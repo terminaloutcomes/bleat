@@ -67242,6 +67242,71 @@ pub struct AndroidToIosAppMappingDetailAttributes {
     pub package_name: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportsResponse {
+    pub data: Vec<AnalyticsReport>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportSegmentsResponse {
+    pub data: Vec<AnalyticsReportSegment>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportSegmentResponse {
+    pub data: AnalyticsReportSegment,
+    pub links: DocumentLinks,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportSegment {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<AnalyticsReportSegmentAttributes>,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<ResourceLinks>,
+    pub r#type: AnalyticsReportSegmentType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportSegmentType {
+    #[default]
+    #[serde(rename = "analyticsReportSegments")]
+    AnalyticsReportSegments,
+}
+impl AnalyticsReportSegmentType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReportSegments => "analyticsReportSegments",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportSegmentType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportSegmentType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AnalyticsReportSegmentAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<String>,
+    #[serde(rename = "sizeInBytes", skip_serializing_if = "Option::is_none")]
+    pub size_in_bytes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<url::Url>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportResponse {
+    pub data: AnalyticsReport,
+    pub links: DocumentLinks,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnalyticsReportRequestsResponse {
     pub data: Vec<AnalyticsReportRequest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67249,6 +67314,150 @@ pub struct AnalyticsReportRequestsResponse {
     pub links: PagedDocumentLinks,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestResponse {
+    pub data: AnalyticsReportRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub included: Option<Vec<AnalyticsReport>>,
+    pub links: DocumentLinks,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestReportsLinkagesResponse {
+    pub data: Vec<AnalyticsReportRequestReportsLinkagesResponseDataItem>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestReportsLinkagesResponseDataItem {
+    pub id: String,
+    pub r#type: AnalyticsReportRequestReportsLinkagesResponseDataItemType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportRequestReportsLinkagesResponseDataItemType {
+    #[default]
+    #[serde(rename = "analyticsReports")]
+    AnalyticsReports,
+}
+impl AnalyticsReportRequestReportsLinkagesResponseDataItemType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReports => "analyticsReports",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportRequestReportsLinkagesResponseDataItemType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportRequestReportsLinkagesResponseDataItemType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequest {
+    pub data: AnalyticsReportRequestCreateRequestData,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequestData {
+    pub attributes: AnalyticsReportRequestCreateRequestDataAttributes,
+    pub relationships: AnalyticsReportRequestCreateRequestDataRelationships,
+    pub r#type: AnalyticsReportRequestCreateRequestDataType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportRequestCreateRequestDataType {
+    #[default]
+    #[serde(rename = "analyticsReportRequests")]
+    AnalyticsReportRequests,
+}
+impl AnalyticsReportRequestCreateRequestDataType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReportRequests => "analyticsReportRequests",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportRequestCreateRequestDataType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportRequestCreateRequestDataType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequestDataRelationships {
+    pub app: AnalyticsReportRequestCreateRequestDataRelationshipsApp,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequestDataRelationshipsApp {
+    pub data: AnalyticsReportRequestCreateRequestDataRelationshipsAppData,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequestDataRelationshipsAppData {
+    pub id: String,
+    pub r#type: AnalyticsReportRequestCreateRequestDataRelationshipsAppDataType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportRequestCreateRequestDataRelationshipsAppDataType {
+    #[default]
+    #[serde(rename = "apps")]
+    Apps,
+}
+impl AnalyticsReportRequestCreateRequestDataRelationshipsAppDataType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Apps => "apps",
+        }
+    }
+}
+impl ::std::fmt::Display
+for AnalyticsReportRequestCreateRequestDataRelationshipsAppDataType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportRequestCreateRequestDataRelationshipsAppDataType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportRequestCreateRequestDataAttributes {
+    #[serde(rename = "accessType")]
+    pub access_type: AnalyticsReportRequestCreateRequestDataAttributesAccessType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportRequestCreateRequestDataAttributesAccessType {
+    #[default]
+    #[serde(rename = "ONE_TIME_SNAPSHOT")]
+    OneTimeSnapshot,
+    #[serde(rename = "ONGOING")]
+    Ongoing,
+}
+impl AnalyticsReportRequestCreateRequestDataAttributesAccessType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::OneTimeSnapshot => "ONE_TIME_SNAPSHOT",
+            Self::Ongoing => "ONGOING",
+        }
+    }
+}
+impl ::std::fmt::Display
+for AnalyticsReportRequestCreateRequestDataAttributesAccessType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportRequestCreateRequestDataAttributesAccessType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnalyticsReportRequest {
@@ -67355,6 +67564,169 @@ impl ::std::fmt::Display for AnalyticsReportRequestAttributesAccessType {
     }
 }
 impl AsRef<str> for AnalyticsReportRequestAttributesAccessType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstancesResponse {
+    pub data: Vec<AnalyticsReportInstance>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstancesLinkagesResponse {
+    pub data: Vec<AnalyticsReportInstancesLinkagesResponseDataItem>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstancesLinkagesResponseDataItem {
+    pub id: String,
+    pub r#type: AnalyticsReportInstancesLinkagesResponseDataItemType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportInstancesLinkagesResponseDataItemType {
+    #[default]
+    #[serde(rename = "analyticsReportInstances")]
+    AnalyticsReportInstances,
+}
+impl AnalyticsReportInstancesLinkagesResponseDataItemType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReportInstances => "analyticsReportInstances",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportInstancesLinkagesResponseDataItemType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportInstancesLinkagesResponseDataItemType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstanceSegmentsLinkagesResponse {
+    pub data: Vec<AnalyticsReportInstanceSegmentsLinkagesResponseDataItem>,
+    pub links: PagedDocumentLinks,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<PagingInformation>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstanceSegmentsLinkagesResponseDataItem {
+    pub id: String,
+    pub r#type: AnalyticsReportInstanceSegmentsLinkagesResponseDataItemType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportInstanceSegmentsLinkagesResponseDataItemType {
+    #[default]
+    #[serde(rename = "analyticsReportSegments")]
+    AnalyticsReportSegments,
+}
+impl AnalyticsReportInstanceSegmentsLinkagesResponseDataItemType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReportSegments => "analyticsReportSegments",
+        }
+    }
+}
+impl ::std::fmt::Display
+for AnalyticsReportInstanceSegmentsLinkagesResponseDataItemType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportInstanceSegmentsLinkagesResponseDataItemType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstanceResponse {
+    pub data: AnalyticsReportInstance,
+    pub links: DocumentLinks,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnalyticsReportInstance {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<AnalyticsReportInstanceAttributes>,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<ResourceLinks>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relationships: Option<AnalyticsReportInstanceRelationships>,
+    pub r#type: AnalyticsReportInstanceType,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportInstanceType {
+    #[default]
+    #[serde(rename = "analyticsReportInstances")]
+    AnalyticsReportInstances,
+}
+impl AnalyticsReportInstanceType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AnalyticsReportInstances => "analyticsReportInstances",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportInstanceType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportInstanceType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AnalyticsReportInstanceRelationships {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments: Option<AnalyticsReportInstanceRelationshipsSegments>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AnalyticsReportInstanceRelationshipsSegments {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<RelationshipLinks>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AnalyticsReportInstanceAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granularity: Option<AnalyticsReportInstanceAttributesGranularity>,
+    #[serde(rename = "processingDate", skip_serializing_if = "Option::is_none")]
+    pub processing_date: Option<chrono::NaiveDate>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub enum AnalyticsReportInstanceAttributesGranularity {
+    #[default]
+    #[serde(rename = "DAILY")]
+    Daily,
+    #[serde(rename = "WEEKLY")]
+    Weekly,
+    #[serde(rename = "MONTHLY")]
+    Monthly,
+}
+impl AnalyticsReportInstanceAttributesGranularity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Daily => "DAILY",
+            Self::Weekly => "WEEKLY",
+            Self::Monthly => "MONTHLY",
+        }
+    }
+}
+impl ::std::fmt::Display for AnalyticsReportInstanceAttributesGranularity {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl AsRef<str> for AnalyticsReportInstanceAttributesGranularity {
     fn as_ref(&self) -> &str {
         self.as_str()
     }

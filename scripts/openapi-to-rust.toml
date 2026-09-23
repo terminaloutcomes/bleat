@@ -31,5 +31,9 @@ operations = [
     "GET /v1/apps",
     "tag:AppStoreVersions",
     "tag:Apps",
+    "tag:AnalyticsReportInstances",
+    "tag:AnalyticsReportRequests",
+    "tag:AnalyticsReports",
+    "tag:AnalyticsReportSegments",
 ]
 prune_models = true

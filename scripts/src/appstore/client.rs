@@ -365,6 +365,115 @@ impl AsRef<str> for AppsBetaTesterUsagesGetMetricsPeriod {
         self.as_str()
     }
 }
+///Typed error responses for `analyticsReportInstances_getInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportInstancesGetInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportInstances_segments_getToManyRelated`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportInstancesSegmentsGetToManyRelatedApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportInstances_segments_getToManyRelationship`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportRequests_createInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportRequestsCreateInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status409(ErrorResponse),
+    Status422(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportRequests_deleteInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportRequestsDeleteInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportRequests_getInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportRequestsGetInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportRequests_reports_getToManyRelated`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportRequestsReportsGetToManyRelatedApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportRequests_reports_getToManyRelationship`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportRequestsReportsGetToManyRelationshipApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReportSegments_getInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportSegmentsGetInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReports_getInstance`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportsGetInstanceApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReports_instances_getToManyRelated`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportsInstancesGetToManyRelatedApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
+///Typed error responses for `analyticsReports_instances_getToManyRelationship`. One variant per declared non-2xx response.
+#[derive(Debug, Clone)]
+pub enum AnalyticsReportsInstancesGetToManyRelationshipApiError {
+    Status400(ErrorResponse),
+    Status401(ErrorResponse),
+    Status403(ErrorResponse),
+    Status404(ErrorResponse),
+    Status429(ErrorResponse),
+}
 ///Typed error responses for `appStoreVersions_alternativeDistributionPackage_getToOneRelated`. One variant per declared non-2xx response.
 #[derive(Debug, Clone)]
 pub enum AppStoreVersionsAlternativeDistributionPackageGetToOneRelatedApiError {
@@ -1420,6 +1529,200 @@ pub enum AppsWebhooksGetToManyRelationshipApiError {
     Status403(ErrorResponse),
     Status404(ErrorResponse),
     Status429(ErrorResponse),
+}
+#[doc = concat!(
+    "Additive request builder for `", "analyticsReportRequests_getInstance", "`."
+)]
+#[must_use]
+pub struct AnalyticsReportRequestsGetInstanceBuilder<'a> {
+    client: &'a HttpClient,
+    id: String,
+    fields_analytics_report_requests: Option<Vec<String>>,
+    fields_analytics_reports: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    limit_reports: Option<i64>,
+}
+impl<'a> AnalyticsReportRequestsGetInstanceBuilder<'a> {
+    #[doc = concat!(
+        "Set the optional `", "fields[analyticsReportRequests]", "` operation parameter."
+    )]
+    #[must_use]
+    pub fn fields_analytics_report_requests(
+        mut self,
+        fields_analytics_report_requests: Vec<String>,
+    ) -> Self {
+        self.fields_analytics_report_requests = Some(fields_analytics_report_requests);
+        self
+    }
+    #[doc = concat!(
+        "Set the optional `", "fields[analyticsReports]", "` operation parameter."
+    )]
+    #[must_use]
+    pub fn fields_analytics_reports(
+        mut self,
+        fields_analytics_reports: Vec<String>,
+    ) -> Self {
+        self.fields_analytics_reports = Some(fields_analytics_reports);
+        self
+    }
+    #[doc = concat!("Set the optional `", "include", "` operation parameter.")]
+    #[must_use]
+    pub fn include(mut self, include: Vec<String>) -> Self {
+        self.include = Some(include);
+        self
+    }
+    #[doc = concat!("Set the optional `", "limit[reports]", "` operation parameter.")]
+    #[must_use]
+    pub fn limit_reports(mut self, limit_reports: i64) -> Self {
+        self.limit_reports = Some(limit_reports);
+        self
+    }
+    /// Send the request through the existing flat operation method.
+    pub async fn send(
+        self,
+    ) -> Result<
+        AnalyticsReportRequestResponse,
+        ApiOpError<AnalyticsReportRequestsGetInstanceApiError>,
+    > {
+        self.client
+            .analytics_report_requests_get_instance(
+                self.id,
+                self.fields_analytics_report_requests,
+                self.fields_analytics_reports,
+                self.include,
+                self.limit_reports,
+            )
+            .await
+    }
+}
+#[doc = concat!(
+    "Additive request builder for `", "analyticsReportRequests_reports_getToManyRelated",
+    "`."
+)]
+#[must_use]
+pub struct AnalyticsReportRequestsReportsGetToManyRelatedBuilder<'a> {
+    client: &'a HttpClient,
+    id: String,
+    filter_name: Option<Vec<String>>,
+    filter_category: Option<Vec<String>>,
+    fields_analytics_reports: Option<Vec<String>>,
+    limit: Option<i64>,
+}
+impl<'a> AnalyticsReportRequestsReportsGetToManyRelatedBuilder<'a> {
+    #[doc = concat!("Set the optional `", "filter[name]", "` operation parameter.")]
+    #[must_use]
+    pub fn filter_name(mut self, filter_name: Vec<String>) -> Self {
+        self.filter_name = Some(filter_name);
+        self
+    }
+    #[doc = concat!("Set the optional `", "filter[category]", "` operation parameter.")]
+    #[must_use]
+    pub fn filter_category(mut self, filter_category: Vec<String>) -> Self {
+        self.filter_category = Some(filter_category);
+        self
+    }
+    #[doc = concat!(
+        "Set the optional `", "fields[analyticsReports]", "` operation parameter."
+    )]
+    #[must_use]
+    pub fn fields_analytics_reports(
+        mut self,
+        fields_analytics_reports: Vec<String>,
+    ) -> Self {
+        self.fields_analytics_reports = Some(fields_analytics_reports);
+        self
+    }
+    #[doc = concat!("Set the optional `", "limit", "` operation parameter.")]
+    #[must_use]
+    pub fn limit(mut self, limit: i64) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+    /// Send the request through the existing flat operation method.
+    pub async fn send(
+        self,
+    ) -> Result<
+        AnalyticsReportsResponse,
+        ApiOpError<AnalyticsReportRequestsReportsGetToManyRelatedApiError>,
+    > {
+        self.client
+            .analytics_report_requests_reports_get_to_many_related(
+                self.id,
+                self.filter_name,
+                self.filter_category,
+                self.fields_analytics_reports,
+                self.limit,
+            )
+            .await
+    }
+}
+#[doc = concat!(
+    "Additive request builder for `", "analyticsReports_instances_getToManyRelated", "`."
+)]
+#[must_use]
+pub struct AnalyticsReportsInstancesGetToManyRelatedBuilder<'a> {
+    client: &'a HttpClient,
+    id: String,
+    filter_granularity: Option<Vec<String>>,
+    filter_processing_date: Option<Vec<String>>,
+    fields_analytics_report_instances: Option<Vec<String>>,
+    limit: Option<i64>,
+}
+impl<'a> AnalyticsReportsInstancesGetToManyRelatedBuilder<'a> {
+    #[doc = concat!(
+        "Set the optional `", "filter[granularity]", "` operation parameter."
+    )]
+    #[must_use]
+    pub fn filter_granularity(mut self, filter_granularity: Vec<String>) -> Self {
+        self.filter_granularity = Some(filter_granularity);
+        self
+    }
+    #[doc = concat!(
+        "Set the optional `", "filter[processingDate]", "` operation parameter."
+    )]
+    #[must_use]
+    pub fn filter_processing_date(
+        mut self,
+        filter_processing_date: Vec<String>,
+    ) -> Self {
+        self.filter_processing_date = Some(filter_processing_date);
+        self
+    }
+    #[doc = concat!(
+        "Set the optional `", "fields[analyticsReportInstances]",
+        "` operation parameter."
+    )]
+    #[must_use]
+    pub fn fields_analytics_report_instances(
+        mut self,
+        fields_analytics_report_instances: Vec<String>,
+    ) -> Self {
+        self.fields_analytics_report_instances = Some(fields_analytics_report_instances);
+        self
+    }
+    #[doc = concat!("Set the optional `", "limit", "` operation parameter.")]
+    #[must_use]
+    pub fn limit(mut self, limit: i64) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+    /// Send the request through the existing flat operation method.
+    pub async fn send(
+        self,
+    ) -> Result<
+        AnalyticsReportInstancesResponse,
+        ApiOpError<AnalyticsReportsInstancesGetToManyRelatedApiError>,
+    > {
+        self.client
+            .analytics_reports_instances_get_to_many_related(
+                self.id,
+                self.filter_granularity,
+                self.filter_processing_date,
+                self.fields_analytics_report_instances,
+                self.limit,
+            )
+            .await
+    }
 }
 #[doc = concat!(
     "Additive request builder for `",
@@ -7391,6 +7694,2427 @@ impl<'a> AppsWebhooksGetToManyRelatedBuilder<'a> {
     }
 }
 impl HttpClient {
+    /// `GET /v1/analyticsReportInstances/{id}`
+    pub async fn analytics_report_instances_get_instance(
+        &self,
+        id: impl AsRef<str>,
+        fields_analytics_report_instances: Option<Vec<String>>,
+    ) -> Result<
+        AnalyticsReportInstanceResponse,
+        ApiOpError<AnalyticsReportInstancesGetInstanceApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportInstances/{}",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = fields_analytics_report_instances {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReportInstances]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReportInstances]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push((
+                            "fields[analyticsReportInstances]".to_string(),
+                            parts.join(","),
+                        ));
+                }
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportInstancesGetInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesGetInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesGetInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesGetInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesGetInstanceApiError::Status404(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesGetInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportInstances/{id}/segments`
+    pub async fn analytics_report_instances_segments_get_to_many_related(
+        &self,
+        id: impl AsRef<str>,
+        fields_analytics_report_segments: Option<Vec<String>>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportSegmentsResponse,
+        ApiOpError<AnalyticsReportInstancesSegmentsGetToManyRelatedApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportInstances/{}/segments",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = fields_analytics_report_segments {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReportSegments]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReportSegments]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push((
+                            "fields[analyticsReportSegments]".to_string(),
+                            parts.join(","),
+                        ));
+                }
+            }
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportInstancesSegmentsGetToManyRelatedApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelatedApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelatedApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelatedApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelatedApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelatedApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportInstances/{id}/relationships/segments`
+    pub async fn analytics_report_instances_segments_get_to_many_relationship(
+        &self,
+        id: impl AsRef<str>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportInstanceSegmentsLinkagesResponse,
+        ApiOpError<AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url,
+            format!("/v1/analyticsReportInstances/{}/relationships/segments",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<
+                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError,
+            >;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportInstancesSegmentsGetToManyRelationshipApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `POST /v1/analyticsReportRequests`
+    pub async fn analytics_report_requests_create_instance(
+        &self,
+        request: AnalyticsReportRequestCreateRequest,
+    ) -> Result<
+        AnalyticsReportRequestResponse,
+        ApiOpError<AnalyticsReportRequestsCreateInstanceApiError>,
+    > {
+        let request_url = format!("{}{}", self.base_url, "/v1/analyticsReportRequests");
+        let mut req = self.http_client.post(request_url);
+        req = req
+            .body(serde_json::to_vec(&request).map_err(HttpError::serialization_error)?)
+            .header("content-type", "application/json");
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 201u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "201",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportRequestsCreateInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                409u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status409(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                422u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status422(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsCreateInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `DELETE /v1/analyticsReportRequests/{id}`
+    pub async fn analytics_report_requests_delete_instance(
+        &self,
+        id: impl AsRef<str>,
+    ) -> Result<(), ApiOpError<AnalyticsReportRequestsDeleteInstanceApiError>> {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportRequests/{}",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.delete(request_url);
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            req = req.header(name, value);
+        }
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 204u16 {
+            let _ = body_text;
+            let _ = raw_body;
+            let _ = headers;
+            Ok(())
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "204",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportRequestsDeleteInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsDeleteInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsDeleteInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsDeleteInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsDeleteInstanceApiError::Status404(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsDeleteInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportRequests/{id}`
+    pub async fn analytics_report_requests_get_instance(
+        &self,
+        id: impl AsRef<str>,
+        fields_analytics_report_requests: Option<Vec<String>>,
+        fields_analytics_reports: Option<Vec<String>>,
+        include: Option<Vec<String>>,
+        limit_reports: Option<i64>,
+    ) -> Result<
+        AnalyticsReportRequestResponse,
+        ApiOpError<AnalyticsReportRequestsGetInstanceApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportRequests/{}",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = fields_analytics_report_requests {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReportRequests]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReportRequests]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push((
+                            "fields[analyticsReportRequests]".to_string(),
+                            parts.join(","),
+                        ));
+                }
+            }
+            if let Some(v) = fields_analytics_reports {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReports]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReports]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push(("fields[analyticsReports]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = include {
+                if v.is_empty() {
+                    query_params.push((format!("{}[]", "include"), String::new()));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "include",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params.push(("include".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = limit_reports {
+                query_params.push(("limit[reports]".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportRequestsGetInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsGetInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsGetInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsGetInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsGetInstanceApiError::Status404(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsGetInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportRequests/{id}/reports`
+    pub async fn analytics_report_requests_reports_get_to_many_related(
+        &self,
+        id: impl AsRef<str>,
+        filter_name: Option<Vec<String>>,
+        filter_category: Option<Vec<String>>,
+        fields_analytics_reports: Option<Vec<String>>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportsResponse,
+        ApiOpError<AnalyticsReportRequestsReportsGetToManyRelatedApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportRequests/{}/reports",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = filter_name {
+                if v.is_empty() {
+                    query_params.push((format!("{}[]", "filter[name]"), String::new()));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "filter[name]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params.push(("filter[name]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = filter_category {
+                if v.is_empty() {
+                    query_params
+                        .push((format!("{}[]", "filter[category]"), String::new()));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "filter[category]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params.push(("filter[category]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = fields_analytics_reports {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReports]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReports]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push(("fields[analyticsReports]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportRequestsReportsGetToManyRelatedApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelatedApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelatedApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelatedApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelatedApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelatedApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportRequests/{id}/relationships/reports`
+    pub async fn analytics_report_requests_reports_get_to_many_relationship(
+        &self,
+        id: impl AsRef<str>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportRequestReportsLinkagesResponse,
+        ApiOpError<AnalyticsReportRequestsReportsGetToManyRelationshipApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url,
+            format!("/v1/analyticsReportRequests/{}/relationships/reports",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<
+                AnalyticsReportRequestsReportsGetToManyRelationshipApiError,
+            >;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelationshipApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelationshipApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelationshipApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelationshipApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportRequestsReportsGetToManyRelationshipApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReportSegments/{id}`
+    pub async fn analytics_report_segments_get_instance(
+        &self,
+        id: impl AsRef<str>,
+        fields_analytics_report_segments: Option<Vec<String>>,
+    ) -> Result<
+        AnalyticsReportSegmentResponse,
+        ApiOpError<AnalyticsReportSegmentsGetInstanceApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReportSegments/{}",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = fields_analytics_report_segments {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReportSegments]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReportSegments]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push((
+                            "fields[analyticsReportSegments]".to_string(),
+                            parts.join(","),
+                        ));
+                }
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportSegmentsGetInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportSegmentsGetInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportSegmentsGetInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportSegmentsGetInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportSegmentsGetInstanceApiError::Status404(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportSegmentsGetInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReports/{id}`
+    pub async fn analytics_reports_get_instance(
+        &self,
+        id: impl AsRef<str>,
+        fields_analytics_reports: Option<Vec<String>>,
+    ) -> Result<
+        AnalyticsReportResponse,
+        ApiOpError<AnalyticsReportsGetInstanceApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReports/{}",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = fields_analytics_reports {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReports]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReports]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push(("fields[analyticsReports]".to_string(), parts.join(",")));
+                }
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportsGetInstanceApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsGetInstanceApiError::Status400(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsGetInstanceApiError::Status401(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsGetInstanceApiError::Status403(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsGetInstanceApiError::Status404(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsGetInstanceApiError::Status429(v),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReports/{id}/instances`
+    pub async fn analytics_reports_instances_get_to_many_related(
+        &self,
+        id: impl AsRef<str>,
+        filter_granularity: Option<Vec<String>>,
+        filter_processing_date: Option<Vec<String>>,
+        fields_analytics_report_instances: Option<Vec<String>>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportInstancesResponse,
+        ApiOpError<AnalyticsReportsInstancesGetToManyRelatedApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url, format!("/v1/analyticsReports/{}/instances",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = filter_granularity {
+                if v.is_empty() {
+                    query_params
+                        .push((format!("{}[]", "filter[granularity]"), String::new()));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "filter[granularity]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push(("filter[granularity]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = filter_processing_date {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "filter[processingDate]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "filter[processingDate]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push(("filter[processingDate]".to_string(), parts.join(",")));
+                }
+            }
+            if let Some(v) = fields_analytics_report_instances {
+                if v.is_empty() {
+                    query_params
+                        .push((
+                            format!("{}[]", "fields[analyticsReportInstances]"),
+                            String::new(),
+                        ));
+                } else {
+                    let mut parts = Vec::with_capacity(v.len());
+                    for item in &v {
+                        let item = item.to_string();
+                        if item.contains(',') {
+                            return Err(
+                                HttpError::serialization_error(
+                                        format!(
+                                            "query array `{}` contains a comma; use explode=true for lossless string values",
+                                            "fields[analyticsReportInstances]",
+                                        ),
+                                    )
+                                    .into(),
+                            );
+                        }
+                        parts.push(item);
+                    }
+                    query_params
+                        .push((
+                            "fields[analyticsReportInstances]".to_string(),
+                            parts.join(","),
+                        ));
+                }
+            }
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportsInstancesGetToManyRelatedApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelatedApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelatedApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelatedApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelatedApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelatedApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
+    /// `GET /v1/analyticsReports/{id}/relationships/instances`
+    pub async fn analytics_reports_instances_get_to_many_relationship(
+        &self,
+        id: impl AsRef<str>,
+        limit: Option<i64>,
+    ) -> Result<
+        AnalyticsReportInstancesLinkagesResponse,
+        ApiOpError<AnalyticsReportsInstancesGetToManyRelationshipApiError>,
+    > {
+        let request_url = format!(
+            "{}{}", self.base_url,
+            format!("/v1/analyticsReports/{}/relationships/instances",
+            __pct_encode_path_segment(id.as_ref()))
+        );
+        let mut req = self.http_client.get(request_url);
+        {
+            let mut query_params: Vec<(String, String)> = Vec::new();
+            if let Some(v) = limit {
+                query_params.push(("limit".to_string(), v.to_string()));
+            }
+            if !query_params.is_empty() {
+                req = req.query(&query_params);
+            }
+        }
+        if let Some(api_key) = &self.api_key {
+            req = req.bearer_auth(api_key);
+        }
+        for (name, value) in &self.custom_headers {
+            if !name.eq_ignore_ascii_case("accept") {
+                req = req.header(name, value);
+            }
+        }
+        req = req.header(reqwest::header::ACCEPT, "application/json");
+        let response = req.send().await?;
+        let status = response.status();
+        let status_code = status.as_u16();
+        let headers = response.headers().clone();
+        let body_bytes = __read_bounded_response_body(
+                response,
+                self.max_response_body_bytes,
+            )
+            .await?;
+        let raw_body = body_bytes;
+        let body_text = String::from_utf8_lossy(&raw_body).into_owned();
+        if false || status_code == 200u16 {
+            match serde_json::from_str(&body_text) {
+                Ok(body) => Ok(body),
+                Err(e) => {
+                    Err(
+                        ApiOpError::Api(ApiError {
+                            status: status_code,
+                            headers: headers,
+                            body: body_text,
+                            raw_body,
+                            typed: None,
+                            parse_error: Some(
+                                format!("failed to deserialize 2xx response body: {}", e),
+                            ),
+                        }),
+                    )
+                }
+            }
+        } else if status.is_success() {
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed: None,
+                    parse_error: Some(
+                        format!(
+                            "unexpected successful status {}; generated return type selects `{}`",
+                            status_code, "200",
+                        ),
+                    ),
+                }),
+            )
+        } else {
+            let typed: Option<AnalyticsReportsInstancesGetToManyRelationshipApiError>;
+            let parse_error: Option<String>;
+            match status_code {
+                400u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelationshipApiError::Status400(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                401u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelationshipApiError::Status401(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                403u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelationshipApiError::Status403(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                404u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelationshipApiError::Status404(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                429u16 => {
+                    match serde_json::from_str::<ErrorResponse>(&body_text) {
+                        Ok(v) => {
+                            typed = Some(
+                                AnalyticsReportsInstancesGetToManyRelationshipApiError::Status429(
+                                    v,
+                                ),
+                            );
+                            parse_error = None;
+                        }
+                        Err(e) => {
+                            typed = None;
+                            parse_error = Some(e.to_string());
+                        }
+                    }
+                }
+                _ => {
+                    typed = None;
+                    parse_error = None;
+                }
+            }
+            Err(
+                ApiOpError::Api(ApiError {
+                    status: status_code,
+                    headers,
+                    body: body_text,
+                    raw_body,
+                    typed,
+                    parse_error,
+                }),
+            )
+        }
+    }
     /// `GET /v1/appStoreVersions/{id}/alternativeDistributionPackage`
     pub async fn app_store_versions_alternative_distribution_package_get_to_one_related(
         &self,
@@ -37767,6 +40491,56 @@ impl HttpClient {
                     parse_error,
                 }),
             )
+        }
+    }
+    #[doc = concat!(
+        "Start an additive builder for `", "analyticsReportRequests_getInstance", "`."
+    )]
+    pub fn analytics_report_requests_get_instance_builder(
+        &self,
+        id: impl Into<String>,
+    ) -> AnalyticsReportRequestsGetInstanceBuilder<'_> {
+        AnalyticsReportRequestsGetInstanceBuilder {
+            client: self,
+            id: id.into(),
+            fields_analytics_report_requests: None,
+            fields_analytics_reports: None,
+            include: None,
+            limit_reports: None,
+        }
+    }
+    #[doc = concat!(
+        "Start an additive builder for `",
+        "analyticsReportRequests_reports_getToManyRelated", "`."
+    )]
+    pub fn analytics_report_requests_reports_get_to_many_related_builder(
+        &self,
+        id: impl Into<String>,
+    ) -> AnalyticsReportRequestsReportsGetToManyRelatedBuilder<'_> {
+        AnalyticsReportRequestsReportsGetToManyRelatedBuilder {
+            client: self,
+            id: id.into(),
+            filter_name: None,
+            filter_category: None,
+            fields_analytics_reports: None,
+            limit: None,
+        }
+    }
+    #[doc = concat!(
+        "Start an additive builder for `", "analyticsReports_instances_getToManyRelated",
+        "`."
+    )]
+    pub fn analytics_reports_instances_get_to_many_related_builder(
+        &self,
+        id: impl Into<String>,
+    ) -> AnalyticsReportsInstancesGetToManyRelatedBuilder<'_> {
+        AnalyticsReportsInstancesGetToManyRelatedBuilder {
+            client: self,
+            id: id.into(),
+            filter_granularity: None,
+            filter_processing_date: None,
+            fields_analytics_report_instances: None,
+            limit: None,
         }
     }
     #[doc = concat!(
