@@ -237,6 +237,11 @@ run = ["./scripts/build-macos.sh"]
 description = "Create and validate the Release archive"
 run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
+[tasks."app-store:upload"]
+description = "Archive, inspect, and upload an App Store-eligible build to App Store Connect"
+depends = ["security:validate"]
+run = "cargo run --quiet --locked --package scripts --bin upload-app-store-connect --"
+
 [tasks."test:testflight-packaging"]
 description = "Validate the internal TestFlight export configuration"
 run = [

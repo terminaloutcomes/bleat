@@ -8,5 +8,6 @@
     clippy::double_must_use
 )]
 pub mod appstore;
+pub mod app_store_connect;
 pub mod deploy_device;
 pub mod error;

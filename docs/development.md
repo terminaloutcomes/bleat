@@ -373,6 +373,22 @@ it. Set `BLEAT_BUILD_NUMBER` to a valid one-to-three-component numeric
 value only when a reproducible or otherwise explicit build identifier is
 required; the supplied value is propagated unchanged.
 
+Archive, inspect, and upload an App Store-eligible build with:
+
+```sh
+mise run app-store:upload
+```
+
+The Rust workflow in `scripts/src/app_store_connect.rs` uses the ignored Apple
+team, bundle identifier, and production telemetry settings from `.envrc`. It
+retains the signed archive, inspected distribution IPA, SHA-256 checksum,
+export options, redacted Xcode logs, and upload report below
+`.build/app-store-connect/`. Its export options omit
+`testFlightInternalTestingOnly`, so the processed build can be assigned to
+external TestFlight groups or an App Store version. A successful upload is
+delivery evidence only; processing and App Store review submission are
+separate gates.
+
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:
 
