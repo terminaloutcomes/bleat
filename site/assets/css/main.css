@@ -80,6 +80,12 @@
   .footer-link img {
     @apply size-4;
   }
+
+  .bmc-image {
+    @apply h-12 w-35;
+
+  }
+
   .admin-guide {
     @apply text-sm font-semibold uppercase tracking-[0.18em] text-lilac;
   }
