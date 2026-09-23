@@ -790,7 +790,8 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   library-item ID ascending when timestamps are equal. Preserve server order
   for other personalized shelves. Reuse the account progress snapshot already
   loaded for browsing; do not fetch individual progress records to sort shelves.
-  If any shelf item lacks a snapshot, retain the server order. The pinned
+  Sort items with known progress ahead of items missing from the snapshot, and
+  retain server order among those unknown items. The pinned
   server's minified personalized entities omit progress even with `include=progress`
   ([source](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/server/utils/queries/libraryFilters.js#L38-L71)).
 - Do not preload expanded details for every item.
