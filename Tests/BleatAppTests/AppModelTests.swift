@@ -7901,6 +7901,7 @@ final class AppModelTests: XCTestCase {
                     policy: .allowCellular,
                     expectedBytes:
                         DownloadModel.largeDownloadThresholdBytes,
+                    networkPathState: .unknown,
                     largeDownloadThresholdBytes:
                         DownloadModel.largeDownloadThresholdBytes
                 ),
@@ -7912,6 +7913,7 @@ final class AppModelTests: XCTestCase {
                     policy: .allowCellular,
                     expectedBytes:
                         DownloadModel.largeDownloadThresholdBytes,
+                    networkPathState: .unknown,
                     largeDownloadThresholdBytes:
                         DownloadModel.largeDownloadThresholdBytes
                 ),
@@ -7925,11 +7927,177 @@ final class AppModelTests: XCTestCase {
             DownloadNetworkDecision.decide(
                 policy: .wifiOnly,
                 expectedBytes: Int64.max,
+                networkPathState: .unknown,
                 largeDownloadThresholdBytes:
                     DownloadModel.largeDownloadThresholdBytes
             ),
             .schedule
         )
+        XCTAssertEqual(
+            DownloadNetworkDecision.decide(
+                policy: .allowCellular,
+                expectedBytes: DownloadModel.largeDownloadThresholdBytes - 1,
+                networkPathState: AppNetworkPathState(
+                    availability: .satisfied,
+                    isConstrained: false,
+                    isExpensive: true
+                ),
+                largeDownloadThresholdBytes:
+                    DownloadModel.largeDownloadThresholdBytes
+            ),
+            .schedule
+        )
+        XCTAssertEqual(
+            DownloadNetworkDecision.decide(
+                policy: .allowCellular,
+                expectedBytes: DownloadModel.largeDownloadThresholdBytes,
+                networkPathState: AppNetworkPathState(
+                    availability: .satisfied,
+                    isConstrained: false,
+                    isExpensive: false
+                ),
+                largeDownloadThresholdBytes:
+                    DownloadModel.largeDownloadThresholdBytes
+            ),
+            .schedule
+        )
+        #if !os(macOS)
+            for availability in [
+                AppNetworkAvailability.unknown,
+                .unavailable,
+                .satisfied,
+            ] {
+                XCTAssertEqual(
+                    DownloadNetworkDecision.decide(
+                        policy: .allowCellular,
+                        expectedBytes:
+                            DownloadModel.largeDownloadThresholdBytes,
+                        networkPathState: AppNetworkPathState(
+                            availability: availability,
+                            isConstrained: false,
+                            isExpensive: availability == .satisfied
+                        ),
+                        largeDownloadThresholdBytes:
+                            DownloadModel.largeDownloadThresholdBytes
+                    ),
+                    .confirmCellular(
+                        expectedBytes:
+                            DownloadModel.largeDownloadThresholdBytes
+                    )
+                )
+            }
+        #endif
+    }
+
+    func testNonExpensivePathReleasesEveryQueuedCellularConfirmation()
+        async throws
+    {
+        guard DownloadModel.supportsNetworkPolicySelection else { return }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatCellularPathRelease-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let suite = "CellularPathReleaseTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let firstAccount = try fixtureAccount()
+        let secondAccount = try fixtureAccount(
+            accountID: "account-2",
+            userID: "user-2",
+            username: "second"
+        )
+        let thirdAccount = try fixtureAccount(
+            accountID: "account-3",
+            userID: "user-3",
+            username: "third"
+        )
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "path-release",
+                title: "Path Release",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0,
+                    inode: "large",
+                    expectedByteLength:
+                        DownloadModel.largeDownloadThresholdBytes,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3,
+                    destinationEntry: "00000.mp3"
+                )
+            ]
+        )
+        let service = TestAppService(
+            activeAccount: .success(firstAccount),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(
+                URLRequest(
+                    url: try XCTUnwrap(
+                        URL(string: "https://books.example/audio.mp3")
+                    )
+                )
+            )
+        )
+        let model = DownloadModel(
+            service: service,
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.cellular-path-release.\(UUID().uuidString)"
+        )
+        model.setNetworkPolicy(.allowCellular)
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: true
+            )
+        )
+
+        await model.download(detail: detail, account: firstAccount)
+        await model.download(detail: detail, account: secondAccount)
+        XCTAssertEqual(
+            model.pendingCellularDownload?.account.id,
+            firstAccount.id
+        )
+        XCTAssertTrue(model.records.isEmpty)
+
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
+        let released = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCellularDownload == nil && model.records.count == 2
+        }
+
+        XCTAssertTrue(released)
+        XCTAssertEqual(
+            Set(model.records.map(\.manifest.accountID)),
+            [
+                firstAccount.id, secondAccount.id,
+            ])
+        await model.download(detail: detail, account: thirdAccount)
+        XCTAssertNil(model.pendingCellularDownload)
+        XCTAssertEqual(
+            Set(model.records.map(\.manifest.accountID)),
+            [firstAccount.id, secondAccount.id, thirdAccount.id]
+        )
+        let authorizedRequests =
+            await service.authorizedDownloadRequestIdentities()
+        XCTAssertEqual(authorizedRequests.count, 3)
+        _ = await model.removeAllForLocalDataReset()
     }
 
     func testLargeCellularDownloadsPreserveEveryPendingConfirmation()

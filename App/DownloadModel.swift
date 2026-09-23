@@ -227,13 +227,16 @@ enum DownloadNetworkDecision: Equatable, Sendable {
     static func decide(
         policy: DownloadNetworkPolicy,
         expectedBytes: Int64,
+        networkPathState: AppNetworkPathState,
         largeDownloadThresholdBytes: Int64
     ) -> DownloadNetworkDecision {
         #if os(macOS)
             return .schedule
         #else
             guard policy == .allowCellular,
-                expectedBytes >= largeDownloadThresholdBytes
+                expectedBytes >= largeDownloadThresholdBytes,
+                networkPathState.availability != .satisfied
+                    || networkPathState.isExpensive
             else {
                 return .schedule
             }
@@ -1590,6 +1593,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func updateNetworkPathState(_ state: AppNetworkPathState) {
         networkPathState = state
+        guard state.availability == .satisfied, !state.isExpensive else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            await self?.releaseCellularDownloadsForNonExpensivePath()
+        }
     }
 
     private static func reconciliationFailureCode(
@@ -1748,6 +1757,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             switch DownloadNetworkDecision.decide(
                 policy: networkPolicy,
                 expectedBytes: requirement.expectedBytes,
+                networkPathState: networkPathState,
                 largeDownloadThresholdBytes:
                     Self.largeDownloadThresholdBytes
             ) {
@@ -1971,7 +1981,35 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     func confirmCellularDownload() async {
-        guard let pending = pendingCellularDownload,
+        guard let pending = pendingCellularDownload else {
+            return
+        }
+        await performCellularDownload(
+            pending,
+            advanceQueueSynchronously: false
+        )
+    }
+
+    private func releaseCellularDownloadsForNonExpensivePath() async {
+        while networkPathState.availability == .satisfied,
+            !networkPathState.isExpensive,
+            let pending = pendingCellularDownload
+        {
+            await performCellularDownload(
+                pending,
+                advanceQueueSynchronously: true
+            )
+            guard pendingCellularDownload != pending else {
+                return
+            }
+        }
+    }
+
+    private func performCellularDownload(
+        _ pending: PendingCellularDownload,
+        advanceQueueSynchronously: Bool
+    ) async {
+        guard pendingCellularDownload == pending,
             !isResettingLocalDownloads,
             !blockedCellularDownloadAccounts.contains(pending.account.id),
             let storage
@@ -2004,7 +2042,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         pendingCellularDownload = nil
         defer {
             cellularDownloadInFlightBooks.remove(key)
-            presentNextCellularDownload()
+            if advanceQueueSynchronously {
+                presentNextCellularDownloadSynchronously()
+            } else {
+                presentNextCellularDownload()
+            }
         }
         failure = nil
         do {
@@ -2132,15 +2174,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     private func presentNextCellularDownload() {
         Task { @MainActor [weak self] in
-            guard let self,
-                self.pendingCellularDownload == nil,
-                !self.queuedCellularDownloads.isEmpty
-            else {
-                return
-            }
-            self.pendingCellularDownload =
-                self.queuedCellularDownloads.removeFirst()
+            self?.presentNextCellularDownloadSynchronously()
         }
+    }
+
+    private func presentNextCellularDownloadSynchronously() {
+        guard pendingCellularDownload == nil,
+            !queuedCellularDownloads.isEmpty
+        else { return }
+        pendingCellularDownload = queuedCellularDownloads.removeFirst()
     }
 
     func downloadFullBook(
@@ -2224,6 +2266,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             switch DownloadNetworkDecision.decide(
                 policy: networkPolicy,
                 expectedBytes: fullBookBytes,
+                networkPathState: networkPathState,
                 largeDownloadThresholdBytes:
                     Self.largeDownloadThresholdBytes
             ) {
