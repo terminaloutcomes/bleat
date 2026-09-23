@@ -11264,7 +11264,7 @@ final class AppModelTests: XCTestCase {
             let shelves = ["continue-listening", "recently-added"].map {
                 LibraryBookShelf(
                     id: $0, label: $0, labelLocalizationKey: nil,
-                    items: [item, other], total: 2)
+                    items: [other, item], total: 2)
             }
             let service = TestAppService(
                 activeAccount: .success(account),
@@ -11281,8 +11281,8 @@ final class AppModelTests: XCTestCase {
                 }
                 XCTAssertEqual(
                     loaded[0].items,
-                    progress.count == 2 ? [other, item] : [item, other])
-                XCTAssertEqual(loaded[1].items, [item, other])
+                    progress.count == 1 ? [item, other] : [other, item])
+                XCTAssertEqual(loaded[1].items, [other, item])
                 let requests = await service.liveRefreshRequestCounts()
                 XCTAssertEqual(requests.progress, 0)
                 XCTAssertEqual(requests.allProgress, refresh ? 2 : 1)

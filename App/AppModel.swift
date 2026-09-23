@@ -6510,9 +6510,7 @@ final class AppModel {
         -> [LibraryBookShelf]
     {
         shelves.map { shelf in
-            guard shelf.id == "continue-listening",
-                shelf.items.allSatisfy({ bookProgressSnapshots[$0.id] != nil })
-            else { return shelf }
+            guard shelf.id == "continue-listening" else { return shelf }
             return LibraryBookShelf(
                 id: shelf.id, label: shelf.label,
                 labelLocalizationKey: shelf.labelLocalizationKey,
@@ -6524,14 +6522,27 @@ final class AppModel {
     private func orderedContinueListening(_ items: [LibraryBookSummary])
         -> [LibraryBookSummary]
     {
-        items.sorted {
-            let left =
-                bookProgressSnapshots[$0.id]?.lastUpdateMilliseconds ?? -1
-            let right =
-                bookProgressSnapshots[$1.id]?.lastUpdateMilliseconds ?? -1
-            if left != right { return left > right }
-            return $0.id.rawValue < $1.id.rawValue
-        }
+        items.enumerated().sorted { left, right in
+            switch (
+                bookProgressSnapshots[left.element.id],
+                bookProgressSnapshots[right.element.id]
+            ) {
+            case (.some(let leftProgress), .some(let rightProgress)):
+                if leftProgress.lastUpdateMilliseconds
+                    != rightProgress.lastUpdateMilliseconds
+                {
+                    return leftProgress.lastUpdateMilliseconds
+                        > rightProgress.lastUpdateMilliseconds
+                }
+                return left.element.id.rawValue < right.element.id.rawValue
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return left.offset < right.offset
+            }
+        }.map(\.element)
     }
 
     private func updateContinueListening(_ book: LibraryBookSummary) {
