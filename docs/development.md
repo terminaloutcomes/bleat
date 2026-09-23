@@ -366,12 +366,14 @@ authorizes the managed CarPlay Audio App entitlement; set the mode to
 
 Every archive defaults to one UTC build number in `YYYYMMDD.HHmm.SS` format,
 generated once and reused for the complete archive, inspection, export, and
-evidence chain. `MARKETING_VERSION` uses the release date in `YYYY.MM.DD`
-format, with zero-padded month and day (for example, `2026.09.18`). Add a
-matching dated changelog section and regenerate the Xcode project when changing
-it. Set `BLEAT_BUILD_NUMBER` to a valid one-to-three-component numeric
-value only when a reproducible or otherwise explicit build identifier is
-required; the supplied value is propagated unchanged.
+evidence chain. The archive marketing version defaults to the date component of
+that build number in `YYYY.MM.DD` format. Set `BLEAT_MARKETING_VERSION` to a
+valid calendar date only when a reproducible or otherwise explicit release
+version is required. A custom `BLEAT_BUILD_NUMBER` without the normal timestamp
+shape requires an explicit `BLEAT_MARKETING_VERSION`; both supplied values are
+propagated unchanged. Update `MARKETING_VERSION` in `project.yml`, add the
+matching dated changelog section, and regenerate the Xcode project when
+publishing a new GitHub release.
 
 Archive, inspect, and upload an App Store-eligible build with:
 

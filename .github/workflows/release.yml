@@ -9,6 +9,7 @@ on:
       - CHANGELOG.md
       - scripts/archive-beta.sh
       - scripts/resolve-build-number.sh
+      - scripts/resolve-marketing-version.sh
       - .github/workflows/release.yml
 
 permissions:
@@ -125,6 +126,7 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         env:
           BLEAT_BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
+          BLEAT_MARKETING_VERSION: ${{ steps.version.outputs.version }}
           BLEAT_CARPLAY_MODE: enabled
           BLEAT_TELEMETRY_AUTH_BASE_URL: ${{ secrets.BLEAT_TELEMETRY_AUTH_BASE_URL }}
           BLEAT_TELEMETRY_OTLP_ENDPOINT: ${{ secrets.BLEAT_TELEMETRY_OTLP_ENDPOINT }}

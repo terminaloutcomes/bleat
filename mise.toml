@@ -247,6 +247,7 @@ description = "Validate the internal TestFlight export configuration"
 run = [
   { task = "test:cloudkit-schema" },
   "./scripts/test-build-number.sh",
+  "./scripts/test-marketing-version.sh",
   "./scripts/test-testflight-export-options.sh",
 ]
 

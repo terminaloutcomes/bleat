@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026.09.23 - 2026-09-23
+
+### Added
+
+- Added a repository-supported App Store Connect upload workflow with retained
+  archive, IPA inspection, checksum, and upload evidence.
+
+### Improved
+
+- Kept recently listened books first and made listening-statistics updates more
+  efficient and easier to distinguish across accounts.
+- Made every supported release archive derive its calendar marketing version
+  from the UTC timestamp build number by default.
+
+### Fixed
+
+- Fixed cellular download confirmation routing and protected completed
+  automatic downloads from redundant retries and cache cleanup.
+- Fixed release uploads retaining a stale marketing version from the previous
+  dated release.
+
 ## 2026.09.18 - 2026-09-18
 
 ### Added
