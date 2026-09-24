@@ -378,7 +378,7 @@ publishing a new GitHub release.
 Archive, inspect, and upload an App Store-eligible build with:
 
 ```sh
-mise run app-store:upload
+mise run appstore:upload
 ```
 
 The Rust workflow in `scripts/src/app_store_connect.rs` uses the ignored Apple
