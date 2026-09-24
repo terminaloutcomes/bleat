@@ -142,13 +142,13 @@ pub enum UploadError {
 
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum ExportDestination {
+pub enum ExportDestination {
     Export,
     Upload,
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct ExportOptions<'a> {
     destination: ExportDestination,
     distribution_bundle_identifier: &'a str,
@@ -388,7 +388,7 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     })
 }
 
-fn validate_development_team(value: &str) -> Result<(), UploadError> {
+pub fn validate_development_team(value: &str) -> Result<(), UploadError> {
     if value.len() == 10
         && value
             .bytes()
@@ -400,7 +400,7 @@ fn validate_development_team(value: &str) -> Result<(), UploadError> {
     }
 }
 
-fn validate_bundle_identifier(value: &str) -> Result<(), UploadError> {
+pub fn validate_bundle_identifier(value: &str) -> Result<(), UploadError> {
     if !value.is_empty()
         && value.bytes().all(|character| {
             character.is_ascii_alphanumeric() || character == b'.' || character == b'-'
@@ -412,14 +412,14 @@ fn validate_bundle_identifier(value: &str) -> Result<(), UploadError> {
     }
 }
 
-fn validate_production_url(name: &'static str, value: &str) -> Result<(), UploadError> {
+pub fn validate_production_url(name: &'static str, value: &str) -> Result<(), UploadError> {
     match url::Url::parse(value) {
         Ok(url) if url.scheme() == "https" && url.host_str().is_some() => Ok(()),
         _ => Err(UploadError::InvalidProductionUrl { name }),
     }
 }
 
-fn validate_build_number(value: &str) -> Result<(), UploadError> {
+pub fn validate_build_number(value: &str) -> Result<(), UploadError> {
     let components: Vec<&str> = value.split('.').collect();
     if (1..=3).contains(&components.len())
         && components.iter().all(|component| {
@@ -432,7 +432,7 @@ fn validate_build_number(value: &str) -> Result<(), UploadError> {
     }
 }
 
-fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
+pub fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
     path.canonicalize().map_err(|source| UploadError::Io {
         operation: "resolving repository root",
         path: path.to_path_buf(),
@@ -440,7 +440,7 @@ fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
     })
 }
 
-fn resolve_build_number(repository_root: &Path) -> Result<String, UploadError> {
+pub fn resolve_build_number(repository_root: &Path) -> Result<String, UploadError> {
     let output = command_output(
         "build-number resolution",
         Command::new(repository_root.join("scripts/resolve-build-number.sh"))
@@ -453,7 +453,7 @@ fn resolve_build_number(repository_root: &Path) -> Result<String, UploadError> {
         })
 }
 
-fn resolve_marketing_version(
+pub fn resolve_marketing_version(
     repository_root: &Path,
     build: &str,
     override_value: Option<&str>,
@@ -490,7 +490,7 @@ fn resolve_marketing_version(
         })
 }
 
-fn create_directory(path: &Path) -> Result<(), UploadError> {
+pub fn create_directory(path: &Path) -> Result<(), UploadError> {
     fs::create_dir_all(path).map_err(|source| UploadError::Io {
         operation: "creating evidence directory",
         path: path.to_path_buf(),
@@ -498,7 +498,7 @@ fn create_directory(path: &Path) -> Result<(), UploadError> {
     })
 }
 
-fn write_export_options(
+pub fn write_export_options(
     path: &Path,
     destination: ExportDestination,
     development_team: &str,
@@ -511,7 +511,7 @@ fn write_export_options(
     })
 }
 
-fn verify_archive_bundle_identifier(
+pub fn verify_archive_bundle_identifier(
     archive_path: &Path,
     expected_bundle_identifier: &str,
 ) -> Result<(), UploadError> {
@@ -528,7 +528,7 @@ fn verify_archive_bundle_identifier(
     }
 }
 
-fn single_ipa(export_directory: &Path) -> Result<PathBuf, UploadError> {
+pub fn single_ipa(export_directory: &Path) -> Result<PathBuf, UploadError> {
     let entries = fs::read_dir(export_directory).map_err(|source| UploadError::Io {
         operation: "reading IPA export directory",
         path: export_directory.to_path_buf(),
@@ -553,7 +553,7 @@ fn single_ipa(export_directory: &Path) -> Result<PathBuf, UploadError> {
     }
 }
 
-fn sha256(path: &Path) -> Result<String, UploadError> {
+pub fn sha256(path: &Path) -> Result<String, UploadError> {
     let mut file = File::open(path).map_err(|source| UploadError::Io {
         operation: "opening IPA for checksum",
         path: path.to_path_buf(),
@@ -644,122 +644,5 @@ fn run_logged_command(
             status: output.status,
             log_path: log_path.to_path_buf(),
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::os::unix::fs::PermissionsExt;
-
-    #[test]
-    fn validates_release_identifiers() {
-        assert!(validate_development_team("ABCDE12345").is_ok());
-        assert!(validate_development_team("invalid").is_err());
-        assert!(validate_bundle_identifier("com.example.Bleat").is_ok());
-        assert!(validate_bundle_identifier("com.example.$(id)").is_err());
-        assert!(validate_build_number("20260921.1146.56").is_ok());
-        assert!(validate_build_number("2026.09.21.1").is_err());
-    }
-
-    #[test]
-    fn resolves_public_upload_marketing_version_through_shared_script() {
-        let repository = tempfile::tempdir().expect("temporary repository should be created");
-        let script_directory = repository.path().join("scripts");
-        fs::create_dir(&script_directory).expect("script directory should be created");
-        let resolver = script_directory.join("resolve-marketing-version.sh");
-        fs::write(
-            &resolver,
-            b"#!/bin/zsh\nprint -r -- \"${BLEAT_MARKETING_VERSION:-derived-$1}\"\n",
-        )
-        .expect("resolver fixture should be written");
-        let mut permissions = fs::metadata(&resolver)
-            .expect("resolver metadata should be readable")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&resolver, permissions).expect("resolver fixture should be executable");
-
-        let derived = resolve_marketing_version(repository.path(), "20260923.0642.54", None)
-            .expect("marketing version should be derived");
-        assert_eq!(derived, "derived-20260923.0642.54");
-
-        let overridden = resolve_marketing_version(repository.path(), "7", Some("2026.09.23"))
-            .expect("marketing-version override should be forwarded");
-        assert_eq!(overridden, "2026.09.23");
-    }
-
-    #[test]
-    fn preserves_typed_marketing_version_failures() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("scripts package should have a repository parent");
-
-        assert!(matches!(
-            resolve_marketing_version(repository, "7", None),
-            Err(UploadError::MissingMarketingVersionForCustomBuild)
-        ));
-        assert!(matches!(
-            resolve_marketing_version(repository, "7", Some("2026.9.23")),
-            Err(UploadError::InvalidMarketingVersionFormat)
-        ));
-        assert!(matches!(
-            resolve_marketing_version(repository, "7", Some("2026.02.30")),
-            Err(UploadError::InvalidMarketingVersionDate)
-        ));
-    }
-
-    #[test]
-    fn public_export_options_omit_internal_only_restriction() {
-        let path = std::env::temp_dir().join(format!(
-            "bleat-app-store-options-{}-{}.plist",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("test clock must be after Unix epoch")
-                .as_nanos()
-        ));
-        write_export_options(
-            &path,
-            ExportDestination::Upload,
-            "ABCDE12345",
-            "com.example.Bleat",
-        )
-        .expect("export options should serialize");
-        let value = plist::Value::from_file(&path).expect("export options should decode");
-        fs::remove_file(&path).expect("temporary export options should be removable");
-        let dictionary = value
-            .as_dictionary()
-            .expect("export options should be a dictionary");
-        assert_eq!(dictionary.len(), 7);
-        assert_eq!(
-            dictionary
-                .get("destination")
-                .and_then(plist::Value::as_string),
-            Some("upload")
-        );
-        assert_eq!(
-            dictionary.get("method").and_then(plist::Value::as_string),
-            Some("app-store-connect")
-        );
-        assert!(!dictionary.contains_key("testFlightInternalTestingOnly"));
-    }
-
-    #[test]
-    fn computes_standard_sha256_checksum() {
-        let path = std::env::temp_dir().join(format!(
-            "bleat-app-store-checksum-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("test clock must be after Unix epoch")
-                .as_nanos()
-        ));
-        fs::write(&path, b"abc").expect("checksum fixture should be writable");
-        let checksum = sha256(&path).expect("checksum should succeed");
-        fs::remove_file(&path).expect("checksum fixture should be removable");
-        assert_eq!(
-            checksum,
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
     }
 }

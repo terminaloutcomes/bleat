@@ -1,5 +1,6 @@
 //! Script-related things for the Bleat project because shell scripts aren't fun.
 
+pub mod app_store_connect;
 #[allow(
     clippy::too_many_arguments,
     clippy::redundant_field_names,
@@ -8,6 +9,5 @@
     clippy::double_must_use
 )]
 pub mod appstore;
-pub mod app_store_connect;
 pub mod deploy_device;
 pub mod error;
