@@ -383,18 +383,27 @@ run = "shrinky-rs --force --output-type jpg *.png"
 
 [tasks."appstore:status"]
 description = "Check the status of the App Store"
-run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- app-status'''
+raw_args = true
+run = '''
+APPSTORE_CONNECT_KEY_ID="$(keychain-secret get appstore-key-id)" \
+APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" \
+cargo run --quiet --package scripts --bin appstore-monitor -- app-status
+'''
 
 [tasks."appstore:connect-admin"]
 description = "Run appstore-connect with the admin creds"
-run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- $args'''
-usage = '''
-arg "[args]" var=#true help="Arguments to pass to the appstore-connect command"
+raw_args = true
+run = '''
+  APPSTORE_CONNECT_KEY_ID="$(keychain-secret get appstore-key-id)" \
+  APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" \
+  cargo run --quiet --package scripts --bin appstore-monitor -- app-status
 '''
 
 [tasks."appstore:connect-download"]
 description = "Run appstore-connect with the download creds"
-run = '''APPSTORE_CONNECT_DOWNLOAD_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- $args'''
-usage = '''
-arg "[args]" var=#true help="Arguments to pass to the appstore-connect command"
+raw_args = true
+run = '''
+  APPSTORE_CONNECT_KEY_ID="$(keychain-secret get appstore-download-id)" \
+  APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" \
+  cargo run --quiet --package scripts --bin appstore-monitor --
 '''

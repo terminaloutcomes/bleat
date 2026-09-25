@@ -5,9 +5,10 @@ use std::process::{Command, ExitStatus, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, ValueEnum};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+use url::Url;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum CapabilityMode {
@@ -645,4 +646,31 @@ fn run_logged_command(
             log_path: log_path.to_path_buf(),
         })
     }
+}
+
+pub fn openapi_file() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("appstore.json")
+}
+
+#[derive(Deserialize, Clone)]
+pub struct OpenApiServer {
+    pub url: Url,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct OpenApiSpec {
+    pub servers: Vec<OpenApiServer>,
+}
+
+pub fn openapi_base_url() -> Url {
+    let openapi_file = openapi_file();
+    let file_contents =
+        std::fs::read_to_string(&openapi_file).expect("Failed to read OpenAPI specification file");
+    let spec: OpenApiSpec =
+        serde_json::from_str(&file_contents).expect("Failed to parse OpenAPI specification JSON");
+    let first_server = spec
+        .servers
+        .first()
+        .expect("No servers defined in OpenAPI specification");
+    first_server.url.clone()
 }

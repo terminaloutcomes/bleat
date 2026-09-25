@@ -2,39 +2,15 @@ use base64::Engine;
 use clap::{Parser, Subcommand};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::header::HeaderValue;
-use scripts::appstore::*;
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::ExitCode};
-use url::Url;
+use scripts::{
+    app_store_connect::{openapi_base_url, openapi_file},
+    appstore::*,
+};
+use serde::Serialize;
+use serde_json::json;
+use std::process::ExitCode;
 
-fn openapi_file() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("appstore.json")
-}
-
-#[derive(Deserialize, Clone)]
-struct OpenApiServer {
-    url: Url,
-}
-
-#[derive(Deserialize, Clone)]
-struct OpenApiSpec {
-    servers: Vec<OpenApiServer>,
-}
-
-fn openapi_base_url() -> Url {
-    let openapi_file = openapi_file();
-    let file_contents =
-        std::fs::read_to_string(&openapi_file).expect("Failed to read OpenAPI specification file");
-    let spec: OpenApiSpec =
-        serde_json::from_str(&file_contents).expect("Failed to parse OpenAPI specification JSON");
-    let first_server = spec
-        .servers
-        .first()
-        .expect("No servers defined in OpenAPI specification");
-    first_server.url.clone()
-}
-
-async fn ensure_openapi_file_exists(force: bool) {
+pub async fn ensure_openapi_file_exists(force: bool) {
     let openapi_file = openapi_file();
     let file_already_exists = openapi_file.exists();
 
@@ -94,14 +70,29 @@ struct UpdateArgs {
     force: bool,
 }
 
+#[derive(Parser, Debug, Clone)]
+struct StatusArgs {
+    #[clap(long)]
+    name: Option<String>,
+
+    #[clap(long)]
+    version_string: Option<String>,
+
+    #[clap(long)]
+    latest: bool,
+
+    #[clap(long)]
+    pretty: bool,
+}
+
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
     UpdateSpec(UpdateArgs),
     UpdateCodegen,
-    AppStatus,
+    AppStatus(StatusArgs),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 struct CliOpts {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -153,7 +144,7 @@ fn generate_app_store_token() -> Result<String, Box<dyn std::error::Error>> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     let cli_opts = CliOpts::parse();
-
+    // eprintln!("Parsed CLI options: {:?}", cli_opts);
     if let Some(command) = cli_opts.command {
         match command {
             Commands::UpdateSpec(args) => {
@@ -163,7 +154,7 @@ async fn main() -> ExitCode {
             Commands::UpdateCodegen => {
                 return ExitCode::SUCCESS;
             }
-            Commands::AppStatus => {
+            Commands::AppStatus(statusargs) => {
                 let jwt_payload =
                     generate_app_store_token().expect("Failed to generate App Store token");
 
@@ -171,43 +162,56 @@ async fn main() -> ExitCode {
                     .with_base_url(openapi_base_url())
                     .with_api_key(&jwt_payload);
 
-                let apps = client
-                    .apps_get_collection_builder()
-                    .filter_name(vec!["Bleat".to_string()])
-                    .send()
-                    .await
-                    .expect("Failed to fetch apps");
-                for (appnum, app) in apps.data.iter().enumerate() {
-                    let app_name = match &app.attributes {
-                        Some(attributes) => attributes
-                            .name
-                            .clone()
-                            .unwrap_or("Unknown Name?".to_string()),
-                        None => "Unknown Name?".to_string(),
-                    };
-                    println!("{} - {}", app.id, app_name);
+                let filter_name = statusargs.name.unwrap_or("Bleat".to_string());
 
+                let mut apps = client
+                    .apps_get_collection_builder()
+                    .filter_name(vec![filter_name]);
+
+                if let Some(version_string) = statusargs.version_string {
+                    apps = apps.filter_app_store_versions(vec![version_string]);
+                }
+
+                let apps = apps.send().await.expect("Failed to fetch apps");
+                for app in apps.data {
                     let versions = client
                         .apps_app_store_versions_get_to_many_related_builder(app.id.clone())
                         .send()
                         .await
                         .expect("Failed to fetch app versions");
 
-                    eprintln!("----------------------------------------------------\nApp versions",);
-
-                    for (num, version) in versions.data.iter().enumerate() {
-                        println!("{}", version.id);
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&version.attributes)
-                                .expect("Failed to serialize version")
-                        );
-                        if num != versions.data.len() - 1 {
-                            println!("----------------------------------------------------");
-                        }
+                    // eprintln!("----------------------------------------------------\nApp versions",);
+                    if versions.data.is_empty() {
+                        eprintln!("No versions found for this app.");
+                        return ExitCode::FAILURE;
                     }
-                    if appnum != apps.data.len() - 1 {
-                        println!("----------------------------------------------------");
+
+                    for version in versions.data.into_iter().enumerate().filter_map(|(i, v)| {
+                        if statusargs.latest {
+                            if i == 0 { Some(v) } else { None }
+                        } else {
+                            Some(v)
+                        }
+                    }) {
+                        // println!("{}", version.id);
+                        if let Some(attributes_original) = &version.attributes {
+                            let mut attributes: serde_json::Map<String, serde_json::Value> =
+                                json!(attributes_original)
+                                    .as_object()
+                                    .cloned()
+                                    .expect("Failed to convert attributes into HashMap");
+                            attributes.insert("appId".to_string(), app.id.clone().into());
+                            attributes.insert("versionId".to_string(), version.id.clone().into());
+                            if statusargs.pretty {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&attributes)
+                                        .expect("Failed to serialize version")
+                                );
+                            } else {
+                                println!("{}", json!(&attributes))
+                            }
+                        }
                     }
                 }
             }
