@@ -387,8 +387,14 @@ run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 app
 
 [tasks."appstore:connect-admin"]
 description = "Run appstore-connect with the admin creds"
-run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- '''
+run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- $args'''
+usage = '''
+arg "[args]" var=#true help="Arguments to pass to the appstore-connect command"
+'''
 
 [tasks."appstore:connect-download"]
 description = "Run appstore-connect with the download creds"
-run = '''APPSTORE_CONNECT_DOWNLOAD_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- '''
+run = '''APPSTORE_CONNECT_DOWNLOAD_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- $args'''
+usage = '''
+arg "[args]" var=#true help="Arguments to pass to the appstore-connect command"
+'''
