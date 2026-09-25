@@ -1,7 +1,7 @@
 //! Daily App Store Connect analytics report lifecycle and local dump.
 use async_compression::tokio::bufread::GzipDecoder;
 use base64::Engine;
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use md5::{Digest, Md5};
 use reqwest::{Client, StatusCode, Url};
@@ -41,6 +41,8 @@ pub enum AnalyticsError {
     Pagination,
     #[error("request state is incomplete")]
     RequestState,
+    #[error("daily report instance has a missing or invalid processing date")]
+    ProcessingDate,
     #[error("no suitable report request exists")]
     NoRequest,
     #[error("report segment metadata is incomplete")]
@@ -232,7 +234,7 @@ impl AnalyticsClient {
         } else {
             None
         };
-        let request = requests
+        let candidates: Vec<_> = requests
             .into_iter()
             .filter(|r| {
                 r.access() == Some(access)
@@ -240,26 +242,59 @@ impl AnalyticsClient {
                         || r.attributes.stopped_due_to_inactivity != Some(true))
             })
             .filter(|r| snapshot_id.as_ref().is_none_or(|id| &r.id == id))
-            .max_by(|a, b| a.id.cmp(&b.id))
-            .ok_or(AnalyticsError::NoRequest)?;
-        let mut count = 0;
-        for report in self
-            .pages::<Resource>(&format!(
-                "analyticsReportRequests/{}/reports?limit=200",
-                request.id
-            ))
-            .await?
-        {
-            for instance in self
+            .collect();
+        if candidates.is_empty() {
+            return Err(AnalyticsError::NoRequest);
+        }
+        let mut inventories = Vec::new();
+        for request in candidates {
+            for report in self
                 .pages::<Resource>(&format!(
-                    "analyticsReports/{}/instances?limit=200",
-                    report.id
+                    "analyticsReportRequests/{}/reports?limit=200",
+                    request.id
                 ))
                 .await?
             {
-                if instance.attributes.granularity.as_deref() != Some("DAILY") {
-                    continue;
+                let mut daily_instances = Vec::new();
+                let mut latest_daily = None;
+                for instance in self
+                    .pages::<Resource>(&format!(
+                        "analyticsReports/{}/instances?limit=200",
+                        report.id
+                    ))
+                    .await?
+                {
+                    if instance.attributes.granularity.as_deref() != Some("DAILY") {
+                        continue;
+                    }
+                    let date = instance
+                        .attributes
+                        .processing_date
+                        .as_deref()
+                        .ok_or(AnalyticsError::ProcessingDate)
+                        .and_then(|value| {
+                            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                                .map_err(|_| AnalyticsError::ProcessingDate)
+                        })?;
+                    latest_daily =
+                        Some(latest_daily.map_or(date, |previous: NaiveDate| previous.max(date)));
+                    daily_instances.push(DailyInstance {
+                        resource: instance,
+                        date,
+                    });
                 }
+                inventories.push(ReportInventory {
+                    request: request.clone(),
+                    report,
+                    instances: daily_instances,
+                    latest_daily,
+                });
+            }
+        }
+        let mut count = 0;
+        for inventory in select_latest(inventories) {
+            for daily in inventory.instances {
+                let instance = daily.resource;
                 for segment in self
                     .pages::<Resource>(&format!(
                         "analyticsReportInstances/{}/segments?limit=200",
@@ -268,7 +303,14 @@ impl AnalyticsClient {
                     .await?
                 {
                     if self
-                        .save_segment(dir, access, &request, &report, &instance, &segment)
+                        .save_segment(
+                            dir,
+                            access,
+                            &inventory.request,
+                            &inventory.report,
+                            &instance,
+                            &segment,
+                        )
                         .await?
                     {
                         count += 1;
@@ -419,12 +461,51 @@ struct Resource {
     #[serde(default)]
     attributes: Attributes,
 }
+struct ReportInventory {
+    request: Resource,
+    report: Resource,
+    instances: Vec<DailyInstance>,
+    latest_daily: Option<NaiveDate>,
+}
+struct DailyInstance {
+    resource: Resource,
+    date: NaiveDate,
+}
+fn select_latest(inventories: Vec<ReportInventory>) -> Vec<ReportInventory> {
+    let mut newest_by_report_and_date = BTreeMap::new();
+    for item in &inventories {
+        for instance in &item.instances {
+            let key = (item.report.identity(), instance.date);
+            newest_by_report_and_date
+                .entry(key)
+                .and_modify(|newest: &mut Option<NaiveDate>| {
+                    *newest = (*newest).max(item.latest_daily)
+                })
+                .or_insert(item.latest_daily);
+        }
+    }
+    inventories
+        .into_iter()
+        .filter_map(|mut item| {
+            item.instances.retain(|instance| {
+                newest_by_report_and_date.get(&(item.report.identity(), instance.date))
+                    == Some(&item.latest_daily)
+            });
+            if item.instances.is_empty() {
+                None
+            } else {
+                Some(item)
+            }
+        })
+        .collect()
+}
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Attributes {
     access_type: Option<String>,
     stopped_due_to_inactivity: Option<bool>,
     name: Option<String>,
+    category: Option<String>,
     granularity: Option<String>,
     processing_date: Option<String>,
     checksum: Option<String>,
@@ -432,6 +513,15 @@ struct Attributes {
     url: Option<String>,
 }
 impl Resource {
+    fn identity(&self) -> (String, String) {
+        (
+            self.attributes.category.clone().unwrap_or_default(),
+            self.attributes
+                .name
+                .clone()
+                .unwrap_or_else(|| self.id.clone()),
+        )
+    }
     fn access(&self) -> Option<AccessType> {
         match self.attributes.access_type.as_deref() {
             Some("ONGOING") => Some(AccessType::Ongoing),
@@ -577,6 +667,131 @@ async fn write_temp(path: &Path, bytes: &[u8]) -> Result<PathBuf, AnalyticsError
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn inventory(id: &str, report_name: &str, dates: &[&str]) -> ReportInventory {
+        let instances: Vec<_> = dates
+            .iter()
+            .map(|value| {
+                let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").expect("valid test date");
+                DailyInstance {
+                    resource: Resource {
+                        id: format!("{id}-{value}"),
+                        attributes: Attributes::default(),
+                    },
+                    date,
+                }
+            })
+            .collect();
+        let latest_daily = instances.iter().map(|item| item.date).max();
+        ReportInventory {
+            request: Resource {
+                id: id.into(),
+                attributes: Attributes::default(),
+            },
+            report: Resource {
+                id: format!("{id}-report"),
+                attributes: Attributes {
+                    name: Some(report_name.into()),
+                    category: Some("APP_USAGE".into()),
+                    ..Attributes::default()
+                },
+            },
+            instances,
+            latest_daily,
+        }
+    }
+    #[test]
+    fn newest_daily_data_wins_over_opaque_request_id_order() {
+        let selected = select_latest(vec![
+            inventory("z-older", "Sessions Standard", &["2026-09-25"]),
+            inventory(
+                "a-newer",
+                "Sessions Standard",
+                &["2026-09-25", "2026-09-26"],
+            ),
+            inventory("m-pending", "Sessions Standard", &[]),
+        ]);
+        assert_eq!(
+            selected
+                .iter()
+                .map(|item| item.request.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a-newer"]
+        );
+    }
+    #[test]
+    fn equally_current_requests_are_all_included() {
+        let selected = select_latest(vec![
+            inventory("z-one", "Sessions Standard", &["2026-09-25"]),
+            inventory("a-two", "Sessions Standard", &["2026-09-25"]),
+        ]);
+        assert_eq!(selected.len(), 2);
+    }
+    #[test]
+    fn pending_report_keeps_latest_available_other_request() {
+        let selected = select_latest(vec![
+            inventory("z-older", "Sessions Standard", &["2026-09-24"]),
+            inventory("z-older", "Downloads Standard", &["2026-09-24"]),
+            inventory("a-newer", "Sessions Standard", &["2026-09-25"]),
+            inventory("a-newer", "Downloads Standard", &[]),
+        ]);
+        let selected: Vec<_> = selected
+            .iter()
+            .map(|item| {
+                (
+                    item.request.id.as_str(),
+                    item.report.attributes.name.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            selected,
+            vec![
+                ("z-older", Some("Sessions Standard")),
+                ("z-older", Some("Downloads Standard")),
+                ("a-newer", Some("Sessions Standard"))
+            ]
+        );
+    }
+    #[test]
+    fn older_request_preserves_dates_missing_from_newer_request() {
+        let selected = select_latest(vec![
+            inventory(
+                "z-older",
+                "Sessions Standard",
+                &["2026-09-23", "2026-09-24"],
+            ),
+            inventory(
+                "a-newer",
+                "Sessions Standard",
+                &["2026-09-24", "2026-09-25"],
+            ),
+        ]);
+        let selected: Vec<_> = selected
+            .iter()
+            .flat_map(|item| {
+                item.instances
+                    .iter()
+                    .map(move |instance| (item.request.id.as_str(), instance.date))
+            })
+            .collect();
+        assert_eq!(
+            selected,
+            vec![
+                (
+                    "z-older",
+                    NaiveDate::from_ymd_opt(2026, 9, 23).expect("valid test date")
+                ),
+                (
+                    "a-newer",
+                    NaiveDate::from_ymd_opt(2026, 9, 24).expect("valid test date")
+                ),
+                (
+                    "a-newer",
+                    NaiveDate::from_ymd_opt(2026, 9, 25).expect("valid test date")
+                ),
+            ]
+        );
+    }
     fn metadata() -> Metadata<'static> {
         Metadata {
             request_id: "request",

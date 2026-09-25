@@ -52,6 +52,10 @@ request on subsequent invocations. Apple permits only one snapshot request per
 month. Keep `.build/appstore-reports/snapshots.json` between runs so the same
 monthly request can be found. Request commands do not wait for generation.
 
+When several requests are eligible, the downloader retains each available DAILY
+processing date for each report name and category. For an overlapping date, it
+uses the request with the newest available processing date and includes ties.
+
 The default download directory is `.build/appstore-reports`. Under it, compressed
 segment bytes are stored in `segments/<request>/<report>/<instance>/<segment>.gz`;
 corresponding typed JSON Lines are stored beside them as `.ndjson`.
