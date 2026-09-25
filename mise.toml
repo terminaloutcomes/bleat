@@ -383,4 +383,12 @@ run = "shrinky-rs --force --output-type jpg *.png"
 
 [tasks."appstore:status"]
 description = "Check the status of the App Store"
-run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get appstore-key-secret | base64)" cargo run --quiet --package scripts --bin appstore-monitor -- app-status'''
+run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- app-status'''
+
+[tasks."appstore:connect-admin"]
+description = "Run appstore-connect with the admin creds"
+run = '''APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- '''
+
+[tasks."appstore:connect-download"]
+description = "Run appstore-connect with the download creds"
+run = '''APPSTORE_CONNECT_DOWNLOAD_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" cargo run --quiet --package scripts --bin appstore-monitor -- '''
