@@ -619,21 +619,21 @@ pub enum PreOrderState {
 }
 impl PreOrderState {
     fn parse(value: &str) -> Result<Self, AnalyticsError> {
-        match value {
-            "Yes" => Ok(Self::Yes),
-            "No" => Ok(Self::No),
+        match value.to_ascii_lowercase().as_str() {
+            "yes" => Ok(Self::Yes),
+            "no" => Ok(Self::No),
             _ => Err(AnalyticsError::InvalidDownloadValue("Pre-Order")),
         }
     }
 }
 impl DownloadType {
     fn parse(value: &str) -> Result<Self, AnalyticsError> {
-        match value {
-            "First-time Download" => Ok(Self::FirstTimeDownload),
-            "Redownload" => Ok(Self::Redownload),
-            "Manual update" => Ok(Self::ManualUpdate),
-            "Auto-update" => Ok(Self::AutoUpdate),
-            "Restore" => Ok(Self::Restore),
+        match value.to_ascii_lowercase().as_str() {
+            "first-time download" => Ok(Self::FirstTimeDownload),
+            "redownload" => Ok(Self::Redownload),
+            "manual update" => Ok(Self::ManualUpdate),
+            "auto-update" => Ok(Self::AutoUpdate),
+            "restore" => Ok(Self::Restore),
             _ => Err(AnalyticsError::UnsupportedDownloadType),
         }
     }
@@ -1110,6 +1110,34 @@ mod tests {
         assert_eq!(row["download"]["total_downloads"], 4);
         assert_eq!(row["columns"]["Future Field"], "future");
         assert!(row["download"]["source_info"].is_null());
+    }
+    #[tokio::test]
+    async fn downloads_accept_case_insensitive_report_values() {
+        let output = fixture(
+            include_bytes!("../tests/fixtures/appstore/downloads-case-insensitive.tsv.gz"),
+            "App Store Downloads Standard",
+        )
+        .await
+        .expect("case-insensitive fixture");
+        let row: serde_json::Value = serde_json::from_str(output.trim()).expect("JSON row");
+        assert_eq!(row["download"]["download_type"], "redownload");
+        assert_eq!(row["download"]["pre_order"], "yes");
+        assert_eq!(row["download"]["total_downloads"], 4);
+        for (value, expected) in [
+            ("FIRST-TIME DOWNLOAD", DownloadType::FirstTimeDownload),
+            ("manual UPDATE", DownloadType::ManualUpdate),
+            ("AUTO-UPDATE", DownloadType::AutoUpdate),
+            ("restore", DownloadType::Restore),
+        ] {
+            assert_eq!(
+                DownloadType::parse(value).expect("case-insensitive type"),
+                expected
+            );
+        }
+        assert_eq!(
+            PreOrderState::parse("nO").expect("case-insensitive flag"),
+            PreOrderState::No
+        );
     }
     #[tokio::test]
     async fn detailed_downloads_remain_distinct_and_classify_events() {
