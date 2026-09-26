@@ -24,9 +24,14 @@ if [[ ! "${bleat_marketing_version}" =~ ^[0-9]{4}[.][0-9]{2}[.][0-9]{2}$ ]]; the
 fi
 
 readonly bleat_compact_date="${bleat_marketing_version//./}"
-readonly bleat_normalized_date="$(
-    date -j -f '%Y%m%d' "${bleat_compact_date}" '+%Y.%m.%d' 2>/dev/null
-)"
+if bleat_normalized_date="$(date -j -f '%Y%m%d' "${bleat_compact_date}" '+%Y.%m.%d' 2>/dev/null)"; then
+    :
+elif bleat_normalized_date="$(date -d "${bleat_marketing_version//./-}" '+%Y.%m.%d' 2>/dev/null)"; then
+    :
+else
+    bleat_normalized_date=""
+fi
+readonly bleat_normalized_date
 if [[ "${bleat_normalized_date}" != "${bleat_marketing_version}" ]]; then
     print -u2 "BLEAT_MARKETING_VERSION must contain a valid calendar date"
     exit 67
