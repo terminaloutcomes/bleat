@@ -5,6 +5,7 @@ use reqwest::header::HeaderValue;
 use scripts::{
     app_store_connect::{openapi_base_url, openapi_file},
     appstore::*,
+    appstore_analytics::{AccessType, AnalyticsClient, download_dir_from_env},
 };
 use serde::Serialize;
 use serde_json::json;
@@ -90,6 +91,18 @@ enum Commands {
     UpdateSpec(UpdateArgs),
     UpdateCodegen,
     AppStatus(StatusArgs),
+    CreateReport,
+    OneTimeSnapshot,
+    DownloadReports {
+        #[arg(long, value_enum)]
+        access_type: DownloadAccessType,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum DownloadAccessType {
+    Ongoing,
+    OneTimeSnapshot,
 }
 
 #[derive(Parser, Debug)]
@@ -147,6 +160,36 @@ async fn main() -> ExitCode {
     // eprintln!("Parsed CLI options: {:?}", cli_opts);
     if let Some(command) = cli_opts.command {
         match command {
+            Commands::CreateReport
+            | Commands::OneTimeSnapshot
+            | Commands::DownloadReports { .. } => {
+                let result = async {
+                    let client = AnalyticsClient::from_env()?;
+                    match command {
+                        Commands::CreateReport => println!("{}", client.create_report().await?),
+                        Commands::OneTimeSnapshot => {
+                            let download_dir = download_dir_from_env()?;
+                            println!("{}", client.one_time_snapshot(&download_dir).await?);
+                        }
+                        Commands::DownloadReports { access_type } => {
+                            let download_dir = download_dir_from_env()?;
+                            let access = match access_type {
+                                DownloadAccessType::Ongoing => AccessType::Ongoing,
+                                DownloadAccessType::OneTimeSnapshot => AccessType::OneTimeSnapshot,
+                            };
+                            println!("{}", client.download_reports(access, &download_dir).await?);
+                        }
+                        _ => return Err(scripts::appstore_analytics::AnalyticsError::RequestState),
+                    }
+                    Ok::<(), scripts::appstore_analytics::AnalyticsError>(())
+                }
+                .await;
+                if let Err(error) = result {
+                    eprintln!("{error}");
+                    return ExitCode::FAILURE;
+                }
+                return ExitCode::SUCCESS;
+            }
             Commands::UpdateSpec(args) => {
                 ensure_openapi_file_exists(args.force).await;
                 return ExitCode::SUCCESS;
