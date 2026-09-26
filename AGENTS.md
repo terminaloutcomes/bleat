@@ -334,7 +334,7 @@ Simulator test.
 
 `MARKETING_VERSION` in `project.yml` is the application version source of
 truth. Distributable builds use the UTC timestamp build number resolved by
-`scripts/resolve-build-number.sh`; `CURRENT_PROJECT_VERSION` is only the
+`scripts/src/bin/resolve-build-number.rs`; `CURRENT_PROJECT_VERSION` is only the
 project fallback for ordinary builds. When changing either project setting,
 regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit generated
 version settings directly.

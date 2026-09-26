@@ -246,8 +246,7 @@ run = "cargo run --quiet --locked --package scripts --bin upload-app-store-conne
 description = "Validate the internal TestFlight export configuration"
 run = [
   { task = "test:cloudkit-schema" },
-  "./scripts/test-build-number.sh",
-  "./scripts/test-marketing-version.sh",
+  "cargo test --locked --package scripts --test release_versions",
   "./scripts/test-testflight-export-options.sh",
 ]
 
