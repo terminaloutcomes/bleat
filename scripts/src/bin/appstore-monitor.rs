@@ -5,11 +5,10 @@ use reqwest::header::HeaderValue;
 use scripts::{
     app_store_connect::{openapi_base_url, openapi_file},
     appstore::*,
-    appstore_analytics::{AccessType, AnalyticsClient},
+    appstore_analytics::{AccessType, AnalyticsClient, download_dir_from_env},
 };
 use serde::Serialize;
 use serde_json::json;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub async fn ensure_openapi_file_exists(force: bool) {
@@ -97,8 +96,6 @@ enum Commands {
     DownloadReports {
         #[arg(long, value_enum)]
         access_type: DownloadAccessType,
-        #[arg(long, default_value = ".build/appstore-reports")]
-        output_dir: PathBuf,
     },
 }
 
@@ -170,21 +167,17 @@ async fn main() -> ExitCode {
                     let client = AnalyticsClient::from_env()?;
                     match command {
                         Commands::CreateReport => println!("{}", client.create_report().await?),
-                        Commands::OneTimeSnapshot => println!(
-                            "{}",
-                            client
-                                .one_time_snapshot(std::path::Path::new(".build/appstore-reports"))
-                                .await?
-                        ),
-                        Commands::DownloadReports {
-                            access_type,
-                            output_dir,
-                        } => {
+                        Commands::OneTimeSnapshot => {
+                            let download_dir = download_dir_from_env()?;
+                            println!("{}", client.one_time_snapshot(&download_dir).await?);
+                        }
+                        Commands::DownloadReports { access_type } => {
+                            let download_dir = download_dir_from_env()?;
                             let access = match access_type {
                                 DownloadAccessType::Ongoing => AccessType::Ongoing,
                                 DownloadAccessType::OneTimeSnapshot => AccessType::OneTimeSnapshot,
                             };
-                            println!("{}", client.download_reports(access, &output_dir).await?);
+                            println!("{}", client.download_reports(access, &download_dir).await?);
                         }
                         _ => return Err(scripts::appstore_analytics::AnalyticsError::RequestState),
                     }

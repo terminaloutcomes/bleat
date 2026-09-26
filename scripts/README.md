@@ -20,6 +20,11 @@ Set these variables for every command:
 - `APPSTORE_CONNECT_PRIVATE_KEY_BASE64`: base64 encoding of the downloaded `.p8` key.
 - `APPSTORE_CONNECT_APP_ID`: numeric App Store Connect app ID.
 
+For `one-time-snapshot` and `download-reports`, also set
+`APPSTORE_CONNECT_DOWNLOAD_DIR` to an absolute directory outside the repository.
+The command has no default directory or directory flag. Keep this directory
+between runs so snapshot reuse and verified-download state persist.
+
 Create the API key in App Store Connect under Users and Access → Integrations →
 App Store Connect API. Download the `.p8` file when Apple offers it; Apple only
 allows one download. Store it in Keychain, not in this repository. For example,
@@ -42,21 +47,22 @@ alternative credential variables for these commands.
 ```text
 appstore-monitor create-report
 appstore-monitor one-time-snapshot
-appstore-monitor download-reports --access-type ongoing [--output-dir PATH]
-appstore-monitor download-reports --access-type one-time-snapshot [--output-dir PATH]
+appstore-monitor download-reports --access-type ongoing
+appstore-monitor download-reports --access-type one-time-snapshot
 ```
 
 `create-report` reuses an active ONGOING request or creates one and prints its ID.
 `one-time-snapshot` stores a request for the current UTC month and reuses that
 request on subsequent invocations. Apple permits only one snapshot request per
-month. Keep `.build/appstore-reports/snapshots.json` between runs so the same
-monthly request can be found. Request commands do not wait for generation.
+month. Keep `snapshots.json` in the configured download directory between runs
+so the same monthly request can be found. Request commands do not wait for
+generation.
 
 When several requests are eligible, the downloader retains each available DAILY
 processing date for each report name and category. For an overlapping date, it
 uses the request with the newest available processing date and includes ties.
 
-The default download directory is `.build/appstore-reports`. Under it, compressed
+Under `APPSTORE_CONNECT_DOWNLOAD_DIR`, compressed
 segment bytes are stored in `segments/<request>/<report>/<instance>/<segment>.gz`;
 corresponding typed JSON Lines are stored beside them as `.ndjson`.
 `manifest.json` records segment IDs, checksums and relative file paths.

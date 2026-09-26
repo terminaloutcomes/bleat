@@ -8,6 +8,7 @@ use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsString,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -17,7 +18,28 @@ use tokio::{
 };
 
 const BASE: &str = "https://api.appstoreconnect.apple.com/v1/";
-const DEFAULT_DIR: &str = ".build/appstore-reports";
+const DOWNLOAD_DIR_ENV: &str = "APPSTORE_CONNECT_DOWNLOAD_DIR";
+
+pub fn download_dir_from_env() -> Result<PathBuf, AnalyticsError> {
+    parse_download_dir(std::env::var_os(DOWNLOAD_DIR_ENV))
+}
+
+fn parse_download_dir(value: Option<OsString>) -> Result<PathBuf, AnalyticsError> {
+    let path = value
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))?;
+    if !path.is_absolute() {
+        return Err(AnalyticsError::Configuration(
+            "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute path",
+        ));
+    }
+    Ok(path)
+}
+
+fn snapshot_manifest_path(dir: &Path) -> PathBuf {
+    dir.join("snapshots.json")
+}
 
 #[derive(Debug, Error)]
 pub enum AnalyticsError {
@@ -202,7 +224,7 @@ impl AnalyticsClient {
     }
     pub async fn one_time_snapshot(&self, dir: &Path) -> Result<String, AnalyticsError> {
         let month = current_month();
-        let path = dir.join("snapshots.json");
+        let path = snapshot_manifest_path(dir);
         let mut snapshots: BTreeMap<String, String> = load_json_or_default(&path).await?;
         let requests = self.requests().await?;
         if let Some(id) = snapshots.get(&month) {
@@ -225,12 +247,10 @@ impl AnalyticsClient {
     ) -> Result<usize, AnalyticsError> {
         let requests = self.requests().await?;
         let snapshot_id = if access == AccessType::OneTimeSnapshot {
-            load_json_or_default::<BTreeMap<String, String>>(
-                &Path::new(DEFAULT_DIR).join("snapshots.json"),
-            )
-            .await?
-            .get(&current_month())
-            .cloned()
+            load_json_or_default::<BTreeMap<String, String>>(&snapshot_manifest_path(dir))
+                .await?
+                .get(&current_month())
+                .cloned()
         } else {
             None
         };
@@ -667,6 +687,21 @@ async fn write_temp(path: &Path, bytes: &[u8]) -> Result<PathBuf, AnalyticsError
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn download_directory_requires_absolute_path() {
+        assert!(matches!(
+            parse_download_dir(None),
+            Err(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))
+        ));
+        assert!(parse_download_dir(Some(OsString::new())).is_err());
+        assert!(parse_download_dir(Some(OsString::from(".build/appstore-reports"))).is_err());
+        let directory =
+            parse_download_dir(Some(OsString::from("/analytics-reports"))).expect("absolute path");
+        assert_eq!(
+            snapshot_manifest_path(&directory),
+            directory.join("snapshots.json")
+        );
+    }
     fn inventory(id: &str, report_name: &str, dates: &[&str]) -> ReportInventory {
         let instances: Vec<_> = dates
             .iter()
