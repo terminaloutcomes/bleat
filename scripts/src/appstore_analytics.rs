@@ -233,13 +233,12 @@ impl AnalyticsClient {
         let path = snapshot_manifest_path(dir);
         let mut snapshots: BTreeMap<String, String> = load_json_or_default(&path).await?;
         let requests = self.requests().await?;
-        if let Some(id) = snapshots.get(&month) {
-            if requests
+        if let Some(id) = snapshots.get(&month)
+            && requests
                 .iter()
                 .any(|r| &r.id == id && r.access() == Some(AccessType::OneTimeSnapshot))
-            {
-                return Ok(id.clone());
-            }
+        {
+            return Ok(id.clone());
         }
         let id = self.create(AccessType::OneTimeSnapshot).await?;
         snapshots.insert(month, id.clone());
@@ -612,6 +611,21 @@ pub enum DownloadType {
     AutoUpdate,
     Restore,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreOrderState {
+    Yes,
+    No,
+}
+impl PreOrderState {
+    fn parse(value: &str) -> Result<Self, AnalyticsError> {
+        match value {
+            "Yes" => Ok(Self::Yes),
+            "No" => Ok(Self::No),
+            _ => Err(AnalyticsError::InvalidDownloadValue("Pre-Order")),
+        }
+    }
+}
 impl DownloadType {
     fn parse(value: &str) -> Result<Self, AnalyticsError> {
         match value {
@@ -643,7 +657,7 @@ pub struct DownloadRow {
     campaign: Option<String>,
     page_type: String,
     page_title: Option<String>,
-    pre_order: String,
+    pre_order: PreOrderState,
     territory: String,
     count: u64,
     total_downloads: u64,
@@ -667,7 +681,7 @@ impl DownloadRow {
             name: &'static str,
         ) -> Result<&'a str, AnalyticsError> {
             let value = required(columns, name)?;
-            if value.is_empty() {
+            if value.trim().is_empty() {
                 Err(AnalyticsError::InvalidDownloadValue(name))
             } else {
                 Ok(value)
@@ -694,10 +708,10 @@ impl DownloadRow {
             app_apple_identifier,
             variant,
             download_type,
-            app_version: required(columns, "App Version")?.into(),
-            device: required(columns, "Device")?.into(),
-            platform_version: required(columns, "Platform Version")?.into(),
-            source_type: required(columns, "Source Type")?.into(),
+            app_version: nonempty(columns, "App Version")?.into(),
+            device: nonempty(columns, "Device")?.into(),
+            platform_version: nonempty(columns, "Platform Version")?.into(),
+            source_type: nonempty(columns, "Source Type")?.into(),
             source_info: detailed
                 .then(|| columns.get("Source Info").copied())
                 .flatten()
@@ -706,13 +720,13 @@ impl DownloadRow {
                 .then(|| columns.get("Campaign").copied())
                 .flatten()
                 .map(str::to_owned),
-            page_type: required(columns, "Page Type")?.into(),
+            page_type: nonempty(columns, "Page Type")?.into(),
             page_title: detailed
                 .then(|| columns.get("Page Title").copied())
                 .flatten()
                 .map(str::to_owned),
-            pre_order: required(columns, "Pre-Order")?.into(),
-            territory: required(columns, "Territory")?.into(),
+            pre_order: PreOrderState::parse(nonempty(columns, "Pre-Order")?)?,
+            territory: nonempty(columns, "Territory")?.into(),
             count,
             total_downloads,
         })
@@ -1092,6 +1106,7 @@ mod tests {
         assert_eq!(row["download"]["variant"], "standard");
         assert_eq!(row["download"]["download_type"], "first_time_download");
         assert_eq!(row["download"]["app_apple_identifier"], 123456789);
+        assert_eq!(row["download"]["pre_order"], "no");
         assert_eq!(row["download"]["total_downloads"], 4);
         assert_eq!(row["columns"]["Future Field"], "future");
         assert!(row["download"]["source_info"].is_null());
@@ -1155,6 +1170,148 @@ mod tests {
             .await,
             Err(AnalyticsError::UnsupportedDownloadType)
         ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/downloads-blank-required.tsv.gz"),
+                "App Store Downloads Standard",
+            )
+            .await,
+            Err(AnalyticsError::InvalidDownloadValue("Device"))
+        ));
+        let base: BTreeMap<&str, &str> = [
+            ("Date", "2026-09-25"),
+            ("App Name", "Bleat"),
+            ("App Apple Identifier", "123456789"),
+            ("Download Type", "Redownload"),
+            ("App Version", "1.0"),
+            ("Device", "iPhone"),
+            ("Platform Version", "26.0"),
+            ("Source Type", "App Store search"),
+            ("Page Type", "Product page"),
+            ("Pre-Order", "No"),
+            ("Territory", "AU"),
+            ("Counts", "2"),
+        ]
+        .into();
+        for field in [
+            "App Name",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Source Type",
+            "Page Type",
+            "Pre-Order",
+            "Territory",
+        ] {
+            let mut columns = base.clone();
+            columns.insert(field, "");
+            assert!(
+                matches!(DownloadRow::parse(&columns, DownloadVariant::Standard), Err(AnalyticsError::InvalidDownloadValue(name)) if name == field)
+            );
+            columns.insert(field, " \t ");
+            assert!(
+                matches!(DownloadRow::parse(&columns, DownloadVariant::Standard), Err(AnalyticsError::InvalidDownloadValue(name)) if name == field)
+            );
+        }
+        let mut invalid_pre_order = base;
+        invalid_pre_order.insert("Pre-Order", "unknown");
+        assert!(matches!(
+            DownloadRow::parse(&invalid_pre_order, DownloadVariant::Standard),
+            Err(AnalyticsError::InvalidDownloadValue("Pre-Order"))
+        ));
+    }
+    #[tokio::test]
+    async fn cached_legacy_download_segment_is_renormalized_without_network() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let dir = temp.path();
+        let bytes =
+            include_bytes!("../tests/fixtures/appstore/downloads-standard-reordered.tsv.gz");
+        let checksum = Md5::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let folder = dir.join("segments/request/report/instance");
+        fs::create_dir_all(&folder).await.expect("create folder");
+        let raw = folder.join("segment.gz");
+        let normalized = folder.join("segment.ndjson");
+        fs::write(&raw, bytes).await.expect("write cached raw");
+        fs::write(&normalized, b"{\"columns\":{}}\n")
+            .await
+            .expect("write old normalized output");
+        let key = format!("segment:{checksum}");
+        let legacy = serde_json::json!({key: {"raw": "segments/request/report/instance/segment.gz", "normalized": "segments/request/report/instance/segment.ndjson"}});
+        fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_vec(&legacy).expect("JSON"),
+        )
+        .await
+        .expect("write legacy manifest");
+        let client = AnalyticsClient {
+            http: Client::new(),
+            signing_key: EncodingKey::from_secret(b"unused"),
+            key_id: String::new(),
+            issuer: String::new(),
+            base: Url::parse(BASE).expect("base URL"),
+            app_id: String::new(),
+        };
+        let resource = |id: &str, attributes: Attributes| Resource {
+            id: id.into(),
+            attributes,
+        };
+        let request = resource("request", Attributes::default());
+        let report = resource(
+            "report",
+            Attributes {
+                name: Some("App Store Downloads Standard".into()),
+                ..Attributes::default()
+            },
+        );
+        let instance = resource(
+            "instance",
+            Attributes {
+                processing_date: Some("2026-09-25".into()),
+                ..Attributes::default()
+            },
+        );
+        let segment = resource(
+            "segment",
+            Attributes {
+                checksum: Some(checksum),
+                size_in_bytes: Some(bytes.len() as i64),
+                ..Attributes::default()
+            },
+        );
+        assert!(
+            client
+                .save_segment(
+                    dir,
+                    AccessType::Ongoing,
+                    &request,
+                    &report,
+                    &instance,
+                    &segment
+                )
+                .await
+                .expect("renormalize cached segment")
+        );
+        let output = fs::read_to_string(&normalized)
+            .await
+            .expect("read normalized output");
+        let row: serde_json::Value = serde_json::from_str(output.trim()).expect("typed row");
+        assert_eq!(row["download"]["total_downloads"], 4);
+        assert!(
+            !client
+                .save_segment(
+                    dir,
+                    AccessType::Ongoing,
+                    &request,
+                    &report,
+                    &instance,
+                    &segment
+                )
+                .await
+                .expect("already normalized")
+        );
     }
     #[test]
     fn integrity_rejects_size_and_checksum() {
