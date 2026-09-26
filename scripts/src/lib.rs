@@ -12,3 +12,4 @@ pub mod appstore;
 pub mod appstore_analytics;
 pub mod deploy_device;
 pub mod error;
+pub mod release_versions;

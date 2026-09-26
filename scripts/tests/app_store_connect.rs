@@ -1,8 +1,6 @@
 use scripts::app_store_connect::*;
 use std::{
     fs,
-    os::unix::fs::PermissionsExt,
-    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,47 +15,28 @@ fn validates_release_identifiers() {
 }
 
 #[test]
-fn resolves_public_upload_marketing_version_through_shared_script() {
-    let repository = tempfile::tempdir().expect("temporary repository should be created");
-    let script_directory = repository.path().join("scripts");
-    fs::create_dir(&script_directory).expect("script directory should be created");
-    let resolver = script_directory.join("resolve-marketing-version.sh");
-    fs::write(
-        &resolver,
-        b"#!/bin/zsh\nprint -r -- \"${BLEAT_MARKETING_VERSION:-derived-$1}\"\n",
-    )
-    .expect("resolver fixture should be written");
-    let mut permissions = fs::metadata(&resolver)
-        .expect("resolver metadata should be readable")
-        .permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&resolver, permissions).expect("resolver fixture should be executable");
-
-    let derived = resolve_marketing_version(repository.path(), "20260923.0642.54", None)
+fn resolves_public_upload_marketing_version_through_shared_library() {
+    let derived = resolve_marketing_version("20260923.0642.54", None)
         .expect("marketing version should be derived");
-    assert_eq!(derived, "derived-20260923.0642.54");
+    assert_eq!(derived, "2026.09.23");
 
-    let overridden = resolve_marketing_version(repository.path(), "7", Some("2026.09.23"))
+    let overridden = resolve_marketing_version("7", Some("2026.09.23"))
         .expect("marketing-version override should be forwarded");
     assert_eq!(overridden, "2026.09.23");
 }
 
 #[test]
 fn preserves_typed_marketing_version_failures() {
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("scripts package should have a repository parent");
-
     assert!(matches!(
-        resolve_marketing_version(repository, "7", None),
+        resolve_marketing_version("7", None),
         Err(UploadError::MissingMarketingVersionForCustomBuild)
     ));
     assert!(matches!(
-        resolve_marketing_version(repository, "7", Some("2026.9.23")),
+        resolve_marketing_version("7", Some("2026.9.23")),
         Err(UploadError::InvalidMarketingVersionFormat)
     ));
     assert!(matches!(
-        resolve_marketing_version(repository, "7", Some("2026.02.30")),
+        resolve_marketing_version("7", Some("2026.02.30")),
         Err(UploadError::InvalidMarketingVersionDate)
     ));
 }

@@ -6,10 +6,12 @@ set -euo pipefail
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
 readonly bleat_archive_path="${BLEAT_ARCHIVE_PATH:-${bleat_repository_root}/.build/Bleat.xcarchive}"
-readonly bleat_expected_build="$("${bleat_script_dir}/resolve-build-number.sh")"
-readonly bleat_expected_version="$(
-    "${bleat_script_dir}/resolve-marketing-version.sh" "${bleat_expected_build}"
+bleat_expected_build="$(cargo run --quiet --locked --manifest-path "${bleat_repository_root}/Cargo.toml" --package scripts --bin resolve-build-number --)"
+readonly bleat_expected_build
+bleat_expected_version="$(
+    cargo run --quiet --locked --manifest-path "${bleat_repository_root}/Cargo.toml" --package scripts --bin resolve-marketing-version -- "${bleat_expected_build}"
 )"
+readonly bleat_expected_version
 
 typeset -a bleat_cloudkit_schema_arguments
 if [[ "${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" == "YES" \

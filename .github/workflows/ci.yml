@@ -111,13 +111,13 @@ jobs:
           rust-src-dir: bleat-api/
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-        with:
-          workspaces: bleat-api
-      - run: mise run 'api:validate'
+      - name: Install zsh for coverage scripts
+        run: sudo apt-get install -y zsh
+      - name: Rust validation and checking
+        run: mise run 'rust:check'
       - name: Full Rust coverage including container integration tests
         run: |
-          sudo apt -y install zsh
-            ./scripts/coverage-bleat-api.sh
+          ./scripts/coverage-bleat-api.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: rust-coverage

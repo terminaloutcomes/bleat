@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Output};
+use std::process::{Command, ExitStatus};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, ValueEnum};
@@ -226,14 +226,10 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     let repository_root = canonicalize(&arguments.repository_root)?;
     let build = match arguments.build_number {
         Some(build) => build,
-        None => resolve_build_number(&repository_root)?,
+        None => resolve_build_number()?,
     };
     validate_build_number(&build)?;
-    let version = resolve_marketing_version(
-        &repository_root,
-        &build,
-        arguments.marketing_version.as_deref(),
-    )?;
+    let version = resolve_marketing_version(&build, arguments.marketing_version.as_deref())?;
 
     let relative_evidence_directory =
         PathBuf::from(".build/app-store-connect").join(format!("{version}-{build}"));
@@ -421,16 +417,8 @@ pub fn validate_production_url(name: &'static str, value: &str) -> Result<(), Up
 }
 
 pub fn validate_build_number(value: &str) -> Result<(), UploadError> {
-    let components: Vec<&str> = value.split('.').collect();
-    if (1..=3).contains(&components.len())
-        && components.iter().all(|component| {
-            !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
-        })
-    {
-        Ok(())
-    } else {
-        Err(UploadError::InvalidBuildNumber)
-    }
+    crate::release_versions::validate_build_number(value)
+        .map_err(|_| UploadError::InvalidBuildNumber)
 }
 
 pub fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
@@ -441,54 +429,31 @@ pub fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
     })
 }
 
-pub fn resolve_build_number(repository_root: &Path) -> Result<String, UploadError> {
-    let output = command_output(
-        "build-number resolution",
-        Command::new(repository_root.join("scripts/resolve-build-number.sh"))
-            .current_dir(repository_root),
-    )?;
-    String::from_utf8(output.stdout)
-        .map(|value| value.trim().to_string())
-        .map_err(|_| UploadError::InvalidCommandOutput {
-            stage: "build-number resolution",
-        })
+pub fn resolve_build_number() -> Result<String, UploadError> {
+    crate::release_versions::resolve_build_number(None, chrono::Utc::now())
+        .map_err(|_| UploadError::InvalidBuildNumber)
 }
 
 pub fn resolve_marketing_version(
-    repository_root: &Path,
     build: &str,
     override_value: Option<&str>,
 ) -> Result<String, UploadError> {
-    let mut command = Command::new(repository_root.join("scripts/resolve-marketing-version.sh"));
-    command
-        .current_dir(repository_root)
-        .arg(build)
-        .env_remove("BLEAT_MARKETING_VERSION");
-    if let Some(value) = override_value {
-        command.env("BLEAT_MARKETING_VERSION", value);
-    }
-    let output = command
-        .output()
-        .map_err(|source| UploadError::CommandStart {
-            stage: "marketing-version resolution",
-            source,
-        })?;
-    if !output.status.success() {
-        return match output.status.code() {
-            Some(65) => Err(UploadError::MissingMarketingVersionForCustomBuild),
-            Some(66) => Err(UploadError::InvalidMarketingVersionFormat),
-            Some(67) => Err(UploadError::InvalidMarketingVersionDate),
-            _ => Err(UploadError::CommandFailedWithoutLog {
-                stage: "marketing-version resolution",
-                status: output.status,
-            }),
-        };
-    }
-    String::from_utf8(output.stdout)
-        .map(|value| value.trim().to_string())
-        .map_err(|_| UploadError::InvalidCommandOutput {
-            stage: "marketing-version resolution",
-        })
+    crate::release_versions::resolve_marketing_version(build, override_value).map_err(|error| {
+        match error {
+            crate::release_versions::VersionError::MissingMarketingVersionForCustomBuild => {
+                UploadError::MissingMarketingVersionForCustomBuild
+            }
+            crate::release_versions::VersionError::InvalidMarketingVersionFormat => {
+                UploadError::InvalidMarketingVersionFormat
+            }
+            crate::release_versions::VersionError::InvalidMarketingVersionDate => {
+                UploadError::InvalidMarketingVersionDate
+            }
+            crate::release_versions::VersionError::InvalidBuildNumber => {
+                UploadError::InvalidBuildNumber
+            }
+        }
+    })
 }
 
 pub fn create_directory(path: &Path) -> Result<(), UploadError> {
@@ -604,20 +569,6 @@ fn run_inherited_command(stage: &'static str, command: &mut Command) -> Result<(
         Ok(())
     } else {
         Err(UploadError::CommandFailedWithoutLog { stage, status })
-    }
-}
-
-fn command_output(stage: &'static str, command: &mut Command) -> Result<Output, UploadError> {
-    let output = command
-        .output()
-        .map_err(|source| UploadError::CommandStart { stage, source })?;
-    if output.status.success() {
-        Ok(output)
-    } else {
-        Err(UploadError::CommandFailedWithoutLog {
-            stage,
-            status: output.status,
-        })
     }
 }
 

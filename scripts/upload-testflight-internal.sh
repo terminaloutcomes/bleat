@@ -7,10 +7,12 @@ readonly bleat_repository_root="${bleat_script_dir:h}"
 
 readonly bleat_development_team="${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
 readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the App Store Connect bundle identifier}"
-readonly bleat_build_number="$("${bleat_script_dir}/resolve-build-number.sh")"
-readonly bleat_version="$(
-    "${bleat_script_dir}/resolve-marketing-version.sh" "${bleat_build_number}"
+bleat_build_number="$(cargo run --quiet --locked --manifest-path "${bleat_repository_root}/Cargo.toml" --package scripts --bin resolve-build-number --)"
+readonly bleat_build_number
+bleat_version="$(
+    cargo run --quiet --locked --manifest-path "${bleat_repository_root}/Cargo.toml" --package scripts --bin resolve-marketing-version -- "${bleat_build_number}"
 )"
+readonly bleat_version
 readonly bleat_relative_output_directory=".build/testflight-internal/${bleat_version}-${bleat_build_number}"
 readonly bleat_output_directory="${bleat_repository_root}/${bleat_relative_output_directory}"
 readonly bleat_archive_path="${bleat_output_directory}/Bleat.xcarchive"

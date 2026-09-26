@@ -34,10 +34,10 @@ run = "cargo clippy --all-targets --all-features -- -D warnings"
 [tasks."api:test"]
 description = "Test bleat-api against disposable PostgreSQL"
 depends = ["api:fmt"]
-dir = "./bleat-api"
 run = """cargo test \
   --quiet \
   --locked \
+  -p bleat-api
   --all-features \
   -- \
   --nocapture \
@@ -246,8 +246,7 @@ run = "cargo run --quiet --locked --package scripts --bin upload-app-store-conne
 description = "Validate the internal TestFlight export configuration"
 run = [
   { task = "test:cloudkit-schema" },
-  "./scripts/test-build-number.sh",
-  "./scripts/test-marketing-version.sh",
+  "cargo test --locked --package scripts --test release_versions",
   "./scripts/test-testflight-export-options.sh",
 ]
 
@@ -352,13 +351,6 @@ export BLEAT_DEVICE_ID BLEAT_DEVICE_BUILD_DIRECTORY
 exec cargo run --quiet --package scripts --bin deploy-device
 """
 
-[tasks.rust-fmt]
-run = "cargo fmt --quiet"
-
-
-[tasks.clippy]
-depends = ["rust-fmt"]
-run = "cargo clippy --all-targets --all-features --quiet -- -D warnings"
 
 [tasks.shellcheck]
 run = "find . -name '*.sh' -not -path '*.build/*' -type f -exec shellcheck '{}' +"
@@ -407,3 +399,28 @@ run = '''
   APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-download-secret)" \
   cargo run --quiet --package scripts --bin appstore-monitor --
 '''
+
+[tasks.clippy]
+run = { task = "rust:clippy" }
+
+[tasks."rust:fmt"]
+run = "cargo fmt --quiet"
+
+[tasks."rust:clippy"]
+depends = ["rust:fmt"]
+run = "cargo clippy --all-targets --all-features --quiet -- -D warnings"
+
+[tasks."rust:test"]
+depends = ["rust:fmt"]
+run = '''
+  cargo test \
+    --all-targets \
+    --all-features \
+    --quiet \
+    -- \
+    --test-threads=4
+'''
+
+[tasks."rust:check"]
+depends = ["rust:fmt"]
+run = [{ task = "rust:clippy" }, { task = "rust:test" }]

@@ -73,6 +73,13 @@ checksum verification. Incomplete temporary files are ignored on the next run.
 Each NDJSON row contains request, access type, report, variant when identifiable,
 instance, segment, granularity, checksum and processing date metadata, plus a
 `columns` object with the original tab-delimited column names and values.
-Unrecognized columns are retained. Report-specific metric typing is added by
-the subsequent normalization work. No signed segment URL or credential is
-written to the local dump.
+Unrecognized columns are retained. App Store Downloads Standard and Detailed
+rows also contain a typed `download` object with the report variant, event date,
+app identity, download type, dimensions, count, and `total_downloads` contribution.
+The latter is the count for first-time downloads and redownloads and zero for
+updates and restores. Query one variant at a time: Standard and Detailed are
+separate aggregates and must not be summed together. Detailed attribution
+(`source_info`, `campaign`, and `page_title`) is optional and remains null for
+Standard rows. Unknown download types and missing or malformed required values
+reject the entire segment. No signed segment URL or credential is written to
+the local dump.
