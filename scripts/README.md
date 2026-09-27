@@ -96,7 +96,7 @@ before calculating conversion rates downstream.
 
 App Store Purchases Standard and Detailed rows contain a typed `purchase` object
 with purchase and content identities, attribution, signed `purchases`, exact
-decimal `proceeds_usd` and `sales_usd` strings, and `paying_users`. Negative
+decimal `proceeds_usd` and `sales_usd` JSON numbers, and `paying_users`. Negative
 values retain refund evidence; zero purchases with negative money retains
 partial-refund evidence. Treat purchase count, proceeds, sales, and paying users
 as separate metrics. Paying users cannot be summed across dimensional rows,

@@ -417,10 +417,8 @@ impl AnalyticsClient {
             let bytes = fs::read(&raw).await?;
             if verify(&bytes, size, checksum).is_ok() {
                 if existing.is_some_and(|entry| {
-                    (download_variant(metadata.report_name).is_none()
-                        && discovery_variant(metadata.report_name).is_none()
-                        && purchase_variant(metadata.report_name).is_none())
-                        || entry.normalization_version >= 3
+                    entry.normalization_version
+                        >= required_normalization_version(metadata.report_name)
                 }) && fs::try_exists(&normalized).await?
                 {
                     return Ok(false);
@@ -592,7 +590,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 3,
+        normalization_version: 4,
     }
 }
 #[derive(Serialize)]
@@ -958,7 +956,9 @@ pub struct PurchaseRow {
     pre_order: PreOrderState,
     territory: String,
     purchases: i64,
+    #[serde(serialize_with = "serialize_decimal_number")]
     proceeds_usd: Decimal,
+    #[serde(serialize_with = "serialize_decimal_number")]
     sales_usd: Decimal,
     paying_users: u64,
 }
@@ -1070,6 +1070,25 @@ fn purchase_variant(name: Option<&str>) -> Option<PurchaseVariant> {
         }
         _ => None,
     }
+}
+
+fn required_normalization_version(name: Option<&str>) -> u8 {
+    if purchase_variant(name).is_some() {
+        4
+    } else if download_variant(name).is_some() || discovery_variant(name).is_some() {
+        2
+    } else {
+        0
+    }
+}
+
+fn serialize_decimal_number<S: serde::Serializer>(
+    value: &Decimal,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let number: serde_json::Number =
+        serde_json::from_str(&value.to_string()).map_err(serde::ser::Error::custom)?;
+    number.serialize(serializer)
 }
 fn variant(name: &str) -> Option<&'static str> {
     if name.ends_with(" Detailed") {
@@ -1547,13 +1566,15 @@ mod tests {
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0]["purchase"]["variant"], "standard");
         assert_eq!(rows[0]["purchase"]["purchase_type"], "app_purchase");
-        assert_eq!(rows[0]["purchase"]["proceeds_usd"], "1.20");
-        assert_eq!(rows[0]["purchase"]["sales_usd"], "1.99");
+        assert!(rows[0]["purchase"]["proceeds_usd"].is_number());
+        assert!(rows[0]["purchase"]["sales_usd"].is_number());
+        assert_eq!(rows[0]["purchase"]["proceeds_usd"].to_string(), "1.20");
+        assert_eq!(rows[0]["purchase"]["sales_usd"].to_string(), "1.99");
         assert!(rows[0]["purchase"]["source_info"].is_null());
         assert_eq!(rows[1]["purchase"]["purchases"], -1);
-        assert_eq!(rows[1]["purchase"]["proceeds_usd"], "-0.60");
+        assert_eq!(rows[1]["purchase"]["proceeds_usd"].to_string(), "-0.60");
         assert_eq!(rows[2]["purchase"]["purchases"], 0);
-        assert_eq!(rows[2]["purchase"]["sales_usd"], "-0.49");
+        assert_eq!(rows[2]["purchase"]["sales_usd"].to_string(), "-0.49");
 
         let detailed = fixture(
             include_bytes!("../tests/fixtures/appstore/purchases-detailed.tsv.gz"),
