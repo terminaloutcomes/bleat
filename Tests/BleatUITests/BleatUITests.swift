@@ -137,6 +137,10 @@ final class BleatUITests: XCTestCase {
             launchScreen.label,
             expectedLabel
         )
+        launchScreen.tap()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 10)
+        )
     }
 
     @MainActor

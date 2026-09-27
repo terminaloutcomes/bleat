@@ -496,7 +496,26 @@ private struct LaunchingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isLogoPulsing = false
 
+    private var isUITestLaunch: Bool {
+        #if DEBUG || BLEAT_UI_TESTING
+            ProcessInfo.processInfo.arguments.contains("--ui-testing-launching")
+        #else
+            false
+        #endif
+    }
+
     var body: some View {
+        #if DEBUG || BLEAT_UI_TESTING
+            content.onTapGesture {
+                guard isUITestLaunch else { return }
+                Task { await UITestLaunchGate.shared.release() }
+            }
+        #else
+            content
+        #endif
+    }
+
+    private var content: some View {
         VStack(spacing: 16) {
             Image("LaunchLogo")
                 .resizable()
@@ -535,7 +554,7 @@ private struct LaunchingView: View {
     }
 
     private func updateLogoAnimation() {
-        isLogoPulsing = !reduceMotion
+        isLogoPulsing = !reduceMotion && !isUITestLaunch
     }
 }
 
