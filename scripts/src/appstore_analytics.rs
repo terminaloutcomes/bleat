@@ -83,6 +83,16 @@ pub enum AnalyticsError {
     InvalidDownloadValue(&'static str),
     #[error("Downloads report contains an unsupported download type")]
     UnsupportedDownloadType,
+    #[error("Discovery and Engagement report has a missing column: {0}")]
+    MissingDiscoveryColumn(&'static str),
+    #[error("Discovery and Engagement report has an invalid value in: {0}")]
+    InvalidDiscoveryValue(&'static str),
+    #[error("Discovery and Engagement report contains an unsupported event")]
+    UnsupportedDiscoveryEvent,
+    #[error("unique counts cannot be added across dimensional rows")]
+    NonAdditiveUniqueCounts,
+    #[error("Standard and Detailed report counts cannot be combined")]
+    MixedReportVariants,
     #[error("local storage failed: {0}")]
     Storage(#[from] std::io::Error),
 }
@@ -398,8 +408,9 @@ impl AnalyticsClient {
             let bytes = fs::read(&raw).await?;
             if verify(&bytes, size, checksum).is_ok() {
                 if existing.is_some_and(|entry| {
-                    download_variant(metadata.report_name).is_none()
-                        || entry.normalization_version >= 1
+                    (download_variant(metadata.report_name).is_none()
+                        && discovery_variant(metadata.report_name).is_none())
+                        || entry.normalization_version >= 2
                 }) && fs::try_exists(&normalized).await?
                 {
                     return Ok(false);
@@ -571,7 +582,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 1,
+        normalization_version: 2,
     }
 }
 #[derive(Serialize)]
@@ -594,6 +605,8 @@ struct Row<'a> {
     columns: BTreeMap<&'a str, &'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     download: Option<DownloadRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    discovery: Option<DiscoveryRow>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -744,6 +757,150 @@ fn download_variant(name: Option<&str>) -> Option<DownloadVariant> {
         _ => None,
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiscoveryEvent {
+    Impression,
+    PageView,
+    Tap,
+}
+impl DiscoveryEvent {
+    fn parse(value: &str) -> Result<Self, AnalyticsError> {
+        match value.to_ascii_lowercase().as_str() {
+            "impression" => Ok(Self::Impression),
+            "page view" => Ok(Self::PageView),
+            "tap" => Ok(Self::Tap),
+            _ => Err(AnalyticsError::UnsupportedDiscoveryEvent),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiscoveryVariant {
+    Standard,
+    Detailed,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DiscoveryRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: DiscoveryVariant,
+    event: DiscoveryEvent,
+    page_type: String,
+    page_title: Option<String>,
+    source_type: String,
+    source_info: Option<String>,
+    campaign: Option<String>,
+    engagement_type: Option<String>,
+    device: String,
+    platform_version: String,
+    territory: String,
+    count: u64,
+    unique_count: u64,
+}
+impl DiscoveryRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: DiscoveryVariant,
+    ) -> Result<Self, AnalyticsError> {
+        fn required<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingDiscoveryColumn(name))
+        }
+        fn nonempty<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            let value = required(columns, name)?;
+            if value.trim().is_empty() {
+                Err(AnalyticsError::InvalidDiscoveryValue(name))
+            } else {
+                Ok(value)
+            }
+        }
+        let date = NaiveDate::parse_from_str(nonempty(columns, "Date")?, "%Y-%m-%d")
+            .map_err(|_| AnalyticsError::InvalidDiscoveryValue("Date"))?;
+        let app_apple_identifier = nonempty(columns, "App Apple Identifier")?
+            .parse()
+            .map_err(|_| AnalyticsError::InvalidDiscoveryValue("App Apple Identifier"))?;
+        let count = nonempty(columns, "Counts")?
+            .parse()
+            .map_err(|_| AnalyticsError::InvalidDiscoveryValue("Counts"))?;
+        let unique_count = nonempty(columns, "Unique Counts")?
+            .parse()
+            .map_err(|_| AnalyticsError::InvalidDiscoveryValue("Unique Counts"))?;
+        let detailed = variant == DiscoveryVariant::Detailed;
+        Ok(Self {
+            date,
+            app_name: nonempty(columns, "App Name")?.into(),
+            app_apple_identifier,
+            variant,
+            event: DiscoveryEvent::parse(nonempty(columns, "Event")?)?,
+            page_type: nonempty(columns, "Page Type")?.into(),
+            page_title: detailed
+                .then(|| columns.get("Page Title").copied())
+                .flatten()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned),
+            source_type: nonempty(columns, "Source Type")?.into(),
+            source_info: detailed
+                .then(|| columns.get("Source Info").copied())
+                .flatten()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned),
+            campaign: detailed
+                .then(|| columns.get("Campaign").copied())
+                .flatten()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned),
+            engagement_type: columns
+                .get("Engagement Type")
+                .copied()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned),
+            device: nonempty(columns, "Device")?.into(),
+            platform_version: nonempty(columns, "Platform Version")?.into(),
+            territory: nonempty(columns, "Territory")?.into(),
+            count,
+            unique_count,
+        })
+    }
+    pub fn sum_counts(rows: &[Self], unique: bool) -> Result<u64, AnalyticsError> {
+        if unique {
+            return Err(AnalyticsError::NonAdditiveUniqueCounts);
+        }
+        let Some(first) = rows.first() else {
+            return Ok(0);
+        };
+        if rows.iter().any(|row| row.variant != first.variant) {
+            return Err(AnalyticsError::MixedReportVariants);
+        }
+        rows.iter().try_fold(0u64, |sum, row| {
+            sum.checked_add(row.count)
+                .ok_or(AnalyticsError::InvalidDiscoveryValue("Counts"))
+        })
+    }
+}
+
+fn discovery_variant(name: Option<&str>) -> Option<DiscoveryVariant> {
+    match name {
+        Some(
+            "App Store Discovery and Engagement Standard" | "Discovery and Engagement Standard",
+        ) => Some(DiscoveryVariant::Standard),
+        Some(
+            "App Store Discovery and Engagement Detailed" | "Discovery and Engagement Detailed",
+        ) => Some(DiscoveryVariant::Detailed),
+        _ => None,
+    }
+}
 fn variant(name: &str) -> Option<&'static str> {
     if name.ends_with(" Detailed") {
         Some("DETAILED")
@@ -825,6 +982,27 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             }
         }
     }
+    let discovery_variant = discovery_variant(metadata.report_name);
+    if discovery_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "Event",
+            "Page Type",
+            "Source Type",
+            "Engagement Type",
+            "Device",
+            "Platform Version",
+            "Territory",
+            "Counts",
+            "Unique Counts",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingDiscoveryColumn(required));
+            }
+        }
+    }
     let mut output = String::new();
     for line in lines {
         let values: Vec<&str> = line.split('\t').collect();
@@ -835,10 +1013,14 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
         let download = download_variant
             .map(|variant| DownloadRow::parse(&columns, variant))
             .transpose()?;
+        let discovery = discovery_variant
+            .map(|variant| DiscoveryRow::parse(&columns, variant))
+            .transpose()?;
         output.push_str(&serde_json::to_string(&Row {
             metadata,
             columns,
             download,
+            discovery,
         })?);
         output.push('\n');
     }
@@ -1110,6 +1292,109 @@ mod tests {
         assert_eq!(row["download"]["total_downloads"], 4);
         assert_eq!(row["columns"]["Future Field"], "future");
         assert!(row["download"]["source_info"].is_null());
+    }
+    #[tokio::test]
+    async fn discovery_variants_preserve_event_classes_and_detailed_dimensions() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Store Discovery and Engagement Standard",
+                include_bytes!("../tests/fixtures/appstore/discovery-standard.tsv.gz").as_slice(),
+                "standard",
+            ),
+            (
+                "App Store Discovery and Engagement Detailed",
+                include_bytes!("../tests/fixtures/appstore/discovery-detailed.tsv.gz").as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("discovery fixture");
+            let rows: Vec<serde_json::Value> = output
+                .lines()
+                .map(|line| serde_json::from_str(line).expect("JSON row"))
+                .collect();
+            assert_eq!(rows.len(), 3);
+            for (row, event) in rows.iter().zip(["impression", "page_view", "tap"]) {
+                assert_eq!(row["discovery"]["variant"], expected_variant);
+                assert_eq!(row["discovery"]["event"], event);
+                assert!(row["discovery"]["count"].is_u64());
+                assert!(row["discovery"]["unique_count"].is_u64());
+                assert_eq!(row["discovery"]["app_apple_identifier"], 123456789);
+                if expected_variant == "detailed" {
+                    assert_eq!(row["discovery"]["source_info"], "example.com");
+                    assert_eq!(row["discovery"]["campaign"], "launch");
+                    assert_eq!(row["discovery"]["page_title"], "Default Product Page");
+                } else {
+                    assert!(row["discovery"]["source_info"].is_null());
+                    assert!(row["discovery"]["campaign"].is_null());
+                    assert!(row["discovery"]["page_title"].is_null());
+                }
+            }
+        }
+    }
+    #[tokio::test]
+    async fn discovery_empty_and_invalid_segments_do_not_invent_zero_rows() {
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/discovery-empty.tsv.gz"),
+                "App Store Discovery and Engagement Standard"
+            )
+            .await
+            .expect("empty report"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/discovery-missing-column.tsv.gz"),
+                "App Store Discovery and Engagement Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingDiscoveryColumn("Unique Counts"))
+        ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/discovery-unknown-event.tsv.gz"),
+                "App Store Discovery and Engagement Standard"
+            )
+            .await,
+            Err(AnalyticsError::UnsupportedDiscoveryEvent)
+        ));
+    }
+    #[test]
+    fn discovery_unique_counts_and_variants_cannot_be_summed() {
+        let columns: BTreeMap<&str, &str> = [
+            ("Date", "2026-09-25"),
+            ("App Name", "Bleat"),
+            ("App Apple Identifier", "123456789"),
+            ("Event", "Impression"),
+            ("Page Type", "No page"),
+            ("Source Type", "App Store search"),
+            ("Engagement Type", ""),
+            ("Device", "iPhone"),
+            ("Platform Version", "26.0"),
+            ("Territory", "AU"),
+            ("Counts", "7"),
+            ("Unique Counts", "5"),
+        ]
+        .into();
+        let standard =
+            DiscoveryRow::parse(&columns, DiscoveryVariant::Standard).expect("standard row");
+        let detailed =
+            DiscoveryRow::parse(&columns, DiscoveryVariant::Detailed).expect("detailed row");
+        assert!(matches!(
+            DiscoveryRow::sum_counts(&[standard], true),
+            Err(AnalyticsError::NonAdditiveUniqueCounts)
+        ));
+        assert!(matches!(
+            DiscoveryRow::sum_counts(
+                &[
+                    DiscoveryRow::parse(&columns, DiscoveryVariant::Standard)
+                        .expect("standard row"),
+                    detailed
+                ],
+                false
+            ),
+            Err(AnalyticsError::MixedReportVariants)
+        ));
     }
     #[tokio::test]
     async fn downloads_accept_case_insensitive_report_values() {

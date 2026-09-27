@@ -83,3 +83,13 @@ separate aggregates and must not be summed together. Detailed attribution
 Standard rows. Unknown download types and missing or malformed required values
 reject the entire segment. No signed segment URL or credential is written to
 the local dump.
+
+App Store Discovery and Engagement Standard and Detailed rows contain a typed
+`discovery` object. It records the event as impression, page view, or tap, with
+numeric `count` and `unique_count` fields. Detailed source info, campaign, and
+page title remain absent on Standard rows. Engagement type may be absent when
+there was no user action. A privacy-suppressed report row is absent data; the
+tool does not invent a zero row. Do not sum unique counts across dimensional
+rows, combine Standard and Detailed counts, or derive a conversion rate from a
+single report row. Match date and source and page dimensions with Downloads
+before calculating conversion rates downstream.
