@@ -1,14 +1,19 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::{Command, ExitCode, ExitStatus};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
 use clap::{Parser, ValueEnum};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
+
+use crate::appstore::client;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum CapabilityMode {
@@ -624,4 +629,124 @@ pub fn openapi_base_url() -> Url {
         .first()
         .expect("No servers defined in OpenAPI specification");
     first_server.url.clone()
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct StatusArgs {
+    #[clap(long)]
+    name: Option<String>,
+
+    #[clap(long)]
+    version_string: Option<String>,
+
+    #[clap(long)]
+    latest: bool,
+
+    #[clap(long)]
+    pretty: bool,
+}
+
+#[derive(Serialize)]
+struct JwtPayload {
+    iss: String,
+    iat: u64,
+    exp: u64,
+    aud: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    scope: Vec<String>,
+}
+
+impl JwtPayload {
+    fn new(iss: String) -> Self {
+        let iat = chrono::Utc::now().timestamp() as u64;
+        let exp = iat + 600; // Token valid for 10 minutes
+        Self {
+            iss,
+            iat,
+            exp,
+            aud: "appstoreconnect-v1".to_string(),
+            scope: vec![],
+        }
+    }
+}
+
+fn generate_app_store_token() -> Result<String, Box<dyn std::error::Error>> {
+    let key_id = std::env::var("APPSTORE_CONNECT_KEY_ID")?;
+    let issuer_id = std::env::var("APPSTORE_CONNECT_ISSUER_ID")?;
+    // let private_key_path: String = std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_PATH")?;
+
+    // This is Apple's downloaded AuthKey_<KEY_ID>.p8 file.
+    let private_key = base64::engine::general_purpose::STANDARD
+        .decode(std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_BASE64")?)?;
+
+    let mut header = Header::new(Algorithm::ES256);
+    header.kid = Some(key_id);
+    // Header::new already sets typ to JWT.
+
+    let payload = JwtPayload::new(issuer_id);
+
+    let encoding_key = EncodingKey::from_ec_pem(&private_key)?;
+    Ok(encode(&header, &payload, &encoding_key)?)
+}
+
+pub async fn appstatus(statusargs: StatusArgs) -> Result<(), ExitCode> {
+    let jwt_payload = generate_app_store_token().expect("Failed to generate App Store token");
+
+    let client = client::HttpClient::new()
+        .with_base_url(openapi_base_url())
+        .with_api_key(&jwt_payload);
+
+    let filter_name = statusargs.name.clone().unwrap_or("Bleat".to_string());
+
+    let mut apps = client
+        .apps_get_collection_builder()
+        .filter_name(vec![filter_name]);
+
+    if let Some(version_string) = &statusargs.version_string {
+        apps = apps.filter_app_store_versions(vec![version_string.to_string()]);
+    }
+
+    let apps = apps.send().await.expect("Failed to fetch apps");
+    for app in apps.data {
+        let versions = client
+            .apps_app_store_versions_get_to_many_related_builder(app.id.clone())
+            .send()
+            .await
+            .expect("Failed to fetch app versions");
+
+        // eprintln!("----------------------------------------------------\nApp versions",);
+        if versions.data.is_empty() {
+            eprintln!("No versions found for this app.");
+            return Err(ExitCode::FAILURE);
+        }
+
+        for version in versions.data.into_iter().enumerate().filter_map(|(i, v)| {
+            if statusargs.latest {
+                if i == 0 { Some(v) } else { None }
+            } else {
+                Some(v)
+            }
+        }) {
+            // println!("{}", version.id);
+            if let Some(attributes_original) = &version.attributes {
+                let mut attributes: serde_json::Map<String, serde_json::Value> =
+                    json!(attributes_original)
+                        .as_object()
+                        .cloned()
+                        .expect("Failed to convert attributes into HashMap");
+                attributes.insert("appId".to_string(), app.id.clone().into());
+                attributes.insert("versionId".to_string(), version.id.clone().into());
+                if statusargs.pretty {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&attributes)
+                            .expect("Failed to serialize version")
+                    );
+                } else {
+                    println!("{}", json!(&attributes))
+                }
+            }
+        }
+    }
+    Ok(())
 }

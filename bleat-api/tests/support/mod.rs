@@ -22,6 +22,7 @@ pub struct TestPostgres {
     database_url: String,
 }
 
+#[cfg(test)]
 impl TestPostgres {
     pub async fn start() -> Self {
         let permit = DATABASE_PERMITS

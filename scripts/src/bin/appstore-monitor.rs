@@ -1,14 +1,9 @@
-use base64::Engine;
 use clap::{Parser, Subcommand};
-use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::header::HeaderValue;
 use scripts::{
-    app_store_connect::{openapi_base_url, openapi_file},
-    appstore::*,
-    appstore_analytics::{AccessType, AnalyticsClient, download_dir_from_env},
+    app_store_connect::{StatusArgs, appstatus, openapi_file},
+    appstore_analytics::{AccessType, AnalyticsClient, AnalyticsError, download_dir_from_env},
 };
-use serde::Serialize;
-use serde_json::json;
 use std::process::ExitCode;
 
 pub async fn ensure_openapi_file_exists(force: bool) {
@@ -71,21 +66,6 @@ struct UpdateArgs {
     force: bool,
 }
 
-#[derive(Parser, Debug, Clone)]
-struct StatusArgs {
-    #[clap(long)]
-    name: Option<String>,
-
-    #[clap(long)]
-    version_string: Option<String>,
-
-    #[clap(long)]
-    latest: bool,
-
-    #[clap(long)]
-    pretty: bool,
-}
-
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
     UpdateSpec(UpdateArgs),
@@ -95,170 +75,60 @@ enum Commands {
     OneTimeSnapshot,
     DownloadReports {
         #[arg(long, value_enum)]
-        access_type: DownloadAccessType,
+        access_type: AccessType,
     },
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum DownloadAccessType {
-    Ongoing,
-    OneTimeSnapshot,
 }
 
 #[derive(Parser, Debug)]
 struct CliOpts {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Commands,
 }
 
-#[derive(Serialize)]
-struct JwtPayload {
-    iss: String,
-    iat: u64,
-    exp: u64,
-    aud: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    scope: Vec<String>,
-}
-
-impl JwtPayload {
-    fn new(iss: String) -> Self {
-        let iat = chrono::Utc::now().timestamp() as u64;
-        let exp = iat + 600; // Token valid for 10 minutes
-        Self {
-            iss,
-            iat,
-            exp,
-            aud: "appstoreconnect-v1".to_string(),
-            scope: vec![],
-        }
-    }
-}
-
-fn generate_app_store_token() -> Result<String, Box<dyn std::error::Error>> {
-    let key_id = std::env::var("APPSTORE_CONNECT_KEY_ID")?;
-    let issuer_id = std::env::var("APPSTORE_CONNECT_ISSUER_ID")?;
-    // let private_key_path: String = std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_PATH")?;
-
-    // This is Apple's downloaded AuthKey_<KEY_ID>.p8 file.
-    let private_key = base64::engine::general_purpose::STANDARD
-        .decode(std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_BASE64")?)?;
-
-    let mut header = Header::new(Algorithm::ES256);
-    header.kid = Some(key_id);
-    // Header::new already sets typ to JWT.
-
-    let payload = JwtPayload::new(issuer_id);
-
-    let encoding_key = EncodingKey::from_ec_pem(&private_key)?;
-    Ok(encode(&header, &payload, &encoding_key)?)
+fn handle_error(error: AnalyticsError) -> ExitCode {
+    eprintln!("{error}");
+    ExitCode::FAILURE
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> ExitCode {
+async fn main() -> Result<ExitCode, ExitCode> {
     let cli_opts = CliOpts::parse();
-    // eprintln!("Parsed CLI options: {:?}", cli_opts);
-    if let Some(command) = cli_opts.command {
-        match command {
-            Commands::CreateReport
-            | Commands::OneTimeSnapshot
-            | Commands::DownloadReports { .. } => {
-                let result = async {
-                    let client = AnalyticsClient::from_env()?;
-                    match command {
-                        Commands::CreateReport => println!("{}", client.create_report().await?),
-                        Commands::OneTimeSnapshot => {
-                            let download_dir = download_dir_from_env()?;
-                            println!("{}", client.one_time_snapshot(&download_dir).await?);
-                        }
-                        Commands::DownloadReports { access_type } => {
-                            let download_dir = download_dir_from_env()?;
-                            let access = match access_type {
-                                DownloadAccessType::Ongoing => AccessType::Ongoing,
-                                DownloadAccessType::OneTimeSnapshot => AccessType::OneTimeSnapshot,
-                            };
-                            println!("{}", client.download_reports(access, &download_dir).await?);
-                        }
-                        _ => return Err(scripts::appstore_analytics::AnalyticsError::RequestState),
-                    }
-                    Ok::<(), scripts::appstore_analytics::AnalyticsError>(())
-                }
-                .await;
-                if let Err(error) = result {
-                    eprintln!("{error}");
-                    return ExitCode::FAILURE;
-                }
-                return ExitCode::SUCCESS;
-            }
-            Commands::UpdateSpec(args) => {
-                ensure_openapi_file_exists(args.force).await;
-                return ExitCode::SUCCESS;
-            }
-            Commands::UpdateCodegen => {
-                return ExitCode::SUCCESS;
-            }
-            Commands::AppStatus(statusargs) => {
-                let jwt_payload =
-                    generate_app_store_token().expect("Failed to generate App Store token");
+    match cli_opts.command {
+        Commands::CreateReport => {
+            let client = AnalyticsClient::from_env().map_err(handle_error)?;
+            println!("{}", client.create_report().await.map_err(handle_error)?);
+        }
+        Commands::OneTimeSnapshot => {
+            let client = AnalyticsClient::from_env().map_err(handle_error)?;
+            let download_dir = download_dir_from_env().map_err(handle_error)?;
+            println!(
+                "{}",
+                client
+                    .one_time_snapshot(&download_dir)
+                    .await
+                    .map_err(handle_error)?
+            );
+        }
+        Commands::DownloadReports { access_type } => {
+            let client = AnalyticsClient::from_env().map_err(handle_error)?;
+            let download_dir = download_dir_from_env().map_err(handle_error)?;
 
-                let client = client::HttpClient::new()
-                    .with_base_url(openapi_base_url())
-                    .with_api_key(&jwt_payload);
+            println!(
+                "{}",
+                client
+                    .download_reports(access_type, &download_dir)
+                    .await
+                    .map_err(handle_error)?
+            );
+        }
 
-                let filter_name = statusargs.name.unwrap_or("Bleat".to_string());
-
-                let mut apps = client
-                    .apps_get_collection_builder()
-                    .filter_name(vec![filter_name]);
-
-                if let Some(version_string) = statusargs.version_string {
-                    apps = apps.filter_app_store_versions(vec![version_string]);
-                }
-
-                let apps = apps.send().await.expect("Failed to fetch apps");
-                for app in apps.data {
-                    let versions = client
-                        .apps_app_store_versions_get_to_many_related_builder(app.id.clone())
-                        .send()
-                        .await
-                        .expect("Failed to fetch app versions");
-
-                    // eprintln!("----------------------------------------------------\nApp versions",);
-                    if versions.data.is_empty() {
-                        eprintln!("No versions found for this app.");
-                        return ExitCode::FAILURE;
-                    }
-
-                    for version in versions.data.into_iter().enumerate().filter_map(|(i, v)| {
-                        if statusargs.latest {
-                            if i == 0 { Some(v) } else { None }
-                        } else {
-                            Some(v)
-                        }
-                    }) {
-                        // println!("{}", version.id);
-                        if let Some(attributes_original) = &version.attributes {
-                            let mut attributes: serde_json::Map<String, serde_json::Value> =
-                                json!(attributes_original)
-                                    .as_object()
-                                    .cloned()
-                                    .expect("Failed to convert attributes into HashMap");
-                            attributes.insert("appId".to_string(), app.id.clone().into());
-                            attributes.insert("versionId".to_string(), version.id.clone().into());
-                            if statusargs.pretty {
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&attributes)
-                                        .expect("Failed to serialize version")
-                                );
-                            } else {
-                                println!("{}", json!(&attributes))
-                            }
-                        }
-                    }
-                }
-            }
+        Commands::UpdateSpec(args) => {
+            ensure_openapi_file_exists(args.force).await;
+        }
+        Commands::UpdateCodegen => {}
+        Commands::AppStatus(statusargs) => {
+            appstatus(statusargs).await?;
         }
     }
-    ExitCode::SUCCESS
+    Ok(ExitCode::SUCCESS)
 }

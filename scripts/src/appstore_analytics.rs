@@ -97,7 +97,7 @@ pub enum AnalyticsError {
     Storage(#[from] std::io::Error),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AccessType {
     Ongoing,
     OneTimeSnapshot,
