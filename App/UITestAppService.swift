@@ -31,6 +31,22 @@
         }
     }
 
+    actor UITestLaunchGate {
+        static let shared = UITestLaunchGate()
+        private var continuation: AsyncStream<Void>.Continuation?
+
+        func wait() async {
+            let (pending, continuation) = AsyncStream<Void>.makeStream()
+            self.continuation = continuation
+            for await _ in pending {}
+            self.continuation = nil
+        }
+
+        func release() {
+            continuation?.finish()
+        }
+    }
+
     private enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
         case openID = "--ui-testing-openid"
@@ -366,10 +382,7 @@
             async throws(AppServiceError) -> ServerAccount?
         {
             if scenario == .launching {
-                // Keep this scenario pending regardless of how long XCTest
-                // takes to attach. AsyncStream ends the wait on cancellation.
-                let pending = AsyncStream<Void> { _ in }
-                for await _ in pending {}
+                await UITestLaunchGate.shared.wait()
                 return nil
             }
             guard isSignedInScenario else {
