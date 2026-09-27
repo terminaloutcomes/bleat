@@ -108,6 +108,14 @@ pub enum AnalyticsError {
     UnsupportedInstallationEvent,
     #[error("Installations and Deletions report contains an unsupported download type")]
     UnsupportedInstallationDownloadType,
+    #[error("App Sessions report has a missing column: {0}")]
+    MissingSessionColumn(&'static str),
+    #[error("App Sessions report has an invalid value in: {0}")]
+    InvalidSessionValue(&'static str),
+    #[error("App Crashes report has a missing column: {0}")]
+    MissingCrashColumn(&'static str),
+    #[error("App Crashes report has an invalid value in: {0}")]
+    InvalidCrashValue(&'static str),
     #[error("unique devices cannot be added across dimensional rows")]
     NonAdditiveUniqueDevices,
     #[error("install and delete counts cannot be combined")]
@@ -421,6 +429,7 @@ impl AnalyticsClient {
             granularity: "DAILY",
             checksum,
             processing_date: instance.attributes.processing_date.as_deref(),
+            privacy: privacy_context(report.attributes.name.as_deref()),
         };
         let existing = manifest.get(&key).filter(|entry| {
             entry.raw == relative(dir, &raw) && entry.normalized == relative(dir, &normalized)
@@ -602,7 +611,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 5,
+        normalization_version: 6,
     }
 }
 #[derive(Serialize)]
@@ -617,6 +626,21 @@ struct Metadata<'a> {
     granularity: &'a str,
     checksum: &'a str,
     processing_date: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    privacy: Option<PrivacyContext>,
+}
+#[derive(Clone, Copy, Serialize)]
+struct PrivacyContext {
+    opted_in_users_only: bool,
+    minimum_users_for_report: u8,
+    missing_rows_mean_zero: bool,
+}
+fn privacy_context(name: Option<&str>) -> Option<PrivacyContext> {
+    (session_variant(name).is_some() || crash_variant(name).is_some()).then_some(PrivacyContext {
+        opted_in_users_only: true,
+        minimum_users_for_report: 5,
+        missing_rows_mean_zero: false,
+    })
 }
 #[derive(Serialize)]
 struct Row<'a> {
@@ -631,6 +655,10 @@ struct Row<'a> {
     purchase: Option<PurchaseRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     installation: Option<InstallationRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session: Option<SessionRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    crash: Option<CrashRow>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1247,8 +1275,166 @@ fn installation_variant(name: Option<&str>) -> Option<InstallationVariant> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageVariant {
+    Single,
+    Standard,
+    Detailed,
+}
+
+fn session_variant(name: Option<&str>) -> Option<UsageVariant> {
+    match name {
+        Some("App Sessions Standard" | "Sessions Standard") => Some(UsageVariant::Standard),
+        Some("App Sessions Detailed" | "Sessions Detailed") => Some(UsageVariant::Detailed),
+        _ => None,
+    }
+}
+
+fn crash_variant(name: Option<&str>) -> Option<UsageVariant> {
+    match name {
+        Some("App Crashes" | "Crashes") => Some(UsageVariant::Single),
+        Some("App Crashes Standard" | "Crashes Standard") => Some(UsageVariant::Standard),
+        Some("App Crashes Detailed" | "Crashes Detailed") => Some(UsageVariant::Detailed),
+        _ => None,
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SessionRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: UsageVariant,
+    app_version: String,
+    device: String,
+    platform_version: String,
+    source_type: String,
+    source_info: Option<String>,
+    campaign: Option<String>,
+    page_type: String,
+    page_title: Option<String>,
+    app_download_date: Option<NaiveDate>,
+    territory: String,
+    sessions: u64,
+    total_session_duration: u64,
+    unique_devices: u64,
+}
+
+impl SessionRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: UsageVariant,
+    ) -> Result<Self, AnalyticsError> {
+        let required = |name| -> Result<&str, AnalyticsError> {
+            let value = columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingSessionColumn(name))?;
+            if value.trim().is_empty() {
+                return Err(AnalyticsError::InvalidSessionValue(name));
+            }
+            Ok(value)
+        };
+        let date = |name| -> Result<NaiveDate, AnalyticsError> {
+            NaiveDate::parse_from_str(required(name)?, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidSessionValue(name))
+        };
+        let number = |name| -> Result<u64, AnalyticsError> {
+            required(name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidSessionValue(name))
+        };
+        let optional = |name| columns.get(name).copied().filter(|value| !value.is_empty());
+        let detailed = variant == UsageVariant::Detailed;
+        Ok(Self {
+            date: date("Date")?,
+            app_name: required("App Name")?.into(),
+            app_apple_identifier: number("App Apple Identifier")?,
+            variant,
+            app_version: required("App Version")?.into(),
+            device: required("Device")?.into(),
+            platform_version: required("Platform Version")?.into(),
+            source_type: required("Source Type")?.into(),
+            source_info: detailed
+                .then(|| optional("Source Info"))
+                .flatten()
+                .map(str::to_owned),
+            campaign: detailed
+                .then(|| optional("Campaign"))
+                .flatten()
+                .map(str::to_owned),
+            page_type: required("Page Type")?.into(),
+            page_title: detailed
+                .then(|| optional("Page Title"))
+                .flatten()
+                .map(str::to_owned),
+            app_download_date: optional("App Download Date")
+                .map(|value| {
+                    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                        .map_err(|_| AnalyticsError::InvalidSessionValue("App Download Date"))
+                })
+                .transpose()?,
+            territory: required("Territory")?.into(),
+            sessions: number("Sessions")?,
+            total_session_duration: number("Total Session Duration")?,
+            unique_devices: number("Unique Devices")?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CrashRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: UsageVariant,
+    app_version: String,
+    device: String,
+    platform_version: String,
+    crashes: u64,
+    unique_devices: u64,
+}
+
+impl CrashRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: UsageVariant,
+    ) -> Result<Self, AnalyticsError> {
+        let required = |name| -> Result<&str, AnalyticsError> {
+            let value = columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingCrashColumn(name))?;
+            if value.trim().is_empty() {
+                return Err(AnalyticsError::InvalidCrashValue(name));
+            }
+            Ok(value)
+        };
+        let number = |name| -> Result<u64, AnalyticsError> {
+            required(name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidCrashValue(name))
+        };
+        Ok(Self {
+            date: NaiveDate::parse_from_str(required("Date")?, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidCrashValue("Date"))?,
+            app_name: required("App Name")?.into(),
+            app_apple_identifier: number("App Apple Identifier")?,
+            variant,
+            app_version: required("App Version")?.into(),
+            device: required("Device")?.into(),
+            platform_version: required("Platform Version")?.into(),
+            crashes: number("Crashes")?,
+            unique_devices: number("Unique Devices")?,
+        })
+    }
+}
+
 fn required_normalization_version(name: Option<&str>) -> u8 {
-    if installation_variant(name).is_some() {
+    if session_variant(name).is_some() || crash_variant(name).is_some() {
+        6
+    } else if installation_variant(name).is_some() {
         5
     } else if purchase_variant(name).is_some() {
         4
@@ -1268,7 +1454,9 @@ fn serialize_decimal_number<S: serde::Serializer>(
     number.serialize(serializer)
 }
 fn variant(name: &str) -> Option<&'static str> {
-    if name.ends_with(" Detailed") {
+    if matches!(name, "App Crashes" | "Crashes") {
+        Some("SINGLE")
+    } else if name.ends_with(" Detailed") {
         Some("DETAILED")
     } else if name.ends_with(" Standard") {
         Some("STANDARD")
@@ -1419,6 +1607,45 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             }
         }
     }
+    let session_variant = session_variant(metadata.report_name);
+    if session_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Source Type",
+            "Page Type",
+            "App Download Date",
+            "Territory",
+            "Sessions",
+            "Total Session Duration",
+            "Unique Devices",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingSessionColumn(required));
+            }
+        }
+    }
+    let crash_variant = crash_variant(metadata.report_name);
+    if crash_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Crashes",
+            "Unique Devices",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingCrashColumn(required));
+            }
+        }
+    }
     let mut output = String::new();
     for line in lines {
         let values: Vec<&str> = line.split('\t').collect();
@@ -1438,6 +1665,12 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
         let installation = installation_variant
             .map(|variant| InstallationRow::parse(&columns, variant))
             .transpose()?;
+        let session = session_variant
+            .map(|variant| SessionRow::parse(&columns, variant))
+            .transpose()?;
+        let crash = crash_variant
+            .map(|variant| CrashRow::parse(&columns, variant))
+            .transpose()?;
         output.push_str(&serde_json::to_string(&Row {
             metadata,
             columns,
@@ -1445,6 +1678,8 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             discovery,
             purchase,
             installation,
+            session,
+            crash,
         })?);
         output.push('\n');
     }
@@ -1643,6 +1878,7 @@ mod tests {
             granularity: "DAILY",
             checksum: "checksum",
             processing_date: Some("2026-09-25"),
+            privacy: None,
         }
     }
     #[tokio::test]
@@ -1697,7 +1933,124 @@ mod tests {
         fs::write(&path, bytes).await.expect("write fixture");
         let mut metadata = metadata();
         metadata.report_name = Some(name);
+        metadata.variant = variant(name);
+        metadata.privacy = privacy_context(Some(name));
         normalize(&path, &metadata).await
+    }
+    #[tokio::test]
+    async fn session_variants_preserve_distinct_metrics_and_privacy_context() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Sessions Standard",
+                include_bytes!("../tests/fixtures/appstore/sessions-standard.tsv.gz").as_slice(),
+                "standard",
+            ),
+            (
+                "App Sessions Detailed",
+                include_bytes!("../tests/fixtures/appstore/sessions-detailed.tsv.gz").as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("session fixture");
+            let row: serde_json::Value = serde_json::from_str(output.trim()).expect("JSON row");
+            assert_eq!(row["session"]["variant"], expected_variant);
+            assert_eq!(row["session"]["sessions"], 7);
+            assert_eq!(row["session"]["total_session_duration"], 900);
+            assert_eq!(row["session"]["unique_devices"], 5);
+            assert!(row.get("crash").is_none());
+            assert_eq!(row["processing_date"], "2026-09-25");
+            assert_eq!(row["privacy"]["opted_in_users_only"], true);
+            assert_eq!(row["privacy"]["minimum_users_for_report"], 5);
+            assert_eq!(row["privacy"]["missing_rows_mean_zero"], false);
+            if expected_variant == "detailed" {
+                assert_eq!(row["session"]["source_info"], "example.com");
+            } else {
+                assert!(row["session"]["source_info"].is_null());
+            }
+        }
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-empty.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await
+            .expect("empty sessions"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-invalid-duration.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await,
+            Err(AnalyticsError::InvalidSessionValue(
+                "Total Session Duration"
+            ))
+        ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-missing-column.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingSessionColumn("Unique Devices"))
+        ));
+    }
+    #[tokio::test]
+    async fn crash_variants_preserve_distinct_metrics_and_privacy_context() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Crashes",
+                include_bytes!("../tests/fixtures/appstore/crashes-single.tsv.gz").as_slice(),
+                "single",
+            ),
+            (
+                "App Crashes Standard",
+                include_bytes!("../tests/fixtures/appstore/crashes-standard.tsv.gz").as_slice(),
+                "standard",
+            ),
+            (
+                "App Crashes Detailed",
+                include_bytes!("../tests/fixtures/appstore/crashes-detailed.tsv.gz").as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("crash fixture");
+            let row: serde_json::Value = serde_json::from_str(output.trim()).expect("JSON row");
+            assert_eq!(row["crash"]["variant"], expected_variant);
+            assert_eq!(row["variant"], expected_variant.to_ascii_uppercase());
+            assert_eq!(row["crash"]["crashes"], 6);
+            assert_eq!(row["crash"]["unique_devices"], 5);
+            assert!(row.get("session").is_none());
+            assert_eq!(row["processing_date"], "2026-09-25");
+            assert_eq!(row["privacy"]["opted_in_users_only"], true);
+            assert_eq!(row["privacy"]["missing_rows_mean_zero"], false);
+        }
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-empty.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await
+            .expect("empty crashes"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-invalid-count.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await,
+            Err(AnalyticsError::InvalidCrashValue("Crashes"))
+        ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-missing-column.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingCrashColumn("Unique Devices"))
+        ));
     }
     #[tokio::test]
     async fn installation_variants_preserve_events_download_types_and_nullable_dates() {

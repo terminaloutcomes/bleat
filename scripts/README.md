@@ -115,3 +115,13 @@ was more than 30 days ago. Detailed attribution is optional and remains null
 in Standard rows. Unique devices are non-additive across dimensional rows;
 install and delete counts remain separate, and Standard and Detailed totals
 must never be combined.
+
+App Sessions Standard and Detailed rows contain a typed `session` object with
+session count, unique devices, and total session duration in seconds as separate
+metrics. Detailed attribution fields are optional. Apple's App Crashes report
+has a single variant; its rows contain a separate typed `crash` object with
+crash count and unique devices. Both retain the Apple processing date and
+report variant. Their metadata states that only opted-in users are represented,
+Apple provides data only when events exist from at least five users, and missing or
+privacy-suppressed rows do not mean zero. Keep Standard and Detailed aggregates
+separate; unique devices are non-additive across dimensional rows.
