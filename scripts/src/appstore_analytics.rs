@@ -5,6 +5,7 @@ use chrono::{Datelike, NaiveDate, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use md5::{Digest, Md5};
 use reqwest::{Client, StatusCode, Url};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -89,6 +90,14 @@ pub enum AnalyticsError {
     InvalidDiscoveryValue(&'static str),
     #[error("Discovery and Engagement report contains an unsupported event")]
     UnsupportedDiscoveryEvent,
+    #[error("Purchases report has a missing column: {0}")]
+    MissingPurchaseColumn(&'static str),
+    #[error("Purchases report has an invalid value in: {0}")]
+    InvalidPurchaseValue(&'static str),
+    #[error("Purchases report contains an unsupported purchase type")]
+    UnsupportedPurchaseType,
+    #[error("paying users cannot be added across dimensional rows")]
+    NonAdditivePayingUsers,
     #[error("unique counts cannot be added across dimensional rows")]
     NonAdditiveUniqueCounts,
     #[error("Standard and Detailed report counts cannot be combined")]
@@ -408,9 +417,8 @@ impl AnalyticsClient {
             let bytes = fs::read(&raw).await?;
             if verify(&bytes, size, checksum).is_ok() {
                 if existing.is_some_and(|entry| {
-                    (download_variant(metadata.report_name).is_none()
-                        && discovery_variant(metadata.report_name).is_none())
-                        || entry.normalization_version >= 2
+                    entry.normalization_version
+                        >= required_normalization_version(metadata.report_name)
                 }) && fs::try_exists(&normalized).await?
                 {
                     return Ok(false);
@@ -582,7 +590,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 2,
+        normalization_version: 4,
     }
 }
 #[derive(Serialize)]
@@ -607,6 +615,8 @@ struct Row<'a> {
     download: Option<DownloadRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     discovery: Option<DiscoveryRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    purchase: Option<PurchaseRow>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -901,6 +911,185 @@ fn discovery_variant(name: Option<&str>) -> Option<DiscoveryVariant> {
         _ => None,
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PurchaseVariant {
+    Standard,
+    Detailed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PurchaseType {
+    AppPurchase,
+    InAppPurchases,
+}
+impl PurchaseType {
+    fn parse(value: &str) -> Result<Self, AnalyticsError> {
+        match value.to_ascii_lowercase().as_str() {
+            "app purchase" => Ok(Self::AppPurchase),
+            "in-app purchases" => Ok(Self::InAppPurchases),
+            _ => Err(AnalyticsError::UnsupportedPurchaseType),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct PurchaseRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: PurchaseVariant,
+    purchase_type: PurchaseType,
+    content_name: String,
+    content_apple_identifier: u64,
+    payment_method: String,
+    device: String,
+    platform_version: String,
+    source_type: String,
+    source_info: Option<String>,
+    campaign: Option<String>,
+    page_type: String,
+    page_title: Option<String>,
+    app_download_date: Option<NaiveDate>,
+    pre_order: PreOrderState,
+    territory: String,
+    purchases: i64,
+    #[serde(serialize_with = "serialize_decimal_number")]
+    proceeds_usd: Decimal,
+    #[serde(serialize_with = "serialize_decimal_number")]
+    sales_usd: Decimal,
+    paying_users: u64,
+}
+impl PurchaseRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: PurchaseVariant,
+    ) -> Result<Self, AnalyticsError> {
+        fn value<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingPurchaseColumn(name))
+        }
+        fn nonempty<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            let value = value(columns, name)?;
+            if value.trim().is_empty() {
+                Err(AnalyticsError::InvalidPurchaseValue(name))
+            } else {
+                Ok(value)
+            }
+        }
+        fn optional(columns: &BTreeMap<&str, &str>, name: &'static str) -> Option<String> {
+            columns
+                .get(name)
+                .copied()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        }
+        fn date(value: &str, name: &'static str) -> Result<NaiveDate, AnalyticsError> {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidPurchaseValue(name))
+        }
+        fn number<T: std::str::FromStr>(
+            columns: &BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<T, AnalyticsError> {
+            nonempty(columns, name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidPurchaseValue(name))
+        }
+        let detailed = variant == PurchaseVariant::Detailed;
+        let pre_order = match nonempty(columns, "Pre-Order")?
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "yes" => PreOrderState::Yes,
+            "no" => PreOrderState::No,
+            _ => return Err(AnalyticsError::InvalidPurchaseValue("Pre-Order")),
+        };
+        Ok(Self {
+            date: date(nonempty(columns, "Date")?, "Date")?,
+            app_name: nonempty(columns, "App Name")?.into(),
+            app_apple_identifier: number(columns, "App Apple Identifier")?,
+            variant,
+            purchase_type: PurchaseType::parse(nonempty(columns, "Purchase Type")?)?,
+            content_name: nonempty(columns, "Content Name")?.into(),
+            content_apple_identifier: number(columns, "Content Apple Identifier")?,
+            payment_method: nonempty(columns, "Payment Method")?.into(),
+            device: nonempty(columns, "Device")?.into(),
+            platform_version: nonempty(columns, "Platform Version")?.into(),
+            source_type: nonempty(columns, "Source Type")?.into(),
+            source_info: detailed.then(|| optional(columns, "Source Info")).flatten(),
+            campaign: detailed.then(|| optional(columns, "Campaign")).flatten(),
+            page_type: nonempty(columns, "Page Type")?.into(),
+            page_title: detailed.then(|| optional(columns, "Page Title")).flatten(),
+            app_download_date: optional(columns, "App Download Date")
+                .map(|value| date(&value, "App Download Date"))
+                .transpose()?,
+            pre_order,
+            territory: nonempty(columns, "Territory")?.into(),
+            purchases: number(columns, "Purchases")?,
+            proceeds_usd: number(columns, "Proceeds in USD")?,
+            sales_usd: number(columns, "Sales in USD")?,
+            paying_users: number(columns, "Paying Users")?,
+        })
+    }
+
+    pub fn sum_purchases(rows: &[Self], paying_users: bool) -> Result<i64, AnalyticsError> {
+        if paying_users {
+            return Err(AnalyticsError::NonAdditivePayingUsers);
+        }
+        let Some(first) = rows.first() else {
+            return Ok(0);
+        };
+        if rows.iter().any(|row| row.variant != first.variant) {
+            return Err(AnalyticsError::MixedReportVariants);
+        }
+        rows.iter().try_fold(0i64, |sum, row| {
+            sum.checked_add(row.purchases)
+                .ok_or(AnalyticsError::InvalidPurchaseValue("Purchases"))
+        })
+    }
+}
+
+fn purchase_variant(name: Option<&str>) -> Option<PurchaseVariant> {
+    match name {
+        Some("App Store Purchases Standard" | "Purchases Standard") => {
+            Some(PurchaseVariant::Standard)
+        }
+        Some("App Store Purchases Detailed" | "Purchases Detailed") => {
+            Some(PurchaseVariant::Detailed)
+        }
+        _ => None,
+    }
+}
+
+fn required_normalization_version(name: Option<&str>) -> u8 {
+    if purchase_variant(name).is_some() {
+        4
+    } else if download_variant(name).is_some() || discovery_variant(name).is_some() {
+        2
+    } else {
+        0
+    }
+}
+
+fn serialize_decimal_number<S: serde::Serializer>(
+    value: &Decimal,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let number: serde_json::Number =
+        serde_json::from_str(&value.to_string()).map_err(serde::ser::Error::custom)?;
+    number.serialize(serializer)
+}
 fn variant(name: &str) -> Option<&'static str> {
     if name.ends_with(" Detailed") {
         Some("DETAILED")
@@ -1003,6 +1192,33 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             }
         }
     }
+    let purchase_variant = purchase_variant(metadata.report_name);
+    if purchase_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "Purchase Type",
+            "Content Name",
+            "Content Apple Identifier",
+            "Payment Method",
+            "Device",
+            "Platform Version",
+            "Source Type",
+            "Page Type",
+            "App Download Date",
+            "Pre-Order",
+            "Territory",
+            "Purchases",
+            "Proceeds in USD",
+            "Sales in USD",
+            "Paying Users",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingPurchaseColumn(required));
+            }
+        }
+    }
     let mut output = String::new();
     for line in lines {
         let values: Vec<&str> = line.split('\t').collect();
@@ -1016,11 +1232,15 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
         let discovery = discovery_variant
             .map(|variant| DiscoveryRow::parse(&columns, variant))
             .transpose()?;
+        let purchase = purchase_variant
+            .map(|variant| PurchaseRow::parse(&columns, variant))
+            .transpose()?;
         output.push_str(&serde_json::to_string(&Row {
             metadata,
             columns,
             download,
             discovery,
+            purchase,
         })?);
         output.push('\n');
     }
@@ -1330,6 +1550,113 @@ mod tests {
                 }
             }
         }
+    }
+    #[tokio::test]
+    async fn purchase_variants_preserve_refunds_precise_amounts_and_dimensions() {
+        let standard = fixture(
+            include_bytes!("../tests/fixtures/appstore/purchases-standard.tsv.gz"),
+            "App Store Purchases Standard",
+        )
+        .await
+        .expect("standard purchases");
+        let rows: Vec<serde_json::Value> = standard
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("JSON row"))
+            .collect();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0]["purchase"]["variant"], "standard");
+        assert_eq!(rows[0]["purchase"]["purchase_type"], "app_purchase");
+        assert!(rows[0]["purchase"]["proceeds_usd"].is_number());
+        assert!(rows[0]["purchase"]["sales_usd"].is_number());
+        assert_eq!(rows[0]["purchase"]["proceeds_usd"].to_string(), "1.20");
+        assert_eq!(rows[0]["purchase"]["sales_usd"].to_string(), "1.99");
+        assert!(rows[0]["purchase"]["source_info"].is_null());
+        assert_eq!(rows[1]["purchase"]["purchases"], -1);
+        assert_eq!(rows[1]["purchase"]["proceeds_usd"].to_string(), "-0.60");
+        assert_eq!(rows[2]["purchase"]["purchases"], 0);
+        assert_eq!(rows[2]["purchase"]["sales_usd"].to_string(), "-0.49");
+
+        let detailed = fixture(
+            include_bytes!("../tests/fixtures/appstore/purchases-detailed.tsv.gz"),
+            "App Store Purchases Detailed",
+        )
+        .await
+        .expect("detailed purchases");
+        let row: serde_json::Value = serde_json::from_str(detailed.trim()).expect("JSON row");
+        assert_eq!(row["purchase"]["variant"], "detailed");
+        assert_eq!(row["purchase"]["purchase_type"], "in_app_purchases");
+        assert_eq!(row["purchase"]["content_apple_identifier"], 987654321);
+        assert_eq!(row["purchase"]["source_info"], "example.com");
+        assert_eq!(row["purchase"]["campaign"], "launch");
+        assert_eq!(row["purchase"]["app_download_date"], "2026-09-24");
+    }
+    #[tokio::test]
+    async fn empty_purchases_succeed_and_missing_columns_fail() {
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/purchases-empty.tsv.gz"),
+                "App Store Purchases Standard",
+            )
+            .await
+            .expect("empty purchases"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/purchases-missing-column.tsv.gz"),
+                "App Store Purchases Standard",
+            )
+            .await,
+            Err(AnalyticsError::MissingPurchaseColumn("Paying Users"))
+        ));
+    }
+    #[test]
+    fn paying_users_and_mixed_variants_cannot_be_summed() {
+        let columns: BTreeMap<&str, &str> = [
+            ("Date", "2026-09-25"),
+            ("App Name", "Bleat"),
+            ("App Apple Identifier", "123456789"),
+            ("Purchase Type", "App purchase"),
+            ("Content Name", "Bleat"),
+            ("Content Apple Identifier", "123456789"),
+            ("Payment Method", "Credit card"),
+            ("Device", "iPhone"),
+            ("Platform Version", "26.0"),
+            ("Source Type", "App Store search"),
+            ("Page Type", "Product page"),
+            ("App Download Date", ""),
+            ("Pre-Order", "No"),
+            ("Territory", "AU"),
+            ("Purchases", "-1"),
+            ("Proceeds in USD", "-0.60"),
+            ("Sales in USD", "-0.99"),
+            ("Paying Users", "1"),
+        ]
+        .into();
+        let standard = PurchaseRow::parse(&columns, PurchaseVariant::Standard).expect("standard");
+        let detailed = PurchaseRow::parse(&columns, PurchaseVariant::Detailed).expect("detailed");
+        assert!(matches!(
+            PurchaseRow::sum_purchases(&[standard], true),
+            Err(AnalyticsError::NonAdditivePayingUsers)
+        ));
+        assert!(matches!(
+            PurchaseRow::sum_purchases(
+                &[
+                    detailed,
+                    PurchaseRow::parse(&columns, PurchaseVariant::Standard).expect("standard")
+                ],
+                false
+            ),
+            Err(AnalyticsError::MixedReportVariants)
+        ));
+        assert_eq!(
+            PurchaseRow::sum_purchases(
+                &[PurchaseRow::parse(&columns, PurchaseVariant::Standard).expect("standard")],
+                false
+            )
+            .expect("signed purchases"),
+            -1
+        );
     }
     #[tokio::test]
     async fn discovery_empty_and_invalid_segments_do_not_invent_zero_rows() {

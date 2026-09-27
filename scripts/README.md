@@ -93,3 +93,12 @@ tool does not invent a zero row. Do not sum unique counts across dimensional
 rows, combine Standard and Detailed counts, or derive a conversion rate from a
 single report row. Match date and source and page dimensions with Downloads
 before calculating conversion rates downstream.
+
+App Store Purchases Standard and Detailed rows contain a typed `purchase` object
+with purchase and content identities, attribution, signed `purchases`, exact
+decimal `proceeds_usd` and `sales_usd` JSON numbers, and `paying_users`. Negative
+values retain refund evidence; zero purchases with negative money retains
+partial-refund evidence. Treat purchase count, proceeds, sales, and paying users
+as separate metrics. Paying users cannot be summed across dimensional rows,
+and Standard and Detailed totals cannot be combined. An empty daily Purchases
+segment is a successful empty result for an app without purchase activity.
