@@ -100,6 +100,18 @@ pub enum AnalyticsError {
     NonAdditivePayingUsers,
     #[error("unique counts cannot be added across dimensional rows")]
     NonAdditiveUniqueCounts,
+    #[error("Installations and Deletions report has a missing column: {0}")]
+    MissingInstallationColumn(&'static str),
+    #[error("Installations and Deletions report has an invalid value in: {0}")]
+    InvalidInstallationValue(&'static str),
+    #[error("Installations and Deletions report contains an unsupported event")]
+    UnsupportedInstallationEvent,
+    #[error("Installations and Deletions report contains an unsupported download type")]
+    UnsupportedInstallationDownloadType,
+    #[error("unique devices cannot be added across dimensional rows")]
+    NonAdditiveUniqueDevices,
+    #[error("install and delete counts cannot be combined")]
+    MixedInstallationEvents,
     #[error("Standard and Detailed report counts cannot be combined")]
     MixedReportVariants,
     #[error("local storage failed: {0}")]
@@ -590,7 +602,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 4,
+        normalization_version: 5,
     }
 }
 #[derive(Serialize)]
@@ -617,6 +629,8 @@ struct Row<'a> {
     discovery: Option<DiscoveryRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     purchase: Option<PurchaseRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    installation: Option<InstallationRow>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1072,8 +1086,171 @@ fn purchase_variant(name: Option<&str>) -> Option<PurchaseVariant> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationVariant {
+    Standard,
+    Detailed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationEvent {
+    Install,
+    Delete,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationDownloadType {
+    FirstTimeDownload,
+    Redownload,
+    ManualUpdate,
+    Restore,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InstallationRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: InstallationVariant,
+    event: InstallationEvent,
+    download_type: InstallationDownloadType,
+    app_version: String,
+    device: String,
+    platform_version: String,
+    source_type: String,
+    source_info: Option<String>,
+    campaign: Option<String>,
+    page_type: String,
+    page_title: Option<String>,
+    app_download_date: Option<NaiveDate>,
+    territory: String,
+    count: u64,
+    unique_devices: u64,
+}
+impl InstallationRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: InstallationVariant,
+    ) -> Result<Self, AnalyticsError> {
+        fn value<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingInstallationColumn(name))
+        }
+        fn nonempty<'a>(
+            columns: &'a BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<&'a str, AnalyticsError> {
+            let value = value(columns, name)?;
+            if value.trim().is_empty() {
+                Err(AnalyticsError::InvalidInstallationValue(name))
+            } else {
+                Ok(value)
+            }
+        }
+        fn optional(columns: &BTreeMap<&str, &str>, name: &'static str) -> Option<String> {
+            columns
+                .get(name)
+                .copied()
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        }
+        fn date(value: &str, name: &'static str) -> Result<NaiveDate, AnalyticsError> {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidInstallationValue(name))
+        }
+        fn number<T: std::str::FromStr>(
+            columns: &BTreeMap<&str, &str>,
+            name: &'static str,
+        ) -> Result<T, AnalyticsError> {
+            nonempty(columns, name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidInstallationValue(name))
+        }
+        let event = match nonempty(columns, "Event")?.to_ascii_lowercase().as_str() {
+            "install" => InstallationEvent::Install,
+            "delete" => InstallationEvent::Delete,
+            _ => return Err(AnalyticsError::UnsupportedInstallationEvent),
+        };
+        let download_type = match nonempty(columns, "Download Type")?
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "first-time download" => InstallationDownloadType::FirstTimeDownload,
+            "redownload" => InstallationDownloadType::Redownload,
+            "manual update" => InstallationDownloadType::ManualUpdate,
+            "restore" => InstallationDownloadType::Restore,
+            _ => return Err(AnalyticsError::UnsupportedInstallationDownloadType),
+        };
+        let detailed = variant == InstallationVariant::Detailed;
+        Ok(Self {
+            date: date(nonempty(columns, "Date")?, "Date")?,
+            app_name: nonempty(columns, "App Name")?.into(),
+            app_apple_identifier: number(columns, "App Apple Identifier")?,
+            variant,
+            event,
+            download_type,
+            app_version: nonempty(columns, "App Version")?.into(),
+            device: nonempty(columns, "Device")?.into(),
+            platform_version: nonempty(columns, "Platform Version")?.into(),
+            source_type: nonempty(columns, "Source Type")?.into(),
+            source_info: detailed.then(|| optional(columns, "Source Info")).flatten(),
+            campaign: detailed.then(|| optional(columns, "Campaign")).flatten(),
+            page_type: nonempty(columns, "Page Type")?.into(),
+            page_title: detailed.then(|| optional(columns, "Page Title")).flatten(),
+            app_download_date: optional(columns, "App Download Date")
+                .map(|value| date(&value, "App Download Date"))
+                .transpose()?,
+            territory: nonempty(columns, "Territory")?.into(),
+            count: number(columns, "Counts")?,
+            unique_devices: number(columns, "Unique Devices")?,
+        })
+    }
+    pub fn sum_counts(rows: &[Self], unique_devices: bool) -> Result<u64, AnalyticsError> {
+        if unique_devices {
+            return Err(AnalyticsError::NonAdditiveUniqueDevices);
+        }
+        let Some(first) = rows.first() else {
+            return Ok(0);
+        };
+        if rows.iter().any(|row| row.variant != first.variant) {
+            return Err(AnalyticsError::MixedReportVariants);
+        }
+        if rows.iter().any(|row| row.event != first.event) {
+            return Err(AnalyticsError::MixedInstallationEvents);
+        }
+        rows.iter().try_fold(0u64, |sum, row| {
+            sum.checked_add(row.count)
+                .ok_or(AnalyticsError::InvalidInstallationValue("Counts"))
+        })
+    }
+}
+
+fn installation_variant(name: Option<&str>) -> Option<InstallationVariant> {
+    match name {
+        Some(
+            "App Store Installations and Deletions Standard"
+            | "Installations and Deletions Standard",
+        ) => Some(InstallationVariant::Standard),
+        Some(
+            "App Store Installations and Deletions Detailed"
+            | "Installations and Deletions Detailed",
+        ) => Some(InstallationVariant::Detailed),
+        _ => None,
+    }
+}
+
 fn required_normalization_version(name: Option<&str>) -> u8 {
-    if purchase_variant(name).is_some() {
+    if installation_variant(name).is_some() {
+        5
+    } else if purchase_variant(name).is_some() {
         4
     } else if download_variant(name).is_some() || discovery_variant(name).is_some() {
         2
@@ -1219,6 +1396,29 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             }
         }
     }
+    let installation_variant = installation_variant(metadata.report_name);
+    if installation_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "Event",
+            "Download Type",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Source Type",
+            "Page Type",
+            "App Download Date",
+            "Territory",
+            "Counts",
+            "Unique Devices",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingInstallationColumn(required));
+            }
+        }
+    }
     let mut output = String::new();
     for line in lines {
         let values: Vec<&str> = line.split('\t').collect();
@@ -1235,12 +1435,16 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
         let purchase = purchase_variant
             .map(|variant| PurchaseRow::parse(&columns, variant))
             .transpose()?;
+        let installation = installation_variant
+            .map(|variant| InstallationRow::parse(&columns, variant))
+            .transpose()?;
         output.push_str(&serde_json::to_string(&Row {
             metadata,
             columns,
             download,
             discovery,
             purchase,
+            installation,
         })?);
         output.push('\n');
     }
@@ -1494,6 +1698,127 @@ mod tests {
         let mut metadata = metadata();
         metadata.report_name = Some(name);
         normalize(&path, &metadata).await
+    }
+    #[tokio::test]
+    async fn installation_variants_preserve_events_download_types_and_nullable_dates() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Store Installations and Deletions Standard",
+                include_bytes!("../tests/fixtures/appstore/installations-standard.tsv.gz")
+                    .as_slice(),
+                "standard",
+            ),
+            (
+                "App Store Installations and Deletions Detailed",
+                include_bytes!("../tests/fixtures/appstore/installations-detailed.tsv.gz")
+                    .as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("installation fixture");
+            let rows: Vec<serde_json::Value> = output
+                .lines()
+                .map(|line| serde_json::from_str(line).expect("JSON row"))
+                .collect();
+            assert_eq!(rows.len(), 5);
+            for (row, download_type) in rows[..4].iter().zip([
+                "first_time_download",
+                "redownload",
+                "manual_update",
+                "restore",
+            ]) {
+                assert_eq!(row["installation"]["variant"], expected_variant);
+                assert_eq!(row["installation"]["event"], "install");
+                assert_eq!(row["installation"]["download_type"], download_type);
+                assert!(row["installation"]["count"].is_u64());
+                assert!(row["installation"]["unique_devices"].is_u64());
+            }
+            assert_eq!(rows[4]["installation"]["event"], "delete");
+            assert_eq!(rows[0]["installation"]["app_download_date"], "2026-09-24");
+            assert!(rows[1]["installation"]["app_download_date"].is_null());
+            if expected_variant == "detailed" {
+                assert_eq!(rows[0]["installation"]["source_info"], "example.com");
+                assert_eq!(rows[0]["installation"]["campaign"], "campaign");
+                assert_eq!(
+                    rows[0]["installation"]["page_title"],
+                    "Default Product Page"
+                );
+            } else {
+                assert!(rows[0]["installation"]["source_info"].is_null());
+                assert!(rows[0]["installation"]["campaign"].is_null());
+                assert!(rows[0]["installation"]["page_title"].is_null());
+            }
+        }
+    }
+    #[tokio::test]
+    async fn absent_installation_rows_do_not_create_zero_records() {
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/installations-empty.tsv.gz"),
+                "App Store Installations and Deletions Standard"
+            )
+            .await
+            .expect("empty report"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/installations-missing-column.tsv.gz"),
+                "App Store Installations and Deletions Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingInstallationColumn("Unique Devices"))
+        ));
+    }
+    #[test]
+    fn installation_unique_devices_and_variants_cannot_be_summed() {
+        let base = BTreeMap::from([
+            ("Date", "2026-09-25"),
+            ("App Name", "Bleat"),
+            ("App Apple Identifier", "123456789"),
+            ("Event", "Install"),
+            ("Download Type", "Redownload"),
+            ("App Version", "1.0"),
+            ("Device", "iPhone"),
+            ("Platform Version", "26.0"),
+            ("Source Type", "Unavailable"),
+            ("Page Type", "No page"),
+            ("App Download Date", ""),
+            ("Territory", "US"),
+            ("Counts", "6"),
+            ("Unique Devices", "5"),
+        ]);
+        let standard =
+            InstallationRow::parse(&base, InstallationVariant::Standard).expect("standard");
+        let detailed =
+            InstallationRow::parse(&base, InstallationVariant::Detailed).expect("detailed");
+        assert!(matches!(
+            InstallationRow::sum_counts(&[standard], true),
+            Err(AnalyticsError::NonAdditiveUniqueDevices)
+        ));
+        assert!(matches!(
+            InstallationRow::sum_counts(
+                &[
+                    InstallationRow::parse(&base, InstallationVariant::Standard).expect("standard"),
+                    detailed
+                ],
+                false
+            ),
+            Err(AnalyticsError::MixedReportVariants)
+        ));
+        let mut deletion = base.clone();
+        deletion.insert("Event", "Delete");
+        assert!(matches!(
+            InstallationRow::sum_counts(
+                &[
+                    InstallationRow::parse(&base, InstallationVariant::Standard).expect("install"),
+                    InstallationRow::parse(&deletion, InstallationVariant::Standard)
+                        .expect("delete"),
+                ],
+                false
+            ),
+            Err(AnalyticsError::MixedInstallationEvents)
+        ));
     }
     #[tokio::test]
     async fn standard_downloads_decode_reordered_columns_and_keep_attribution_absent() {

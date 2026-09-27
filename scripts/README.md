@@ -102,3 +102,16 @@ partial-refund evidence. Treat purchase count, proceeds, sales, and paying users
 as separate metrics. Paying users cannot be summed across dimensional rows,
 and Standard and Detailed totals cannot be combined. An empty daily Purchases
 segment is a successful empty result for an app without purchase activity.
+
+App Store Installations and Deletions Standard and Detailed rows contain a
+typed `installation` object with distinct install/delete events and App Store
+download types. The download type describes the store action, while the event
+describes the device installation state. Counts and numeric `unique_devices`
+cover only users who opted to share analytics with Apple and developers. Apple
+provides the report only when events exist from at least five users, and
+Detailed reports apply additional privacy measures. A missing or suppressed
+row is absent data, never zero. `app_download_date` is null when the download
+was more than 30 days ago. Detailed attribution is optional and remains null
+in Standard rows. Unique devices are non-additive across dimensional rows;
+install and delete counts remain separate, and Standard and Detailed totals
+must never be combined.
