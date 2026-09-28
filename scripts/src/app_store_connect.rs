@@ -799,6 +799,12 @@ pub enum Commands {
         #[arg(long, value_enum)]
         access_type: AccessType,
 
+        #[arg(
+            long,
+            help = "List available reports and DAILY instances without downloading"
+        )]
+        list: bool,
+
         #[clap(long, env = "APPSTORE_CONNECT_DOWNLOAD_DIR", hide_env_values = true)]
         download_dir: PathBuf,
     },

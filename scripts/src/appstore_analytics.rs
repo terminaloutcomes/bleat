@@ -152,6 +152,20 @@ pub struct AnalyticsClient {
     base: Url,
     app_id: String,
 }
+pub struct ReportListing {
+    pub requests: Vec<String>,
+    pub reports: Vec<ReportListingRow>,
+}
+
+pub struct ReportListingRow {
+    pub request_id: String,
+    pub name: String,
+    pub category: String,
+    pub daily_instances: usize,
+    pub segments: usize,
+    pub latest_daily: Option<NaiveDate>,
+}
+
 impl AnalyticsClient {
     pub fn new(cli_opts: &CliOpts) -> Result<Self, AnalyticsError> {
         let app_id = std::env::var("APPSTORE_CONNECT_APP_ID")
@@ -255,6 +269,79 @@ impl AnalyticsClient {
         access: AccessType,
         dir: &Path,
     ) -> Result<usize, AnalyticsError> {
+        let (_, inventories) = self.report_inventories(access, dir).await?;
+        let mut count = 0;
+        for inventory in select_latest(inventories) {
+            for daily in inventory.instances {
+                let instance = daily.resource;
+                for segment in self
+                    .pages::<Resource>(&format!(
+                        "analyticsReportInstances/{}/segments?limit=200",
+                        instance.id
+                    ))
+                    .await?
+                {
+                    if self
+                        .save_segment(
+                            dir,
+                            access,
+                            &inventory.request,
+                            &inventory.report,
+                            &instance,
+                            &segment,
+                        )
+                        .await?
+                    {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    pub async fn list_reports(
+        &self,
+        access: AccessType,
+        dir: &Path,
+    ) -> Result<ReportListing, AnalyticsError> {
+        let (requests, inventories) = self.report_inventories(access, dir).await?;
+        let mut reports = Vec::new();
+        for inventory in inventories {
+            let mut segments = 0;
+            for daily in &inventory.instances {
+                segments += self
+                    .pages::<Resource>(&format!(
+                        "analyticsReportInstances/{}/segments?limit=200",
+                        daily.resource.id
+                    ))
+                    .await?
+                    .len();
+            }
+            reports.push(ReportListingRow {
+                request_id: inventory.request.id,
+                name: inventory
+                    .report
+                    .attributes
+                    .name
+                    .unwrap_or(inventory.report.id),
+                category: inventory.report.attributes.category.unwrap_or_default(),
+                daily_instances: inventory.instances.len(),
+                segments,
+                latest_daily: inventory.latest_daily,
+            });
+        }
+        reports.sort_by(|a, b| {
+            (&a.request_id, &a.category, &a.name).cmp(&(&b.request_id, &b.category, &b.name))
+        });
+        Ok(ReportListing { requests, reports })
+    }
+
+    async fn report_inventories(
+        &self,
+        access: AccessType,
+        dir: &Path,
+    ) -> Result<(Vec<String>, Vec<ReportInventory>), AnalyticsError> {
         let requests = self.requests().await?;
         let snapshot_id = if access == AccessType::OneTimeSnapshot {
             load_json_or_default::<BTreeMap<String, String>>(&snapshot_manifest_path(dir))
@@ -276,6 +363,10 @@ impl AnalyticsClient {
         if candidates.is_empty() {
             return Err(AnalyticsError::NoRequest);
         }
+        let request_ids = candidates
+            .iter()
+            .map(|request| request.id.clone())
+            .collect();
         let mut inventories = Vec::new();
         for request in candidates {
             for report in self
@@ -321,34 +412,7 @@ impl AnalyticsClient {
                 });
             }
         }
-        let mut count = 0;
-        for inventory in select_latest(inventories) {
-            for daily in inventory.instances {
-                let instance = daily.resource;
-                for segment in self
-                    .pages::<Resource>(&format!(
-                        "analyticsReportInstances/{}/segments?limit=200",
-                        instance.id
-                    ))
-                    .await?
-                {
-                    if self
-                        .save_segment(
-                            dir,
-                            access,
-                            &inventory.request,
-                            &inventory.report,
-                            &instance,
-                            &segment,
-                        )
-                        .await?
-                    {
-                        count += 1;
-                    }
-                }
-            }
-        }
-        Ok(count)
+        Ok((request_ids, inventories))
     }
     async fn save_segment(
         &self,
@@ -1740,6 +1804,35 @@ async fn write_temp(path: &Path, bytes: &[u8]) -> Result<PathBuf, AnalyticsError
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn download_reports_list_flag_is_opt_in() {
+        for (flag, expected) in [(None, false), (Some("--list"), true)] {
+            let mut args = vec![
+                "appstore-monitor",
+                "download-reports",
+                "--access-type",
+                "one-time-snapshot",
+                "--download-dir",
+                "/analytics-reports",
+            ];
+            if let Some(flag) = flag {
+                args.push(flag);
+            }
+            let parsed = CliOpts::try_parse_from(args).expect("valid download command");
+            match parsed.command {
+                crate::app_store_connect::Commands::DownloadReports {
+                    access_type, list, ..
+                } => {
+                    assert_eq!(access_type, AccessType::OneTimeSnapshot);
+                    assert_eq!(list, expected);
+                }
+                _ => panic!("expected download command"),
+            }
+        }
+    }
+
     #[test]
     fn download_directory_requires_absolute_path() {
         assert!(parse_download_dir(PathBuf::new()).is_err());

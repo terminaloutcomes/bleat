@@ -51,6 +51,7 @@ appstore-monitor create-report
 appstore-monitor one-time-snapshot
 appstore-monitor download-reports --access-type ongoing
 appstore-monitor download-reports --access-type one-time-snapshot
+appstore-monitor download-reports --access-type one-time-snapshot --list
 ```
 
 `create-report` reuses an active ONGOING request or creates one and prints its ID.
@@ -59,6 +60,13 @@ local request ID on subsequent invocations. It does not list requests with the
 creation key before posting. Apple permits only one snapshot request per month;
 keep `snapshots.json` in the configured download directory so reruns do not
 submit a duplicate. Request commands do not wait for generation.
+
+`download-reports --list` reads the selected request's report inventory without
+downloading or changing local files. It prints every generated report's DAILY
+instance and segment counts and latest processing date. If Apple has not
+generated reports yet, it says so explicitly. Apple does not expose a pending
+status for individual reports; an absent report or instance may also mean no
+eligible or privacy-permitted data exists.
 
 When several requests are eligible, the downloader retains each available DAILY
 processing date for each report name and category. For an overlapping date, it

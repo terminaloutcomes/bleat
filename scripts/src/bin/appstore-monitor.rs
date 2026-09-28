@@ -86,18 +86,48 @@ async fn main() -> Result<ExitCode, ExitCode> {
         }
         Commands::DownloadReports {
             access_type,
+            list,
             download_dir,
         } => {
             let client = AnalyticsClient::new(&cli_opts).map_err(handle_error)?;
             let download_dir = parse_download_dir(download_dir).map_err(handle_error)?;
-
-            println!(
-                "{}",
-                client
-                    .download_reports(access_type, &download_dir)
+            if list {
+                let listing = client
+                    .list_reports(access_type, &download_dir)
                     .await
-                    .map_err(handle_error)?
-            );
+                    .map_err(handle_error)?;
+                for request in &listing.requests {
+                    println!("Request {request}");
+                    for report in listing
+                        .reports
+                        .iter()
+                        .filter(|row| &row.request_id == request)
+                    {
+                        let latest = report
+                            .latest_daily
+                            .map_or_else(|| "none".to_string(), |date| date.to_string());
+                        println!(
+                            "  {} [{}]: {} DAILY instances, {} segments; latest processing date {}",
+                            report.name,
+                            report.category,
+                            report.daily_instances,
+                            report.segments,
+                            latest
+                        );
+                    }
+                }
+                if listing.reports.is_empty() {
+                    println!("No reports generated for the selected request yet.");
+                }
+            } else {
+                println!(
+                    "{}",
+                    client
+                        .download_reports(access_type, &download_dir)
+                        .await
+                        .map_err(handle_error)?
+                );
+            }
         }
 
         Commands::UpdateSpec(args) => {
