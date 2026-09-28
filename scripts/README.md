@@ -7,9 +7,11 @@ run the request command first and download later. Apple retains report instances
 
 ## Access and credentials
 
-Create one App Store Connect API key with access to the app. The caller supplies
-that same key to every command. Request creation needs an Admin API key. Listing and downloading reports accepts
-Admin, Sales and Reports, or Finance API keys.
+The caller supplies a key through the same environment variables for every
+command. Request creation needs an Admin API key. Listing and downloading
+reports accepts Admin, Sales and Reports, or Finance API keys. The
+`appstore:connect-admin` and `appstore:connect-download` Mise tasks select their
+respective keys from Keychain.
 Apple decides the effective authorization and the command reports HTTP 401/403
 as an authorization failure. It does not inspect roles or switch keys.
 
@@ -53,10 +55,10 @@ appstore-monitor download-reports --access-type one-time-snapshot
 
 `create-report` reuses an active ONGOING request or creates one and prints its ID.
 `one-time-snapshot` stores a request for the current UTC month and reuses that
-request on subsequent invocations. Apple permits only one snapshot request per
-month. Keep `snapshots.json` in the configured download directory between runs
-so the same monthly request can be found. Request commands do not wait for
-generation.
+local request ID on subsequent invocations. It does not list requests with the
+creation key before posting. Apple permits only one snapshot request per month;
+keep `snapshots.json` in the configured download directory so reruns do not
+submit a duplicate. Request commands do not wait for generation.
 
 When several requests are eligible, the downloader retains each available DAILY
 processing date for each report name and category. For an overlapping date, it

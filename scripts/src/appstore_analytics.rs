@@ -1,8 +1,6 @@
 //! Daily App Store Connect analytics report lifecycle and local dump.
 use async_compression::tokio::bufread::GzipDecoder;
-use base64::Engine;
 use chrono::{Datelike, NaiveDate, Utc};
-use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use md5::{Digest, Md5};
 use reqwest::{Client, StatusCode, Url};
 use rust_decimal::Decimal;
@@ -17,14 +15,14 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
 
-use crate::app_store_connect::CliOpts;
+use crate::app_store_connect::{AppStoreTokenError, CliOpts, generate_app_store_token};
 
 const BASE: &str = "https://api.appstoreconnect.apple.com/v1/";
 
 pub fn parse_download_dir(path: PathBuf) -> Result<PathBuf, AnalyticsError> {
-    if !path.is_absolute() | !path.is_dir() {
+    if !path.is_absolute() {
         return Err(AnalyticsError::Configuration(
-            "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute directory path",
+            "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute path",
         ));
     }
     Ok(path)
@@ -38,14 +36,15 @@ fn snapshot_manifest_path(dir: &Path) -> PathBuf {
 pub enum AnalyticsError {
     #[error("missing configuration: {0}")]
     Configuration(&'static str),
-    #[error("invalid private key encoding")]
-    KeyEncoding,
-    #[error("invalid private key")]
-    PrivateKey,
-    #[error("unable to sign App Store Connect token")]
-    Signing,
-    #[error("Apple denied the requested operation (HTTP {0})")]
-    Authorization(u16),
+    #[error(transparent)]
+    Token(#[from] AppStoreTokenError),
+    #[error("Apple denied {stage} (HTTP {status}, code {code:?}, detail {detail:?})")]
+    Authorization {
+        stage: ApiStage,
+        status: u16,
+        code: Option<String>,
+        detail: Option<String>,
+    },
     #[error("Apple API returned HTTP {0}")]
     Api(u16),
     #[error("network operation failed: {0}")]
@@ -123,6 +122,21 @@ pub enum AccessType {
     Ongoing,
     OneTimeSnapshot,
 }
+#[derive(Clone, Copy, Debug)]
+pub enum ApiStage {
+    Read,
+    CreateRequest,
+    DownloadSegment,
+}
+impl std::fmt::Display for ApiStage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Read => "App Store Connect API read",
+            Self::CreateRequest => "analytics request creation",
+            Self::DownloadSegment => "analytics segment download",
+        })
+    }
+}
 impl AccessType {
     fn api(self) -> &'static str {
         match self {
@@ -132,81 +146,37 @@ impl AccessType {
     }
 }
 
-#[derive(Serialize)]
-struct Claims {
-    iss: String,
-    iat: i64,
-    exp: i64,
-    aud: &'static str,
-}
-
 pub struct AnalyticsClient {
     http: Client,
-    signing_key: EncodingKey,
-    key_id: String,
-    issuer: String,
+    cli_opts: CliOpts,
     base: Url,
     app_id: String,
 }
 impl AnalyticsClient {
     pub fn new(cli_opts: &CliOpts) -> Result<Self, AnalyticsError> {
-        let issuer = cli_opts
-            .issuer_id
-            .clone()
-            .ok_or(AnalyticsError::Configuration("APPSTORE_CONNECT_ISSUER_ID"))?;
-        let key_id = cli_opts
-            .key_id
-            .clone()
-            .ok_or(AnalyticsError::Configuration("APPSTORE_CONNECT_KEY_ID"))?;
-        let key = cli_opts
-            .private_key_base64
-            .clone()
-            .ok_or(AnalyticsError::Configuration(
-                "APPSTORE_CONNECT_PRIVATE_KEY_BASE64",
-            ))?;
         let app_id = std::env::var("APPSTORE_CONNECT_APP_ID")
             .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_APP_ID"))?;
-        if issuer.is_empty() || key_id.is_empty() || key.is_empty() || app_id.is_empty() {
-            return Err(AnalyticsError::Configuration(
-                "nonempty App Store Connect environment variables",
-            ));
+        if app_id.is_empty() {
+            return Err(AnalyticsError::Configuration("APPSTORE_CONNECT_APP_ID"));
         }
-        let key = base64::engine::general_purpose::STANDARD
-            .decode(key)
-            .map_err(|_| AnalyticsError::KeyEncoding)?;
-        let signing_key = EncodingKey::from_ec_pem(&key).map_err(|_| AnalyticsError::PrivateKey)?;
+        generate_app_store_token(cli_opts)?;
         Ok(Self {
             http: Client::builder().no_gzip().build()?,
-            signing_key,
-            key_id,
-            issuer,
+            cli_opts: cli_opts.clone(),
             base: Url::parse(BASE).map_err(|_| AnalyticsError::Pagination)?,
             app_id,
         })
     }
 
     fn token(&self) -> Result<String, AnalyticsError> {
-        let mut header = Header::new(Algorithm::ES256);
-        header.kid = Some(self.key_id.clone());
-        let now = Utc::now().timestamp();
-        encode(
-            &header,
-            &Claims {
-                iss: self.issuer.clone(),
-                iat: now,
-                exp: now + 600,
-                aud: "appstoreconnect-v1",
-            },
-            &self.signing_key,
-        )
-        .map_err(|_| AnalyticsError::Signing)
+        generate_app_store_token(&self.cli_opts).map_err(AnalyticsError::from)
     }
     fn url(&self, path: &str) -> Result<Url, AnalyticsError> {
         self.base.join(path).map_err(|_| AnalyticsError::Pagination)
     }
     async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, AnalyticsError> {
         let response = self.http.get(url).bearer_auth(self.token()?).send().await?;
-        let response = checked(response).await?;
+        let response = checked(response, ApiStage::Read).await?;
         Ok(response.json().await?)
     }
     async fn pages<T: DeserializeOwned>(&self, path: &str) -> Result<Vec<T>, AnalyticsError> {
@@ -249,7 +219,7 @@ impl AnalyticsClient {
             .json(&body)
             .send()
             .await?;
-        let response = checked(response).await?;
+        let response = checked(response, ApiStage::CreateRequest).await?;
         let result: Single<Resource> = response.json().await?;
         Ok(result.data.id)
     }
@@ -272,12 +242,7 @@ impl AnalyticsClient {
         let month = current_month();
         let path = snapshot_manifest_path(dir);
         let mut snapshots: BTreeMap<String, String> = load_json_or_default(&path).await?;
-        let requests = self.requests().await?;
-        if let Some(id) = snapshots.get(&month)
-            && requests
-                .iter()
-                .any(|r| &r.id == id && r.access() == Some(AccessType::OneTimeSnapshot))
-        {
+        if let Some(id) = snapshots.get(&month) {
             return Ok(id.clone());
         }
         let id = self.create(AccessType::OneTimeSnapshot).await?;
@@ -481,7 +446,13 @@ impl AnalyticsClient {
                 }
                 return Err(AnalyticsError::ExpiredUrl);
             }
-            bytes = Some(checked(response).await?.bytes().await?.to_vec());
+            bytes = Some(
+                checked(response, ApiStage::DownloadSegment)
+                    .await?
+                    .bytes()
+                    .await?
+                    .to_vec(),
+            );
             break;
         }
         let bytes = bytes.ok_or(AnalyticsError::ExpiredUrl)?;
@@ -503,12 +474,54 @@ impl AnalyticsClient {
     }
 }
 
-async fn checked(response: reqwest::Response) -> Result<reqwest::Response, AnalyticsError> {
+async fn checked(
+    response: reqwest::Response,
+    stage: ApiStage,
+) -> Result<reqwest::Response, AnalyticsError> {
     let status = response.status();
     if status.is_success() {
         Ok(response)
     } else if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
-        Err(AnalyticsError::Authorization(status.as_u16()))
+        #[derive(Deserialize)]
+        struct AppleError {
+            code: Option<String>,
+            detail: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct AppleErrors {
+            errors: Vec<AppleError>,
+        }
+        let error = response
+            .json::<AppleErrors>()
+            .await
+            .ok()
+            .and_then(|body| body.errors.into_iter().next());
+        let code = error
+            .as_ref()
+            .and_then(|error| error.code.clone())
+            .filter(|code| {
+                code.len() <= 80
+                    && code.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                    })
+            });
+        let detail = error.and_then(|error| error.detail).filter(|detail| {
+            detail.len() <= 240
+                && detail.chars().all(|character| {
+                    character.is_ascii_alphabetic()
+                        || character.is_ascii_whitespace()
+                        || matches!(
+                            character,
+                            '.' | ',' | ':' | ';' | '!' | '?' | '(' | ')' | '-'
+                        )
+                })
+        });
+        Err(AnalyticsError::Authorization {
+            stage,
+            status: status.as_u16(),
+            code,
+            detail,
+        })
     } else {
         Err(AnalyticsError::Api(status.as_u16()))
     }
@@ -1738,6 +1751,34 @@ mod tests {
             directory.join("snapshots.json")
         );
     }
+    #[tokio::test]
+    async fn one_time_snapshot_reuses_local_month_without_admin_read_access() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let saved = BTreeMap::from([(current_month(), String::from("saved-request"))]);
+        atomic_json(&snapshot_manifest_path(temp.path()), &saved)
+            .await
+            .expect("save snapshot manifest");
+        let client = AnalyticsClient {
+            http: Client::new(),
+            cli_opts: CliOpts {
+                command: crate::app_store_connect::Commands::OneTimeSnapshot {
+                    download_dir: temp.path().to_path_buf(),
+                },
+                issuer_id: None,
+                private_key_base64: None,
+                key_id: None,
+            },
+            base: Url::parse(BASE).expect("API base"),
+            app_id: String::new(),
+        };
+        assert_eq!(
+            client
+                .one_time_snapshot(temp.path())
+                .await
+                .expect("reuse saved request"),
+            "saved-request"
+        );
+    }
     fn inventory(id: &str, report_name: &str, dates: &[&str]) -> ReportInventory {
         let instances: Vec<_> = dates
             .iter()
@@ -2563,9 +2604,12 @@ mod tests {
         .expect("write legacy manifest");
         let client = AnalyticsClient {
             http: Client::new(),
-            signing_key: EncodingKey::from_secret(b"unused"),
-            key_id: String::new(),
-            issuer: String::new(),
+            cli_opts: CliOpts {
+                command: crate::app_store_connect::Commands::CreateReport,
+                issuer_id: None,
+                private_key_base64: None,
+                key_id: None,
+            },
             base: Url::parse(BASE).expect("base URL"),
             app_id: String::new(),
         };

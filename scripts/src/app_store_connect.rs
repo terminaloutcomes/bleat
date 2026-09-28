@@ -671,21 +671,37 @@ impl JwtPayload {
     }
 }
 
-fn generate_app_store_token(cliopts: &CliOpts) -> Result<String, Box<dyn std::error::Error>> {
+#[derive(Debug, Error)]
+pub enum AppStoreTokenError {
+    #[error("missing App Store Connect configuration: {0}")]
+    Configuration(&'static str),
+    #[error("invalid App Store Connect private key encoding")]
+    KeyEncoding,
+    #[error("invalid App Store Connect private key")]
+    PrivateKey,
+    #[error("unable to sign App Store Connect token")]
+    Signing,
+}
+
+pub fn generate_app_store_token(cliopts: &CliOpts) -> Result<String, AppStoreTokenError> {
     let Some(key_id) = cliopts.key_id.clone() else {
-        return Err(std::io::Error::other("Missing env var APPSTORE_CONNECT_KEY_ID").into());
+        return Err(AppStoreTokenError::Configuration("APPSTORE_CONNECT_KEY_ID"));
     };
     let Some(issuer_id) = cliopts.issuer_id.clone() else {
-        return Err(std::io::Error::other("Missing env var APPSTORE_CONNECT_ISSUER_ID").into());
+        return Err(AppStoreTokenError::Configuration(
+            "APPSTORE_CONNECT_ISSUER_ID",
+        ));
     };
 
     // This is Apple's downloaded AuthKey_<KEY_ID>.p8 file.
     let Some(private_key) = cliopts.private_key_base64.clone() else {
-        return Err(
-            std::io::Error::other("Missing env var APPSTORE_CONNECT_PRIVATE_KEY_BASE64").into(),
-        );
+        return Err(AppStoreTokenError::Configuration(
+            "APPSTORE_CONNECT_PRIVATE_KEY_BASE64",
+        ));
     };
-    let private_key = base64::engine::general_purpose::STANDARD.decode(private_key)?;
+    let private_key = base64::engine::general_purpose::STANDARD
+        .decode(private_key)
+        .map_err(|_| AppStoreTokenError::KeyEncoding)?;
 
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(key_id);
@@ -693,13 +709,16 @@ fn generate_app_store_token(cliopts: &CliOpts) -> Result<String, Box<dyn std::er
 
     let payload = JwtPayload::new(issuer_id);
 
-    let encoding_key = EncodingKey::from_ec_pem(&private_key)?;
-    Ok(encode(&header, &payload, &encoding_key)?)
+    let encoding_key =
+        EncodingKey::from_ec_pem(&private_key).map_err(|_| AppStoreTokenError::PrivateKey)?;
+    encode(&header, &payload, &encoding_key).map_err(|_| AppStoreTokenError::Signing)
 }
 
 pub async fn appstatus(statusargs: StatusArgs, cliopts: &CliOpts) -> Result<(), ExitCode> {
-    let jwt_payload =
-        generate_app_store_token(cliopts).expect("Failed to generate App Store token");
+    let jwt_payload = generate_app_store_token(cliopts).map_err(|error| {
+        eprintln!("{error}");
+        ExitCode::FAILURE
+    })?;
 
     let client = client::HttpClient::new()
         .with_base_url(openapi_base_url())
@@ -785,7 +804,7 @@ pub enum Commands {
     },
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Clone)]
 pub struct CliOpts {
     #[command(subcommand)]
     pub command: Commands,
