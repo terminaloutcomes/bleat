@@ -9,7 +9,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ffi::OsString,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -18,21 +17,14 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
 
+use crate::app_store_connect::CliOpts;
+
 const BASE: &str = "https://api.appstoreconnect.apple.com/v1/";
-const DOWNLOAD_DIR_ENV: &str = "APPSTORE_CONNECT_DOWNLOAD_DIR";
 
-pub fn download_dir_from_env() -> Result<PathBuf, AnalyticsError> {
-    parse_download_dir(std::env::var_os(DOWNLOAD_DIR_ENV))
-}
-
-fn parse_download_dir(value: Option<OsString>) -> Result<PathBuf, AnalyticsError> {
-    let path = value
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))?;
-    if !path.is_absolute() {
+pub fn parse_download_dir(path: PathBuf) -> Result<PathBuf, AnalyticsError> {
+    if !path.is_absolute() | !path.is_dir() {
         return Err(AnalyticsError::Configuration(
-            "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute path",
+            "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute directory path",
         ));
     }
     Ok(path)
@@ -157,13 +149,21 @@ pub struct AnalyticsClient {
     app_id: String,
 }
 impl AnalyticsClient {
-    pub fn from_env() -> Result<Self, AnalyticsError> {
-        let issuer = std::env::var("APPSTORE_CONNECT_ISSUER_ID")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_ISSUER_ID"))?;
-        let key_id = std::env::var("APPSTORE_CONNECT_KEY_ID")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_KEY_ID"))?;
-        let key = std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_BASE64")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_PRIVATE_KEY_BASE64"))?;
+    pub fn new(cli_opts: &CliOpts) -> Result<Self, AnalyticsError> {
+        let issuer = cli_opts
+            .issuer_id
+            .clone()
+            .ok_or(AnalyticsError::Configuration("APPSTORE_CONNECT_ISSUER_ID"))?;
+        let key_id = cli_opts
+            .key_id
+            .clone()
+            .ok_or(AnalyticsError::Configuration("APPSTORE_CONNECT_KEY_ID"))?;
+        let key = cli_opts
+            .private_key_base64
+            .clone()
+            .ok_or(AnalyticsError::Configuration(
+                "APPSTORE_CONNECT_PRIVATE_KEY_BASE64",
+            ))?;
         let app_id = std::env::var("APPSTORE_CONNECT_APP_ID")
             .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_APP_ID"))?;
         if issuer.is_empty() || key_id.is_empty() || key.is_empty() || app_id.is_empty() {
@@ -184,6 +184,7 @@ impl AnalyticsClient {
             app_id,
         })
     }
+
     fn token(&self) -> Result<String, AnalyticsError> {
         let mut header = Header::new(Algorithm::ES256);
         header.kid = Some(self.key_id.clone());
@@ -1728,14 +1729,10 @@ mod tests {
     use super::*;
     #[test]
     fn download_directory_requires_absolute_path() {
-        assert!(matches!(
-            parse_download_dir(None),
-            Err(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))
-        ));
-        assert!(parse_download_dir(Some(OsString::new())).is_err());
-        assert!(parse_download_dir(Some(OsString::from(".build/appstore-reports"))).is_err());
+        assert!(parse_download_dir(PathBuf::new()).is_err());
+        assert!(parse_download_dir(PathBuf::from(".build/appstore-reports")).is_err());
         let directory =
-            parse_download_dir(Some(OsString::from("/analytics-reports"))).expect("absolute path");
+            parse_download_dir(PathBuf::from("/analytics-reports")).expect("absolute path");
         assert_eq!(
             snapshot_manifest_path(&directory),
             directory.join("snapshots.json")

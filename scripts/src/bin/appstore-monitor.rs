@@ -1,8 +1,8 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use reqwest::header::HeaderValue;
 use scripts::{
-    app_store_connect::{StatusArgs, appstatus, openapi_file},
-    appstore_analytics::{AccessType, AnalyticsClient, AnalyticsError, download_dir_from_env},
+    app_store_connect::{CliOpts, Commands, appstatus, openapi_file},
+    appstore_analytics::{AnalyticsClient, AnalyticsError, parse_download_dir},
 };
 use std::process::ExitCode;
 
@@ -60,31 +60,6 @@ pub async fn ensure_openapi_file_exists(force: bool) {
     }
 }
 
-#[derive(Parser, Debug, Clone)]
-struct UpdateArgs {
-    #[clap(long)]
-    force: bool,
-}
-
-#[derive(Subcommand, Debug, Clone)]
-enum Commands {
-    UpdateSpec(UpdateArgs),
-    UpdateCodegen,
-    AppStatus(StatusArgs),
-    CreateReport,
-    OneTimeSnapshot,
-    DownloadReports {
-        #[arg(long, value_enum)]
-        access_type: AccessType,
-    },
-}
-
-#[derive(Parser, Debug)]
-struct CliOpts {
-    #[command(subcommand)]
-    pub command: Commands,
-}
-
 fn handle_error(error: AnalyticsError) -> ExitCode {
     eprintln!("{error}");
     ExitCode::FAILURE
@@ -93,14 +68,14 @@ fn handle_error(error: AnalyticsError) -> ExitCode {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<ExitCode, ExitCode> {
     let cli_opts = CliOpts::parse();
-    match cli_opts.command {
+    match cli_opts.clone().command {
         Commands::CreateReport => {
-            let client = AnalyticsClient::from_env().map_err(handle_error)?;
+            let client = AnalyticsClient::new(&cli_opts).map_err(handle_error)?;
             println!("{}", client.create_report().await.map_err(handle_error)?);
         }
-        Commands::OneTimeSnapshot => {
-            let client = AnalyticsClient::from_env().map_err(handle_error)?;
-            let download_dir = download_dir_from_env().map_err(handle_error)?;
+        Commands::OneTimeSnapshot { download_dir } => {
+            let client = AnalyticsClient::new(&cli_opts).map_err(handle_error)?;
+            let download_dir = parse_download_dir(download_dir).map_err(handle_error)?;
             println!(
                 "{}",
                 client
@@ -109,9 +84,12 @@ async fn main() -> Result<ExitCode, ExitCode> {
                     .map_err(handle_error)?
             );
         }
-        Commands::DownloadReports { access_type } => {
-            let client = AnalyticsClient::from_env().map_err(handle_error)?;
-            let download_dir = download_dir_from_env().map_err(handle_error)?;
+        Commands::DownloadReports {
+            access_type,
+            download_dir,
+        } => {
+            let client = AnalyticsClient::new(&cli_opts).map_err(handle_error)?;
+            let download_dir = parse_download_dir(download_dir).map_err(handle_error)?;
 
             println!(
                 "{}",
@@ -127,7 +105,7 @@ async fn main() -> Result<ExitCode, ExitCode> {
         }
         Commands::UpdateCodegen => {}
         Commands::AppStatus(statusargs) => {
-            appstatus(statusargs).await?;
+            appstatus(statusargs, &cli_opts).await?;
         }
     }
     Ok(ExitCode::SUCCESS)

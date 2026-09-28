@@ -388,7 +388,7 @@ raw_args = true
 run = '''
   APPSTORE_CONNECT_KEY_ID="$(keychain-secret get appstore-key-id)" \
   APPSTORE_CONNECT_PRIVATE_KEY_BASE64="$(keychain-secret get --base64 appstore-key-secret)" \
-  cargo run --quiet --package scripts --bin appstore-monitor -- app-status
+  cargo run --quiet --package scripts --bin appstore-monitor --
 '''
 
 [tasks."appstore:connect-download"]
