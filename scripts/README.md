@@ -5,6 +5,18 @@ instances locally. Apple generates reports asynchronously, usually after 1–2 d
 run the request command first and download later. Apple retains report instances for
 35 days. The command ignores WEEKLY and MONTHLY instances.
 
+Report availability also depends on Apple's data thresholds. [Analytics download
+metrics](https://developer.apple.com/help/app-store-connect-analytics/reference/metrics-definitions)
+appear after at least five first-time downloads. Dashboard usage metrics require
+at least five active devices in the selected date range and use data from users
+who opted in to sharing analytics. For the [Analytics Reports
+API](https://developer.apple.com/documentation/analytics-reports/privacy), Apple
+generates App Sessions, App Crashes, and other app-usage reports only when at
+least five opted-in users contribute events to the respective report in a day,
+week, or month. Detailed report rows have additional privacy thresholds. A
+report definition with no instances can reflect generation delay or unmet data
+thresholds; it does not establish zero activity or a download failure.
+
 ## Access and credentials
 
 The caller supplies a key through the same environment variables for every
