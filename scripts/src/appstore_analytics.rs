@@ -162,6 +162,7 @@ pub struct ReportListingRow {
     pub name: String,
     pub category: String,
     pub daily_instances: usize,
+    pub other_instances: usize,
     pub segments: usize,
     pub latest_daily: Option<NaiveDate>,
 }
@@ -327,6 +328,7 @@ impl AnalyticsClient {
                     .unwrap_or(inventory.report.id),
                 category: inventory.report.attributes.category.unwrap_or_default(),
                 daily_instances: inventory.instances.len(),
+                other_instances: inventory.other_instances,
                 segments,
                 latest_daily: inventory.latest_daily,
             });
@@ -377,6 +379,7 @@ impl AnalyticsClient {
                 .await?
             {
                 let mut daily_instances = Vec::new();
+                let mut other_instances = 0;
                 let mut latest_daily = None;
                 for instance in self
                     .pages::<Resource>(&format!(
@@ -386,6 +389,7 @@ impl AnalyticsClient {
                     .await?
                 {
                     if instance.attributes.granularity.as_deref() != Some("DAILY") {
+                        other_instances += 1;
                         continue;
                     }
                     let date = instance
@@ -408,6 +412,7 @@ impl AnalyticsClient {
                     request: request.clone(),
                     report,
                     instances: daily_instances,
+                    other_instances,
                     latest_daily,
                 });
             }
@@ -613,6 +618,7 @@ struct ReportInventory {
     request: Resource,
     report: Resource,
     instances: Vec<DailyInstance>,
+    other_instances: usize,
     latest_daily: Option<NaiveDate>,
 }
 struct DailyInstance {
@@ -1901,6 +1907,7 @@ mod tests {
                 },
             },
             instances,
+            other_instances: 0,
             latest_daily,
         }
     }

@@ -107,10 +107,11 @@ async fn main() -> Result<ExitCode, ExitCode> {
                             .latest_daily
                             .map_or_else(|| "none".to_string(), |date| date.to_string());
                         println!(
-                            "  {} [{}]: {} DAILY instances, {} segments; latest processing date {}",
+                            "  {} [{}]: {} DAILY instances, {} other instances, {} DAILY segments; latest DAILY processing date {}",
                             report.name,
                             report.category,
                             report.daily_instances,
+                            report.other_instances,
                             report.segments,
                             latest
                         );

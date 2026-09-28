@@ -63,7 +63,8 @@ submit a duplicate. Request commands do not wait for generation.
 
 `download-reports --list` reads the selected request's report inventory without
 downloading or changing local files. It prints every generated report's DAILY
-instance and segment counts and latest processing date. If Apple has not
+instance, other-granularity instance, and DAILY segment counts plus the latest
+DAILY processing date. If Apple has not
 generated reports yet, it says so explicitly. Apple does not expose a pending
 status for individual reports; an absent report or instance may also mean no
 eligible or privacy-permitted data exists.
