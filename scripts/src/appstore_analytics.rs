@@ -1,15 +1,12 @@
 //! Daily App Store Connect analytics report lifecycle and local dump.
 use async_compression::tokio::bufread::GzipDecoder;
-use base64::Engine;
 use chrono::{Datelike, NaiveDate, Utc};
-use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use md5::{Digest, Md5};
 use reqwest::{Client, StatusCode, Url};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ffi::OsString,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -18,18 +15,11 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
 
+use crate::app_store_connect::{AppStoreTokenError, CliOpts, generate_app_store_token};
+
 const BASE: &str = "https://api.appstoreconnect.apple.com/v1/";
-const DOWNLOAD_DIR_ENV: &str = "APPSTORE_CONNECT_DOWNLOAD_DIR";
 
-pub fn download_dir_from_env() -> Result<PathBuf, AnalyticsError> {
-    parse_download_dir(std::env::var_os(DOWNLOAD_DIR_ENV))
-}
-
-fn parse_download_dir(value: Option<OsString>) -> Result<PathBuf, AnalyticsError> {
-    let path = value
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))?;
+pub fn parse_download_dir(path: PathBuf) -> Result<PathBuf, AnalyticsError> {
     if !path.is_absolute() {
         return Err(AnalyticsError::Configuration(
             "APPSTORE_CONNECT_DOWNLOAD_DIR must be an absolute path",
@@ -46,14 +36,15 @@ fn snapshot_manifest_path(dir: &Path) -> PathBuf {
 pub enum AnalyticsError {
     #[error("missing configuration: {0}")]
     Configuration(&'static str),
-    #[error("invalid private key encoding")]
-    KeyEncoding,
-    #[error("invalid private key")]
-    PrivateKey,
-    #[error("unable to sign App Store Connect token")]
-    Signing,
-    #[error("Apple denied the requested operation (HTTP {0})")]
-    Authorization(u16),
+    #[error(transparent)]
+    Token(#[from] AppStoreTokenError),
+    #[error("Apple denied {stage} (HTTP {status}, code {code:?}, detail {detail:?})")]
+    Authorization {
+        stage: ApiStage,
+        status: u16,
+        code: Option<String>,
+        detail: Option<String>,
+    },
     #[error("Apple API returned HTTP {0}")]
     Api(u16),
     #[error("network operation failed: {0}")]
@@ -108,6 +99,14 @@ pub enum AnalyticsError {
     UnsupportedInstallationEvent,
     #[error("Installations and Deletions report contains an unsupported download type")]
     UnsupportedInstallationDownloadType,
+    #[error("App Sessions report has a missing column: {0}")]
+    MissingSessionColumn(&'static str),
+    #[error("App Sessions report has an invalid value in: {0}")]
+    InvalidSessionValue(&'static str),
+    #[error("App Crashes report has a missing column: {0}")]
+    MissingCrashColumn(&'static str),
+    #[error("App Crashes report has an invalid value in: {0}")]
+    InvalidCrashValue(&'static str),
     #[error("unique devices cannot be added across dimensional rows")]
     NonAdditiveUniqueDevices,
     #[error("install and delete counts cannot be combined")]
@@ -123,6 +122,21 @@ pub enum AccessType {
     Ongoing,
     OneTimeSnapshot,
 }
+#[derive(Clone, Copy, Debug)]
+pub enum ApiStage {
+    Read,
+    CreateRequest,
+    DownloadSegment,
+}
+impl std::fmt::Display for ApiStage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Read => "App Store Connect API read",
+            Self::CreateRequest => "analytics request creation",
+            Self::DownloadSegment => "analytics segment download",
+        })
+    }
+}
 impl AccessType {
     fn api(self) -> &'static str {
         match self {
@@ -132,72 +146,52 @@ impl AccessType {
     }
 }
 
-#[derive(Serialize)]
-struct Claims {
-    iss: String,
-    iat: i64,
-    exp: i64,
-    aud: &'static str,
-}
-
 pub struct AnalyticsClient {
     http: Client,
-    signing_key: EncodingKey,
-    key_id: String,
-    issuer: String,
+    cli_opts: CliOpts,
     base: Url,
     app_id: String,
 }
+pub struct ReportListing {
+    pub requests: Vec<String>,
+    pub reports: Vec<ReportListingRow>,
+}
+
+pub struct ReportListingRow {
+    pub request_id: String,
+    pub name: String,
+    pub category: String,
+    pub daily_instances: usize,
+    pub other_instances: usize,
+    pub segments: usize,
+    pub latest_daily: Option<NaiveDate>,
+}
+
 impl AnalyticsClient {
-    pub fn from_env() -> Result<Self, AnalyticsError> {
-        let issuer = std::env::var("APPSTORE_CONNECT_ISSUER_ID")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_ISSUER_ID"))?;
-        let key_id = std::env::var("APPSTORE_CONNECT_KEY_ID")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_KEY_ID"))?;
-        let key = std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_BASE64")
-            .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_PRIVATE_KEY_BASE64"))?;
+    pub fn new(cli_opts: &CliOpts) -> Result<Self, AnalyticsError> {
         let app_id = std::env::var("APPSTORE_CONNECT_APP_ID")
             .map_err(|_| AnalyticsError::Configuration("APPSTORE_CONNECT_APP_ID"))?;
-        if issuer.is_empty() || key_id.is_empty() || key.is_empty() || app_id.is_empty() {
-            return Err(AnalyticsError::Configuration(
-                "nonempty App Store Connect environment variables",
-            ));
+        if app_id.is_empty() {
+            return Err(AnalyticsError::Configuration("APPSTORE_CONNECT_APP_ID"));
         }
-        let key = base64::engine::general_purpose::STANDARD
-            .decode(key)
-            .map_err(|_| AnalyticsError::KeyEncoding)?;
-        let signing_key = EncodingKey::from_ec_pem(&key).map_err(|_| AnalyticsError::PrivateKey)?;
+        generate_app_store_token(cli_opts)?;
         Ok(Self {
             http: Client::builder().no_gzip().build()?,
-            signing_key,
-            key_id,
-            issuer,
+            cli_opts: cli_opts.clone(),
             base: Url::parse(BASE).map_err(|_| AnalyticsError::Pagination)?,
             app_id,
         })
     }
+
     fn token(&self) -> Result<String, AnalyticsError> {
-        let mut header = Header::new(Algorithm::ES256);
-        header.kid = Some(self.key_id.clone());
-        let now = Utc::now().timestamp();
-        encode(
-            &header,
-            &Claims {
-                iss: self.issuer.clone(),
-                iat: now,
-                exp: now + 600,
-                aud: "appstoreconnect-v1",
-            },
-            &self.signing_key,
-        )
-        .map_err(|_| AnalyticsError::Signing)
+        generate_app_store_token(&self.cli_opts).map_err(AnalyticsError::from)
     }
     fn url(&self, path: &str) -> Result<Url, AnalyticsError> {
         self.base.join(path).map_err(|_| AnalyticsError::Pagination)
     }
     async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, AnalyticsError> {
         let response = self.http.get(url).bearer_auth(self.token()?).send().await?;
-        let response = checked(response).await?;
+        let response = checked(response, ApiStage::Read).await?;
         Ok(response.json().await?)
     }
     async fn pages<T: DeserializeOwned>(&self, path: &str) -> Result<Vec<T>, AnalyticsError> {
@@ -240,7 +234,7 @@ impl AnalyticsClient {
             .json(&body)
             .send()
             .await?;
-        let response = checked(response).await?;
+        let response = checked(response, ApiStage::CreateRequest).await?;
         let result: Single<Resource> = response.json().await?;
         Ok(result.data.id)
     }
@@ -263,12 +257,7 @@ impl AnalyticsClient {
         let month = current_month();
         let path = snapshot_manifest_path(dir);
         let mut snapshots: BTreeMap<String, String> = load_json_or_default(&path).await?;
-        let requests = self.requests().await?;
-        if let Some(id) = snapshots.get(&month)
-            && requests
-                .iter()
-                .any(|r| &r.id == id && r.access() == Some(AccessType::OneTimeSnapshot))
-        {
+        if let Some(id) = snapshots.get(&month) {
             return Ok(id.clone());
         }
         let id = self.create(AccessType::OneTimeSnapshot).await?;
@@ -281,72 +270,7 @@ impl AnalyticsClient {
         access: AccessType,
         dir: &Path,
     ) -> Result<usize, AnalyticsError> {
-        let requests = self.requests().await?;
-        let snapshot_id = if access == AccessType::OneTimeSnapshot {
-            load_json_or_default::<BTreeMap<String, String>>(&snapshot_manifest_path(dir))
-                .await?
-                .get(&current_month())
-                .cloned()
-        } else {
-            None
-        };
-        let candidates: Vec<_> = requests
-            .into_iter()
-            .filter(|r| {
-                r.access() == Some(access)
-                    && (access != AccessType::Ongoing
-                        || r.attributes.stopped_due_to_inactivity != Some(true))
-            })
-            .filter(|r| snapshot_id.as_ref().is_none_or(|id| &r.id == id))
-            .collect();
-        if candidates.is_empty() {
-            return Err(AnalyticsError::NoRequest);
-        }
-        let mut inventories = Vec::new();
-        for request in candidates {
-            for report in self
-                .pages::<Resource>(&format!(
-                    "analyticsReportRequests/{}/reports?limit=200",
-                    request.id
-                ))
-                .await?
-            {
-                let mut daily_instances = Vec::new();
-                let mut latest_daily = None;
-                for instance in self
-                    .pages::<Resource>(&format!(
-                        "analyticsReports/{}/instances?limit=200",
-                        report.id
-                    ))
-                    .await?
-                {
-                    if instance.attributes.granularity.as_deref() != Some("DAILY") {
-                        continue;
-                    }
-                    let date = instance
-                        .attributes
-                        .processing_date
-                        .as_deref()
-                        .ok_or(AnalyticsError::ProcessingDate)
-                        .and_then(|value| {
-                            NaiveDate::parse_from_str(value, "%Y-%m-%d")
-                                .map_err(|_| AnalyticsError::ProcessingDate)
-                        })?;
-                    latest_daily =
-                        Some(latest_daily.map_or(date, |previous: NaiveDate| previous.max(date)));
-                    daily_instances.push(DailyInstance {
-                        resource: instance,
-                        date,
-                    });
-                }
-                inventories.push(ReportInventory {
-                    request: request.clone(),
-                    report,
-                    instances: daily_instances,
-                    latest_daily,
-                });
-            }
-        }
+        let (_, inventories) = self.report_inventories(access, dir).await?;
         let mut count = 0;
         for inventory in select_latest(inventories) {
             for daily in inventory.instances {
@@ -375,6 +299,125 @@ impl AnalyticsClient {
             }
         }
         Ok(count)
+    }
+
+    pub async fn list_reports(
+        &self,
+        access: AccessType,
+        dir: &Path,
+    ) -> Result<ReportListing, AnalyticsError> {
+        let (requests, inventories) = self.report_inventories(access, dir).await?;
+        let mut reports = Vec::new();
+        for inventory in inventories {
+            let mut segments = 0;
+            for daily in &inventory.instances {
+                segments += self
+                    .pages::<Resource>(&format!(
+                        "analyticsReportInstances/{}/segments?limit=200",
+                        daily.resource.id
+                    ))
+                    .await?
+                    .len();
+            }
+            reports.push(ReportListingRow {
+                request_id: inventory.request.id,
+                name: inventory
+                    .report
+                    .attributes
+                    .name
+                    .unwrap_or(inventory.report.id),
+                category: inventory.report.attributes.category.unwrap_or_default(),
+                daily_instances: inventory.instances.len(),
+                other_instances: inventory.other_instances,
+                segments,
+                latest_daily: inventory.latest_daily,
+            });
+        }
+        reports.sort_by(|a, b| {
+            (&a.request_id, &a.category, &a.name).cmp(&(&b.request_id, &b.category, &b.name))
+        });
+        Ok(ReportListing { requests, reports })
+    }
+
+    async fn report_inventories(
+        &self,
+        access: AccessType,
+        dir: &Path,
+    ) -> Result<(Vec<String>, Vec<ReportInventory>), AnalyticsError> {
+        let requests = self.requests().await?;
+        let snapshot_id = if access == AccessType::OneTimeSnapshot {
+            load_json_or_default::<BTreeMap<String, String>>(&snapshot_manifest_path(dir))
+                .await?
+                .get(&current_month())
+                .cloned()
+        } else {
+            None
+        };
+        let candidates: Vec<_> = requests
+            .into_iter()
+            .filter(|r| {
+                r.access() == Some(access)
+                    && (access != AccessType::Ongoing
+                        || r.attributes.stopped_due_to_inactivity != Some(true))
+            })
+            .filter(|r| snapshot_id.as_ref().is_none_or(|id| &r.id == id))
+            .collect();
+        if candidates.is_empty() {
+            return Err(AnalyticsError::NoRequest);
+        }
+        let request_ids = candidates
+            .iter()
+            .map(|request| request.id.clone())
+            .collect();
+        let mut inventories = Vec::new();
+        for request in candidates {
+            for report in self
+                .pages::<Resource>(&format!(
+                    "analyticsReportRequests/{}/reports?limit=200",
+                    request.id
+                ))
+                .await?
+            {
+                let mut daily_instances = Vec::new();
+                let mut other_instances = 0;
+                let mut latest_daily = None;
+                for instance in self
+                    .pages::<Resource>(&format!(
+                        "analyticsReports/{}/instances?limit=200",
+                        report.id
+                    ))
+                    .await?
+                {
+                    if instance.attributes.granularity.as_deref() != Some("DAILY") {
+                        other_instances += 1;
+                        continue;
+                    }
+                    let date = instance
+                        .attributes
+                        .processing_date
+                        .as_deref()
+                        .ok_or(AnalyticsError::ProcessingDate)
+                        .and_then(|value| {
+                            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                                .map_err(|_| AnalyticsError::ProcessingDate)
+                        })?;
+                    latest_daily =
+                        Some(latest_daily.map_or(date, |previous: NaiveDate| previous.max(date)));
+                    daily_instances.push(DailyInstance {
+                        resource: instance,
+                        date,
+                    });
+                }
+                inventories.push(ReportInventory {
+                    request: request.clone(),
+                    report,
+                    instances: daily_instances,
+                    other_instances,
+                    latest_daily,
+                });
+            }
+        }
+        Ok((request_ids, inventories))
     }
     async fn save_segment(
         &self,
@@ -421,6 +464,7 @@ impl AnalyticsClient {
             granularity: "DAILY",
             checksum,
             processing_date: instance.attributes.processing_date.as_deref(),
+            privacy: privacy_context(report.attributes.name.as_deref()),
         };
         let existing = manifest.get(&key).filter(|entry| {
             entry.raw == relative(dir, &raw) && entry.normalized == relative(dir, &normalized)
@@ -471,7 +515,13 @@ impl AnalyticsClient {
                 }
                 return Err(AnalyticsError::ExpiredUrl);
             }
-            bytes = Some(checked(response).await?.bytes().await?.to_vec());
+            bytes = Some(
+                checked(response, ApiStage::DownloadSegment)
+                    .await?
+                    .bytes()
+                    .await?
+                    .to_vec(),
+            );
             break;
         }
         let bytes = bytes.ok_or(AnalyticsError::ExpiredUrl)?;
@@ -493,12 +543,54 @@ impl AnalyticsClient {
     }
 }
 
-async fn checked(response: reqwest::Response) -> Result<reqwest::Response, AnalyticsError> {
+async fn checked(
+    response: reqwest::Response,
+    stage: ApiStage,
+) -> Result<reqwest::Response, AnalyticsError> {
     let status = response.status();
     if status.is_success() {
         Ok(response)
     } else if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
-        Err(AnalyticsError::Authorization(status.as_u16()))
+        #[derive(Deserialize)]
+        struct AppleError {
+            code: Option<String>,
+            detail: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct AppleErrors {
+            errors: Vec<AppleError>,
+        }
+        let error = response
+            .json::<AppleErrors>()
+            .await
+            .ok()
+            .and_then(|body| body.errors.into_iter().next());
+        let code = error
+            .as_ref()
+            .and_then(|error| error.code.clone())
+            .filter(|code| {
+                code.len() <= 80
+                    && code.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                    })
+            });
+        let detail = error.and_then(|error| error.detail).filter(|detail| {
+            detail.len() <= 240
+                && detail.chars().all(|character| {
+                    character.is_ascii_alphabetic()
+                        || character.is_ascii_whitespace()
+                        || matches!(
+                            character,
+                            '.' | ',' | ':' | ';' | '!' | '?' | '(' | ')' | '-'
+                        )
+                })
+        });
+        Err(AnalyticsError::Authorization {
+            stage,
+            status: status.as_u16(),
+            code,
+            detail,
+        })
     } else {
         Err(AnalyticsError::Api(status.as_u16()))
     }
@@ -526,6 +618,7 @@ struct ReportInventory {
     request: Resource,
     report: Resource,
     instances: Vec<DailyInstance>,
+    other_instances: usize,
     latest_daily: Option<NaiveDate>,
 }
 struct DailyInstance {
@@ -602,7 +695,7 @@ fn manifest_entry(dir: &Path, raw: &Path, normalized: &Path) -> ManifestEntry {
     ManifestEntry {
         raw: relative(dir, raw),
         normalized: relative(dir, normalized),
-        normalization_version: 5,
+        normalization_version: 6,
     }
 }
 #[derive(Serialize)]
@@ -617,6 +710,21 @@ struct Metadata<'a> {
     granularity: &'a str,
     checksum: &'a str,
     processing_date: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    privacy: Option<PrivacyContext>,
+}
+#[derive(Clone, Copy, Serialize)]
+struct PrivacyContext {
+    opted_in_users_only: bool,
+    minimum_users_for_report: u8,
+    missing_rows_mean_zero: bool,
+}
+fn privacy_context(name: Option<&str>) -> Option<PrivacyContext> {
+    (session_variant(name).is_some() || crash_variant(name).is_some()).then_some(PrivacyContext {
+        opted_in_users_only: true,
+        minimum_users_for_report: 5,
+        missing_rows_mean_zero: false,
+    })
 }
 #[derive(Serialize)]
 struct Row<'a> {
@@ -631,6 +739,10 @@ struct Row<'a> {
     purchase: Option<PurchaseRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     installation: Option<InstallationRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session: Option<SessionRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    crash: Option<CrashRow>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1247,8 +1359,166 @@ fn installation_variant(name: Option<&str>) -> Option<InstallationVariant> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageVariant {
+    Single,
+    Standard,
+    Detailed,
+}
+
+fn session_variant(name: Option<&str>) -> Option<UsageVariant> {
+    match name {
+        Some("App Sessions Standard" | "Sessions Standard") => Some(UsageVariant::Standard),
+        Some("App Sessions Detailed" | "Sessions Detailed") => Some(UsageVariant::Detailed),
+        _ => None,
+    }
+}
+
+fn crash_variant(name: Option<&str>) -> Option<UsageVariant> {
+    match name {
+        Some("App Crashes" | "Crashes") => Some(UsageVariant::Single),
+        Some("App Crashes Standard" | "Crashes Standard") => Some(UsageVariant::Standard),
+        Some("App Crashes Detailed" | "Crashes Detailed") => Some(UsageVariant::Detailed),
+        _ => None,
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SessionRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: UsageVariant,
+    app_version: String,
+    device: String,
+    platform_version: String,
+    source_type: String,
+    source_info: Option<String>,
+    campaign: Option<String>,
+    page_type: String,
+    page_title: Option<String>,
+    app_download_date: Option<NaiveDate>,
+    territory: String,
+    sessions: u64,
+    total_session_duration: u64,
+    unique_devices: u64,
+}
+
+impl SessionRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: UsageVariant,
+    ) -> Result<Self, AnalyticsError> {
+        let required = |name| -> Result<&str, AnalyticsError> {
+            let value = columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingSessionColumn(name))?;
+            if value.trim().is_empty() {
+                return Err(AnalyticsError::InvalidSessionValue(name));
+            }
+            Ok(value)
+        };
+        let date = |name| -> Result<NaiveDate, AnalyticsError> {
+            NaiveDate::parse_from_str(required(name)?, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidSessionValue(name))
+        };
+        let number = |name| -> Result<u64, AnalyticsError> {
+            required(name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidSessionValue(name))
+        };
+        let optional = |name| columns.get(name).copied().filter(|value| !value.is_empty());
+        let detailed = variant == UsageVariant::Detailed;
+        Ok(Self {
+            date: date("Date")?,
+            app_name: required("App Name")?.into(),
+            app_apple_identifier: number("App Apple Identifier")?,
+            variant,
+            app_version: required("App Version")?.into(),
+            device: required("Device")?.into(),
+            platform_version: required("Platform Version")?.into(),
+            source_type: required("Source Type")?.into(),
+            source_info: detailed
+                .then(|| optional("Source Info"))
+                .flatten()
+                .map(str::to_owned),
+            campaign: detailed
+                .then(|| optional("Campaign"))
+                .flatten()
+                .map(str::to_owned),
+            page_type: required("Page Type")?.into(),
+            page_title: detailed
+                .then(|| optional("Page Title"))
+                .flatten()
+                .map(str::to_owned),
+            app_download_date: optional("App Download Date")
+                .map(|value| {
+                    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                        .map_err(|_| AnalyticsError::InvalidSessionValue("App Download Date"))
+                })
+                .transpose()?,
+            territory: required("Territory")?.into(),
+            sessions: number("Sessions")?,
+            total_session_duration: number("Total Session Duration")?,
+            unique_devices: number("Unique Devices")?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CrashRow {
+    date: NaiveDate,
+    app_name: String,
+    app_apple_identifier: u64,
+    variant: UsageVariant,
+    app_version: String,
+    device: String,
+    platform_version: String,
+    crashes: u64,
+    unique_devices: u64,
+}
+
+impl CrashRow {
+    fn parse(
+        columns: &BTreeMap<&str, &str>,
+        variant: UsageVariant,
+    ) -> Result<Self, AnalyticsError> {
+        let required = |name| -> Result<&str, AnalyticsError> {
+            let value = columns
+                .get(name)
+                .copied()
+                .ok_or(AnalyticsError::MissingCrashColumn(name))?;
+            if value.trim().is_empty() {
+                return Err(AnalyticsError::InvalidCrashValue(name));
+            }
+            Ok(value)
+        };
+        let number = |name| -> Result<u64, AnalyticsError> {
+            required(name)?
+                .parse()
+                .map_err(|_| AnalyticsError::InvalidCrashValue(name))
+        };
+        Ok(Self {
+            date: NaiveDate::parse_from_str(required("Date")?, "%Y-%m-%d")
+                .map_err(|_| AnalyticsError::InvalidCrashValue("Date"))?,
+            app_name: required("App Name")?.into(),
+            app_apple_identifier: number("App Apple Identifier")?,
+            variant,
+            app_version: required("App Version")?.into(),
+            device: required("Device")?.into(),
+            platform_version: required("Platform Version")?.into(),
+            crashes: number("Crashes")?,
+            unique_devices: number("Unique Devices")?,
+        })
+    }
+}
+
 fn required_normalization_version(name: Option<&str>) -> u8 {
-    if installation_variant(name).is_some() {
+    if session_variant(name).is_some() || crash_variant(name).is_some() {
+        6
+    } else if installation_variant(name).is_some() {
         5
     } else if purchase_variant(name).is_some() {
         4
@@ -1268,7 +1538,9 @@ fn serialize_decimal_number<S: serde::Serializer>(
     number.serialize(serializer)
 }
 fn variant(name: &str) -> Option<&'static str> {
-    if name.ends_with(" Detailed") {
+    if matches!(name, "App Crashes" | "Crashes") {
+        Some("SINGLE")
+    } else if name.ends_with(" Detailed") {
         Some("DETAILED")
     } else if name.ends_with(" Standard") {
         Some("STANDARD")
@@ -1419,6 +1691,45 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             }
         }
     }
+    let session_variant = session_variant(metadata.report_name);
+    if session_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Source Type",
+            "Page Type",
+            "App Download Date",
+            "Territory",
+            "Sessions",
+            "Total Session Duration",
+            "Unique Devices",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingSessionColumn(required));
+            }
+        }
+    }
+    let crash_variant = crash_variant(metadata.report_name);
+    if crash_variant.is_some() {
+        for required in [
+            "Date",
+            "App Name",
+            "App Apple Identifier",
+            "App Version",
+            "Device",
+            "Platform Version",
+            "Crashes",
+            "Unique Devices",
+        ] {
+            if !names.contains(&required) {
+                return Err(AnalyticsError::MissingCrashColumn(required));
+            }
+        }
+    }
     let mut output = String::new();
     for line in lines {
         let values: Vec<&str> = line.split('\t').collect();
@@ -1438,6 +1749,12 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
         let installation = installation_variant
             .map(|variant| InstallationRow::parse(&columns, variant))
             .transpose()?;
+        let session = session_variant
+            .map(|variant| SessionRow::parse(&columns, variant))
+            .transpose()?;
+        let crash = crash_variant
+            .map(|variant| CrashRow::parse(&columns, variant))
+            .transpose()?;
         output.push_str(&serde_json::to_string(&Row {
             metadata,
             columns,
@@ -1445,6 +1762,8 @@ async fn normalize<'a>(path: &Path, metadata: &'a Metadata<'a>) -> Result<String
             discovery,
             purchase,
             installation,
+            session,
+            crash,
         })?);
         output.push('\n');
     }
@@ -1491,19 +1810,72 @@ async fn write_temp(path: &Path, bytes: &[u8]) -> Result<PathBuf, AnalyticsError
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn download_reports_list_flag_is_opt_in() {
+        for (flag, expected) in [(None, false), (Some("--list"), true)] {
+            let mut args = vec![
+                "appstore-monitor",
+                "download-reports",
+                "--access-type",
+                "one-time-snapshot",
+                "--download-dir",
+                "/analytics-reports",
+            ];
+            if let Some(flag) = flag {
+                args.push(flag);
+            }
+            let parsed = CliOpts::try_parse_from(args).expect("valid download command");
+            match parsed.command {
+                crate::app_store_connect::Commands::DownloadReports {
+                    access_type, list, ..
+                } => {
+                    assert_eq!(access_type, AccessType::OneTimeSnapshot);
+                    assert_eq!(list, expected);
+                }
+                _ => panic!("expected download command"),
+            }
+        }
+    }
+
     #[test]
     fn download_directory_requires_absolute_path() {
-        assert!(matches!(
-            parse_download_dir(None),
-            Err(AnalyticsError::Configuration(DOWNLOAD_DIR_ENV))
-        ));
-        assert!(parse_download_dir(Some(OsString::new())).is_err());
-        assert!(parse_download_dir(Some(OsString::from(".build/appstore-reports"))).is_err());
+        assert!(parse_download_dir(PathBuf::new()).is_err());
+        assert!(parse_download_dir(PathBuf::from(".build/appstore-reports")).is_err());
         let directory =
-            parse_download_dir(Some(OsString::from("/analytics-reports"))).expect("absolute path");
+            parse_download_dir(PathBuf::from("/analytics-reports")).expect("absolute path");
         assert_eq!(
             snapshot_manifest_path(&directory),
             directory.join("snapshots.json")
+        );
+    }
+    #[tokio::test]
+    async fn one_time_snapshot_reuses_local_month_without_admin_read_access() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let saved = BTreeMap::from([(current_month(), String::from("saved-request"))]);
+        atomic_json(&snapshot_manifest_path(temp.path()), &saved)
+            .await
+            .expect("save snapshot manifest");
+        let client = AnalyticsClient {
+            http: Client::new(),
+            cli_opts: CliOpts {
+                command: crate::app_store_connect::Commands::OneTimeSnapshot {
+                    download_dir: temp.path().to_path_buf(),
+                },
+                issuer_id: None,
+                private_key_base64: None,
+                key_id: None,
+            },
+            base: Url::parse(BASE).expect("API base"),
+            app_id: String::new(),
+        };
+        assert_eq!(
+            client
+                .one_time_snapshot(temp.path())
+                .await
+                .expect("reuse saved request"),
+            "saved-request"
         );
     }
     fn inventory(id: &str, report_name: &str, dates: &[&str]) -> ReportInventory {
@@ -1535,6 +1907,7 @@ mod tests {
                 },
             },
             instances,
+            other_instances: 0,
             latest_daily,
         }
     }
@@ -1643,6 +2016,7 @@ mod tests {
             granularity: "DAILY",
             checksum: "checksum",
             processing_date: Some("2026-09-25"),
+            privacy: None,
         }
     }
     #[tokio::test]
@@ -1697,7 +2071,124 @@ mod tests {
         fs::write(&path, bytes).await.expect("write fixture");
         let mut metadata = metadata();
         metadata.report_name = Some(name);
+        metadata.variant = variant(name);
+        metadata.privacy = privacy_context(Some(name));
         normalize(&path, &metadata).await
+    }
+    #[tokio::test]
+    async fn session_variants_preserve_distinct_metrics_and_privacy_context() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Sessions Standard",
+                include_bytes!("../tests/fixtures/appstore/sessions-standard.tsv.gz").as_slice(),
+                "standard",
+            ),
+            (
+                "App Sessions Detailed",
+                include_bytes!("../tests/fixtures/appstore/sessions-detailed.tsv.gz").as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("session fixture");
+            let row: serde_json::Value = serde_json::from_str(output.trim()).expect("JSON row");
+            assert_eq!(row["session"]["variant"], expected_variant);
+            assert_eq!(row["session"]["sessions"], 7);
+            assert_eq!(row["session"]["total_session_duration"], 900);
+            assert_eq!(row["session"]["unique_devices"], 5);
+            assert!(row.get("crash").is_none());
+            assert_eq!(row["processing_date"], "2026-09-25");
+            assert_eq!(row["privacy"]["opted_in_users_only"], true);
+            assert_eq!(row["privacy"]["minimum_users_for_report"], 5);
+            assert_eq!(row["privacy"]["missing_rows_mean_zero"], false);
+            if expected_variant == "detailed" {
+                assert_eq!(row["session"]["source_info"], "example.com");
+            } else {
+                assert!(row["session"]["source_info"].is_null());
+            }
+        }
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-empty.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await
+            .expect("empty sessions"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-invalid-duration.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await,
+            Err(AnalyticsError::InvalidSessionValue(
+                "Total Session Duration"
+            ))
+        ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/sessions-missing-column.tsv.gz"),
+                "App Sessions Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingSessionColumn("Unique Devices"))
+        ));
+    }
+    #[tokio::test]
+    async fn crash_variants_preserve_distinct_metrics_and_privacy_context() {
+        for (name, bytes, expected_variant) in [
+            (
+                "App Crashes",
+                include_bytes!("../tests/fixtures/appstore/crashes-single.tsv.gz").as_slice(),
+                "single",
+            ),
+            (
+                "App Crashes Standard",
+                include_bytes!("../tests/fixtures/appstore/crashes-standard.tsv.gz").as_slice(),
+                "standard",
+            ),
+            (
+                "App Crashes Detailed",
+                include_bytes!("../tests/fixtures/appstore/crashes-detailed.tsv.gz").as_slice(),
+                "detailed",
+            ),
+        ] {
+            let output = fixture(bytes, name).await.expect("crash fixture");
+            let row: serde_json::Value = serde_json::from_str(output.trim()).expect("JSON row");
+            assert_eq!(row["crash"]["variant"], expected_variant);
+            assert_eq!(row["variant"], expected_variant.to_ascii_uppercase());
+            assert_eq!(row["crash"]["crashes"], 6);
+            assert_eq!(row["crash"]["unique_devices"], 5);
+            assert!(row.get("session").is_none());
+            assert_eq!(row["processing_date"], "2026-09-25");
+            assert_eq!(row["privacy"]["opted_in_users_only"], true);
+            assert_eq!(row["privacy"]["missing_rows_mean_zero"], false);
+        }
+        assert_eq!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-empty.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await
+            .expect("empty crashes"),
+            ""
+        );
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-invalid-count.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await,
+            Err(AnalyticsError::InvalidCrashValue("Crashes"))
+        ));
+        assert!(matches!(
+            fixture(
+                include_bytes!("../tests/fixtures/appstore/crashes-missing-column.tsv.gz"),
+                "App Crashes Standard"
+            )
+            .await,
+            Err(AnalyticsError::MissingCrashColumn("Unique Devices"))
+        ));
     }
     #[tokio::test]
     async fn installation_variants_preserve_events_download_types_and_nullable_dates() {
@@ -2213,9 +2704,12 @@ mod tests {
         .expect("write legacy manifest");
         let client = AnalyticsClient {
             http: Client::new(),
-            signing_key: EncodingKey::from_secret(b"unused"),
-            key_id: String::new(),
-            issuer: String::new(),
+            cli_opts: CliOpts {
+                command: crate::app_store_connect::Commands::CreateReport,
+                issuer_id: None,
+                private_key_base64: None,
+                key_id: None,
+            },
             base: Url::parse(BASE).expect("base URL"),
             app_id: String::new(),
         };

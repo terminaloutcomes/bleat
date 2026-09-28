@@ -5,11 +5,25 @@ instances locally. Apple generates reports asynchronously, usually after 1–2 d
 run the request command first and download later. Apple retains report instances for
 35 days. The command ignores WEEKLY and MONTHLY instances.
 
+Report availability also depends on Apple's data thresholds. [Analytics download
+metrics](https://developer.apple.com/help/app-store-connect-analytics/reference/metrics-definitions)
+appear after at least five first-time downloads. Dashboard usage metrics require
+at least five active devices in the selected date range and use data from users
+who opted in to sharing analytics. For the [Analytics Reports
+API](https://developer.apple.com/documentation/analytics-reports/privacy), Apple
+generates App Sessions, App Crashes, and other app-usage reports only when at
+least five opted-in users contribute events to the respective report in a day,
+week, or month. Detailed report rows have additional privacy thresholds. A
+report definition with no instances can reflect generation delay or unmet data
+thresholds; it does not establish zero activity or a download failure.
+
 ## Access and credentials
 
-Create one App Store Connect API key with access to the app. The caller supplies
-that same key to every command. Request creation needs an Admin API key. Listing and downloading reports accepts
-Admin, Sales and Reports, or Finance API keys.
+The caller supplies a key through the same environment variables for every
+command. Request creation needs an Admin API key. Listing and downloading
+reports accepts Admin, Sales and Reports, or Finance API keys. The
+`appstore:connect-admin` and `appstore:connect-download` Mise tasks select their
+respective keys from Keychain.
 Apple decides the effective authorization and the command reports HTTP 401/403
 as an authorization failure. It does not inspect roles or switch keys.
 
@@ -49,14 +63,23 @@ appstore-monitor create-report
 appstore-monitor one-time-snapshot
 appstore-monitor download-reports --access-type ongoing
 appstore-monitor download-reports --access-type one-time-snapshot
+appstore-monitor download-reports --access-type one-time-snapshot --list
 ```
 
 `create-report` reuses an active ONGOING request or creates one and prints its ID.
 `one-time-snapshot` stores a request for the current UTC month and reuses that
-request on subsequent invocations. Apple permits only one snapshot request per
-month. Keep `snapshots.json` in the configured download directory between runs
-so the same monthly request can be found. Request commands do not wait for
-generation.
+local request ID on subsequent invocations. It does not list requests with the
+creation key before posting. Apple permits only one snapshot request per month;
+keep `snapshots.json` in the configured download directory so reruns do not
+submit a duplicate. Request commands do not wait for generation.
+
+`download-reports --list` reads the selected request's report inventory without
+downloading or changing local files. It prints every generated report's DAILY
+instance, other-granularity instance, and DAILY segment counts plus the latest
+DAILY processing date. If Apple has not
+generated reports yet, it says so explicitly. Apple does not expose a pending
+status for individual reports; an absent report or instance may also mean no
+eligible or privacy-permitted data exists.
 
 When several requests are eligible, the downloader retains each available DAILY
 processing date for each report name and category. For an overlapping date, it
@@ -115,3 +138,13 @@ was more than 30 days ago. Detailed attribution is optional and remains null
 in Standard rows. Unique devices are non-additive across dimensional rows;
 install and delete counts remain separate, and Standard and Detailed totals
 must never be combined.
+
+App Sessions Standard and Detailed rows contain a typed `session` object with
+session count, unique devices, and total session duration in seconds as separate
+metrics. Detailed attribution fields are optional. Apple's App Crashes report
+has a single variant; its rows contain a separate typed `crash` object with
+crash count and unique devices. Both retain the Apple processing date and
+report variant. Their metadata states that only opted-in users are represented,
+Apple provides data only when events exist from at least five users, and missing or
+privacy-suppressed rows do not mean zero. Keep Standard and Detailed aggregates
+separate; unique devices are non-additive across dimensional rows.

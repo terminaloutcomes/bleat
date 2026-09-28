@@ -5,7 +5,7 @@ use std::process::{Command, ExitCode, ExitStatus};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -14,6 +14,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::appstore::client;
+use crate::appstore_analytics::AccessType;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum CapabilityMode {
@@ -670,14 +671,37 @@ impl JwtPayload {
     }
 }
 
-fn generate_app_store_token() -> Result<String, Box<dyn std::error::Error>> {
-    let key_id = std::env::var("APPSTORE_CONNECT_KEY_ID")?;
-    let issuer_id = std::env::var("APPSTORE_CONNECT_ISSUER_ID")?;
-    // let private_key_path: String = std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_PATH")?;
+#[derive(Debug, Error)]
+pub enum AppStoreTokenError {
+    #[error("missing App Store Connect configuration: {0}")]
+    Configuration(&'static str),
+    #[error("invalid App Store Connect private key encoding")]
+    KeyEncoding,
+    #[error("invalid App Store Connect private key")]
+    PrivateKey,
+    #[error("unable to sign App Store Connect token")]
+    Signing,
+}
+
+pub fn generate_app_store_token(cliopts: &CliOpts) -> Result<String, AppStoreTokenError> {
+    let Some(key_id) = cliopts.key_id.clone() else {
+        return Err(AppStoreTokenError::Configuration("APPSTORE_CONNECT_KEY_ID"));
+    };
+    let Some(issuer_id) = cliopts.issuer_id.clone() else {
+        return Err(AppStoreTokenError::Configuration(
+            "APPSTORE_CONNECT_ISSUER_ID",
+        ));
+    };
 
     // This is Apple's downloaded AuthKey_<KEY_ID>.p8 file.
+    let Some(private_key) = cliopts.private_key_base64.clone() else {
+        return Err(AppStoreTokenError::Configuration(
+            "APPSTORE_CONNECT_PRIVATE_KEY_BASE64",
+        ));
+    };
     let private_key = base64::engine::general_purpose::STANDARD
-        .decode(std::env::var("APPSTORE_CONNECT_PRIVATE_KEY_BASE64")?)?;
+        .decode(private_key)
+        .map_err(|_| AppStoreTokenError::KeyEncoding)?;
 
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(key_id);
@@ -685,12 +709,16 @@ fn generate_app_store_token() -> Result<String, Box<dyn std::error::Error>> {
 
     let payload = JwtPayload::new(issuer_id);
 
-    let encoding_key = EncodingKey::from_ec_pem(&private_key)?;
-    Ok(encode(&header, &payload, &encoding_key)?)
+    let encoding_key =
+        EncodingKey::from_ec_pem(&private_key).map_err(|_| AppStoreTokenError::PrivateKey)?;
+    encode(&header, &payload, &encoding_key).map_err(|_| AppStoreTokenError::Signing)
 }
 
-pub async fn appstatus(statusargs: StatusArgs) -> Result<(), ExitCode> {
-    let jwt_payload = generate_app_store_token().expect("Failed to generate App Store token");
+pub async fn appstatus(statusargs: StatusArgs, cliopts: &CliOpts) -> Result<(), ExitCode> {
+    let jwt_payload = generate_app_store_token(cliopts).map_err(|error| {
+        eprintln!("{error}");
+        ExitCode::FAILURE
+    })?;
 
     let client = client::HttpClient::new()
         .with_base_url(openapi_base_url())
@@ -749,4 +777,65 @@ pub async fn appstatus(statusargs: StatusArgs) -> Result<(), ExitCode> {
         }
     }
     Ok(())
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct UpdateArgs {
+    #[clap(long)]
+    pub force: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum Commands {
+    UpdateSpec(UpdateArgs),
+    UpdateCodegen,
+    AppStatus(StatusArgs),
+    CreateReport,
+    OneTimeSnapshot {
+        #[clap(long, env = "APPSTORE_CONNECT_DOWNLOAD_DIR", hide_env_values = true)]
+        download_dir: PathBuf,
+    },
+    DownloadReports {
+        #[arg(long, value_enum)]
+        access_type: AccessType,
+
+        #[arg(
+            long,
+            help = "List available reports and DAILY instances without downloading"
+        )]
+        list: bool,
+
+        #[clap(long, env = "APPSTORE_CONNECT_DOWNLOAD_DIR", hide_env_values = true)]
+        download_dir: PathBuf,
+    },
+}
+
+#[derive(Parser, Clone)]
+pub struct CliOpts {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    #[clap(
+        long,
+        env = "APPSTORE_CONNECT_ISSUER_ID",
+        global = true,
+        hide_env_values = true
+    )]
+    pub issuer_id: Option<String>,
+
+    #[clap(
+        long,
+        env = "APPSTORE_CONNECT_PRIVATE_KEY_BASE64",
+        global = true,
+        hide_env_values = true
+    )]
+    pub private_key_base64: Option<String>,
+
+    #[clap(
+        long,
+        env = "APPSTORE_CONNECT_KEY_ID",
+        global = true,
+        hide_env_values = true
+    )]
+    pub key_id: Option<String>,
 }
