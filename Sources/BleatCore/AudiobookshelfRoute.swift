@@ -8,6 +8,7 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
     case refresh
     case logout
     case authorize
+    case me
     case libraries
     case libraryItems(LibraryID)
     case personalized(LibraryID)
@@ -48,6 +49,8 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
             ["logout"]
         case .authorize:
             ["api", "authorize"]
+        case .me:
+            ["api", "me"]
         case .libraries:
             ["api", "libraries"]
         case .libraryItems(let libraryID):
@@ -128,6 +131,8 @@ extension AudiobookshelfRoute {
             .logout
         case .authorize:
             .authorize
+        case .me:
+            .me
         case .libraries:
             .libraries
         case .libraryItems:

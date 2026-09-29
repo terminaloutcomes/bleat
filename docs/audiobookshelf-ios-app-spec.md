@@ -7,6 +7,7 @@ Minimum OS: iOS 26.0; macOS 26.0
 Language mode: Swift 6 with strict concurrency checking
 Backend: Audiobookshelf 2.26.0 or newer
 Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`
+Current-stable compatibility profile: Audiobookshelf v2.37.0; live evidence is tracked in `docs/audiobookshelf-compatibility.md`.
 Audit date: 2026-07-29
 
 ## 1. Purpose

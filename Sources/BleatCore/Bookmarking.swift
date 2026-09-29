@@ -48,7 +48,7 @@ public enum BookmarkError: Error, Equatable, Sendable {
 }
 
 extension AuthCoordinator {
-    /// Implements the pinned v2.36.0 current-user bookmark contract.
+    /// Implements the current-user bookmark contract across supported servers.
     ///
     /// Contract source: `docs/audiobookshelf-ios-app-spec.md`, sections 15 and 24.
     public func bookmarks(
@@ -56,12 +56,24 @@ extension AuthCoordinator {
         server: NormalizedServerURL,
         itemID: LibraryItemID
     ) async throws(BookmarkError) -> [AudioBookmark] {
-        let response = try await bookmarkRequest(
+        var response = try await bookmarkRequest(
             accountID: accountID,
             server: server,
             route: .bookmarks(itemID),
             method: "GET"
         )
+        if response.statusCode == 404 {
+            // The 2.26.0 router exposes bookmarks in GET /api/me. The
+            // dedicated GET route was added later; mutations use the same
+            // item routes in both supported profiles. Source:
+            // https://github.com/advplyr/audiobookshelf/blob/v2.26.0/server/routers/ApiRouter.js.
+            response = try await bookmarkRequest(
+                accountID: accountID,
+                server: server,
+                route: .me,
+                method: "GET"
+            )
+        }
         guard response.statusCode == 200 else {
             throw .unexpectedStatus(response.statusCode)
         }
@@ -69,7 +81,8 @@ extension AuthCoordinator {
             return try JSONDecoder().decode(
                 BookmarkListResponse.self,
                 from: response.data
-            ).bookmarks.sorted { $0.time < $1.time }
+            ).bookmarks.filter { $0.libraryItemID == itemID }
+                .sorted { $0.time < $1.time }
         } catch {
             throw .malformedResponse
         }
@@ -156,6 +169,8 @@ extension AuthCoordinator {
                 !itemID.rawValue.isEmpty
             case .deleteBookmark(let itemID, _):
                 !itemID.rawValue.isEmpty
+            case .me:
+                true
             default:
                 false
             }

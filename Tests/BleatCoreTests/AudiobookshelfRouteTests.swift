@@ -53,6 +53,7 @@ final class AudiobookshelfRouteTests {
             ),
             (.yearlyStats(2026), "/api/me/stats/year/2026"),
             (.bookmarks(itemID), "/api/me/bookmarks/item"),
+            (.me, "/api/me"),
             (.bookmark(itemID), "/api/me/item/item/bookmark"),
             (
                 .deleteBookmark(itemID: itemID, time: 12.5),
@@ -82,7 +83,7 @@ final class AudiobookshelfRouteTests {
         let sessionID = PlaybackSessionID(rawValue: secret)
         let routes: [AudiobookshelfRoute] = [
             .status, .login, .beginOpenID, .completeOpenID, .refresh,
-            .logout, .authorize, .libraries, .libraryItems(libraryID),
+            .logout, .authorize, .me, .libraries, .libraryItems(libraryID),
             .personalized(libraryID), .search(libraryID), .item(itemID),
             .play(itemID),
             .directPlay(sessionID: sessionID, trackIndex: 9),

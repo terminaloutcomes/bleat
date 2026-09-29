@@ -1,0 +1,180 @@
+{
+  "authors": [],
+  "book": [
+    {
+      "libraryItem": {
+        "addedAt": 1790693700920,
+        "birthtimeMs": 0,
+        "ctimeMs": 1790639230402,
+        "folderId": "9c650bb8-dd36-469f-a6ad-3f6cb2c1da98",
+        "id": "dbd3be48-0cf3-4e2a-ae91-22a54d06385e",
+        "ino": "541",
+        "isFile": false,
+        "isInvalid": false,
+        "isMissing": false,
+        "lastScan": 1790693700920,
+        "libraryFiles": [
+          {
+            "addedAt": 1790693700486,
+            "fileType": "audio",
+            "ino": "544",
+            "isSupplementary": null,
+            "metadata": {
+              "birthtimeMs": 0,
+              "ctimeMs": 1790639230404,
+              "ext": ".m4b",
+              "filename": "[REDACTED]",
+              "mtimeMs": 1790639230404,
+              "path": "[REDACTED]",
+              "relPath": "[REDACTED]",
+              "size": 108621
+            },
+            "updatedAt": 1790693700486
+          }
+        ],
+        "libraryId": "9bc68c9f-5a73-4cbd-8df2-1397f8d51b1c",
+        "media": {
+          "audioFiles": [
+            {
+              "addedAt": 1790693700920,
+              "bitRate": 69308,
+              "channelLayout": "mono",
+              "channels": 1,
+              "chapters": [],
+              "codec": "aac",
+              "discNumFromFilename": "[REDACTED]",
+              "discNumFromMeta": null,
+              "duration": 12.16,
+              "embeddedCoverArt": null,
+              "error": null,
+              "exclude": false,
+              "format": "QuickTime / MOV",
+              "index": 1,
+              "ino": "544",
+              "language": "und",
+              "manuallyVerified": false,
+              "metaTags": {
+                "tagEncoder": "Lavf62.12.102"
+              },
+              "metadata": {
+                "birthtimeMs": 0,
+                "ctimeMs": 1790639230404,
+                "ext": ".m4b",
+                "filename": "[REDACTED]",
+                "mtimeMs": 1790639230404,
+                "path": "[REDACTED]",
+                "relPath": "[REDACTED]",
+                "size": 108621
+              },
+              "mimeType": "audio/mp4",
+              "timeBase": "1/48000",
+              "trackNumFromFilename": "[REDACTED]",
+              "trackNumFromMeta": null,
+              "updatedAt": 1790693700920
+            }
+          ],
+          "chapters": [],
+          "coverPath": "[REDACTED]",
+          "duration": 12.16,
+          "ebookFile": null,
+          "id": "4b083301-258b-4403-a178-aac44ee33a59",
+          "libraryItemId": "dbd3be48-0cf3-4e2a-ae91-22a54d06385e",
+          "metadata": {
+            "abridged": false,
+            "asin": null,
+            "authorName": "Fixture Author Three",
+            "authorNameLF": "Three, Fixture Author",
+            "authors": [
+              {
+                "id": "7f1ac6bb-27d4-4ce2-aa09-84aba433e4df",
+                "name": "Fixture Author Three"
+              }
+            ],
+            "description": null,
+            "descriptionPlain": null,
+            "explicit": false,
+            "genres": [],
+            "isbn": null,
+            "language": null,
+            "narratorName": "",
+            "narrators": [],
+            "publishedDate": null,
+            "publishedYear": null,
+            "publisher": null,
+            "series": [
+              {
+                "id": "b507cd85-e5f3-427b-9293-c80d7c368193",
+                "name": "Fixture Companion",
+                "sequence": "2"
+              }
+            ],
+            "seriesName": "Fixture Companion #2",
+            "subtitle": null,
+            "title": "direct",
+            "titleIgnorePrefix": "direct"
+          },
+          "numAudioFiles": 1,
+          "numChapters": 0,
+          "numTracks": 1,
+          "size": 108621,
+          "tags": [],
+          "tracks": [
+            {
+              "addedAt": 1790693700920,
+              "bitRate": 69308,
+              "channelLayout": "mono",
+              "channels": 1,
+              "chapters": [],
+              "codec": "aac",
+              "contentUrl": "[REDACTED]",
+              "discNumFromFilename": "[REDACTED]",
+              "discNumFromMeta": null,
+              "duration": 12.16,
+              "embeddedCoverArt": null,
+              "error": null,
+              "exclude": false,
+              "format": "QuickTime / MOV",
+              "index": 1,
+              "ino": "544",
+              "language": "und",
+              "manuallyVerified": false,
+              "metaTags": {
+                "tagEncoder": "Lavf62.12.102"
+              },
+              "metadata": {
+                "birthtimeMs": 0,
+                "ctimeMs": 1790639230404,
+                "ext": ".m4b",
+                "filename": "[REDACTED]",
+                "mtimeMs": 1790639230404,
+                "path": "[REDACTED]",
+                "relPath": "[REDACTED]",
+                "size": 108621
+              },
+              "mimeType": "audio/mp4",
+              "startOffset": 0,
+              "timeBase": "1/48000",
+              "title": "music.m4b",
+              "trackNumFromFilename": "[REDACTED]",
+              "trackNumFromMeta": null,
+              "updatedAt": 1790693700920
+            }
+          ]
+        },
+        "mediaType": "book",
+        "mtimeMs": 1790639230402,
+        "numFiles": 1,
+        "oldLibraryItemId": null,
+        "path": "[REDACTED]",
+        "relPath": "[REDACTED]",
+        "scanVersion": "2.37.0",
+        "size": 108621,
+        "updatedAt": 1790693701722
+      }
+    }
+  ],
+  "genres": [],
+  "narrators": [],
+  "series": [],
+  "tags": []
+}

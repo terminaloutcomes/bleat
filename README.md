@@ -905,12 +905,18 @@ use normal system trust validation and contain no trust bypass.
 
 ## Run against Audiobookshelf
 
-Docker is required for live contract tests. Run the pinned Audiobookshelf
-2.36.0 root and path-prefix status and local-authentication suite with:
+Docker is required for live contract tests. Run the pinned current-stable
+Audiobookshelf 2.37.0 root and path-prefix suite with:
 
 ```sh
 ./scripts/test-live.sh
 ```
+
+Run `mise run test:compatibility` to test the same core live suite against
+both the minimum supported 2.26.0 server and current-stable 2.37.0. Each
+profile uses fresh volumes and verifies both server versions before seeding.
+The tested images and results are recorded in
+`docs/audiobookshelf-compatibility.md`.
 
 The script creates fresh root and `/audiobookshelf` instances, waits for both
 services, generates disposable test credentials at runtime, and seeds a
@@ -970,14 +976,10 @@ export BLEAT_TEST_PASSWORD="$(uuidgen)"
 unset BLEAT_TEST_USERNAME BLEAT_TEST_PASSWORD
 ```
 
-The harness covers pinned 2.36.0 status, native login-token, authorization,
+The harness covers selected-profile status, native login-token, authorization,
 refresh-rotation, logout, seeded-library, media, root/prefix, and HTTPS app
-profiles. The 2.26.x and current-stable compatibility profiles remain later
-release work tracked in
-[GitHub issue #31](https://github.com/terminaloutcomes/bleat/issues/31). It also
-provisions a disposable Keycloak realm and runs the real PKCE browser bridge,
-token exchange, and account authorization for root and path-prefixed
-Audiobookshelf servers.
+profiles. The minimum/current-stable matrix implements
+[GitHub issue #31](https://github.com/terminaloutcomes/bleat/issues/31).
 
 The deterministic refresh suite exercises 20 simultaneous 401 responses,
 single-flight rotation, retry limits, 403 behavior, typed failures, and

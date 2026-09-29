@@ -6,6 +6,41 @@ import Testing
 @Suite(.serialized)
 final class ProgressSyncTests {
     @Test
+    func testOlderServerReadsAllProgressFromCurrentUser() async throws {
+        let accountID = AccountID(rawValue: "account")
+        let transport = ProgressTestTransport(responses: [
+            HTTPResponse(data: Data(), statusCode: 404),
+            HTTPResponse(
+                data: Data(#"{"mediaProgress":[]}"#.utf8),
+                statusCode: 200
+            ),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: ProgressTestCredentialStore(
+                accountID: accountID,
+                credentials: try AuthenticationTokens(
+                    accessToken: "access",
+                    refreshToken: "refresh"
+                )
+            )
+        )
+        let server = try NormalizedServerURL("https://books.example/prefix")
+        let progress = try await coordinator.allBookProgress(
+            accountID: accountID,
+            userID: UserID(rawValue: "user"),
+            server: server
+        )
+        #expect(progress.isEmpty)
+        let requests = await transport.recordedRequests()
+        #expect(
+            requests.map { $0.url?.path } == [
+                "/prefix/api/me/progress", "/prefix/api/me",
+            ]
+        )
+    }
+
+    @Test
     func testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts()
         async throws
     {

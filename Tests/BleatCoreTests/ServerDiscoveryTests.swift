@@ -5,6 +5,23 @@ import Testing
 
 @Suite(.serialized)
 final class ServerDiscoveryTests {
+    @Test(arguments: ["2.26.0", "2.37.0"])
+    func capturedSupportedStatusShapes(version: String) throws {
+        let url = try #require(
+            Bundle.module.url(
+                forResource: "captured-\(version)-status",
+                withExtension: "json"
+            )
+        )
+        let status = try JSONDecoder().decode(
+            ServerStatusResponse.self,
+            from: Data(contentsOf: url)
+        )
+        #expect(status.serverVersion == version)
+        #expect(status.app == "audiobookshelf")
+        #expect(status.isInitialized)
+    }
+
     @Test
     func testDecodesPinnedLiveStatusFixture() throws {
         let fixtureURL = try #require(

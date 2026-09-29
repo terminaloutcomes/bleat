@@ -11,7 +11,8 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
             let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
             let username = environment["BLEAT_LIVE_USERNAME"],
-            let password = environment["BLEAT_LIVE_PASSWORD"]
+            let password = environment["BLEAT_LIVE_PASSWORD"],
+            let expectedVersion = environment["BLEAT_LIVE_EXPECTED_VERSION"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide local session data"
@@ -23,7 +24,8 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
                 server: secureLiveServerURL(for: liveURL),
                 accountID: AccountID(rawValue: "local-session-\(index)"),
                 username: username,
-                password: password
+                password: password,
+                expectedVersion: expectedVersion
             )
         }
     }
@@ -32,7 +34,8 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         server: NormalizedServerURL,
         accountID: AccountID,
         username: String,
-        password: String
+        password: String,
+        expectedVersion: String
     ) async throws {
         let store = LiveCredentialStore()
         let coordinator = AuthCoordinator(
@@ -48,7 +51,7 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         let account = try ServerAccount(
             id: accountID,
             server: server,
-            serverVersion: "2.36.0",
+            serverVersion: expectedVersion,
             authenticationMethods: [.local],
             user: authenticated.user
         )

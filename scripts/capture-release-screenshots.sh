@@ -4,14 +4,16 @@ set -euo pipefail
 
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
+source "${bleat_script_dir}/live-profile.sh"
+bleat_select_live_profile current-stable
 readonly bleat_fixture_directory="${bleat_repository_root}/TestSupport/ReleaseScreenshots"
 readonly bleat_fixture="${BLEAT_SCREENSHOT_FIXTURE:-${bleat_fixture_directory}/fixtures.json}"
 readonly bleat_compose_file="${bleat_fixture_directory}/compose.yaml"
 readonly bleat_output_directory="${bleat_repository_root}/.build/release-screenshots"
-readonly bleat_abs_image_default="ghcr.io/advplyr/audiobookshelf:2.36.0@sha256:180acad33d69c99ed208676465d8edcb268fa46967735579a7810859885b1a8e"
+readonly bleat_abs_image_default="${BLEAT_ABS_IMAGE}"
 readonly bleat_abs_image="${BLEAT_SCREENSHOT_ABS_IMAGE:-${bleat_abs_image_default}}"
 readonly bleat_run_id="$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
-readonly bleat_compose_project="bleat-release-screenshots-${bleat_run_id}"
+readonly bleat_compose_project="bleat-release-screenshots-${BLEAT_LIVE_PROFILE_ID}-${BLEAT_EXPECTED_SERVER_VERSION//./-}-${bleat_run_id}"
 readonly bleat_password="$(/usr/bin/uuidgen)"
 readonly bleat_appearances_raw="${BLEAT_SCREENSHOT_APPEARANCES:-light,dark}"
 readonly bleat_orientations_raw="${BLEAT_SCREENSHOT_ORIENTATIONS-portrait,landscapeLeft}"

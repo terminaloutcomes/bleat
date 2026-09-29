@@ -5,6 +5,27 @@ import Testing
 
 @Suite(.serialized)
 final class AuthenticationTests {
+    @Test(arguments: ["2.26.0", "2.37.0"])
+    func capturedSupportedAuthenticationShapes(version: String) async throws {
+        let transport = AuthenticationHTTPTransport(responses: [
+            .json(try Self.fixture(named: "captured-\(version)-login")),
+            .json(try Self.fixture(named: "captured-\(version)-authorize")),
+        ])
+        let accountID = AccountID(rawValue: "captured-account")
+        let store = RecordingCredentialStore()
+        let account = try await AuthCoordinator(
+            transport: transport,
+            credentialStore: store
+        ).login(
+            accountID: accountID,
+            server: NormalizedServerURL("https://example.com"),
+            username: "fixture-root",
+            password: "fixture-password"
+        )
+        #expect(account.user.id == UserID(rawValue: "fixture-user"))
+        #expect(await store.credentials(for: accountID) != nil)
+    }
+
     @Test
     func testPinnedAuthenticationFixturesCompleteTransaction() async throws {
         let transport = AuthenticationHTTPTransport(

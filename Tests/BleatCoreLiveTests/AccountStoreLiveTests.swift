@@ -10,7 +10,8 @@ final class AccountStoreLiveTests: XCTestCase {
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
             let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
             let username = environment["BLEAT_LIVE_USERNAME"],
-            let password = environment["BLEAT_LIVE_PASSWORD"]
+            let password = environment["BLEAT_LIVE_PASSWORD"],
+            let expectedVersion = environment["BLEAT_LIVE_EXPECTED_VERSION"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live account data"
@@ -26,7 +27,8 @@ final class AccountStoreLiveTests: XCTestCase {
                         rawValue: "persisted-\(index)"
                     ),
                     username: username,
-                    password: password
+                    password: password,
+                    expectedVersion: expectedVersion
                 )
             )
         }
@@ -37,13 +39,14 @@ final class AccountStoreLiveTests: XCTestCase {
         server: NormalizedServerURL,
         provisionalAccountID: AccountID,
         username: String,
-        password: String
+        password: String,
+        expectedVersion: String
     ) async throws -> AccountID {
         let transport = LocalDockerHTTPTransport()
         let discovered = try await ServerDiscoveryClient(
             transport: transport
         ).discover(server)
-        XCTAssertEqual(discovered.version.original, "2.36.0")
+        XCTAssertEqual(discovered.version.original, expectedVersion)
         XCTAssertTrue(discovered.authenticationMethods.contains(.local))
 
         let credentials = LiveCredentialStore()

@@ -3712,8 +3712,12 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(remotePlay.waitForExistence(timeout: 30))
         let remoteOpen = app.buttons[
             String(remotePlay.identifier.dropLast(".play".count))
-        ]
+        ].firstMatch
         XCTAssertTrue(remoteOpen.waitForExistence(timeout: 20))
+        let liveBookID = String(
+            remoteOpen.identifier.dropFirst("home.book.".count)
+        )
+        XCTAssertFalse(liveBookID.isEmpty)
         XCTAssertTrue(remotePlay.isHittable)
         XCTAssertTrue(remoteOpen.isHittable)
         XCTAssertEqual(remotePlay.frame.width, 44, accuracy: 0.5)
@@ -3799,9 +3803,6 @@ final class BleatLiveUITests: XCTestCase {
         stopMiniPlayer(in: app)
         tabButton("Home", in: app).tap()
         XCTAssertTrue(remoteOpen.waitForExistence(timeout: 20))
-        let liveBookID = String(
-            remoteOpen.identifier.dropFirst("home.book.".count)
-        )
         remoteOpen.press(forDuration: 1)
         let removeCached = app.buttons[
             "book.context.\(liveBookID).removeDownload"
