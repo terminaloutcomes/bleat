@@ -29,8 +29,8 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
             "One or more audio files could not be downloaded."
         case .transportUnavailable:
             "The connection was lost repeatedly while downloading."
-        case .requestRejected(let statusCode):
-            "The server rejected a download request (HTTP \(statusCode))."
+        case .requestRejected:
+            "The server rejected a download request."
         }
     }
 

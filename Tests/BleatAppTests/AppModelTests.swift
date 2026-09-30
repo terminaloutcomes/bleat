@@ -7645,6 +7645,14 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(failures.allSatisfy { !$0.message.isEmpty })
         XCTAssertEqual(Set(failures.map(\.message)).count, failures.count)
+        XCTAssertEqual(
+            DownloadModelFailure.requestRejected(statusCode: 503).message,
+            "The server rejected a download request."
+        )
+        XCTAssertEqual(
+            DownloadModelFailure.requestRejected(statusCode: 404).message,
+            DownloadModelFailure.requestRejected(statusCode: 503).message
+        )
     }
 
     func testTransferFailureIsNotPresentedWhileManifestIsDownloading()
