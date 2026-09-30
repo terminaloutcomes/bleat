@@ -906,14 +906,14 @@ use normal system trust validation and contain no trust bypass.
 ## Run against Audiobookshelf
 
 Docker is required for live contract tests. Run the pinned current-stable
-Audiobookshelf 2.37.0 root and path-prefix suite with:
+Audiobookshelf root and path-prefix suite with:
 
 ```sh
 ./scripts/test-live.sh
 ```
 
 Run `mise run test:compatibility` to test the same core live suite against
-both the minimum supported 2.26.0 server and current-stable 2.37.0. Each
+both the minimum supported 2.26.0 server and current-stable. Each
 profile uses fresh volumes and verifies both server versions before seeding.
 The tested images and results are recorded in
 `docs/audiobookshelf-compatibility.md`.

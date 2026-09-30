@@ -1,6 +1,6 @@
 # Transcript Reduce Motion audit
 
-Issue [#202](https://github.com/terminaloutcomes/bleat/issues/202) follows the
+Issue [`#202`](https://github.com/terminaloutcomes/bleat/issues/202) follows the
 maintainer's completed manual Reduce Motion audit in #41.
 
 The transcript view reads SwiftUI's system `accessibilityReduceMotion` value.
@@ -54,4 +54,4 @@ not prevent the recorded test execution. No application crash was reported.
 The UI regression checks navigation and highlight behavior, not animation frames.
 The no-animation selection is also checked by source review. Physical iPhone
 and iPad verification of scrolling in both system modes remains pending under
-#202; Simulator results do not substitute for that device evidence.
+`#202`; Simulator results do not substitute for that device evidence.

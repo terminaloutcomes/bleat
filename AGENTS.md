@@ -1,6 +1,6 @@
 # Repository Guide
 
-If `.envrc` is missing and you are building or doing any code work, 
+If `.envrc` is missing and you are building or doing any code work,
 stop and request it to be present before continuing.
 
 ## Project state and sources of truth
@@ -75,6 +75,13 @@ browsing, watchOS, widgets, Siri, SharePlay, or server administration.
 
 Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
 `xcodegen generate`, and review the generated project diff.
+
+## Repository scripting
+
+Write new repository scripts in Rust in the existing `scripts` package, not in
+shell/Python. Put reusable logic in `scripts/src/` and keep CLI entry points in
+`scripts/src/bin/` thin. When changing an existing shell workflow, move the
+changed scripting logic to Rust rather than adding more shell code.
 
 ## Architecture and concurrency
 

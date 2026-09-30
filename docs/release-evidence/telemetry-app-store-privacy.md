@@ -1,7 +1,7 @@
 # Telemetry App Store privacy and archive evidence
 
 Release evidence for [GitHub issue
-#113](https://github.com/terminaloutcomes/bleat/issues/113). This record applies
+`#113`](https://github.com/terminaloutcomes/bleat/issues/113). This record applies
 to the exact signed archive inspected below. Remote telemetry is iOS-only,
 explicit opt-in, and default-off.
 
@@ -76,7 +76,7 @@ automatic expiry. Access and retention boundaries are documented in
 
 The public Privacy Policy and User Privacy Choices URLs remain separately
 tracked by [GitHub issue
-#118](https://github.com/terminaloutcomes/bleat/issues/118); that release-metadata
+`#118`](https://github.com/terminaloutcomes/bleat/issues/118); that release-metadata
 task does not change the published data-category answers recorded here.
 
 ## Package and archive inspection

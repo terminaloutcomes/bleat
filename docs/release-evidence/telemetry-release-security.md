@@ -1,7 +1,7 @@
 # Telemetry release security evidence
 
 Release evidence for [GitHub issue
-#114](https://github.com/terminaloutcomes/bleat/issues/114). This record evaluates
+`#114`](https://github.com/terminaloutcomes/bleat/issues/114). This record evaluates
 the current source tree at the commit below. It makes no Git-history claim and
 contains no signing identity, credential, device identifier, private key, or
 private deployment value.
