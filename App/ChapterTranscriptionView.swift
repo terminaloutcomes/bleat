@@ -310,7 +310,7 @@ enum ChapterTranscriptionViewFailure: Error, Equatable, Sendable {
         case .cacheSaveFailed:
             "The transcription was created but could not be saved."
         case .transcription(let failure):
-            failure.localizedDescription
+            failure.cachedTaskFailure.message
         case .cancelled:
             "Transcription was cancelled."
         }
@@ -448,7 +448,11 @@ extension CachedChapterTranscriptionTaskFailure {
         case .cancelled:
             "Transcription was cancelled."
         case .operatingSystemUnsupported:
-            "SpeechTranscriber requires iOS 26 or newer."
+            #if os(macOS)
+                "SpeechTranscriber requires macOS 26 or newer."
+            #else
+                "SpeechTranscriber requires iOS 26 or newer."
+            #endif
         case .unavailableOnDevice:
             "SpeechTranscriber is unavailable on this device."
         case .unsupportedLocale:
