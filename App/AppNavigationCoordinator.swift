@@ -20,6 +20,12 @@ enum AppRootTab: CaseIterable, Hashable, Sendable {
     }
 }
 
+enum BookNavigationOrigin {
+    case home
+    case library
+    case search
+}
+
 enum DeepLinkPresentationFailure: Equatable, Sendable {
     case signInRequired
     case unavailable
@@ -98,7 +104,6 @@ final class AppNavigationCoordinator {
     var homePath = NavigationPath()
     var libraryPath = NavigationPath()
     var searchPath = NavigationPath()
-    var downloadsPath = NavigationPath()
     var settingsPath = NavigationPath()
     var searchQuery = ""
     var searchScope: DeepLinkSearchScope = .all
@@ -206,7 +211,6 @@ final class AppNavigationCoordinator {
             libraryPath = NavigationPath()
         case .downloads:
             selectedTab = .downloads
-            downloadsPath = NavigationPath()
         case .search(let query, let scope, _):
             selectedTab = .search
             searchPath = NavigationPath()
@@ -278,7 +282,7 @@ final class AppNavigationCoordinator {
         return .applied
     }
 
-    func pathBinding(for tab: AppRootTab) -> Binding<NavigationPath> {
+    func pathBinding(for tab: BookNavigationOrigin) -> Binding<NavigationPath> {
         Binding(
             get: { [weak self] in
                 guard let self else { return NavigationPath() }
@@ -286,8 +290,6 @@ final class AppNavigationCoordinator {
                 case .home: homePath
                 case .library: libraryPath
                 case .search: searchPath
-                case .downloads: downloadsPath
-                case .settings: settingsPath
                 }
             },
             set: { [weak self] path in
@@ -296,8 +298,6 @@ final class AppNavigationCoordinator {
                 case .home: homePath = path
                 case .library: libraryPath = path
                 case .search: searchPath = path
-                case .downloads: downloadsPath = path
-                case .settings: settingsPath = path
                 }
             }
         )
@@ -329,7 +329,7 @@ final class AppNavigationCoordinator {
         id: SeriesID,
         name: String,
         libraryID: LibraryID,
-        from tab: AppRootTab
+        from tab: BookNavigationOrigin
     ) {
         let destination = SeriesDestination(
             libraryID: libraryID,
@@ -343,14 +343,10 @@ final class AppNavigationCoordinator {
             libraryPath.append(destination)
         case .search:
             searchPath.append(destination)
-        case .downloads:
-            downloadsPath.append(destination)
-        case .settings:
-            settingsPath.append(destination)
         }
     }
 
-    func showBook(_ book: LibraryBookSummary, from tab: AppRootTab) {
+    func showBook(_ book: LibraryBookSummary, from tab: BookNavigationOrigin) {
         switch tab {
         case .home:
             homePath.append(book)
@@ -358,10 +354,6 @@ final class AppNavigationCoordinator {
             libraryPath.append(book)
         case .search:
             searchPath.append(book)
-        case .downloads:
-            downloadsPath.append(book)
-        case .settings:
-            settingsPath.append(book)
         }
     }
 

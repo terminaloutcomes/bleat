@@ -13531,6 +13531,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.homeShelves, .loaded([]))
     }
 
+    func testDownloadsDeepLinkSelectsStorageTab() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let coordinator = AppNavigationCoordinator()
+
+        coordinator.receive(route: .downloads)
+        await coordinator.applyPendingRoute(model: model)
+
+        XCTAssertEqual(coordinator.selectedTab, .downloads)
+        XCTAssertNil(coordinator.pendingRoute)
+        XCTAssertNil(coordinator.deepLinkFailure)
+    }
+
     func testLatestDeepLinkDoesNotNavigateAfterNewerLinkArrives()
         async throws
     {
