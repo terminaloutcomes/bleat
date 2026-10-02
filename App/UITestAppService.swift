@@ -150,6 +150,12 @@
             )
         }
 
+        static var seedsSignedInAlerts: Bool {
+            ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-signed-in-alert-queue"
+            )
+        }
+
         static var bootstrapError: AppBootstrapError? {
             ProcessInfo.processInfo.arguments.contains(
                 UITestScenario.unavailableStartup.rawValue

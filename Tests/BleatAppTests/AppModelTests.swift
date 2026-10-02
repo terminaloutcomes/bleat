@@ -94,6 +94,67 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testDownloadFailureDismissalClearsPresentedFailure() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DismissDownloadFailure-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "dismiss-failure",
+                title: "Dismiss failure",
+                libraryID: fixtureLibrary().id
+            )
+        )
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .failure(
+                    .downloadPlan(.unexpectedStatus(404))
+                )
+            ),
+            storageRootURL: root,
+            backgroundSessionIdentifier:
+                "bleat.tests.dismiss-failure.\(UUID())"
+        )
+
+        await model.download(detail: detail, account: account)
+        XCTAssertEqual(model.presentedFailure, .preparationFailed)
+        model.dismissFailure()
+        XCTAssertNil(model.presentedFailure)
+    }
+
+    func testSignedInAlertQueueSerializesAndResetsForAccountChange()
+        async
+    {
+        let queue = SignedInAlertQueue()
+        let playback = SignedInAlert.playback(
+            AppFailure(.openPlayback, .mediaUnavailable)
+        )
+        let download = SignedInAlert.bookAction(
+            .action(AppFailure(.download, .serverUnavailable))
+        )
+
+        queue.reconcile([playback, download])
+        XCTAssertEqual(queue.active?.alert, playback)
+        if let active = queue.active {
+            queue.finish(active)
+        }
+        queue.reconcile([download])
+        XCTAssertEqual(queue.active?.alert, download)
+
+        queue.reset(ignoring: [download])
+        XCTAssertNil(queue.active)
+        queue.reconcile([download])
+        XCTAssertNil(queue.active)
+        queue.reconcile([playback])
+        XCTAssertEqual(queue.active?.alert, playback)
+        queue.reset()
+        XCTAssertNil(queue.active)
+        await Task.yield()
+        XCTAssertNil(queue.active)
+    }
+
     func testDownloadTransferAdmissionEnforcesAndReconcilesGlobalLimit() throws
     {
         for limit in [1, 5, 100] {
