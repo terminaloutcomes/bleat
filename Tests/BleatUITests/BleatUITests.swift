@@ -3673,8 +3673,18 @@ final class BleatLiveUITests: XCTestCase {
             app.textFields["login.server"].waitForExistence(timeout: 10)
         )
         let serverField = app.textFields["login.server"]
-        serverField.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        serverField.tap()
+        if let value = serverField.value as? String,
+            !value.isEmpty,
+            value != serverField.label
+        {
+            serverField.press(forDuration: 1)
+            let selectAll = app.menuItems["Select All"]
+            XCTAssertTrue(selectAll.waitForExistence(timeout: 2))
+            selectAll.tap()
+        }
         serverField.typeText(environment.server)
+        XCTAssertEqual(serverField.value as? String, environment.server)
         let usernameField = app.textFields["login.username"]
         usernameField.tap()
         usernameField.typeText(environment.username)
