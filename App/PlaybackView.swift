@@ -2,6 +2,27 @@ import AVKit
 import BleatCore
 import SwiftUI
 
+enum PlaybackTimeFormatter {
+    static func string(_ value: Double) -> String {
+        let seconds: Int
+        if !value.isFinite || value <= 0 {
+            seconds = 0
+        } else if value >= Double(Int.max) {
+            seconds = Int.max
+        } else {
+            seconds = Int(value)
+        }
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        if hours > 0 {
+            return String(
+                format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+        }
+        return String(format: "%d:%02d", minutes, remainingSeconds)
+    }
+}
+
 struct PendingScrubberSeek: Equatable {
     let origin: Double
     let target: Double
@@ -151,9 +172,11 @@ private struct PlaybackScrubberView: View {
             .contentShape(Rectangle())
             .accessibilityLabel("Playback Position")
             .accessibilityValue(
-                playbackTime(chapterWindow.elapsed(at: scrubTime))
+                PlaybackTimeFormatter.string(
+                    chapterWindow.elapsed(at: scrubTime))
                     + " elapsed, "
-                    + playbackTime(chapterWindow.remaining(at: scrubTime))
+                    + PlaybackTimeFormatter.string(
+                        chapterWindow.remaining(at: scrubTime))
                     + " remaining"
             )
             .accessibilityIdentifier("player.position")
@@ -163,14 +186,14 @@ private struct PlaybackScrubberView: View {
 
             HStack {
                 Text(
-                    playbackTime(
+                    PlaybackTimeFormatter.string(
                         chapterWindow.elapsed(at: scrubTime)
                     )
                 )
                 Spacer()
                 Text(
                     "-"
-                        + playbackTime(
+                        + PlaybackTimeFormatter.string(
                             chapterWindow.remaining(at: scrubTime)
                         )
                 )
@@ -235,28 +258,8 @@ private struct PlaybackScrubberView: View {
         for pending: PendingScrubberSeek
     ) -> String {
         "Jump \(pending.isForward ? "forward" : "backward") "
-            + "by \(playbackTime(pending.distance)) "
-            + "to \(playbackTime(pending.target))?"
-    }
-
-    private func playbackTime(_ value: Double) -> String {
-        let seconds = max(0, Int(value))
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        let remainingSeconds = seconds % 60
-        if hours > 0 {
-            return String(
-                format: "%d:%02d:%02d",
-                hours,
-                minutes,
-                remainingSeconds
-            )
-        }
-        return String(
-            format: "%d:%02d",
-            minutes,
-            remainingSeconds
-        )
+            + "by \(PlaybackTimeFormatter.string(pending.distance)) "
+            + "to \(PlaybackTimeFormatter.string(pending.target))?"
     }
 }
 
@@ -494,7 +497,7 @@ struct NowPlaying: View {
                                 .font(.headline)
                             HStack {
                                 Button(
-                                    "This device (\(playbackTime(conflict.localTime)))"
+                                    "This device (\(PlaybackTimeFormatter.string(conflict.localTime)))"
                                 ) {
                                     Task {
                                         await playback.resolvePositionConflict(
@@ -504,7 +507,7 @@ struct NowPlaying: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 Button(
-                                    "Server (\(playbackTime(conflict.serverTime)))"
+                                    "Server (\(PlaybackTimeFormatter.string(conflict.serverTime)))"
                                 ) {
                                     Task {
                                         await playback.resolvePositionConflict(
@@ -714,7 +717,8 @@ struct NowPlaying: View {
                                 let time = playback.currentTime
                                 bookmarkDraft = BookmarkDraft(
                                     bookmark: nil,
-                                    title: "Bookmark at " + playbackTime(time)
+                                    title: "Bookmark at "
+                                        + PlaybackTimeFormatter.string(time)
                                 )
                             },
                             onRename: { bookmark in
@@ -738,7 +742,7 @@ struct NowPlaying: View {
                                     await playback.retryPendingBookmarks()
                                 }
                             },
-                            formatTime: playbackTime
+                            formatTime: PlaybackTimeFormatter.string
                         )
                         .equatable()
 
@@ -835,26 +839,6 @@ struct NowPlaying: View {
         }
     #endif
 
-    private func playbackTime(_ value: Double) -> String {
-        let seconds = max(0, Int(value))
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        let remainingSeconds = seconds % 60
-        if hours > 0 {
-            return String(
-                format: "%d:%02d:%02d",
-                hours,
-                minutes,
-                remainingSeconds
-            )
-        }
-        return String(
-            format: "%d:%02d",
-            minutes,
-            remainingSeconds
-        )
-    }
-
     private func audioFileLabel(
         _ file: AppPlaybackTrack,
         index: Int
@@ -863,7 +847,8 @@ struct NowPlaying: View {
             in: .whitespacesAndNewlines
         )
         let displayTitle = title.isEmpty ? "File \(index + 1)" : title
-        return "\(displayTitle) · \(playbackTime(file.duration))"
+        return
+            "\(displayTitle) · \(PlaybackTimeFormatter.string(file.duration))"
     }
 }
 
@@ -1165,9 +1150,7 @@ private struct BookmarkEditorView: View {
                 if let bookmark {
                     LabeledContent(
                         "Position",
-                        value: bookmark.time.formatted(
-                            .number.precision(.fractionLength(0...1))
-                        ) + " seconds"
+                        value: PlaybackTimeFormatter.string(bookmark.time)
                     )
                 }
             }

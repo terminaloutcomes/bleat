@@ -34,6 +34,66 @@ extension DownloadStorageLayout {
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testPlaybackTimeFormatterUsesOneBookmarkAndPlayerFormat() {
+        XCTAssertEqual(PlaybackTimeFormatter.string(0), "0:00")
+        XCTAssertEqual(PlaybackTimeFormatter.string(1_234.5), "20:34")
+        XCTAssertEqual(PlaybackTimeFormatter.string(3_661.9), "1:01:01")
+        XCTAssertEqual(PlaybackTimeFormatter.string(-1), "0:00")
+        XCTAssertEqual(PlaybackTimeFormatter.string(.nan), "0:00")
+    }
+
+    func testDownloadTransferButtonPresentationPreservesControlStates() {
+        XCTAssertEqual(
+            DownloadTransferButtonPresentation.select(
+                snapshot: .init(phase: .downloading, actions: [.cancel]),
+                canStart: true,
+                hasAccount: false,
+                isDeleting: false
+            ),
+            .stop(isCancelling: false)
+        )
+        XCTAssertEqual(
+            DownloadTransferButtonPresentation.select(
+                snapshot: .init(phase: .cancelling, actions: []),
+                canStart: false,
+                hasAccount: false,
+                isDeleting: false
+            ),
+            .stop(isCancelling: true)
+        )
+        let retry = DownloadControlSnapshot(
+            phase: .failed,
+            actions: [.retry, .remove]
+        )
+        XCTAssertEqual(
+            DownloadTransferButtonPresentation.select(
+                snapshot: retry,
+                canStart: true,
+                hasAccount: true,
+                isDeleting: false
+            ),
+            .start
+        )
+        XCTAssertEqual(
+            DownloadTransferButtonPresentation.select(
+                snapshot: retry,
+                canStart: true,
+                hasAccount: false,
+                isDeleting: false
+            ),
+            .hidden
+        )
+        XCTAssertEqual(
+            DownloadTransferButtonPresentation.select(
+                snapshot: .init(phase: .deleting, actions: []),
+                canStart: true,
+                hasAccount: true,
+                isDeleting: true
+            ),
+            .hidden
+        )
+    }
+
     func testDownloadTransferAdmissionEnforcesAndReconcilesGlobalLimit() throws
     {
         for limit in [1, 5, 100] {
