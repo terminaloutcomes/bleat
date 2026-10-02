@@ -32,9 +32,14 @@ jobs:
         run: |
           brew install zsh
       - run: mise run swift-lint
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
+        with:
+          cache: false
       - name: Identify compatible Swift caches
         id: cache-keys
-        run: bash scripts/ci-cache-keys.sh ios
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-cache-keys.rs -o "$RUNNER_TEMP/bleat-ci-cache-keys"
+          "$RUNNER_TEMP/bleat-ci-cache-keys" ios
       - name: Restore iOS Swift packages
         id: swift-packages
         uses: actions/cache/restore@v4
@@ -56,7 +61,9 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
       - name: Build and run smoke tests
-        run: ./scripts/test-ci-smoke.sh
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
+          "$RUNNER_TEMP/bleat-ci-smoke"
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
@@ -106,9 +113,14 @@ jobs:
           xcodebuild -version
       - name: Prepare CI environment file
         run: touch .envrc
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
+        with:
+          cache: false
       - name: Identify compatible host Swift packages
         id: cache-keys
-        run: bash scripts/ci-cache-keys.sh host
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-cache-keys.rs -o "$RUNNER_TEMP/bleat-ci-cache-keys"
+          "$RUNNER_TEMP/bleat-ci-cache-keys" host
       - name: Restore host Swift packages
         id: swift-packages
         uses: actions/cache/restore@v4
