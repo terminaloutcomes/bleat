@@ -3461,6 +3461,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             presentNextCellularDownload()
         }
         await waitForDownloadOperations(accountID: accountID)
+        accounts[accountID] = nil
         let tasks = await session.allTasks
         for task in tasks {
             guard let description = task.taskDescription,
@@ -3471,6 +3472,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             else {
                 continue
             }
+            invalidateTask(description)
             task.cancel()
             finishTransferSpan(identity, outcome: .cancelled)
         }
@@ -3480,7 +3482,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         for record in accountRecords {
             await remove(record, duringTransition: true)
         }
-        accounts[accountID] = nil
     }
 
     func removeOrphanedDownloads(
