@@ -2128,6 +2128,41 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testImmediateTranscriptionFailureMessagesMatchSafePersistedMessages() {
+        let diagnostic = ChapterTranscriptionDiagnostic(
+            domain: "PrivateSpeechDomain",
+            code: 12345
+        )
+        let failures: [ChapterTranscriptionFailure] = [
+            .unsupportedLocale("private-locale"),
+            .audioFileUnreadable("private filename.m4b"),
+            .analyzerInputFailed(diagnostic),
+        ]
+
+        for failure in failures {
+            let immediate = ChapterTranscriptionViewFailure.transcription(
+                failure)
+            XCTAssertEqual(
+                immediate.message, immediate.cachedTaskFailure.message)
+            XCTAssertFalse(immediate.message.contains("private-locale"))
+            XCTAssertFalse(immediate.message.contains("private filename.m4b"))
+            XCTAssertFalse(immediate.message.contains("PrivateSpeechDomain"))
+            XCTAssertFalse(immediate.message.contains("12345"))
+        }
+    }
+
+    func testUnsupportedTranscriptionOSMessageNamesCurrentPlatform() {
+        let message = CachedChapterTranscriptionTaskFailure
+            .operatingSystemUnsupported.message
+        #if os(macOS)
+            XCTAssertEqual(
+                message, "SpeechTranscriber requires macOS 26 or newer.")
+        #else
+            XCTAssertEqual(
+                message, "SpeechTranscriber requires iOS 26 or newer.")
+        #endif
+    }
+
     func testPersistentTranscriptionFailuresIdentifyImmediateRetrySupport() {
         let retryable: [CachedChapterTranscriptionTaskFailure] = [
             .jobPersistenceFailed,
