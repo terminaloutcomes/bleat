@@ -6,6 +6,88 @@ import Testing
 
 @Suite(.serialized)
 final class AudiobookshelfAPITests {
+    @Test(arguments: ["2.26.0", "2.37.0"])
+    func capturedSupportedLibraryAndDetailShapes(version: String) async throws {
+        let pageData = try Self.capturedFixture(
+            named: "library-items",
+            version: version
+        )
+        let pageIdentity = try JSONDecoder().decode(
+            CapturedLibraryPageIdentity.self,
+            from: pageData
+        )
+        let libraryID = try #require(pageIdentity.results.first?.libraryID)
+        let pageFixture = try APIFixture(responses: [
+            HTTPResponse(data: pageData, statusCode: 200)
+        ])
+        let page = try await pageFixture.api.libraryItems(
+            in: libraryID,
+            request: try LibraryItemsPageRequest(page: 0, limit: 2)
+        ).value
+        #expect(page.items.count == 2)
+
+        let detailData = try Self.capturedFixture(
+            named: "book-detail",
+            version: version
+        )
+        let detailIdentity = try JSONDecoder().decode(
+            CapturedBookIdentity.self,
+            from: detailData
+        )
+        let detailFixture = try APIFixture(responses: [
+            HTTPResponse(data: detailData, statusCode: 200)
+        ])
+        let detail = try await detailFixture.api.bookDetail(
+            for: detailIdentity.id,
+            in: detailIdentity.libraryID
+        ).value
+        #expect(detail.id == detailIdentity.id)
+        #expect(detail.trackCount > 0)
+        #expect(detail.audioFileCount > 0)
+
+        let searchFixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try Self.capturedFixture(
+                    named: "search",
+                    version: version
+                ),
+                statusCode: 200
+            )
+        ])
+        let search = try await searchFixture.api.search(
+            in: libraryID,
+            request: try LibrarySearchRequest(query: "direct", limit: 12)
+        ).value
+        #expect(search.count == 1)
+    }
+
+    private struct CapturedLibraryPageIdentity: Decodable {
+        let results: [CapturedBookIdentity]
+    }
+
+    private struct CapturedBookIdentity: Decodable {
+        let id: LibraryItemID
+        let libraryID: LibraryID
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case libraryID = "libraryId"
+        }
+    }
+
+    private static func capturedFixture(
+        named name: String,
+        version: String
+    ) throws -> Data {
+        let url = try #require(
+            Bundle.module.url(
+                forResource: "captured-\(version)-\(name)",
+                withExtension: "json"
+            )
+        )
+        return try Data(contentsOf: url)
+    }
+
     @Test
     func historyImportRestartsAfterInterruptionAndRetainsDisappearedSessions()
         async throws

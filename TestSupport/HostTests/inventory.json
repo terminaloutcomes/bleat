@@ -20,6 +20,7 @@
     "testPersistedLifecycleRejectsUnknownAccountBeforeLogout()"
   ],
   "BleatCoreTests.AudiobookshelfAPITests": [
+    "capturedSupportedLibraryAndDetailShapes(version:)",
     "testListeningSessionsUseZeroIndexedPrefixedRouteAndPinnedShape()",
     "testListeningSessionsRootHostedRoute()",
     "testBookDetailUsesNativeAccountAndMapsExpandedContract()",
@@ -110,6 +111,7 @@
     "testRefreshFailureDoesNotAffectAnotherAccount()"
   ],
   "BleatCoreTests.AuthenticationTests": [
+    "capturedSupportedAuthenticationShapes(version:)",
     "testPinnedAuthenticationFixturesCompleteTransaction()",
     "testLocalLoginValidatesBeforePersistingCredentials()",
     "testCredentialValidationRequiresSameUserWithoutPersisting()",
@@ -155,6 +157,7 @@
     "testAccessAllTagsIgnoresSelectedTagMode()"
   ],
   "BleatCoreTests.BookmarkingTests": [
+    "testOlderServerReadsBookmarksFromCurrentUser()",
     "testBookmarkCRUDUsesAuthenticatedPrefixedContracts()",
     "testBookmarkValidationFailsBeforeTransport()"
   ],
@@ -419,6 +422,7 @@
     "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
+    "testOlderServerReadsAllProgressFromCurrentUser()",
     "testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts()",
     "testAllProgressRejectsWrongUserAndMalformedBookProgress()",
     "testAllProgressRejectsMismatchedAccountCredentials()",
@@ -463,6 +467,7 @@
     "testRapidReenableExportsOnlyCleanGeneration()"
   ],
   "BleatCoreTests.ServerDiscoveryTests": [
+    "capturedSupportedStatusShapes(version:)",
     "testDecodesPinnedLiveStatusFixture()",
     "testDiscoversInitializedSupportedServer()",
     "testUnknownAuthenticationMethodIsPreserved()",

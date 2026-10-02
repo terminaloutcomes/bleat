@@ -4,6 +4,8 @@ set -euo pipefail
 
 readonly bleat_script_dir="${0:A:h}"
 readonly bleat_repository_root="${bleat_script_dir:h}"
+source "${bleat_script_dir}/live-profile.sh"
+bleat_select_live_profile "${BLEAT_LIVE_PROFILE_ID:-current-stable}"
 readonly bleat_compose_file="${bleat_repository_root}/TestSupport/ServerHarness/compose.yaml"
 readonly bleat_compose_override_file="${BLEAT_COMPOSE_OVERRIDE_FILE:-}"
 readonly bleat_project_name="${BLEAT_COMPOSE_PROJECT_NAME:-bleat-live-tests}"
@@ -29,6 +31,14 @@ bleat_compose() {
         "$@"
 }
 
+bleat_verify_compose_images() {
+    if ! bleat_compose config --format json \
+        | bleat_compose_images_match_profile "${BLEAT_ABS_IMAGE}"; then
+        print -u2 "Audiobookshelf Compose images do not match the selected profile"
+        return 1
+    fi
+}
+
 bleat_status() {
     /usr/bin/curl \
         --fail \
@@ -36,6 +46,21 @@ bleat_status() {
         --show-error \
         --max-time 2 \
         "${1}/status"
+}
+
+bleat_verify_versions() {
+    local base_url
+    local observed
+    local payload
+    for base_url in "${bleat_root_url}" "${bleat_prefix_url}"; do
+        payload="$(bleat_status "${base_url}")" || return 1
+        if ! print -r -- "${payload}" \
+            | bleat_status_matches_profile "${BLEAT_EXPECTED_SERVER_VERSION}"; then
+            observed="$(print -r -- "${payload}" | jq --raw-output '.serverVersion // "missing"')"
+            print -u2 "Audiobookshelf at ${base_url} reported ${observed}; expected ${BLEAT_EXPECTED_SERVER_VERSION}"
+            return 1
+        fi
+    done
 }
 
 bleat_export_ca() {
@@ -102,10 +127,10 @@ bleat_initialize() {
     local status_payload
     status_payload="$(bleat_status "${base_url}")"
 
-    if [[ "${status_payload}" == *'"isInit":true'* ]]; then
+    if print -r -- "${status_payload}" | jq --exit-status '.isInit == true' >/dev/null; then
         return 0
     fi
-    if [[ "${status_payload}" != *'"isInit":false'* ]]; then
+    if ! print -r -- "${status_payload}" | jq --exit-status '.isInit == false' >/dev/null; then
         print -u2 "Unexpected Audiobookshelf status payload from ${base_url}"
         return 1
     fi
@@ -121,7 +146,7 @@ bleat_initialize() {
         "${base_url}/init" \
         >/dev/null
 
-    if [[ "$(bleat_status "${base_url}")" != *'"isInit":true'* ]]; then
+    if ! bleat_status "${base_url}" | jq --exit-status '.isInit == true' >/dev/null; then
         print -u2 "Audiobookshelf initialization did not persist for ${base_url}"
         return 1
     fi
@@ -415,8 +440,10 @@ bleat_down() {
 
 case "${1:-}" in
     up)
+        bleat_verify_compose_images
         bleat_compose up --detach --wait
         bleat_wait
+        bleat_verify_versions
         bleat_wait_https
         ;;
     wait)
@@ -424,6 +451,7 @@ case "${1:-}" in
         ;;
     seed)
         bleat_wait
+        bleat_verify_versions
         bleat_seed
         ;;
     seed-large)
@@ -432,13 +460,16 @@ case "${1:-}" in
             print -u2 "BLEAT_LARGE_LIBRARY_COUNT is required for seed-large"
             exit 64
         fi
+        bleat_verify_versions
         bleat_seed_large_library "${bleat_root_url}"
         bleat_seed_large_library "${bleat_prefix_url}"
         ;;
     reset)
+        bleat_verify_compose_images
         bleat_down
         bleat_compose up --detach --wait
         bleat_wait
+        bleat_verify_versions
         bleat_seed
         bleat_wait_https
         ;;

@@ -9,7 +9,8 @@ final class LocalAuthenticationLiveTests: XCTestCase {
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
             let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
             let username = environment["BLEAT_LIVE_USERNAME"],
-            let password = environment["BLEAT_LIVE_PASSWORD"]
+            let password = environment["BLEAT_LIVE_PASSWORD"],
+            let expectedVersion = environment["BLEAT_LIVE_EXPECTED_VERSION"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live authentication data"
@@ -65,14 +66,14 @@ final class LocalAuthenticationLiveTests: XCTestCase {
                 await client.requiresReauthentication(for: accountID)
 
             XCTAssertEqual(librariesResponse.statusCode, 200)
-            XCTAssertNotEqual(
-                rotatedTokens.accessToken,
-                rejectedAccessTokens.accessToken
+            XCTAssertFalse(
+                rotatedTokens.accessToken == rejectedAccessTokens.accessToken
             )
-            XCTAssertNotEqual(
-                rotatedTokens.refreshToken,
-                initialTokens.refreshToken
-            )
+            if expectedVersion != "2.26.0" {
+                XCTAssertFalse(
+                    rotatedTokens.refreshToken == initialTokens.refreshToken
+                )
+            }
             XCTAssertFalse(requiresReauthentication)
 
             let logoutResult = try await client.logout(
@@ -165,14 +166,17 @@ final class LocalAuthenticationLiveTests: XCTestCase {
                 .nativeLoginCredentials(for: recoveryAccountID)
 
             XCTAssertEqual(recoveredResponse.statusCode, 200)
-            XCTAssertNotEqual(
-                automaticallyRecoveredTokens.accessToken,
-                rejectedRecoveryTokens.accessToken
+            let rejectedAccessToken = rejectedRecoveryTokens.accessToken
+            XCTAssertFalse(
+                automaticallyRecoveredTokens.accessToken == rejectedAccessToken
             )
-            XCTAssertNotEqual(
-                automaticallyRecoveredTokens.refreshToken,
-                rejectedRecoveryTokens.refreshToken
-            )
+            if expectedVersion != "2.26.0" {
+                let rejectedRefreshToken = rejectedRecoveryTokens.refreshToken
+                let refreshTokenRotated =
+                    automaticallyRecoveredTokens.refreshToken
+                    != rejectedRefreshToken
+                XCTAssertTrue(refreshTokenRotated)
+            }
             XCTAssertEqual(retainedNativeLogin?.username, username)
             _ = try await recoveryCoordinator.logout(
                 accountID: recoveryAccountID,

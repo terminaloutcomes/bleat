@@ -1,7 +1,6 @@
 # Native-authentication secret-leakage evidence
 
-Release evidence for [GitHub issue
-#48](https://github.com/terminaloutcomes/bleat/issues/48) and AC-02. This record
+Release evidence for [GitHub issue `#48`](https://github.com/terminaloutcomes/bleat/issues/48) and AC-02. This record
 covers the native Audiobookshelf username/password scope. OIDC callback values,
 cookies, and playback-session routes remain outside this gate's scope.
 

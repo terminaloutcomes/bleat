@@ -324,6 +324,15 @@ Contract or server-behavior changes require the disposable live suite:
 ./scripts/test-live.sh
 ```
 
+Capture redacted response fixtures from a fresh supported server with
+`mise run fixtures:live minimum` or `mise run fixtures:live current-stable`.
+The Rust command uses the live harness for Docker setup and cleanup.
+
+Run `mise run test:compatibility` to exercise the minimum 2.26.0 and pinned
+current-stable 2.37.0 profiles sequentially. The profile manifests and
+verification results are documented in
+`docs/audiobookshelf-compatibility.md`.
+
 Changes spanning the app, HTTPS trust, playback, downloads, offline state, or
 pending synchronization require the disposable live app journeys when
 practical:
@@ -501,7 +510,6 @@ intended test executed and passed. Treat zero-test selections, unexpected test
 bundles, runtime warnings, crashes, hangs, and unexpected skips as failed or
 unresolved validation attempts. Distinguish host, Simulator, disposable-server,
 signed-host, and physical-device evidence when reporting results.
-
 
 ## Statistics performance
 

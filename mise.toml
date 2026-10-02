@@ -144,6 +144,14 @@ run = ["./scripts/test-core.sh"]
 description = "Run core tests against disposable Audiobookshelf servers"
 run = ["./scripts/test-live.sh"]
 
+[tasks."test:compatibility"]
+description = "Run minimum and current-stable Audiobookshelf compatibility profiles"
+run = ["./scripts/test-compatibility.sh"]
+
+[tasks."fixtures:live"]
+description = "Capture redacted responses from a disposable Audiobookshelf profile"
+run = "cargo run --quiet --locked --package scripts --bin capture-live-fixtures --"
+
 [tasks."test:app-live"]
 description = "Run live app journeys on a disposable iOS Simulator"
 run = ["./scripts/test-app-live.sh"]

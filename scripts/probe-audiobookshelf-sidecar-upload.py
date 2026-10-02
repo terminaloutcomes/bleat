@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Probe v2.36.0 generic upload behavior using disposable Audiobookshelf data.
-
-
-#Validate the pinned server's generic upload behavior for a VTT sidecar with
+"""Probe current-stable generic upload behavior using disposable Audiobookshelf data.
 
 The probe uses a disposable writable media copy. It uploads a VTT beside a
 conventionally named item, downloads it through the authenticated item-file
@@ -121,12 +118,17 @@ def multipart_body(
     return boundary, b"".join(parts)
 
 
-def command_environment(media_root: Path) -> tuple[dict[str, str], str, str]:
+def command_environment(
+    media_root: Path, expected_version: str
+) -> tuple[dict[str, str], str, str]:
     environment = os.environ.copy()
     root_port, prefix_port, https_root_port, https_prefix_port, oidc_https_port = (
         available_port() for _ in range(5)
     )
-    project_name = f"bleat-sidecar-upload-{secrets.token_hex(6)}"
+    project_name = (
+        f"bleat-sidecar-current-stable-{expected_version.replace('.', '-')}-"
+        f"{secrets.token_hex(6)}"
+    )
     username = f"bleat-upload-{secrets.token_hex(8)}"
     password = secrets.token_urlsafe(32)
     environment.update(
@@ -241,16 +243,21 @@ def scan_item(base_url: str, item_id: str, headers: dict[str, str]) -> None:
         raise ProbeFailure(f"explicit item scan returned status {result.status}")
 
 
-def validate_server_version(base_url: str) -> None:
+def validate_server_version(base_url: str, expected_version: str) -> None:
     result, payload = request_json(f"{base_url}/status")
     if result.status != 200:
         raise ProbeFailure(f"status lookup returned status {result.status}")
-    if payload.get("serverVersion") != "2.36.0":
-        raise ProbeFailure("probe did not start Audiobookshelf 2.36.0")
+    if payload.get("serverVersion") != expected_version:
+        raise ProbeFailure(f"probe did not start Audiobookshelf {expected_version}")
 
 
-def run_probe(environment: dict[str, str], username: str, base_url: str) -> None:
-    validate_server_version(base_url)
+def run_probe(
+    environment: dict[str, str],
+    username: str,
+    base_url: str,
+    expected_version: str,
+) -> None:
+    validate_server_version(base_url, expected_version)
     password = environment["BLEAT_TEST_PASSWORD"]
     access_token = login(base_url, username, password)
     headers = bearer_headers(access_token)
@@ -331,7 +338,7 @@ def run_probe(environment: dict[str, str], username: str, base_url: str) -> None
         raise ProbeFailure("downloaded VTT bytes differed from the uploaded payload")
 
     print(
-        "PASS: v2.36.0 uploaded and downloaded identical VTT bytes beside a "
+        f"PASS: v{expected_version} uploaded and downloaded identical VTT bytes beside a "
         f"conventionally named existing item after {scan_mode}."
     )
 
@@ -340,6 +347,15 @@ def main() -> int:
     repository_root = Path(__file__).resolve().parent.parent
     environment_script = repository_root / "scripts" / "live-test-environment.sh"
     source_media = repository_root / "TestSupport" / "ServerHarness" / "media"
+    profile_path = (
+        repository_root
+        / "TestSupport"
+        / "ServerHarness"
+        / "profiles"
+        / "current-stable.json"
+    )
+    profile = json.loads(profile_path.read_text())
+    expected_version = profile["serverVersion"]
     if not environment_script.is_file() or not source_media.is_dir():
         raise ProbeFailure("probe must run from the Bleat repository")
 
@@ -349,10 +365,13 @@ def main() -> int:
         media_root = Path(temporary_directory) / "media"
         shutil.copytree(source_media, media_root)
         media_root.chmod(0o777)
-        environment, username, base_url = command_environment(media_root)
+        environment, username, base_url = command_environment(
+            media_root, expected_version
+        )
+        environment["BLEAT_LIVE_PROFILE_ID"] = "current-stable"
         try:
             run_environment(environment_script, environment, "reset")
-            run_probe(environment, username, base_url)
+            run_probe(environment, username, base_url, expected_version)
         finally:
             try:
                 run_environment(environment_script, environment, "down")

@@ -761,12 +761,54 @@ private struct LibraryItemDTO: Decodable, Sendable {
     }
 }
 
+// v2.26.0 search results include expanded media arrays without count fields.
+// Source: https://github.com/advplyr/audiobookshelf/blob/v2.26.0/server/models/Book.js.
 private struct LibraryBookDTO: Decodable, Sendable {
     let metadata: LibraryBookMetadataDTO
     let tags: [String]?
     let numTracks: Int
     let numChapters: Int
     let duration: Double
+
+    enum CodingKeys: String, CodingKey {
+        case metadata, tags, numTracks, numChapters, duration
+        case tracks, chapters
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        metadata = try values.decode(
+            LibraryBookMetadataDTO.self, forKey: .metadata
+        )
+        tags = try values.decodeIfPresent([String].self, forKey: .tags)
+        duration = try values.decode(Double.self, forKey: .duration)
+        if values.contains(.numTracks) {
+            numTracks = try values.decode(Int.self, forKey: .numTracks)
+        } else {
+            numTracks = try Self.arrayCount(values, key: .tracks)
+        }
+        if values.contains(.numChapters) {
+            numChapters = try values.decode(Int.self, forKey: .numChapters)
+        } else {
+            numChapters = try Self.arrayCount(values, key: .chapters)
+        }
+    }
+
+    private static func arrayCount(
+        _ values: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) throws -> Int {
+        let array = try values.nestedUnkeyedContainer(forKey: key)
+        guard let count = array.count else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: array.codingPath,
+                    debugDescription: "Unknown array length"
+                )
+            )
+        }
+        return count
+    }
 }
 
 private struct LibraryBookMetadataDTO: Decodable, Sendable {
@@ -1016,6 +1058,9 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
     }
 }
 
+// Expanded media counts are absent in v2.26.0 and included in v2.37.0.
+// Sources: https://github.com/advplyr/audiobookshelf/blob/v2.26.0/server/models/Book.js
+// and https://github.com/advplyr/audiobookshelf/blob/v2.37.0/server/models/Book.js.
 private struct ExpandedLibraryBookDTO: Decodable, Sendable {
     let id: BookID
     let libraryItemID: LibraryItemID
@@ -1037,6 +1082,56 @@ private struct ExpandedLibraryBookDTO: Decodable, Sendable {
         case numChapters
         case duration
         case chapters
+        case tracks
+        case audioFiles
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(BookID.self, forKey: .id)
+        libraryItemID = try values.decode(
+            LibraryItemID.self, forKey: .libraryItemID
+        )
+        metadata = try values.decode(
+            ExpandedLibraryBookMetadataDTO.self, forKey: .metadata
+        )
+        tags = try values.decode([String].self, forKey: .tags)
+        duration = try values.decode(Double.self, forKey: .duration)
+        chapters = try values.decode([PlaybackChapter].self, forKey: .chapters)
+
+        // Audiobookshelf 2.26.0 expanded media has the arrays but omits the
+        // count fields added to expanded JSON in later releases.
+        if values.contains(.numTracks) {
+            numTracks = try values.decode(Int.self, forKey: .numTracks)
+        } else {
+            numTracks = try Self.arrayCount(values, key: .tracks)
+        }
+        if values.contains(.numAudioFiles) {
+            numAudioFiles = try values.decode(Int.self, forKey: .numAudioFiles)
+        } else {
+            numAudioFiles = try Self.arrayCount(values, key: .audioFiles)
+        }
+        if values.contains(.numChapters) {
+            numChapters = try values.decode(Int.self, forKey: .numChapters)
+        } else {
+            numChapters = chapters.count
+        }
+    }
+
+    private static func arrayCount(
+        _ values: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) throws -> Int {
+        let array = try values.nestedUnkeyedContainer(forKey: key)
+        guard let count = array.count else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: array.codingPath,
+                    debugDescription: "Unknown array length"
+                )
+            )
+        }
+        return count
     }
 }
 

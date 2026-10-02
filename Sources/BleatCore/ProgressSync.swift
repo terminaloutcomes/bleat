@@ -41,7 +41,7 @@ private struct AllBookProgressResponse: Decodable {
 }
 
 extension AuthCoordinator {
-    /// Implements the pinned v2.36.0 current-user progress contract.
+    /// Implements the current-user progress contract across supported servers.
     ///
     /// Contract source: `docs/audiobookshelf-ios-app-spec.md`, sections 11 and 24.
     public func bookProgress(
@@ -94,7 +94,7 @@ extension AuthCoordinator {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        let response: HTTPResponse
+        var response: HTTPResponse
         do {
             response = try await sendAuthenticated(
                 request,
@@ -106,6 +106,32 @@ extension AuthCoordinator {
             throw .authenticationFailed(error)
         } catch {
             throw .requestFailed
+        }
+        if response.statusCode == 404 {
+            // The 2.26.0 router exposes all progress through GET /api/me.
+            // GET /api/me/progress was added in a later release. Source:
+            // https://github.com/advplyr/audiobookshelf/blob/v2.26.0/server/routers/ApiRouter.js.
+            let legacyURL: URL
+            do {
+                legacyURL = try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .me)
+            } catch let error {
+                throw .requestConstructionFailed(error)
+            }
+            var legacyRequest = URLRequest(url: legacyURL)
+            legacyRequest.httpMethod = "GET"
+            do {
+                response = try await sendAuthenticated(
+                    legacyRequest,
+                    route: .me,
+                    accountID: accountID,
+                    server: server
+                )
+            } catch let error as AuthenticatedRequestError {
+                throw .authenticationFailed(error)
+            } catch {
+                throw .requestFailed
+            }
         }
         guard response.statusCode == 200 else {
             throw .unexpectedStatus(response.statusCode)

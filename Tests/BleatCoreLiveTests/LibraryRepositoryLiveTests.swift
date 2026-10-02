@@ -7,7 +7,7 @@ import XCTest
 /// Live 10,000-book paged-load and cache-fallback baseline for GitHub issue
 /// #46 / spec section 19.
 ///
-/// Phase 1 — paged-load: exercises the real pinned Audiobookshelf 2.36.0
+/// Phase 1 — paged-load: exercises the selected Audiobookshelf profile's
 /// decode path through `LibraryRepository` with `.remoteElseCache`, which
 /// caches every page. The `AudiobookshelfAPI` actor decodes each response
 /// off the main actor.
@@ -37,7 +37,8 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
             let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
             let username = environment["BLEAT_LIVE_USERNAME"],
-            let password = environment["BLEAT_LIVE_PASSWORD"]
+            let password = environment["BLEAT_LIVE_PASSWORD"],
+            let expectedVersion = environment["BLEAT_LIVE_EXPECTED_VERSION"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live server URLs"
@@ -53,6 +54,7 @@ final class LibraryRepositoryLiveTests: XCTestCase {
                 accountID: AccountID(rawValue: "large-\(UUID().uuidString)"),
                 username: username,
                 password: password,
+                expectedVersion: expectedVersion,
                 expectedCount: largeCount,
                 limit: limit,
                 expectedPages: expectedPages
@@ -65,6 +67,7 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         accountID: AccountID,
         username: String,
         password: String,
+        expectedVersion: String,
         expectedCount: Int,
         limit: Int,
         expectedPages: Int
@@ -84,7 +87,7 @@ final class LibraryRepositoryLiveTests: XCTestCase {
         let account = try ServerAccount(
             id: authenticated.id,
             server: authenticated.server,
-            serverVersion: "2.36.0",
+            serverVersion: expectedVersion,
             authenticationMethods: [.local],
             user: authenticated.user
         )

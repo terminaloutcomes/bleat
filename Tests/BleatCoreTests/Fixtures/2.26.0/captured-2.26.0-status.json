@@ -1,0 +1,12 @@
+{
+  "app": "audiobookshelf",
+  "authFormData": {
+    "authLoginCustomMessage": null
+  },
+  "authMethods": [
+    "local"
+  ],
+  "isInit": true,
+  "language": "en-us",
+  "serverVersion": "2.26.0"
+}

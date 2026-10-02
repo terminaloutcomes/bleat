@@ -6,6 +6,48 @@ import Testing
 @Suite(.serialized)
 final class BookmarkingTests {
     @Test
+    func testOlderServerReadsBookmarksFromCurrentUser() async throws {
+        let accountID = AccountID(rawValue: "account")
+        let transport = BookmarkTestTransport(responses: [
+            HTTPResponse(data: Data(), statusCode: 404),
+            HTTPResponse(
+                data: Data(
+                    #"""
+                    {"bookmarks":[
+                        {"libraryItemId":"item","time":12,"title":"Keep","createdAt":1},
+                        {"libraryItemId":"other","time":15,"title":"Other","createdAt":2}
+                    ]}
+                    """#.utf8
+                ),
+                statusCode: 200
+            ),
+        ])
+        let coordinator = AuthCoordinator(
+            transport: transport,
+            credentialStore: BookmarkTestCredentialStore(
+                accountID: accountID,
+                credentials: try AuthenticationTokens(
+                    accessToken: "access-token",
+                    refreshToken: "refresh-token"
+                )
+            )
+        )
+        let server = try NormalizedServerURL("https://books.example/prefix")
+        let bookmarks = try await coordinator.bookmarks(
+            accountID: accountID,
+            server: server,
+            itemID: LibraryItemID(rawValue: "item")
+        )
+        #expect(bookmarks.map(\.title) == ["Keep"])
+        let requests = await transport.recordedRequests()
+        #expect(
+            requests.map { $0.url?.path } == [
+                "/prefix/api/me/bookmarks/item", "/prefix/api/me",
+            ]
+        )
+    }
+
+    @Test
     func testBookmarkCRUDUsesAuthenticatedPrefixedContracts() async throws {
         let accountID = AccountID(rawValue: "account")
         let transport = BookmarkTestTransport(

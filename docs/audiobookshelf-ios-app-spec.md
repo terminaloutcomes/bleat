@@ -7,6 +7,7 @@ Minimum OS: iOS 26.0; macOS 26.0
 Language mode: Swift 6 with strict concurrency checking
 Backend: Audiobookshelf 2.26.0 or newer
 Contract baseline: Audiobookshelf v2.36.0, commit `96d4021a3cd45f67bf374b65abafbe5d73e926b5`
+Current-stable compatibility profile: Audiobookshelf v2.37.0; live evidence is tracked in `docs/audiobookshelf-compatibility.md`.
 Audit date: 2026-07-29
 
 ## 1. Purpose
@@ -332,7 +333,7 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
   then its saved local position, then the displayed book’s account-scoped server
   progress timestamp when neither is available, to select and scroll
   to the nearest cached transcript segment and highlight it briefly. Untranscribed
-  destinations are selected and revealed with “Chapter ‘<chapter title>’ has not
+  destinations are selected and revealed with “Chapter `<chapter title>` has not
   been transcribed.” and a Start Transcription confirmation. Cancel leaves the
   chapter selected; confirmation starts only that chapter through the existing
   workflow. Active work or deletion prevents a conflicting start. No-speech
@@ -1472,7 +1473,6 @@ The All Accounts view aggregates account-scoped results only after each account 
 Current implementation limitation accepted for issue #26: statistics grouping
 uses exact chapter index, title, and boundaries. Tolerance-preserving identity
 normalization below remains deferred; small metadata changes may split coverage.
-
 
 Chapter metadata is mutable and current server history does not retain it. Create a `ChapterKey` from the book key plus a stable local chapter UUID. On first encounter, map server chapters by ordered index, normalized title, and start/end times. On later metadata refresh:
 

@@ -278,6 +278,7 @@ public enum DiagnosticEndpoint: String, Codable, CaseIterable, Sendable {
     case refresh
     case logout
     case authorize
+    case me
     case libraries
     case libraryItems = "library_items"
     case personalized

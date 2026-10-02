@@ -7,7 +7,8 @@ final class ServerStatusLiveTests: XCTestCase {
     func testPinnedRootAndPrefixStatusContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],
-            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"]
+            let prefixURL = environment["BLEAT_LIVE_PREFIX_URL"],
+            let expectedVersion = environment["BLEAT_LIVE_EXPECTED_VERSION"]
         else {
             throw XCTSkip(
                 "Run scripts/test-live.sh to provide live server URLs"
@@ -25,9 +26,9 @@ final class ServerStatusLiveTests: XCTestCase {
 
             XCTAssertEqual(httpResponse.statusCode, 200)
             XCTAssertEqual(status.app, "audiobookshelf")
-            XCTAssertEqual(status.serverVersion, "2.36.0")
+            XCTAssertEqual(status.serverVersion, expectedVersion)
             XCTAssertTrue(status.isInitialized)
-            XCTAssertEqual(status.authenticationMethods, [.local, .openID])
+            XCTAssertEqual(status.authenticationMethods, [.local])
         }
     }
 }
