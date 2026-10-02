@@ -64,6 +64,25 @@ jobs:
         run: |
           rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
           "$RUNNER_TEMP/bleat-ci-smoke"
+      - name: Run book detail race regressions
+        run: |
+          set -euo pipefail
+          results=.build/ci-smoke/book-detail-races.xcresult
+          xcodebuild -project Bleat.xcodeproj -scheme Bleat -configuration Debug \
+            -derivedDataPath .build/ci-smoke/derived -enableCodeCoverage YES \
+            -parallel-testing-enabled NO -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -only-testing:BleatAppTests/AppModelTests/testFailedRefreshDoesNotStrandPendingBookmarks \
+            -only-testing:BleatAppTests/AppModelTests/testCancelledRefreshDoesNotStrandPendingBookmarks \
+            -only-testing:BleatAppTests/AppModelTests/testCompletedSaveSupersedesPendingDetailRefresh \
+            -resultBundlePath "$results" test
+          xcrun xcresulttool get test-results tests --path "$results" --format json |
+            jq -e '[.. | objects | select(.nodeType == "Test Case")] as $tests |
+              ($tests | length) == 3 and all($tests[]; .result == "Passed") and
+              ([$tests[].name] | sort) == ([
+                "testFailedRefreshDoesNotStrandPendingBookmarks()",
+                "testCancelledRefreshDoesNotStrandPendingBookmarks()",
+                "testCompletedSaveSupersedesPendingDetailRefresh()"
+              ] | sort)'
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
@@ -84,7 +103,9 @@ jobs:
         if: always()
         with:
           name: ios-smoke-results
-          path: .build/ci-smoke/results.xcresult
+          path: |
+            .build/ci-smoke/results.xcresult
+            .build/ci-smoke/book-detail-races.xcresult
           retention-days: 7
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation
