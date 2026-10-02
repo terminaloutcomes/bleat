@@ -3905,6 +3905,93 @@ private struct SeriesCarouselBookCard: View {
     }
 }
 
+enum DownloadTransferButtonPresentation: Equatable {
+    case stop(isCancelling: Bool)
+    case start
+    case hidden
+
+    static func select(
+        snapshot: DownloadControlSnapshot,
+        canStart: Bool,
+        hasAccount: Bool,
+        isDeleting: Bool
+    ) -> Self {
+        if snapshot.actions.contains(.cancel) || snapshot.phase == .cancelling {
+            return .stop(isCancelling: snapshot.phase == .cancelling)
+        }
+        if canStart && !isDeleting && hasAccount {
+            return .start
+        }
+        return .hidden
+    }
+}
+
+private struct DownloadTransferButton: View {
+    @Bindable var downloads: DownloadModel
+    let record: DownloadedBookRecord
+    let account: ServerAccount?
+    let canStart: Bool
+    let identifierPrefix: String
+
+    var body: some View {
+        let snapshot = downloads.controlSnapshot(for: record)
+        let presentation = DownloadTransferButtonPresentation.select(
+            snapshot: snapshot,
+            canStart: canStart,
+            hasAccount: account?.id == record.manifest.accountID,
+            isDeleting: record.manifest.state == .deleting
+        )
+        Group {
+            switch presentation {
+            case .stop(let isCancelling):
+                Button {
+                    Task {
+                        await downloads.cancel(record)
+                    }
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.title2)
+                }
+                .disabled(isCancelling)
+                .accessibilityLabel(
+                    isCancelling ? "Stopping download" : "Stop download"
+                )
+                .accessibilityIdentifier("\(identifierPrefix).stop")
+            case .start:
+                if let account {
+                    Button {
+                        Task {
+                            await startDownload(account: account)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.title2)
+                    }
+                    .accessibilityLabel("Download")
+                    .accessibilityIdentifier("\(identifierPrefix).start")
+                }
+            case .hidden:
+                EmptyView()
+            }
+        }
+    }
+
+    private func startDownload(account: ServerAccount) async {
+        let snapshot = downloads.controlSnapshot(for: record)
+        if snapshot.actions.contains(.continueDownload)
+            || snapshot.phase == .pauseFailed
+        {
+            await downloads.continueDownload(record)
+        } else if record.manifest.purpose == .automaticCache,
+            downloads.automaticCacheState(for: record) != .failed
+        {
+            await downloads.downloadFullBook(record, account: account)
+        } else {
+            await downloads.repair(record, account: account)
+        }
+    }
+}
+
 // Keep high-frequency transfer observation below the detail presentation owner.
 private struct BookDetailDownloadControls: View {
     @Bindable var downloads: DownloadModel
@@ -3922,6 +4009,7 @@ private struct BookDetailDownloadControls: View {
                 itemID: detail.id
             ) {
                 if !downloads.isFullBookAvailable(record) {
+                    let actions = downloads.controlSnapshot(for: record).actions
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top, spacing: 8) {
                             HStack(alignment: .top, spacing: 8) {
@@ -3943,9 +4031,13 @@ private struct BookDetailDownloadControls: View {
                                 "book.detail.downloadStatus"
                             )
                             Spacer()
-                            downloadTransferButton(
-                                record,
-                                account: account
+                            DownloadTransferButton(
+                                downloads: downloads,
+                                record: record,
+                                account: account,
+                                canStart: actions.contains(.continueDownload)
+                                    || actions.contains(.retry),
+                                identifierPrefix: "book.detail.download"
                             )
                         }
                         .font(.subheadline)
@@ -3986,70 +4078,6 @@ private struct BookDetailDownloadControls: View {
                 .accessibilityIdentifier("book.detail.download")
             }
         }
-    }
-
-    @ViewBuilder
-    private func downloadTransferButton(
-        _ record: DownloadedBookRecord,
-        account: ServerAccount
-    ) -> some View {
-        let snapshot = downloads.controlSnapshot(for: record)
-        if downloadIsActive(record) {
-            Button {
-                Task {
-                    await downloads.cancel(record)
-                }
-            } label: {
-                Image(systemName: "stop.fill")
-                    .font(.title2)
-            }
-            .disabled(snapshot.phase == .cancelling)
-            .accessibilityLabel(
-                snapshot.phase == .cancelling
-                    ? "Stopping download" : "Stop download"
-            )
-            .accessibilityIdentifier("book.detail.download.stop")
-        } else if record.manifest.state != .deleting,
-            snapshot.actions.contains(.continueDownload)
-                || snapshot.actions.contains(.retry)
-        {
-            Button {
-                Task {
-                    await startDownload(record, account: account)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.title2)
-            }
-            .accessibilityLabel("Download")
-            .accessibilityIdentifier("book.detail.download.start")
-        }
-    }
-
-    private func startDownload(
-        _ record: DownloadedBookRecord,
-        account: ServerAccount
-    ) async {
-        let snapshot = downloads.controlSnapshot(for: record)
-        if snapshot.actions.contains(.continueDownload)
-            || snapshot.phase == .pauseFailed
-        {
-            await downloads.continueDownload(record)
-        } else if record.manifest.purpose == .automaticCache,
-            downloads.automaticCacheState(for: record) != .failed
-        {
-            await downloads.downloadFullBook(record, account: account)
-        } else {
-            await downloads.repair(record, account: account)
-        }
-    }
-
-    private func downloadIsActive(
-        _ record: DownloadedBookRecord
-    ) -> Bool {
-        let snapshot = downloads.controlSnapshot(for: record)
-        return snapshot.actions.contains(.cancel)
-            || snapshot.phase == .cancelling
     }
 
     private func downloadStatus(
@@ -6347,7 +6375,13 @@ private struct DownloadStorageView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                downloadTransferButton(record)
+                DownloadTransferButton(
+                    downloads: model.downloads,
+                    record: record,
+                    account: model.account,
+                    canStart: downloadCanStart(record),
+                    identifierPrefix: "downloads"
+                )
             }
             ProgressView(
                 value: model.downloads.progress[
@@ -6393,62 +6427,6 @@ private struct DownloadStorageView: View {
                     }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func downloadTransferButton(
-        _ record: DownloadedBookRecord
-    ) -> some View {
-        let snapshot = model.downloads.controlSnapshot(for: record)
-        if downloadIsActive(record) {
-            Button {
-                Task {
-                    await model.downloads.cancel(record)
-                }
-            } label: {
-                Image(systemName: "stop.fill")
-                    .font(.title2)
-            }
-            .disabled(snapshot.phase == .cancelling)
-            .accessibilityLabel(
-                snapshot.phase == .cancelling
-                    ? "Stopping download" : "Stop download"
-            )
-            .accessibilityIdentifier("downloads.stop")
-        } else if downloadCanStart(record),
-            record.manifest.state != .deleting,
-            let account = model.account,
-            account.id == record.manifest.accountID
-        {
-            Button {
-                Task {
-                    await startDownload(record, account: account)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.title2)
-            }
-            .accessibilityLabel("Download")
-            .accessibilityIdentifier("downloads.start")
-        }
-    }
-
-    private func startDownload(
-        _ record: DownloadedBookRecord,
-        account: ServerAccount
-    ) async {
-        let snapshot = model.downloads.controlSnapshot(for: record)
-        if snapshot.actions.contains(.continueDownload)
-            || snapshot.phase == .pauseFailed
-        {
-            await model.downloads.continueDownload(record)
-        } else if record.manifest.purpose == .automaticCache,
-            model.downloads.automaticCacheState(for: record) != .failed
-        {
-            await model.downloads.downloadFullBook(record, account: account)
-        } else {
-            await model.downloads.repair(record, account: account)
         }
     }
 
