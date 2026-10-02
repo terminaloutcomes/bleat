@@ -10,6 +10,8 @@ pub mod app_store_connect;
 )]
 pub mod appstore;
 pub mod appstore_analytics;
+pub mod ci_cache_keys;
+pub mod ci_smoke;
 pub mod deploy_device;
 pub mod error;
 pub mod live_fixtures;

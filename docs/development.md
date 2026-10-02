@@ -38,8 +38,8 @@ reports formatting violations without modifying source files.
 branch-push runs. Its Apple gate runs strict lint through mise, one Debug iPhone
 Simulator build, and two UI smoke tests: startup and the signed-in library
 before playback. It checks the result bundle for both passing test identifiers.
-After building, the gate waits for the selected Simulator to finish booting and
-installs the built app before starting XCTest on that same Simulator ID.
+It starts the selected Simulator while compiling, then waits for boot readiness
+and installs the built app before starting XCTest on that same Simulator ID.
 This is a compile-and-launch gate, not the full app regression suite.
 The startup fixture remains suspended until the UI test taps the launching
 screen, so slow automation attachment cannot miss it. The test waits beyond
@@ -47,7 +47,8 @@ the former five-second fixture timeout, checks the startup label, then verifies
 that startup finishes. The fixture disables the repeating logo animation so
 XCTest can detect an idle app during launch.
 
-Run the same smoke gate locally with `zsh scripts/test-ci-smoke.sh`. It uses
+Run the same smoke gate locally with
+`cargo run --quiet --locked --package scripts --bin ci-smoke --`. It uses
 `BLEAT_SIMULATOR_DESTINATION` when set. Run `bundle install` followed by
 `bundle exec slather coverage` to export coverage from that build. Swift
 smoke coverage reflects only those UI journeys. The separate host job runs

@@ -32,12 +32,38 @@ jobs:
         run: |
           brew install zsh
       - run: mise run swift-lint
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
+        with:
+          cache: false
+      - name: Identify compatible Swift caches
+        id: cache-keys
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-cache-keys.rs -o "$RUNNER_TEMP/bleat-ci-cache-keys"
+          "$RUNNER_TEMP/bleat-ci-cache-keys" ios
+      - name: Restore iOS Swift packages
+        id: swift-packages
+        uses: actions/cache/restore@v4
+        with:
+          path: .build/ci-smoke/derived/SourcePackages
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Restore iOS build outputs from main
+        id: build-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/ci-smoke/derived/Build
+            .build/ci-smoke/derived/ModuleCache.noindex
+          key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
+          restore-keys: |
+            ${{ steps.cache-keys.outputs.build }}-
       - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8
         with:
           ruby-version: "3.4"
           bundler-cache: true
       - name: Build and run smoke tests
-        run: ./scripts/test-ci-smoke.sh
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
+          "$RUNNER_TEMP/bleat-ci-smoke"
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
@@ -61,6 +87,20 @@ jobs:
           path: .build/ci-smoke/results.xcresult
           retention-days: 7
           if-no-files-found: warn
+      - name: Seed iOS Swift packages from successful main validation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .build/ci-smoke/derived/SourcePackages
+          key: ${{ steps.cache-keys.outputs.dependencies }}
+      - name: Refresh iOS build outputs from successful main validation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .build/ci-smoke/derived/Build
+            .build/ci-smoke/derived/ModuleCache.noindex
+          key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
 
   host:
     name: Unsigned Swift host tests and coverage
@@ -73,6 +113,23 @@ jobs:
           xcodebuild -version
       - name: Prepare CI environment file
         run: touch .envrc
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
+        with:
+          cache: false
+      - name: Identify compatible host Swift packages
+        id: cache-keys
+        run: |
+          rustc --edition=2024 scripts/src/bin/ci-cache-keys.rs -o "$RUNNER_TEMP/bleat-ci-cache-keys"
+          "$RUNNER_TEMP/bleat-ci-cache-keys" host
+      - name: Restore host Swift packages
+        id: swift-packages
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: ${{ steps.cache-keys.outputs.dependencies }}
       - name: Verify host report tooling
         run: python3 -m unittest discover -s TestSupport/HostTests
       - name: Run unsigned host coverage (signed Keychain test excluded)
@@ -92,6 +149,15 @@ jobs:
           path: .build/host-results/*.xml
           if-no-files-found: warn
           retention-days: 7
+      - name: Seed host Swift packages from successful main validation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: ${{ steps.cache-keys.outputs.dependencies }}
 
   rust:
     name: Rust lint, tests and coverage
