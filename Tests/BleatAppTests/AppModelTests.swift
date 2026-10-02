@@ -14706,7 +14706,9 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail),
             bookmarksGate: bookmarksGate
         )
-        await service.setRefreshedBookDetail(.success(detail), gate: refreshGate)
+        await service.setRefreshedBookDetail(
+            .success(detail), gate: refreshGate
+        )
         let model = AppModel(service: service)
         await model.start()
 
@@ -14744,7 +14746,9 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(original),
             metadataSave: .success(.saved(saved))
         )
-        await service.setRefreshedBookDetail(.success(original), gate: refreshGate)
+        await service.setRefreshedBookDetail(
+            .success(original), gate: refreshGate
+        )
         let model = AppModel(service: service)
         await model.start()
         await model.loadBookDetail(book)
