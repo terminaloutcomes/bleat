@@ -1358,6 +1358,7 @@ final class AppModel {
     private var seriesPageGeneration: UInt64 = 0
     private var searchGeneration: UInt64 = 0
     private var bookDetailGeneration: UInt64 = 0
+    private var bookDetailRefreshGeneration: UInt64 = 0
     private var playbackStartGeneration: UInt64 = 0
     @ObservationIgnored
     private var playbackStartTask: Task<PlaybackStartOutcome, Never>?
@@ -1499,6 +1500,7 @@ final class AppModel {
     private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
     private(set) var selectedBookID: LibraryItemID?
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
+    private(set) var bookDetailRefreshState: ResourceRefreshState = .idle
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
@@ -3786,7 +3788,9 @@ final class AppModel {
 
     func loadBookDetail(_ book: LibraryBookSummary) async {
         bookProgressUpdateState = .idle
+        bookDetailRefreshState = .idle
         bookDetailGeneration &+= 1
+        bookDetailRefreshGeneration &+= 1
         let operationGeneration = bookDetailGeneration
         selectedBookID = book.id
         bookBookmarks = .idle
@@ -3820,6 +3824,63 @@ final class AppModel {
             }
             let failure = AppFailure(operation: .loadBook, serviceError: error)
             bookDetail = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadBook,
+                    category: .api,
+                    failureCode: failure.diagnosticFailureCode
+                )
+            )
+        }
+    }
+
+    func refreshBookDetail(_ book: LibraryBookSummary) async {
+        guard selectedBookID == book.id,
+            case .loaded(let currentDetail) = bookDetail,
+            currentDetail.libraryID == book.libraryID
+        else { return }
+        guard let account else {
+            bookDetailRefreshState = .failed(
+                AppFailure(.loadBook, .authenticationRequired)
+            )
+            return
+        }
+        bookDetailRefreshGeneration &+= 1
+        let operationGeneration = bookDetailRefreshGeneration
+        let selectionGeneration = bookDetailGeneration
+        bookDetailRefreshState = .idle
+        await diagnostics.record(.started(.loadBook, category: .api))
+        do {
+            let detail = try await service.refreshedBookDetail(
+                for: account,
+                libraryID: book.libraryID,
+                itemID: book.id
+            )
+            guard !Task.isCancelled,
+                bookDetailRefreshGeneration == operationGeneration,
+                bookDetailGeneration == selectionGeneration,
+                self.account?.id == account.id,
+                selectedBookID == book.id,
+                case .loaded(let currentDetail) = bookDetail,
+                currentDetail.libraryID == book.libraryID
+            else { return }
+            // A successful refresh starts a replacement bookmark load. Retire
+            // older bookmark results only once that replacement is certain.
+            bookDetailGeneration &+= 1
+            bookDetail = .loaded(detail)
+            await diagnostics.record(.completed(.loadBook, category: .api))
+            await loadBookBookmarks()
+        } catch let error {
+            guard !Task.isCancelled,
+                bookDetailRefreshGeneration == operationGeneration,
+                bookDetailGeneration == selectionGeneration,
+                self.account?.id == account.id,
+                selectedBookID == book.id,
+                case .loaded(let currentDetail) = bookDetail,
+                currentDetail.libraryID == book.libraryID
+            else { return }
+            let failure = AppFailure(operation: .loadBook, serviceError: error)
+            bookDetailRefreshState = .failed(failure)
             await diagnostics.record(
                 .failed(
                     .loadBook,
@@ -3925,6 +3986,8 @@ final class AppModel {
                 overwrite: overwrite
             ) {
             case .saved(let detail):
+                bookDetailRefreshGeneration &+= 1
+                bookDetailRefreshState = .idle
                 selectedBookID = detail.id
                 bookDetail = .loaded(detail)
                 guard let coverJPEGData else {
@@ -3937,6 +4000,8 @@ final class AppModel {
                         detail: detail,
                         jpegData: coverJPEGData
                     )
+                    bookDetailRefreshGeneration &+= 1
+                    bookDetailRefreshState = .idle
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
                     bookEditSaveState = .saved
@@ -3993,6 +4058,8 @@ final class AppModel {
                 return
             }
             bookCoverRetryOperationID = nil
+            bookDetailRefreshGeneration &+= 1
+            bookDetailRefreshState = .idle
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
             bookEditSaveState = .coverSaved(updated)
@@ -6663,6 +6730,7 @@ final class AppModel {
         bookDetailGeneration &+= 1
         selectedBookID = nil
         bookDetail = .idle
+        bookDetailRefreshState = .idle
         bookBookmarks = .idle
         resetBookEditSaveState()
         bookDeletionState = .idle

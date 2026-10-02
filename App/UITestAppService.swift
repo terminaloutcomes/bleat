@@ -168,6 +168,7 @@
         private var firstPageRequests = 0
         private var homeShelfRequests = 0
         private var libraryRequests = 0
+        private var bookDetailRequests = 0
         private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> =
             []
 
@@ -783,6 +784,17 @@
             libraryID: LibraryID,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookDetail {
+            bookDetailRequests += 1
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-book-detail-refresh"
+            ), bookDetailRequests >= 2 {
+                try? await Task.sleep(for: .seconds(2))
+            }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-book-detail-refresh-failure"
+            ), bookDetailRequests >= 2 {
+                throw .bookDetail(.remote(.unexpectedStatus(503)))
+            }
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-slow-context-download"
             ) {
@@ -802,7 +814,11 @@
                 id: itemID,
                 libraryID: libraryID,
                 bookID: BookID(rawValue: "ui-book"),
-                title: Self.title(for: itemID),
+                title: ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-book-detail-refresh"
+                ) && bookDetailRequests >= 2
+                    ? "The Refreshed Book Detail"
+                    : Self.title(for: itemID),
                 subtitle: "A complete test story",
                 authors: [
                     LibraryBookContributor(

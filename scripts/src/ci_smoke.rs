@@ -1,4 +1,4 @@
-//! iOS smoke validation with Simulator startup concurrent with compilation.
+//! iOS app and smoke validation with Simulator startup concurrent with compilation.
 
 use std::error::Error;
 use std::fs;
@@ -12,6 +12,7 @@ pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const RESULT: &str = ".build/ci-smoke/results.xcresult";
 const DERIVED: &str = ".build/ci-smoke/derived";
+const APP_TESTS: &str = "BleatAppTests";
 const STARTUP: &str = "BleatUITests/BleatUITests/testLaunchingScreenDescribesStartupWork";
 const SIGNED_IN: &str = "BleatUITests/BleatUITests/testMiniPlayerIsAbsentBeforePlayback";
 
@@ -151,6 +152,7 @@ pub fn run() -> Result<()> {
             "NO",
             "-destination",
             &resolved_destination,
+            &format!("-only-testing:{APP_TESTS}"),
             &format!("-only-testing:{STARTUP}"),
             &format!("-only-testing:{SIGNED_IN}"),
             "build-for-testing",
@@ -165,8 +167,8 @@ pub fn run() -> Result<()> {
     println!("Build for testing completed in {build_seconds}s");
     boot_result?;
 
-    // Resolve the app path from the build settings used above, then verify the
-    // exact two smoke tests from the result bundle even if xcodebuild fails.
+    // Resolve the app path from the build settings used above, then verify
+    // both test targets from the result bundle even if xcodebuild fails.
     ensure_success(
         Command::new("xcrun")
             .args(["simctl", "install", &simulator_id, &app_path])
@@ -181,6 +183,7 @@ pub fn run() -> Result<()> {
             "NO",
             "-destination",
             &resolved_destination,
+            &format!("-only-testing:{APP_TESTS}"),
             &format!("-only-testing:{STARTUP}"),
             &format!("-only-testing:{SIGNED_IN}"),
             "-resultBundlePath",
@@ -219,9 +222,9 @@ pub fn run() -> Result<()> {
         &tests,
         &[
             "-e",
-            "[.. | objects | select(.nodeType == \"Test Case\")] as $tests | ($tests | length) == 2 and all($tests[]; .result == \"Passed\") and ([$tests[].name] | sort) == ([\"testLaunchingScreenDescribesStartupWork()\", \"testMiniPlayerIsAbsentBeforePlayback()\"] | sort)",
+            "[.. | objects | select(.nodeType == \"Test Case\")] as $tests | ($tests | length) > 2 and all($tests[]; .result == \"Passed\") and any(.. | objects; .name == \"BleatAppTests\") and ([\"testLaunchingScreenDescribesStartupWork()\", \"testMiniPlayerIsAbsentBeforePlayback()\"] - [$tests[].name] | length) == 0",
         ],
     )?;
     println!("{verification}");
-    ensure_success(test_status, "Smoke tests")
+    ensure_success(test_status, "iOS tests")
 }
