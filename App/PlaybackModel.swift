@@ -68,7 +68,7 @@ enum BookmarkState: Equatable, Sendable {
 }
 
 enum PlaybackSleepTimer: Equatable, Sendable {
-    case duration(Date)
+    case duration(ContinuousClock.Instant)
     case endOfChapter(Double)
 }
 
@@ -1606,15 +1606,11 @@ final class PlaybackModel {
             return
         }
         let seconds = max(minutes, 1) * 60
-        sleepTimer = .duration(
-            Date().addingTimeInterval(
-                TimeInterval(seconds)
-            )
-        )
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(seconds))
+        sleepTimer = .duration(deadline)
         sleepTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(
-                for: .seconds(Double(seconds))
-            )
+            try? await clock.sleep(until: deadline)
             guard !Task.isCancelled else {
                 return
             }

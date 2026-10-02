@@ -694,7 +694,7 @@ struct NowPlaying: View {
 
                         PlaybackSleepTimerMenu(
                             sourceID: ObjectIdentifier(playback),
-                            hasTimer: playback.sleepTimer != nil,
+                            timer: playback.sleepTimer,
                             canSetEndOfChapter:
                                 playback.canSetEndOfChapterSleepTimer,
                             onSetDuration: { minutes in
@@ -962,42 +962,87 @@ private struct PlaybackChapterPickerSheet: View {
 
 private struct PlaybackSleepTimerMenu: View, @MainActor Equatable {
     let sourceID: ObjectIdentifier
-    let hasTimer: Bool
+    let timer: PlaybackSleepTimer?
     let canSetEndOfChapter: Bool
     let onSetDuration: (Int?) -> Void
     let onSetEndOfChapter: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.sourceID == rhs.sourceID
-            && lhs.hasTimer == rhs.hasTimer
+            && lhs.timer == rhs.timer
             && lhs.canSetEndOfChapter == rhs.canSetEndOfChapter
     }
 
     var body: some View {
-        Menu {
-            ForEach([5, 10, 15, 30, 45, 60, 90, 120], id: \.self) {
-                minutes in
-                Button("\(minutes) minutes") {
-                    onSetDuration(minutes)
+        TimelineView(.periodic(from: .now, by: 15)) { _ in
+            let presentation = PlaybackSleepTimerPresentation(
+                timer: timer,
+                now: ContinuousClock().now
+            )
+            Menu {
+                ForEach([5, 10, 15, 30, 45, 60, 90, 120], id: \.self) {
+                    minutes in
+                    Button("\(minutes) minutes") {
+                        onSetDuration(minutes)
+                    }
                 }
-            }
-            if canSetEndOfChapter {
-                Button("End of Chapter") {
-                    onSetEndOfChapter()
+                if canSetEndOfChapter {
+                    Button("End of Chapter") {
+                        onSetEndOfChapter()
+                    }
                 }
-            }
-            if hasTimer {
-                Button("Cancel Timer", role: .destructive) {
-                    onSetDuration(nil)
+                if timer != nil {
+                    Button("Cancel Timer", role: .destructive) {
+                        onSetDuration(nil)
+                    }
                 }
-            }
-        } label: {
-            Image(systemName: hasTimer ? "moon.zzz.fill" : "moon.zzz")
+            } label: {
+                VStack(spacing: 0) {
+                    Image(
+                        systemName: timer == nil ? "moon.zzz" : "moon.zzz.fill"
+                    )
+                    if let badge = presentation.badge {
+                        Text(badge)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
+            }
+            .accessibilityLabel(timer == nil ? "Sleep Timer" : "Timer Set")
+            .accessibilityValue(presentation.accessibilityValue)
+            .accessibilityIdentifier("player.sleepTimer")
         }
-        .accessibilityLabel(hasTimer ? "Timer Set" : "Sleep Timer")
-        .accessibilityIdentifier("player.sleepTimer")
+    }
+}
+
+struct PlaybackSleepTimerPresentation {
+    let badge: String?
+    let accessibilityValue: String
+
+    init(timer: PlaybackSleepTimer?, now: ContinuousClock.Instant) {
+        switch timer {
+        case .none:
+            badge = nil
+            accessibilityValue = ""
+        case .duration(let deadline):
+            let duration = now.duration(to: deadline)
+            let remainingSeconds =
+                Double(duration.components.seconds)
+                + Double(duration.components.attoseconds) / 1e18
+            let minutes = max(
+                0,
+                Int(ceil(remainingSeconds / 60))
+            )
+            badge = "\(minutes)m"
+            accessibilityValue =
+                "\(minutes) minute\(minutes == 1 ? "" : "s") remaining"
+        case .endOfChapter:
+            badge = "End"
+            accessibilityValue = "End of chapter"
+        }
     }
 }
 

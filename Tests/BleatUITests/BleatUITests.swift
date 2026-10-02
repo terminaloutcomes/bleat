@@ -2692,6 +2692,16 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(fiveMinutes.exists)
         XCTAssertTrue(fiveMinutes.isHittable)
         fiveMinutes.tap()
+        XCTAssertEqual(sleepTimer.label, "Timer Set")
+        XCTAssertEqual(sleepTimer.value as? String, "5 minutes remaining")
+        XCTAssertTrue(sleepTimer.staticTexts["5m"].exists)
+
+        sleepTimer.tap()
+        let cancelTimer = app.collectionViews.buttons["Cancel Timer"].firstMatch
+        XCTAssertTrue(cancelTimer.waitForExistence(timeout: 3))
+        cancelTimer.tap()
+        XCTAssertEqual(sleepTimer.label, "Sleep Timer")
+        XCTAssertTrue((sleepTimer.value as? String ?? "").isEmpty)
 
         let bookmarks = app.buttons["player.bookmarks"]
         XCTAssertTrue(bookmarks.waitForExistence(timeout: 3))
