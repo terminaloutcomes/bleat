@@ -60,29 +60,21 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - name: Build and run smoke tests
+      - name: Build and run iOS tests
         run: |
           rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
           "$RUNNER_TEMP/bleat-ci-smoke"
-      - name: Run book detail race regressions
-        run: |
           set -euo pipefail
-          results=.build/ci-smoke/book-detail-races.xcresult
+          results=.build/ci-smoke/app-tests.xcresult
           xcodebuild -project Bleat.xcodeproj -scheme Bleat -configuration Debug \
             -derivedDataPath .build/ci-smoke/derived -enableCodeCoverage YES \
             -parallel-testing-enabled NO -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-            -only-testing:BleatAppTests/AppModelTests/testFailedRefreshDoesNotStrandPendingBookmarks \
-            -only-testing:BleatAppTests/AppModelTests/testCancelledRefreshDoesNotStrandPendingBookmarks \
-            -only-testing:BleatAppTests/AppModelTests/testCompletedSaveSupersedesPendingDetailRefresh \
+            -only-testing:BleatAppTests \
             -resultBundlePath "$results" test
           xcrun xcresulttool get test-results tests --path "$results" --format json |
             jq -e '[.. | objects | select(.nodeType == "Test Case")] as $tests |
-              ($tests | length) == 3 and all($tests[]; .result == "Passed") and
-              ([$tests[].name] | sort) == ([
-                "testFailedRefreshDoesNotStrandPendingBookmarks()",
-                "testCancelledRefreshDoesNotStrandPendingBookmarks()",
-                "testCompletedSaveSupersedesPendingDetailRefresh()"
-              ] | sort)'
+              ($tests | length) > 0 and all($tests[]; .result == "Passed") and
+              any(.. | objects; .name == "BleatAppTests")'
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
@@ -105,7 +97,7 @@ jobs:
           name: ios-smoke-results
           path: |
             .build/ci-smoke/results.xcresult
-            .build/ci-smoke/book-detail-races.xcresult
+            .build/ci-smoke/app-tests.xcresult
           retention-days: 7
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation
