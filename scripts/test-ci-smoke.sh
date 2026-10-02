@@ -14,10 +14,8 @@ typeset -a test_options
 test_options=(-enableCodeCoverage YES -parallel-testing-enabled NO)
 
 rm -rf "${result}"
-xcodebuild "${common[@]}" "${test_options[@]}" -destination "${destination}" -only-testing:"${startup}" \
-    -only-testing:"${signed_in}" build-for-testing
-
-# Resolve the same destination and product Xcode used for the successful build.
+# Resolve the destination and product before building, so Simulator boot can
+# proceed while Xcode compiles. Use Xcode's resolved device for both commands.
 app_settings="$(
     xcodebuild "${common[@]}" -destination "${destination}" -showBuildSettings -json \
         | jq -e '[.[] | select(.target == "BleatApp") | .buildSettings]
@@ -25,7 +23,37 @@ app_settings="$(
 )"
 simulator_id="$(print -r -- "${app_settings}" | jq -er '.TARGET_DEVICE_IDENTIFIER | select(type == "string" and length > 0)')"
 app_path="$(print -r -- "${app_settings}" | jq -er '.TARGET_BUILD_DIR + "/" + .FULL_PRODUCT_NAME')"
-xcrun simctl bootstatus "${simulator_id}" -b
+simulator_state="$(xcrun simctl list devices available --json \
+    | jq -er --arg id "${simulator_id}" '[.devices[][] | select(.udid == $id) | .state] | if length == 1 then .[0] else error("Expected one Simulator") end')"
+boot_pid=0
+cleanup_boot_waiter() {
+    if (( boot_pid > 0 )); then
+        kill "${boot_pid}" 2>/dev/null || true
+        wait "${boot_pid}" 2>/dev/null || true
+    fi
+}
+trap cleanup_boot_waiter EXIT
+(
+    started="$(date +%s)"
+    if [[ "${simulator_state}" == Shutdown ]]; then
+        xcrun simctl boot "${simulator_id}"
+    elif [[ "${simulator_state}" != Booted ]]; then
+        print -u2 "Simulator is in unexpected state: ${simulator_state}"
+        exit 1
+    fi
+    xcrun simctl bootstatus "${simulator_id}" -b
+    print "Simulator ready in $(( $(date +%s) - started ))s"
+) &
+boot_pid=$!
+
+build_started="$(date +%s)"
+xcodebuild "${common[@]}" "${test_options[@]}" -destination "platform=iOS Simulator,id=${simulator_id}" \
+    -only-testing:"${startup}" -only-testing:"${signed_in}" build-for-testing
+print "Build for testing completed in $(( $(date +%s) - build_started ))s"
+boot_status=0
+wait "${boot_pid}" || boot_status=$?
+boot_pid=0
+(( boot_status == 0 )) || exit "${boot_status}"
 xcrun simctl install "${simulator_id}" "${app_path}"
 
 test_status=0
