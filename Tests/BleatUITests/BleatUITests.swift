@@ -2082,6 +2082,63 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookDetailUsesPullToRefresh() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-book-detail-refresh"]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        let open = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+        open.tap()
+
+        let detail = app.descendants(matching: .any)["book.detail"]
+        let title = app.staticTexts["book.detail.title"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 3))
+        XCTAssertEqual(title.label, "The Test Audiobook")
+        XCTAssertFalse(app.buttons["book.detail.reload"].exists)
+
+        pullToRefresh(detail)
+        XCTAssertTrue(detail.exists)
+        XCTAssertTrue(
+            app.staticTexts["The Refreshed Book Detail"]
+                .waitForExistence(timeout: 5)
+        )
+    }
+
+    @MainActor
+    func testBookDetailRefreshFailureKeepsContentVisible() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-book-detail-refresh-failure"
+            ]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        let open = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(open.waitForExistence(timeout: 3))
+        open.tap()
+
+        let detail = app.descendants(matching: .any)["book.detail"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 3))
+        pullToRefresh(detail)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["book.detail.refreshError"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertEqual(
+            app.staticTexts["book.detail.title"].label,
+            "The Test Audiobook"
+        )
+        XCTAssertTrue(app.buttons["Try Again"].exists)
+    }
+
+    @MainActor
     func testHomeLoadingAndEmptyStatesUsePresentationIdentifiers() {
         let loadingApp = launch(scenario: "--ui-testing-home-loading")
         XCTAssertTrue(

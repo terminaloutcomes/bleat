@@ -14578,6 +14578,85 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testBookDetailRefreshUsesRemoteResultAndKeepsLoadedDetailOnFailure()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: book)
+        let updatedBook = fixtureBook(
+            id: book.id.rawValue,
+            title: "Updated Book",
+            libraryID: library.id
+        )
+        let updated = fixtureBookDetail(item: updatedBook)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            bookDetail: .success(detail)
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadBookDetail(book)
+
+        await service.setRefreshedBookDetail(.success(updated))
+        await model.refreshBookDetail(book)
+        XCTAssertEqual(model.bookDetail, .loaded(updated))
+        XCTAssertEqual(model.bookDetailRefreshState, .idle)
+
+        await service.setRefreshedBookDetail(
+            .failure(.bookDetail(.remote(.unexpectedStatus(503))))
+        )
+        await model.refreshBookDetail(book)
+        XCTAssertEqual(model.bookDetail, .loaded(updated))
+        guard case .failed(let failure) = model.bookDetailRefreshState else {
+            return XCTFail("Expected a typed refresh failure")
+        }
+        XCTAssertEqual(failure.operation, .loadBook)
+        XCTAssertEqual(failure.cause, .serverUnavailable)
+        let refreshRequests = await service.refreshedBookDetailRequests()
+        XCTAssertEqual(refreshRequests.count, 2)
+    }
+
+    func testBookDetailRefreshDoesNotReplaceNewSelection() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixturePage(libraryID: library.id).items[0]
+        let other = fixtureBook(
+            id: "other-book", title: "Other Book", libraryID: library.id
+        )
+        let detail = fixtureBookDetail(item: book)
+        let otherDetail = fixtureBookDetail(item: other)
+        let firstGate = AsyncGate()
+        await firstGate.release()
+        let refreshGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            firstPage: .success(fixturePage(libraryID: library.id)),
+            bookDetail: .success(detail)
+        )
+        await service.queueBookDetails(
+            [.success(detail), .success(detail), .success(otherDetail)],
+            gates: [firstGate, refreshGate]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        await model.loadBookDetail(book)
+
+        let refresh = Task { await model.refreshBookDetail(book) }
+        await refreshGate.waitUntilEntered()
+        XCTAssertEqual(model.bookDetail, .loaded(detail))
+        await model.loadBookDetail(other)
+        await refreshGate.release()
+        await refresh.value
+
+        XCTAssertEqual(model.bookDetail, .loaded(otherDetail))
+        XCTAssertEqual(model.bookDetailRefreshState, .idle)
+    }
+
     func testMetadataSaveForwardsDraftAndPublishesSuccess() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()

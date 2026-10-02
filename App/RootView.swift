@@ -3255,7 +3255,9 @@ private struct RefreshFailureBanner: View {
             )
             .foregroundStyle(.secondary)
             Spacer(minLength: 8)
-            Button("Try Again", action: retry)
+            if failure.allowsRetry {
+                Button("Try Again", action: retry)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(accessibilityIdentifier)
@@ -4629,6 +4631,14 @@ private struct BookDetailView: View {
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if case .failed(let failure) = model.bookDetailRefreshState {
+                    RefreshFailureBanner(
+                        failure: failure,
+                        accessibilityIdentifier: "book.detail.refreshError"
+                    ) {
+                        Task { await model.refreshBookDetail(book) }
+                    }
+                }
                 BookCoverView(
                     accountID: model.account?.id,
                     server: model.account?.server,
@@ -4779,6 +4789,9 @@ private struct BookDetailView: View {
             .padding()
         }
         .accessibilityIdentifier("book.detail")
+        .refreshable {
+            await model.refreshBookDetail(book)
+        }
     }
 
     @ViewBuilder
