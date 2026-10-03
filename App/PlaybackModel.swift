@@ -372,6 +372,13 @@ private struct CachedContinuationOperation: Equatable {
     var resumePlayback: Bool
 }
 
+private struct ActivePlaybackSessionClose {
+    let id = UUID()
+    let accountID: AccountID
+    let sessionID: PlaybackSessionID
+    let task: Task<Bool, Never>
+}
+
 @MainActor
 @Observable
 final class PlaybackModel {
@@ -404,7 +411,12 @@ final class PlaybackModel {
     private var activeAccount: ServerAccount?
     private var localAccountID: AccountID?
     private var preparingAccountID: AccountID?
-    private var preparation: AppPlaybackPreparation?
+    private var preparation: AppPlaybackPreparation? {
+        didSet {
+            activeSessionClose = nil
+        }
+    }
+    private var activeSessionClose: ActivePlaybackSessionClose?
     private var retainedRetryIdentity: RetainedPlaybackIdentity?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
@@ -2167,29 +2179,63 @@ final class PlaybackModel {
     }
 
     private func closeActiveSession() async {
-        guard let activeAccount,
-            let sessionID = preparation?.sessionID
-        else {
+        guard let close = activeSessionCloseTask() else {
             return
         }
-        try? await service.closePlayback(
-            for: activeAccount,
-            sessionID: sessionID
-        )
+        await finishActiveSessionClose(close)
     }
 
     private func closeActiveSessionWithoutWaiting() {
+        guard let close = activeSessionCloseTask() else {
+            return
+        }
+        Task { [weak self] in
+            await self?.finishActiveSessionClose(close)
+        }
+    }
+
+    private func activeSessionCloseTask() -> ActivePlaybackSessionClose? {
         guard let activeAccount,
             let sessionID = preparation?.sessionID
         else {
+            return nil
+        }
+        if let activeSessionClose,
+            activeSessionClose.accountID == activeAccount.id,
+            activeSessionClose.sessionID == sessionID
+        {
+            return activeSessionClose
+        }
+        let task = Task { [service] in
+            do {
+                try await service.closePlayback(
+                    for: activeAccount,
+                    sessionID: sessionID
+                )
+                return true
+            } catch {
+                return false
+            }
+        }
+        let close = ActivePlaybackSessionClose(
+            accountID: activeAccount.id,
+            sessionID: sessionID,
+            task: task
+        )
+        activeSessionClose = close
+        return close
+    }
+
+    private func finishActiveSessionClose(
+        _ close: ActivePlaybackSessionClose
+    ) async {
+        let succeeded = await close.task.value
+        guard !succeeded,
+            activeSessionClose?.id == close.id
+        else {
             return
         }
-        Task { [service] in
-            try? await service.closePlayback(
-                for: activeAccount,
-                sessionID: sessionID
-            )
-        }
+        activeSessionClose = nil
     }
 
     private func releaseAutomaticCachedPlaybackWindow() {
