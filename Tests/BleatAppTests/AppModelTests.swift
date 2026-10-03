@@ -9053,6 +9053,50 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testSleepTimerPresentationShowsRemainingDurationAndChapterEnd() {
+        let now = ContinuousClock().now
+        let deadline = now.advanced(by: .seconds(300))
+
+        let inactive = PlaybackSleepTimerPresentation(timer: nil, now: now)
+        XCTAssertNil(inactive.badge)
+        XCTAssertEqual(inactive.accessibilityValue, "")
+
+        let active = PlaybackSleepTimerPresentation(
+            timer: .duration(deadline),
+            now: now
+        )
+        XCTAssertEqual(active.badge, "5m")
+        XCTAssertEqual(active.accessibilityValue, "5 minutes remaining")
+
+        let remaining = PlaybackSleepTimerPresentation(
+            timer: .duration(deadline),
+            now: now.advanced(by: .seconds(61))
+        )
+        XCTAssertEqual(remaining.badge, "4m")
+        XCTAssertEqual(remaining.accessibilityValue, "4 minutes remaining")
+
+        let expired = PlaybackSleepTimerPresentation(
+            timer: .duration(deadline),
+            now: deadline.advanced(by: .seconds(1))
+        )
+        XCTAssertEqual(expired.badge, "0m")
+        XCTAssertEqual(expired.accessibilityValue, "0 minutes remaining")
+
+        let finalMinute = PlaybackSleepTimerPresentation(
+            timer: .duration(deadline),
+            now: deadline.advanced(by: .seconds(-30))
+        )
+        XCTAssertEqual(finalMinute.badge, "1m")
+        XCTAssertEqual(finalMinute.accessibilityValue, "1 minute remaining")
+
+        let chapterEnd = PlaybackSleepTimerPresentation(
+            timer: .endOfChapter(130),
+            now: now
+        )
+        XCTAssertEqual(chapterEnd.badge, "End")
+        XCTAssertEqual(chapterEnd.accessibilityValue, "End of chapter")
+    }
+
     func testPlaybackObservationRequiresReadyAdvancingPlayback() {
         XCTAssertEqual(
             PlaybackObservationDecision.decide(
