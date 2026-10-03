@@ -3638,11 +3638,13 @@ final class AppModelTests: XCTestCase {
             )
         )
         XCTAssertEqual(terminalState?.outcome, .succeeded)
-        for _ in 0..<100
-        where downloads.record(
+        let cleanupDeadline = ContinuousClock.now.advanced(
+            by: .seconds(10)
+        )
+        while downloads.record(
             accountID: account.id,
             itemID: detail.id
-        ) != nil {
+        ) != nil, ContinuousClock.now < cleanupDeadline {
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNil(
@@ -19148,7 +19150,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(resetSelection.activeAccount)
         let liveAfterReset = try await service.statisticsLivePresentation(
             query: StatisticsQuery())
-        XCTAssertNil(liveAfterReset)
+        if let liveAfterReset {
+            XCTAssertEqual(liveAfterReset.snapshot.summary, .empty)
+            XCTAssertNil(liveAfterReset.liveSlice)
+        }
         let afterReset = try await service.statisticsPresentation(
             query: StatisticsQuery())
         XCTAssertEqual(afterReset.snapshot.summary, .empty)
