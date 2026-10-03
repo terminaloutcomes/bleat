@@ -277,13 +277,16 @@ final class PrivateCloudDefaultsReference: @unchecked Sendable {
 public struct PrivateCloudSyncFailure: Error, Equatable, Sendable {
     public let operation: PrivateCloudSyncOperation
     public let cause: PrivateCloudSyncError
+    public let selectionCommitted: Bool
 
     public init(
         operation: PrivateCloudSyncOperation,
-        cause: PrivateCloudSyncError
+        cause: PrivateCloudSyncError,
+        selectionCommitted: Bool = false
     ) {
         self.operation = operation
         self.cause = cause
+        self.selectionCommitted = selectionCommitted
     }
 }
 
@@ -1587,7 +1590,18 @@ actor PrivateCloudSyncStore {
             persistPendingAccountChanges()
             throw PrivateCloudSyncError.persistenceFailed
         }
-        return try prepareAccountRecord(change.incoming, zoneID: zoneID)
+        do {
+            return try prepareAccountRecord(change.incoming, zoneID: zoneID)
+        } catch {
+            throw PrivateCloudSyncFailure(
+                operation: .resolveServerConfiguration,
+                cause: PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .resolveServerConfiguration,
+                    error: error
+                ).cause,
+                selectionCommitted: true
+            )
+        }
     }
 
     func rejectServerConfigurationChange(
@@ -2999,18 +3013,30 @@ public final class PrivateCloudSyncCoordinator:
             guard let record else {
                 return
             }
-            let engine = try configuredEngine()
-            engine.state.add(
-                pendingRecordZoneChanges: [
-                    .saveRecord(record.recordID)
-                ]
-            )
-            try await sendRecordChanges(
-                engine: engine,
-                CKSyncEngine.SendChangesOptions(
-                    scope: .recordIDs([record.recordID])
+            do {
+                let engine = try configuredEngine()
+                engine.state.add(
+                    pendingRecordZoneChanges: [
+                        .saveRecord(record.recordID)
+                    ]
                 )
-            )
+                try await sendRecordChanges(
+                    engine: engine,
+                    CKSyncEngine.SendChangesOptions(
+                        scope: .recordIDs([record.recordID])
+                    )
+                )
+            } catch {
+                let failure = Self.mappedFailure(
+                    operation: .resolveServerConfiguration,
+                    error: error
+                )
+                throw PrivateCloudSyncFailure(
+                    operation: failure.operation,
+                    cause: failure.cause,
+                    selectionCommitted: accept
+                )
+            }
         }
     }
 
@@ -3300,10 +3326,7 @@ public final class PrivateCloudSyncCoordinator:
                 error: error
             )
             await recordFailure(
-                PrivateCloudSyncFailure(
-                    operation: operation,
-                    cause: failure.cause
-                ),
+                failure,
                 correlationID: correlationID,
                 startedAt: startedAt,
                 recordCount: failureRecordCount

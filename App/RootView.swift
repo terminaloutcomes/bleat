@@ -72,6 +72,7 @@ struct RootView: View {
     @State private var navigation = AppNavigationCoordinator()
     @State private var deepLinkInbox = AppDeepLinkInbox.shared
     @State private var isShowingDiagnostics = false
+    @State private var cloudAccountSelectionFailure: AppFailure?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -207,19 +208,48 @@ struct RootView: View {
         .sheet(
             isPresented: Binding(
                 get: {
-                    !model.pendingCloudServerConfigurationChanges.isEmpty
+                    !model.cloudAccountSelectionDeferred
+                        && !model.pendingCloudServerConfigurationChanges.isEmpty
                 },
-                set: { _ in }
+                set: { isPresented in
+                    if !isPresented,
+                        !model.pendingCloudServerConfigurationChanges.isEmpty
+                    {
+                        model.deferCloudAccountSelection()
+                    }
+                }
             )
         ) {
             CloudAccountSelectionView(
                 candidates: model.pendingCloudServerConfigurationChanges,
                 onSelect: { selected in
-                    await model.resolveCloudServerConfigurationSelection(
+                    let failure = await model.resolveCloudServerConfigurationSelection(
                         selected
                     )
+                    if model.pendingCloudServerConfigurationChanges.isEmpty {
+                        cloudAccountSelectionFailure = failure
+                    }
+                    return failure
+                },
+                onCancel: {
+                    model.deferCloudAccountSelection()
                 }
             )
+        }
+        .alert(
+            "Cannot Restore iCloud Account",
+            isPresented: Binding(
+                get: { cloudAccountSelectionFailure != nil },
+                set: { isPresented in
+                    if !isPresented { cloudAccountSelectionFailure = nil }
+                }
+            )
+        ) {
+            Button("OK") { cloudAccountSelectionFailure = nil }
+        } message: {
+            if let failure = cloudAccountSelectionFailure {
+                Text(failure.message)
+            }
         }
         .sheet(
             item: Binding(
@@ -270,9 +300,11 @@ struct RootView: View {
 
 private struct CloudAccountSelectionView: View {
     let candidates: [CloudServerConfigurationChange]
-    let onSelect: (CloudServerConfigurationChange) async -> Void
+    let onSelect: (CloudServerConfigurationChange) async -> AppFailure?
+    let onCancel: () -> Void
     @State private var selectedIndex: Int?
     @State private var isSaving = false
+    @State private var selectionFailure: AppFailure?
 
     var body: some View {
         NavigationStack {
@@ -305,9 +337,26 @@ private struct CloudAccountSelectionView: View {
                         )
                     }
                 }
+                .disabled(isSaving)
+
+                if let selectionFailure {
+                    Section {
+                        Label(
+                            selectionFailure.message,
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("icloud.accountSelection.error")
+                    }
+                }
             }
             .navigationTitle("Accounts from iCloud")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                        .disabled(isSaving)
+                        .accessibilityIdentifier("icloud.accountSelection.cancel")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Use Selected") {
                         guard let selectedIndex,
@@ -315,9 +364,17 @@ private struct CloudAccountSelectionView: View {
                         else { return }
                         let selected = candidates[selectedIndex]
                         isSaving = true
-                        Task { await onSelect(selected) }
+                        selectionFailure = nil
+                        Task {
+                            selectionFailure = await onSelect(selected)
+                            isSaving = false
+                        }
                     }
-                    .disabled(selectedIndex == nil || isSaving)
+                    .disabled(
+                        selectedIndex == nil || isSaving
+                            || selectionFailure?.allowsRetry == false
+                    )
+                    .accessibilityIdentifier("icloud.accountSelection.useSelected")
                 }
             }
         }

@@ -1538,6 +1538,7 @@ final class AppModel {
     private(set) var canCancelPrivateCloudSynchronization = false
     private(set) var pendingCloudServerConfigurationChanges:
         [CloudServerConfigurationChange] = []
+    private(set) var cloudAccountSelectionDeferred = false
     private(set) var pendingCloudConfigurationConflict:
         CloudConfigurationConflict?
     private(set) var remoteTelemetryEnabled: Bool
@@ -5799,7 +5800,7 @@ final class AppModel {
 
     func resolveCloudServerConfigurationSelection(
         _ selected: CloudServerConfigurationChange
-    ) async {
+    ) async -> AppFailure? {
         let candidates = pendingCloudServerConfigurationChanges
         privateCloudState = .syncing
         do {
@@ -5828,14 +5829,25 @@ final class AppModel {
             phase = .launching
             launchStage = initialLaunchStage
             await start()
+            return nil
         } catch let error {
-            privateCloudState = .failed(
-                AppFailure(
-                    operation: .privateCloudSync,
-                    serviceError: error
-                )
+            let failure = AppFailure(
+                operation: .privateCloudSync,
+                serviceError: error
             )
+            if case .privateCloud(let cloudFailure) = failure.cause,
+                cloudFailure.selectionCommitted
+            {
+                pendingCloudServerConfigurationChanges.removeAll()
+                cloudAccountRestoreState = .awaitingCredentials(selected.id)
+            }
+            privateCloudState = .failed(failure)
+            return failure
         }
+    }
+
+    func deferCloudAccountSelection() {
+        cloudAccountSelectionDeferred = true
     }
 
     func resolveCloudConfigurationConflict(

@@ -59,6 +59,133 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testCloudAccountSelectionCancelDefersUntilNextLaunch() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-cloud-account-selection"]
+        )
+        let cancel = app.buttons["icloud.accountSelection.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        cancel.tap()
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["app.signedIn"].exists)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCloudAccountSelectionSwipeDefersUntilNextLaunch() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-cloud-account-selection"]
+        )
+        let cancel = app.buttons["icloud.accountSelection.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        let sheet = app.navigationBars["Accounts from iCloud"]
+        XCTAssertTrue(sheet.exists)
+        let start = sheet.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        )
+        let end = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)
+        )
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 3))
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCloudAccountSelectionFailureShowsErrorAndAllowsRetry() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-account-selection",
+                "--ui-testing-cloud-selection-fail-once",
+            ]
+        )
+        let candidate = app.buttons["icloud.accountCandidate.ui-account"]
+        XCTAssertTrue(candidate.waitForExistence(timeout: 10))
+        candidate.tap()
+        let useSelected = app.buttons["icloud.accountSelection.useSelected"]
+        useSelected.tap()
+        let error = app.descendants(matching: .any)[
+            "icloud.accountSelection.error"
+        ]
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(useSelected.isEnabled)
+        useSelected.tap()
+        XCTAssertTrue(useSelected.waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCloudAccountSelectionNonretryableFailureCanBeDismissed() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-account-selection",
+                "--ui-testing-cloud-selection-nonretryable",
+            ]
+        )
+        let candidate = app.buttons["icloud.accountCandidate.ui-account"]
+        XCTAssertTrue(candidate.waitForExistence(timeout: 10))
+        candidate.tap()
+        let useSelected = app.buttons["icloud.accountSelection.useSelected"]
+        useSelected.tap()
+        let error = app.descendants(matching: .any)[
+            "icloud.accountSelection.error"
+        ]
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertFalse(useSelected.isEnabled)
+        let cancel = app.buttons["icloud.accountSelection.cancel"]
+        XCTAssertTrue(cancel.isEnabled)
+        cancel.tap()
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testCloudAccountSelectionPostCommitFailureShowsAlert() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-account-selection",
+                "--ui-testing-cloud-auth-failure",
+            ]
+        )
+        let candidate = app.buttons["icloud.accountCandidate.ui-account"]
+        XCTAssertTrue(candidate.waitForExistence(timeout: 10))
+        candidate.tap()
+        app.buttons["icloud.accountSelection.useSelected"].tap()
+        let alert = app.alerts["Cannot Restore iCloud Account"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["icloud.accountSelection.cancel"].exists)
+        alert.buttons["OK"].tap()
+    }
+
+    @MainActor
+    func testCloudAccountSelectionCommittedSendFailureClosesChoiceAndShowsAlert() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-account-selection",
+                "--ui-testing-cloud-selection-send-failure",
+            ]
+        )
+        let candidate = app.buttons["icloud.accountCandidate.ui-account"]
+        XCTAssertTrue(candidate.waitForExistence(timeout: 10))
+        candidate.tap()
+        app.buttons["icloud.accountSelection.useSelected"].tap()
+        let alert = app.alerts["Cannot Restore iCloud Account"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["icloud.accountSelection.useSelected"].exists)
+        alert.buttons["OK"].tap()
+    }
+
+    @MainActor
     func testLoginExposesOpenIDSetupGuide() {
         let app = launch(scenario: "--ui-testing-openid")
         let server = app.textFields["login.server"]

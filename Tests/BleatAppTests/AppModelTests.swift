@@ -12335,6 +12335,190 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(resolutions[0].accept)
     }
 
+    func testCloudAccountSelectionFailureRetainsCandidatesAndCanRetry()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let change = CloudServerConfigurationChange(
+            current: current,
+            incoming: incoming
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [change],
+            privateCloudSelectionResults: [
+                .failure(.privateCloud(PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .persistenceFailed
+                ))),
+                .success(()),
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+
+        let failure = await model.resolveCloudServerConfigurationSelection(
+            change
+        )
+        guard let failure else {
+            return XCTFail("Expected selection failure")
+        }
+        XCTAssertEqual(model.pendingCloudServerConfigurationChanges, [change])
+        XCTAssertEqual(model.privateCloudState, .failed(failure))
+
+        let retryFailure = await model.resolveCloudServerConfigurationSelection(
+            change
+        )
+        XCTAssertNil(retryFailure)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+    }
+
+    func testCloudAccountSelectionDeferralIsSharedByViewsForOneLaunch()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let change = CloudServerConfigurationChange(
+            current: current,
+            incoming: incoming
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [change]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+
+        model.deferCloudAccountSelection()
+        XCTAssertTrue(model.cloudAccountSelectionDeferred)
+        XCTAssertEqual(model.pendingCloudServerConfigurationChanges, [change])
+
+        let nextLaunch = AppModel(service: service)
+        XCTAssertFalse(nextLaunch.cloudAccountSelectionDeferred)
+    }
+
+    func testCloudAccountSelectionSendFailureAfterCommitCannotRetryChoice()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let change = CloudServerConfigurationChange(
+            current: current,
+            incoming: incoming
+        )
+        let committedFailure = PrivateCloudSyncFailure(
+            operation: .resolveServerConfiguration,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure))),
+            selectionCommitted: true
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [change],
+            privateCloudSelectionResults: [
+                .failure(.privateCloud(committedFailure))
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+
+        let failure = await model.resolveCloudServerConfigurationSelection(
+            change
+        )
+        guard let failure else {
+            return XCTFail("Expected a committed selection failure")
+        }
+        XCTAssertEqual(failure.cause, .privateCloud(committedFailure))
+        XCTAssertTrue(failure.allowsRetry)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        XCTAssertEqual(
+            model.cloudAccountRestoreState,
+            .awaitingCredentials(change.id)
+        )
+        XCTAssertEqual(model.privateCloudState, .failed(failure))
+    }
+
+    func testCloudAccountSelectionAuthenticationFailureRemainsVisibleAfterCommit()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try ServerAccount(
+            id: current.id,
+            server: NormalizedServerURL("https://incoming.example"),
+            localServer: nil,
+            localServerValidated: false,
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user
+        )
+        let change = CloudServerConfigurationChange(
+            current: current,
+            incoming: incoming
+        )
+        let service = TestAppService(
+            activeAccount: .success(current),
+            privateCloudSyncChanges: [change],
+            cloudAuthenticationResult: .failure(.privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .persistenceFailed
+                )
+            ))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+
+        let failure = await model.resolveCloudServerConfigurationSelection(
+            change
+        )
+        XCTAssertNotNil(failure)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        guard case .failed(let presented) = model.privateCloudState else {
+            return XCTFail("Expected a typed iCloud failure after selection")
+        }
+        XCTAssertEqual(presented, failure)
+    }
+
     func testFreshInstallCloudRestoreShowsSingleFlightAndEmptyResult()
         async throws
     {
@@ -21615,6 +21799,10 @@ private actor TestAppService: AppServicing {
     private var privateCloudSyncEnabled = true
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
+    private var privateCloudSelectionResults:
+        [Result<Void, AppServiceError>]
+    private let cloudAuthenticationResult:
+        Result<ServerAccount?, AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
@@ -21844,6 +22032,10 @@ private actor TestAppService: AppServicing {
         privateCloudConfigurationConflict: CloudConfigurationConflict? = nil,
         privateCloudSyncResult:
             Result<[CloudServerConfigurationChange], AppServiceError>? = nil,
+        privateCloudSelectionResults:
+            [Result<Void, AppServiceError>] = [],
+        cloudAuthenticationResult:
+            Result<ServerAccount?, AppServiceError> = .success(nil),
         endpointDiagnostics: AppEndpointDiagnostics? = nil
     ) {
         accountsResult = accounts
@@ -21916,6 +22108,8 @@ private actor TestAppService: AppServicing {
         self.privateCloudSyncResult =
             privateCloudSyncResult
             ?? .success(privateCloudSyncChanges)
+        self.privateCloudSelectionResults = privateCloudSelectionResults
+        self.cloudAuthenticationResult = cloudAuthenticationResult
         self.privateCloudConfigurationConflict =
             privateCloudConfigurationConflict
         configuredEndpointDiagnostics = endpointDiagnostics
@@ -22247,6 +22441,24 @@ private actor TestAppService: AppServicing {
             changes.removeAll { $0.id == accountID }
             privateCloudSyncResult = .success(changes)
         }
+    }
+
+    func resolvePrivateCloudServerConfigurationSelection(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) {
+        if !privateCloudSelectionResults.isEmpty {
+            try value(from: privateCloudSelectionResults.removeFirst())
+        }
+        try await resolvePrivateCloudServerConfigurationChange(
+            accountID: account.id,
+            accept: true
+        )
+    }
+
+    func authenticateRestoredAccountUsingSynchronizedCredential(
+        _ account: ServerAccount
+    ) async throws(AppServiceError) -> ServerAccount? {
+        try value(from: cloudAuthenticationResult)
     }
 
     func forcedCloudAccounts() -> [ServerAccount] {

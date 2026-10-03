@@ -175,6 +175,8 @@
         private var homeShelfRequests = 0
         private var libraryRequests = 0
         private var bookDetailRequests = 0
+        private var cloudSelectionAttempts = 0
+        private var cloudSelectionResolved = false
         private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> =
             []
 
@@ -298,6 +300,88 @@
 
         private var isSignedInScenario: Bool {
             scenario.isSignedIn
+        }
+
+        func synchronizePrivateCloud() async throws(AppServiceError)
+            -> [CloudServerConfigurationChange]
+        {
+            guard ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-cloud-account-selection"
+            ), !cloudSelectionResolved else { return [] }
+            let current: ServerAccount
+            switch accountResult {
+            case .success(let account):
+                current = account
+            case .failure(let error):
+                throw error
+            }
+            let incoming: ServerAccount
+            do {
+                incoming = try ServerAccount(
+                    id: current.id,
+                    server: NormalizedServerURL(
+                        "https://incoming-books.example"
+                    ),
+                    localServer: current.localServer,
+                    localServerValidated: current.localServerValidated,
+                    serverVersion: current.serverVersion,
+                    authenticationMethods: current.authenticationMethods,
+                    user: current.user
+                )
+            } catch {
+                throw .accountStore(.persistenceFailed)
+            }
+            return [CloudServerConfigurationChange(
+                current: current,
+                incoming: incoming
+            )]
+        }
+
+        func resolvePrivateCloudServerConfigurationSelection(
+            _ account: ServerAccount
+        ) async throws(AppServiceError) {
+            cloudSelectionAttempts += 1
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-cloud-selection-send-failure"
+            ) {
+                cloudSelectionResolved = true
+                throw .privateCloud(PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .persistenceFailed,
+                    selectionCommitted: true
+                ))
+            }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-cloud-selection-nonretryable"
+            ) {
+                throw .privateCloud(PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .disabled
+                ))
+            }
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-cloud-selection-fail-once"
+            ), cloudSelectionAttempts == 1 {
+                throw .privateCloud(PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .persistenceFailed
+                ))
+            }
+            cloudSelectionResolved = true
+        }
+
+        func authenticateRestoredAccountUsingSynchronizedCredential(
+            _ account: ServerAccount
+        ) async throws(AppServiceError) -> ServerAccount? {
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-cloud-auth-failure"
+            ) {
+                throw .privateCloud(PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .persistenceFailed
+                ))
+            }
+            return nil
         }
 
         private var statisticsFixture: StatisticsRepository?
