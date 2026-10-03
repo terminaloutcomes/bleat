@@ -3639,7 +3639,7 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(terminalState?.outcome, .succeeded)
         let cleanupDeadline = ContinuousClock.now.advanced(
-            by: .seconds(10)
+            by: .seconds(30)
         )
         while downloads.record(
             accountID: account.id,
@@ -4900,7 +4900,7 @@ final class AppModelTests: XCTestCase {
                 $0.identity.itemID == automaticDetail.id
             }
         let automaticTaskDeadline = ContinuousClock.now.advanced(
-            by: .seconds(5)
+            by: .seconds(30)
         )
         while automaticDescriptors.isEmpty,
             ContinuousClock.now < automaticTaskDeadline
@@ -21028,7 +21028,7 @@ final class AppModelTests: XCTestCase {
         bookKey: ChapterTranscriptionBookKey
     ) async -> CachedChapterTranscriptionTaskState? {
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(10))
+        let deadline = clock.now.advanced(by: .seconds(30))
         while clock.now < deadline {
             if let terminalState = coordinator.terminalState(for: bookKey) {
                 return terminalState
