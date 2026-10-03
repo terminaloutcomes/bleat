@@ -167,7 +167,9 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testCloudAccountSelectionCommittedSendFailureClosesChoiceAndShowsAlert() {
+    func
+        testCloudAccountSelectionCommittedSendFailureClosesChoiceAndShowsAlert()
+    {
         let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: [
@@ -181,7 +183,8 @@ final class BleatUITests: XCTestCase {
         app.buttons["icloud.accountSelection.useSelected"].tap()
         let alert = app.alerts["Cannot Restore iCloud Account"]
         XCTAssertTrue(alert.waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["icloud.accountSelection.useSelected"].exists)
+        XCTAssertFalse(
+            app.buttons["icloud.accountSelection.useSelected"].exists)
         alert.buttons["OK"].tap()
     }
 

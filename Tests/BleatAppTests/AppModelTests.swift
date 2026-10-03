@@ -12356,10 +12356,12 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(current),
             privateCloudSyncChanges: [change],
             privateCloudSelectionResults: [
-                .failure(.privateCloud(PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .persistenceFailed
-                ))),
+                .failure(
+                    .privateCloud(
+                        PrivateCloudSyncFailure(
+                            operation: .resolveServerConfiguration,
+                            cause: .persistenceFailed
+                        ))),
                 .success(()),
             ]
         )
@@ -12474,7 +12476,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.privateCloudState, .failed(failure))
     }
 
-    func testCloudAccountSelectionAuthenticationFailureRemainsVisibleAfterCommit()
+    func
+        testCloudAccountSelectionAuthenticationFailureRemainsVisibleAfterCommit()
         async throws
     {
         let current = try fixtureAccount()
@@ -12494,12 +12497,13 @@ final class AppModelTests: XCTestCase {
         let service = TestAppService(
             activeAccount: .success(current),
             privateCloudSyncChanges: [change],
-            cloudAuthenticationResult: .failure(.privateCloud(
-                PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .persistenceFailed
-                )
-            ))
+            cloudAuthenticationResult: .failure(
+                .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .persistenceFailed
+                    )
+                ))
         )
         let model = AppModel(service: service)
         await model.start()
@@ -21799,8 +21803,7 @@ private actor TestAppService: AppServicing {
     private var privateCloudSyncEnabled = true
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
-    private var privateCloudSelectionResults:
-        [Result<Void, AppServiceError>]
+    private var privateCloudSelectionResults: [Result<Void, AppServiceError>]
     private let cloudAuthenticationResult:
         Result<ServerAccount?, AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?

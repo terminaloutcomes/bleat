@@ -223,9 +223,10 @@ struct RootView: View {
             CloudAccountSelectionView(
                 candidates: model.pendingCloudServerConfigurationChanges,
                 onSelect: { selected in
-                    let failure = await model.resolveCloudServerConfigurationSelection(
-                        selected
-                    )
+                    let failure =
+                        await model.resolveCloudServerConfigurationSelection(
+                            selected
+                        )
                     if model.pendingCloudServerConfigurationChanges.isEmpty {
                         cloudAccountSelectionFailure = failure
                     }
@@ -346,7 +347,8 @@ private struct CloudAccountSelectionView: View {
                             systemImage: "exclamationmark.triangle"
                         )
                         .foregroundStyle(.red)
-                        .accessibilityIdentifier("icloud.accountSelection.error")
+                        .accessibilityIdentifier(
+                            "icloud.accountSelection.error")
                     }
                 }
             }
@@ -355,7 +357,8 @@ private struct CloudAccountSelectionView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                         .disabled(isSaving)
-                        .accessibilityIdentifier("icloud.accountSelection.cancel")
+                        .accessibilityIdentifier(
+                            "icloud.accountSelection.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Use Selected") {
@@ -374,7 +377,8 @@ private struct CloudAccountSelectionView: View {
                         selectedIndex == nil || isSaving
                             || selectionFailure?.allowsRetry == false
                     )
-                    .accessibilityIdentifier("icloud.accountSelection.useSelected")
+                    .accessibilityIdentifier(
+                        "icloud.accountSelection.useSelected")
                 }
             }
         }

@@ -305,9 +305,11 @@
         func synchronizePrivateCloud() async throws(AppServiceError)
             -> [CloudServerConfigurationChange]
         {
-            guard ProcessInfo.processInfo.arguments.contains(
-                "--ui-testing-cloud-account-selection"
-            ), !cloudSelectionResolved else { return [] }
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-cloud-account-selection"
+                ), !cloudSelectionResolved
+            else { return [] }
             let current: ServerAccount
             switch accountResult {
             case .success(let account):
@@ -331,10 +333,12 @@
             } catch {
                 throw .accountStore(.persistenceFailed)
             }
-            return [CloudServerConfigurationChange(
-                current: current,
-                incoming: incoming
-            )]
+            return [
+                CloudServerConfigurationChange(
+                    current: current,
+                    incoming: incoming
+                )
+            ]
         }
 
         func resolvePrivateCloudServerConfigurationSelection(
@@ -345,27 +349,30 @@
                 "--ui-testing-cloud-selection-send-failure"
             ) {
                 cloudSelectionResolved = true
-                throw .privateCloud(PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .persistenceFailed,
-                    selectionCommitted: true
-                ))
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .persistenceFailed,
+                        selectionCommitted: true
+                    ))
             }
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-cloud-selection-nonretryable"
             ) {
-                throw .privateCloud(PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .disabled
-                ))
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .disabled
+                    ))
             }
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-cloud-selection-fail-once"
             ), cloudSelectionAttempts == 1 {
-                throw .privateCloud(PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .persistenceFailed
-                ))
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .persistenceFailed
+                    ))
             }
             cloudSelectionResolved = true
         }
@@ -376,10 +383,11 @@
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-cloud-auth-failure"
             ) {
-                throw .privateCloud(PrivateCloudSyncFailure(
-                    operation: .resolveServerConfiguration,
-                    cause: .persistenceFailed
-                ))
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .persistenceFailed
+                    ))
             }
             return nil
         }
