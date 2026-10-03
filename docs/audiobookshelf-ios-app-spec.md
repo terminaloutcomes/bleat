@@ -419,6 +419,11 @@ A persistent mini-player appears in a rounded material bar above the signed-in
 tab bar when a book is loaded, leaving every tab unobstructed. Tapping it or
 swiping upward opens the full player. Swiping it downward stops playback and
 dismisses it, whether it is playing or paused.
+If playback fails after a book has loaded, the mini-player remains available.
+Now Playing explains the typed failure and offers Retry, which prepares playback
+again at the current position, and Cancel, which stops and clears the session.
+Removing the book or its account stops failed playback and supersedes any
+retry in progress.
 
 ### 5.4 Scene-local deep links
 

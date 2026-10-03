@@ -149,6 +149,14 @@ struct RootView: View {
             }
             .overlay(alignment: .topTrailing) {
                 if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-loaded-playback-failure"
+                ), model.playback.hasActiveBook {
+                    Button("Fail Playback") {
+                        model.playback.fail(.mediaUnavailable)
+                    }
+                    .accessibilityIdentifier("testing.playback.fail")
+                }
+                if ProcessInfo.processInfo.arguments.contains(
                     "--ui-testing-delayed-playback-sync"
                 ), UITestPlaybackSyncGate.shared.state == .waiting {
                     Button("Complete Sync") {
@@ -1029,7 +1037,10 @@ private struct OfflineDownloadsSheet: View {
                 }
         }
         .sheet(isPresented: $showPlayer) {
-            NowPlaying(playback: model.playback)
+            NowPlaying(
+                playback: model.playback,
+                retryPlayback: { await model.retryFailedPlayback() }
+            )
         }
     }
 
@@ -1574,7 +1585,10 @@ private struct SignedInView: View {
                 let libraryID = model.playback.libraryID,
                 let itemID = model.playback.itemID
             {
-                NowPlaying(playback: model.playback) {
+                NowPlaying(
+                    playback: model.playback,
+                    retryPlayback: { await model.retryFailedPlayback() }
+                ) {
                     openPlayingBook(
                         accountID: accountID,
                         libraryID: libraryID,
@@ -1582,7 +1596,10 @@ private struct SignedInView: View {
                     )
                 }
             } else {
-                NowPlaying(playback: model.playback)
+                NowPlaying(
+                    playback: model.playback,
+                    retryPlayback: { await model.retryFailedPlayback() }
+                )
             }
 
         }

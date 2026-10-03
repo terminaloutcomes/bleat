@@ -312,7 +312,10 @@ struct MiniPlayerView: View {
                 .accessibilityIdentifier("player.mini.open")
                 .simultaneousGesture(miniPlayerGesture)
 
-                if playback.state == .preparing {
+                if case .failed = playback.state {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .accessibilityLabel("Playback failed")
+                } else if playback.state == .preparing {
                     ProgressView()
                         .accessibilityIdentifier("player.preparing")
                 } else {
@@ -414,17 +417,28 @@ struct MiniPlayerView: View {
 struct NowPlaying: View {
     @Bindable var playback: PlaybackModel
     let openBook: (() -> Void)?
+    let retryPlayback: @MainActor () async -> PlaybackStartOutcome
     @Environment(\.dismiss) private var dismiss
     @State private var bookmarkDraft: BookmarkDraft?
+    @State private var isRetrying = false
 
     @ColourSchemePreference private var colourScheme
 
     init(
         playback: PlaybackModel,
+        retryPlayback: @escaping @MainActor () async -> PlaybackStartOutcome,
         openBook: (() -> Void)? = nil
     ) {
         self.playback = playback
+        self.retryPlayback = retryPlayback
         self.openBook = openBook
+    }
+
+    private var failureToPresent: AppFailure? {
+        guard case .failed(let failure) = playback.state else {
+            return nil
+        }
+        return failure
     }
 
     var body: some View {
@@ -474,11 +488,34 @@ struct NowPlaying: View {
 
                     PlaybackScrubberView(playback: playback)
 
-                    if case .failed(let failure) = playback.state {
-                        Text(failure.message)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                            .accessibilityIdentifier("player.error")
+                    if let failure = failureToPresent {
+                        VStack(spacing: 12) {
+                            Text(failure.title)
+                                .font(.headline)
+                            Text(failure.message)
+                                .multilineTextAlignment(.center)
+                                .accessibilityIdentifier("player.error")
+                            HStack {
+                                Button("Retry") {
+                                    isRetrying = true
+                                    Task {
+                                        _ = await retryPlayback()
+                                        isRetrying = false
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityIdentifier("player.retry")
+                                Button("Cancel") {
+                                    Task {
+                                        await playback.stop()
+                                        dismiss()
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("player.cancel")
+                            }
+                            .disabled(isRetrying)
+                        }
                     }
                     if playback.syncState == .failed {
                         // TODO have a button to force-sync the position, and show a progress indicator while syncing
@@ -621,6 +658,7 @@ struct NowPlaying: View {
                         .accessibilityLabel("Next Chapter")
                         .accessibilityIdentifier("player.nextChapter")
                     }
+                    .disabled(failureToPresent != nil)
 
                     HStack(spacing: 8) {
                         PlaybackRateMenu(

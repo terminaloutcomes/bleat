@@ -707,7 +707,12 @@ struct AppFailure: Equatable, Sendable {
         case .authenticationCredentialInvalid:
             "Audiobookshelf returned incomplete or mismatched account credentials."
         case .mediaUnavailable:
-            "This audiobook could not be prepared for playback."
+            switch operation {
+            case .localPlayback, .recoverPlayback:
+                "Bleat could not read this audiobook's media."
+            default:
+                "This audiobook could not be prepared for playback."
+            }
         case .uncertainMutation:
             "The result of this change is uncertain; Bleat kept it for safe recovery."
         }
@@ -1362,6 +1367,8 @@ final class AppModel {
     private var playbackStartGeneration: UInt64 = 0
     @ObservationIgnored
     private var playbackStartTask: Task<PlaybackStartOutcome, Never>?
+    @ObservationIgnored
+    private var failedPlaybackRetryRequest: PlaybackStartRequest?
     @ObservationIgnored
     private var playbackStartPhase: PlaybackStartPhase?
     @ObservationIgnored
@@ -4100,6 +4107,19 @@ final class AppModel {
         }
         bookDeletionState = .deleting
 
+        let deletionTarget = PlaybackStartTarget(
+            accountID: account.id,
+            itemID: detail.id
+        )
+        if failedPlaybackRetryRequest?.account.id == account.id,
+            failedPlaybackRetryRequest?.book.itemID == detail.id
+        {
+            failedPlaybackRetryRequest = nil
+        }
+        if playbackStartTarget == deletionTarget {
+            await invalidatePlaybackStarts()
+        }
+
         await transcription.cancelAndWait(
             for: ChapterTranscriptionBookKey(
                 accountID: account.id,
@@ -4769,10 +4789,62 @@ final class AppModel {
         )
     }
 
+    func retryFailedPlayback() async -> PlaybackStartOutcome {
+        guard accountActionStatus != .removing,
+            accountActionStatus != .switching,
+            bookDeletionState != .deleting
+        else {
+            return .superseded
+        }
+        guard case .failed = playback.state else {
+            return .failed(
+                AppFailure(.openPlayback, .accountUnavailable)
+            )
+        }
+        if let detail = playback.preparedBookDetail,
+            let accountID = playback.accountID,
+            let account = accounts.first(where: { $0.id == accountID })
+        {
+            playback.retainFailedBookForRetry(
+                accountID: accountID,
+                libraryID: detail.libraryID
+            )
+            failedPlaybackRetryRequest = PlaybackStartRequest(
+                book: .detail(detail),
+                account: account,
+                position: .absoluteTime(playback.currentTime)
+            )
+        }
+        guard let request = failedPlaybackRetryRequest else {
+            return .failed(
+                AppFailure(.openPlayback, .accountUnavailable)
+            )
+        }
+        let outcome = await startPlayback(request, isRetry: true)
+        switch outcome {
+        case .started:
+            failedPlaybackRetryRequest = nil
+        case .failed(let failure):
+            playback.fail(failure)
+        case .superseded:
+            break
+        }
+        return outcome
+    }
+
+    private func clearFailedPlaybackRetry() {
+        failedPlaybackRetryRequest = nil
+        playback.clearRetainedFailedBook()
+    }
+
     private func startPlayback(
-        _ request: PlaybackStartRequest
+        _ request: PlaybackStartRequest,
+        isRetry: Bool = false
     ) async -> PlaybackStartOutcome {
-        guard accountActionStatus != .switching else {
+        guard accountActionStatus != .switching,
+            accountActionStatus != .removing,
+            bookDeletionState != .deleting
+        else {
             return .superseded
         }
         let target = PlaybackStartTarget(
@@ -4794,7 +4866,8 @@ final class AppModel {
             }
             return await performPlaybackStart(
                 request,
-                generation: generation
+                generation: generation,
+                isRetry: isRetry
             )
         }
         playbackStartTask = task
@@ -4824,7 +4897,8 @@ final class AppModel {
 
     private func performPlaybackStart(
         _ request: PlaybackStartRequest,
-        generation: UInt64
+        generation: UInt64,
+        isRetry: Bool
     ) async -> PlaybackStartOutcome {
         guard
             let savedAccount = accounts.first(where: {
@@ -4867,10 +4941,12 @@ final class AppModel {
         guard playbackStartGeneration == generation else {
             return .superseded
         }
-        if playback.isPrepared(
-            accountID: savedAccount.id,
-            itemID: itemID
-        ) {
+        if playback.canReusePreparedPlayback,
+            playback.isPrepared(
+                accountID: savedAccount.id,
+                itemID: itemID
+            )
+        {
             guard playback.libraryID == libraryID else {
                 return await playbackStartFailure(
                     .playbackIdentityMismatch,
@@ -4940,6 +5016,9 @@ final class AppModel {
                     return .superseded
                 }
                 playbackStartPhase = .preparingPlayback
+                if !isRetry {
+                    clearFailedPlaybackRetry()
+                }
                 await playback.startDownloaded(
                     detail: downloaded.detail,
                     trackURLs: urls,
@@ -5007,6 +5086,9 @@ final class AppModel {
                     return .superseded
                 }
                 playbackStartPhase = .preparingPlayback
+                if !isRetry {
+                    clearFailedPlaybackRetry()
+                }
                 await playback.startDownloaded(
                     detail: downloaded.detail,
                     trackURLs: [],
@@ -5087,6 +5169,9 @@ final class AppModel {
             )
         }
         playbackStartPhase = .preparingPlayback
+        if !isRetry {
+            clearFailedPlaybackRetry()
+        }
         await playback.start(
             detail: detail,
             account: savedAccount,
@@ -5927,9 +6012,12 @@ final class AppModel {
         guard accountActionStatus != .removing else {
             return false
         }
+        accountActionStatus = .removing
+        if failedPlaybackRetryRequest?.account.id == account.id {
+            failedPlaybackRetryRequest = nil
+        }
         await invalidatePlaybackStarts()
         let removingBrowsingAccount = account.id == self.account?.id
-        accountActionStatus = .removing
         await service.suspendStatisticsHistoryImport(for: account.id)
         seriesDownloadBlockedAccounts.insert(account.id)
         if removingBrowsingAccount {
