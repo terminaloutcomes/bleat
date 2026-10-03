@@ -21008,7 +21008,9 @@ final class AppModelTests: XCTestCase {
         in coordinator: ChapterTranscriptionModel,
         bookKey: ChapterTranscriptionBookKey
     ) async -> CachedChapterTranscriptionTaskState? {
-        for _ in 0..<100 {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(10))
+        while clock.now < deadline {
             if let terminalState = coordinator.terminalState(for: bookKey) {
                 return terminalState
             }
