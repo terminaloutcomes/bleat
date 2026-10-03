@@ -1455,12 +1455,107 @@ private struct DiagnosticsView: View {
     }
 }
 
+enum SignedInAlert: Equatable {
+    case series(AppFailure)
+    case cellular(PendingCellularDownload)
+    case playback(AppFailure)
+    case bookAction(BookActionContextFailure)
+    case progress(AppFailure)
+
+    enum Source: Hashable {
+        case series, cellular, playback, bookAction, progress
+    }
+
+    var source: Source {
+        switch self {
+        case .series: .series
+        case .cellular: .cellular
+        case .playback: .playback
+        case .bookAction: .bookAction
+        case .progress: .progress
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .series(let failure), .playback(let failure),
+            .progress(let failure):
+            failure.title
+        case .cellular: "Allow Cellular Download?"
+        case .bookAction(let failure): failure.title
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .series(let failure), .playback(let failure),
+            .progress(let failure):
+            failure.message
+        case .cellular(let pending):
+            "\(pending.detail.title) is \(ByteCountFormatter.string(fromByteCount: pending.expectedBytes, countStyle: .file)). It may use cellular data."
+        case .bookAction(let failure): failure.message
+        }
+    }
+}
+
+@MainActor
+@Observable
+final class SignedInAlertQueue {
+    struct Entry: Identifiable {
+        let id = UUID()
+        let alert: SignedInAlert
+    }
+
+    private(set) var active: Entry?
+    private var pending: [Entry] = []
+    private var observed: [SignedInAlert.Source: SignedInAlert] = [:]
+
+    func reconcile(_ candidates: [SignedInAlert]) {
+        let current = Dictionary(
+            uniqueKeysWithValues: candidates.map { ($0.source, $0) }
+        )
+        pending.removeAll { current[$0.alert.source] != $0.alert }
+        if let active, current[active.alert.source] != active.alert {
+            self.active = nil
+        }
+        for candidate in candidates {
+            guard observed[candidate.source] != candidate else { continue }
+            pending.append(Entry(alert: candidate))
+        }
+        observed = current
+        showNext()
+    }
+
+    func finish(_ entry: Entry) {
+        guard active?.id == entry.id else { return }
+        active = nil
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.showNext()
+        }
+    }
+
+    func reset(ignoring candidates: [SignedInAlert] = []) {
+        active = nil
+        pending = []
+        observed = Dictionary(
+            uniqueKeysWithValues: candidates.map { ($0.source, $0) }
+        )
+    }
+
+    private func showNext() {
+        guard active == nil, !pending.isEmpty else { return }
+        active = pending.removeFirst()
+    }
+}
+
 private struct SignedInView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
     @State private var playbackFailure: AppFailure?
     @State private var bookActionPresentation =
         BookActionContextPresentation()
+    @State private var alertQueue = SignedInAlertQueue()
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1523,100 +1618,109 @@ private struct SignedInView: View {
                 "Existing downloads will be kept. Each book will follow your current download network policy."
             )
         }
-        .alert(
-            model.seriesDownloadFailure?.title ?? "Download unavailable",
-            isPresented: Binding(
-                get: { model.seriesDownloadFailure != nil },
-                set: { presented in
-                    if !presented {
-                        model.dismissSeriesDownloadFailure()
+        .alert(item: alertBinding) { entry in
+            switch entry.alert {
+            case .cellular:
+                Alert(
+                    title: Text(entry.alert.title),
+                    message: Text(entry.alert.message),
+                    primaryButton: .default(Text("Download")) {
+                        dismissAlert(entry, confirmCellular: true)
+                    },
+                    secondaryButton: .cancel(Text("Cancel")) {
+                        dismissAlert(entry)
                     }
-                }
-            )
-        ) {
-            Button("OK") { model.dismissSeriesDownloadFailure() }
-        } message: {
-            if let failure = model.seriesDownloadFailure {
-                Text(failure.message)
-            }
-        }
-        .alert(
-            "Allow Cellular Download?",
-            isPresented: Binding(
-                get: {
-                    model.downloads.pendingCellularDownload != nil
-                },
-                set: { _ in }
-            )
-        ) {
-            Button("Cancel", role: .cancel) {
-                model.downloads.cancelCellularDownload()
-            }
-            Button("Download") {
-                Task {
-                    await model.downloads.confirmCellularDownload()
-                }
-            }
-        } message: {
-            if let pending = model.downloads.pendingCellularDownload {
-                Text(
-                    "\(pending.detail.title) is \(ByteCountFormatter.string(fromByteCount: pending.expectedBytes, countStyle: .file)). It may use cellular data."
                 )
-            }
-        }
-        .alert(
-            playbackFailure?.title ?? "Playback unavailable",
-            isPresented: Binding(
-                get: { playbackFailure != nil },
-                set: { if !$0 { playbackFailure = nil } }
-            )
-        ) {
-            Button("OK") { playbackFailure = nil }
-        } message: {
-            if let playbackFailure {
-                Text(playbackFailure.message)
-            }
-        }
-        .alert(
-            bookActionPresentation.failure?.title
-                ?? "Download unavailable",
-            isPresented: Binding(
-                get: {
-                    bookActionPresentation.failure != nil
-                },
-                set: {
-                    if !$0 {
-                        bookActionPresentation.dismissFailure()
+            default:
+                Alert(
+                    title: Text(entry.alert.title),
+                    message: Text(entry.alert.message),
+                    dismissButton: .default(Text("OK")) {
+                        dismissAlert(entry)
                     }
-                }
-            )
-        ) {
-            Button("OK") {
-                bookActionPresentation.dismissFailure()
-            }
-        } message: {
-            if let failure = bookActionPresentation.failure {
-                Text(failure.message)
-            }
-        }
-        .alert(
-            model.bookProgressFailure?.title ?? "Progress update failed",
-            isPresented: Binding(
-                get: { model.bookProgressFailure != nil },
-                set: { if !$0 { model.dismissBookProgressFailure() } }
-            )
-        ) {
-            Button("OK") {}
-        } message: {
-            if let failure = model.bookProgressFailure {
-                Text(failure.message)
+                )
             }
         }
         .accessibilityIdentifier("app.signedIn")
         .environment(bookActionPresentation)
         .onChange(of: model.account?.id) {
             bookActionPresentation.dismiss()
+            playbackFailure = nil
+            alertQueue.reset(ignoring: alertCandidates)
         }
+        .onChange(of: alertCandidates) { _, candidates in
+            alertQueue.reconcile(candidates)
+        }
+        .onAppear {
+            #if DEBUG || BLEAT_UI_TESTING
+                if UITestAppService.seedsSignedInAlerts {
+                    playbackFailure = AppFailure(
+                        .openPlayback, .mediaUnavailable)
+                    bookActionPresentation.presentDownloadFailure(
+                        AppFailure(.download, .serverUnavailable)
+                    )
+                }
+            #endif
+            alertQueue.reconcile(alertCandidates)
+        }
+    }
+
+    private var alertCandidates: [SignedInAlert] {
+        var candidates: [SignedInAlert] = []
+        if let failure = model.seriesDownloadFailure {
+            candidates.append(.series(failure))
+        }
+        if let pending = model.downloads.pendingCellularDownload {
+            candidates.append(.cellular(pending))
+        }
+        if let playbackFailure {
+            candidates.append(.playback(playbackFailure))
+        }
+        if let failure = bookActionPresentation.failure {
+            candidates.append(.bookAction(failure))
+        }
+        if let failure = model.bookProgressFailure {
+            candidates.append(.progress(failure))
+        }
+        return candidates
+    }
+
+    private var alertBinding: Binding<SignedInAlertQueue.Entry?> {
+        Binding(
+            get: { alertQueue.active },
+            set: { entry in
+                if entry == nil, let active = alertQueue.active {
+                    Task { @MainActor in
+                        await Task.yield()
+                        dismissAlert(active)
+                    }
+                }
+            }
+        )
+    }
+
+    private func dismissAlert(
+        _ entry: SignedInAlertQueue.Entry,
+        confirmCellular: Bool = false
+    ) {
+        guard alertQueue.active?.id == entry.id else { return }
+        switch entry.alert {
+        case .series:
+            model.dismissSeriesDownloadFailure()
+        case .cellular:
+            if confirmCellular {
+                Task { await model.downloads.confirmCellularDownload() }
+            } else {
+                model.downloads.cancelCellularDownload()
+            }
+        case .playback:
+            playbackFailure = nil
+        case .bookAction:
+            bookActionPresentation.dismissFailure()
+        case .progress:
+            model.dismissBookProgressFailure()
+        }
+        alertQueue.finish(entry)
     }
 
     #if os(macOS)
@@ -1905,7 +2009,7 @@ private enum BookContextAction: Hashable {
     case transcribe
 }
 
-private enum BookActionContextFailure: Equatable {
+enum BookActionContextFailure: Equatable {
     case action(AppFailure)
     case removal(DownloadModelFailure)
     case removalControlTransitionInProgress
@@ -5516,14 +5620,14 @@ private struct StatisticsView: View {
                 }
             }
         }
-        .confirmationDialog(
+        .alert(
             "Reset listening statistics?",
-            isPresented: $confirmingReset,
-            titleVisibility: .visible
+            isPresented: $confirmingReset
         ) {
             Button("Delete \(scopeLabel) Statistics", role: .destructive) {
                 Task { _ = await model.resetStatistics(query: query) }
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(
                 "This deletes \(scopeLabel) history for \(range.title) from Bleat and its private iCloud copy. Audiobookshelf sessions may return on a later import."
@@ -6266,16 +6370,24 @@ private struct DownloadStorageView: View {
         }
         .safeAreaInset(edge: .top) {
             if let failure = model.downloads.presentedFailure {
-                Label(
-                    failure.message,
-                    systemImage: "externaldrive.badge.exclamationmark"
-                )
-                .font(.callout)
-                .foregroundStyle(.red)
+                HStack {
+                    Label(
+                        failure.message,
+                        systemImage: "externaldrive.badge.exclamationmark"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("downloads.error")
+                    Spacer()
+                    Button("Dismiss", systemImage: "xmark") {
+                        model.downloads.dismissFailure()
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("downloads.error.dismiss")
+                }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.regularMaterial)
-                .accessibilityIdentifier("downloads.error")
             }
         }
         .navigationTitle("Downloads")

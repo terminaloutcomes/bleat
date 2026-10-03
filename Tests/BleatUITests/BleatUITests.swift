@@ -1107,6 +1107,44 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testDownloadErrorBannerDismissesWithoutRemovingBook() {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal-failure"
+        )
+        tabButton("Downloads", in: app).tap()
+        let book = app.staticTexts["The Downloaded Audiobook"]
+        XCTAssertTrue(book.waitForExistence(timeout: 3))
+        app.buttons["downloads.removeAll"].tap()
+        app.buttons["Remove Downloads"].tap()
+
+        let banner = app.descendants(matching: .any)["downloads.error"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 3))
+        XCTAssertTrue(book.exists)
+        let dismiss = app.buttons["downloads.error.dismiss"]
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 3))
+        dismiss.tap()
+        XCTAssertTrue(banner.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(book.exists)
+    }
+
+    @MainActor
+    func testSignedInAlertsPresentInSequence() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-signed-in-alert-queue"]
+        )
+        let playback = app.alerts["Playback unavailable"]
+        XCTAssertTrue(playback.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.alerts["Server unavailable"].exists)
+        playback.buttons["OK"].tap()
+        XCTAssertTrue(
+            app.alerts["Server unavailable"].waitForExistence(timeout: 3)
+        )
+        app.alerts["Server unavailable"].buttons["OK"].tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 3))
+    }
+
+    @MainActor
     func testSeriesDownloadStartsEveryBook() {
         let app = launch(scenario: "--ui-testing-signed-in")
         let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
@@ -1611,13 +1649,9 @@ final class BleatUITests: XCTestCase {
             app.staticTexts.matching(
                 NSPredicate(format: "label CONTAINS %@", "Last 7 Days")
             ).firstMatch.exists)
-        if app.buttons["Cancel"].exists {
-            app.buttons["Cancel"].tap()
-        } else {
-            app.otherElements["PopoverDismissRegion"].coordinate(
-                withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)
-            ).tap()
-        }
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 3))
+        cancel.tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
         XCTAssertTrue(reset.exists)
         reset.tap()

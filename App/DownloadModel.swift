@@ -797,6 +797,11 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
     }
 
+    func dismissFailure() {
+        failure = nil
+        failureDownloadID = nil
+    }
+
     static func presentedFailure(
         _ failure: DownloadModelFailure?,
         downloadID: DownloadID?,
