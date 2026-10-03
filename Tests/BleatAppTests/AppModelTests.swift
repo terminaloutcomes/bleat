@@ -4875,7 +4875,7 @@ final class AppModelTests: XCTestCase {
         )
         await service.setDownloadPlan(.success(plan))
         await model.repair(published, account: account)
-        var scheduled = await model.scheduledTransferDescriptorsForTesting()
+        let scheduled = await model.scheduledTransferDescriptorsForTesting()
         let manualDescriptors = scheduled.filter {
             $0.identity.itemID == detail.id
         }
@@ -4892,9 +4892,23 @@ final class AppModelTests: XCTestCase {
         }
         await service.setDownloadPlan(.success(automaticPlan))
         await model.repair(automaticPublished, account: account)
-        scheduled = await model.scheduledTransferDescriptorsForTesting()
-        let automaticDescriptors = scheduled.filter {
-            $0.identity.itemID == automaticDetail.id
+        var automaticDescriptors =
+            await model
+            .scheduledTransferDescriptorsForTesting().filter {
+                $0.identity.itemID == automaticDetail.id
+            }
+        let automaticTaskDeadline = ContinuousClock.now.advanced(
+            by: .seconds(5)
+        )
+        while automaticDescriptors.isEmpty,
+            ContinuousClock.now < automaticTaskDeadline
+        {
+            try await Task.sleep(for: .milliseconds(20))
+            automaticDescriptors =
+                await model
+                .scheduledTransferDescriptorsForTesting().filter {
+                    $0.identity.itemID == automaticDetail.id
+                }
         }
         XCTAssertEqual(
             automaticDescriptors.map(\.identity.trackIndex),
