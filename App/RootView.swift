@@ -3140,7 +3140,7 @@ extension LibraryProgressFilter {
 private struct BookListContent: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
-    let origin: AppRootTab
+    let origin: BookNavigationOrigin
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
     var body: some View {
@@ -3595,7 +3595,7 @@ private struct BookSummaryRow: View {
     let navigation: AppNavigationCoordinator
     let book: LibraryBookSummary
     let account: ServerAccount
-    let origin: AppRootTab
+    let origin: BookNavigationOrigin
     let navigationIdentifier: String
     let navigationAccessibilityLabel: String
     let playbackIdentifier: String
@@ -3719,7 +3719,7 @@ private struct SeriesDetailView: View {
     @Bindable var model: AppModel
     let destination: SeriesDestination
     @Bindable var navigation: AppNavigationCoordinator
-    let origin: AppRootTab
+    let origin: BookNavigationOrigin
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverSwipeOffset: CGFloat = 0
@@ -3933,7 +3933,7 @@ private struct SeriesCarouselBookCard: View {
     let navigation: AppNavigationCoordinator
     let account: ServerAccount
     let book: LibraryBookSummary
-    let origin: AppRootTab
+    let origin: BookNavigationOrigin
     let sequenceLabel: String
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
 
@@ -4301,7 +4301,7 @@ private struct BookDetailView: View {
     @Bindable var model: AppModel
     let book: LibraryBookSummary
     @Bindable var navigation: AppNavigationCoordinator
-    let origin: AppRootTab
+    let origin: BookNavigationOrigin
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showMetadataEditor = false
@@ -5787,7 +5787,7 @@ private struct SettingsView: View {
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
-        NavigationStack(path: navigation.pathBinding(for: .settings)) {
+        NavigationStack(path: $navigation.settingsPath) {
             Form {
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.id) { account in
