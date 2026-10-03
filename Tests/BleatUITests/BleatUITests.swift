@@ -2532,6 +2532,44 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testFailedPlaybackCanBeReopenedRetriedAndCancelled() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-loaded-playback-failure"]
+        )
+        app.staticTexts["The Test Audiobook"].tap()
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+        play.tap()
+
+        let fail = app.buttons["testing.playback.fail"]
+        XCTAssertTrue(fail.waitForExistence(timeout: 3))
+        fail.tap()
+        let miniPlayer = app.buttons["player.mini.open"]
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+        let error = app.staticTexts["player.error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            error.label,
+            "Bleat could not read this audiobook's media."
+        )
+        app.buttons["Close"].tap()
+        XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
+        miniPlayer.tap()
+        XCTAssertTrue(app.buttons["player.retry"].waitForExistence(timeout: 3))
+        app.buttons["player.retry"].tap()
+        XCTAssertTrue(error.waitForNonExistence(timeout: 10))
+
+        app.buttons["Close"].tap()
+        fail.tap()
+        miniPlayer.tap()
+        XCTAssertTrue(error.waitForExistence(timeout: 3))
+        app.buttons["player.cancel"].tap()
+        XCTAssertTrue(miniPlayer.waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
     func testNowPlayingCoverOpensBookDetail() {
         assertNowPlayingBookControlOpensDetail("player.book.cover")
     }

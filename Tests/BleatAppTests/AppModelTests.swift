@@ -15156,16 +15156,253 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(outcome, .started(source: .streamed))
         model.playback.fail(.mediaUnavailable)
         XCTAssertTrue(model.playback.hasActiveBook)
-        XCTAssertFalse(model.playback.showsMiniPlayer)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
 
         await model.deleteBook(detail, mode: .libraryRecordOnly)
 
         let closedSessions = await service.playbackCloseSessionIDs()
         XCTAssertEqual(model.playback.state, .idle)
         XCTAssertFalse(model.playback.hasActiveBook)
+        XCTAssertFalse(model.playback.showsMiniPlayer)
         XCTAssertEqual(
             closedSessions,
             [PlaybackSessionID(rawValue: "failed-session")]
+        )
+    }
+
+    func testRetryFailedPreparedPlaybackOpensFreshSession() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: library.id).items[0]
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([library]),
+            bookDetail: .success(detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "first-session"
+                    )),
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "retry-session"
+                    )),
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let firstOutcome = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(firstOutcome, .started(source: .streamed))
+        model.playback.fail(.mediaUnavailable)
+
+        let retryOutcome = await model.retryFailedPlayback()
+        XCTAssertEqual(retryOutcome, .started(source: .streamed))
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 2)
+        let closedAfterRetry = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(
+            closedAfterRetry,
+            [PlaybackSessionID(rawValue: "first-session")]
+        )
+        await model.playback.stop()
+        XCTAssertFalse(model.playback.showsMiniPlayer)
+        let closedAfterCancel = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(
+            closedAfterCancel,
+            [
+                PlaybackSessionID(rawValue: "first-session"),
+                PlaybackSessionID(rawValue: "retry-session"),
+            ]
+        )
+    }
+
+    func testRetryCanRunAgainAfterPreparationFails() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "first-session"
+                    )),
+                .failure(.playbackSession(.requestFailed)),
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "third-session"
+                    )),
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let first = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(first, .started(source: .streamed))
+        model.playback.fail(.mediaUnavailable)
+
+        let failedRetry = await model.retryFailedPlayback()
+        guard case .failed = failedRetry else {
+            XCTFail("First retry should fail during preparation")
+            return
+        }
+        XCTAssertTrue(model.playback.hasActiveBook)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        XCTAssertEqual(model.playback.accountID, account.id)
+        XCTAssertEqual(model.playback.libraryID, detail.libraryID)
+        let unrelatedAccount = try fixtureAccount(accountID: "account-2")
+        let rejectedStart = await model.startPlayback(
+            detail: detail,
+            account: unrelatedAccount
+        )
+        XCTAssertEqual(
+            rejectedStart,
+            .failed(AppFailure(.openPlayback, .accountUnavailable))
+        )
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        XCTAssertEqual(model.playback.accountID, account.id)
+        let secondRetry = await model.retryFailedPlayback()
+        XCTAssertEqual(secondRetry, .started(source: .streamed))
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 3)
+        await model.playback.stop()
+        XCTAssertFalse(model.playback.showsMiniPlayer)
+    }
+
+    func testRemovingAccountClearsFailedRetryPlayback() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )),
+                .failure(.playbackSession(.requestFailed)),
+            ]
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initial = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initial, .started(source: .streamed))
+        model.playback.fail(.mediaUnavailable)
+        let retry = await model.retryFailedPlayback()
+        guard case .failed = retry else {
+            XCTFail("Retry should fail during preparation")
+            return
+        }
+        XCTAssertEqual(model.playback.accountID, account.id)
+
+        let removed = await model.removeAccount()
+        XCTAssertTrue(removed)
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertFalse(model.playback.showsMiniPlayer)
+        let afterRemoval = await model.retryFailedPlayback()
+        XCTAssertEqual(
+            afterRemoval,
+            .failed(AppFailure(.openPlayback, .accountUnavailable))
+        )
+        let openRequests = await service.playbackOpenRequests()
+        XCTAssertEqual(openRequests.count, 2)
+    }
+
+    func testBookDeletionSupersedesInFlightFailedPlaybackRetry()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail
+        let closeGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDeletion: .success(.deleted),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL
+                    )),
+                .success(
+                    playbackPreparation(
+                        detail: detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: "retry-session"
+                    )),
+            ],
+            playbackCloseGate: closeGate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let initial = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(initial, .started(source: .streamed))
+        model.playback.fail(.mediaUnavailable)
+
+        let retry = Task { await model.retryFailedPlayback() }
+        await closeGate.waitUntilEntered()
+        let deletion = Task {
+            await model.deleteBook(detail, mode: .libraryRecordOnly)
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while model.bookDeletionState != .deleting, clock.now < deadline {
+            await Task.yield()
+        }
+        XCTAssertEqual(model.bookDeletionState, .deleting)
+        let competingStart = await model.startPlayback(
+            detail: detail,
+            account: account
+        )
+        XCTAssertEqual(competingStart, .superseded)
+        XCTAssertEqual(model.playback.accountID, account.id)
+        await closeGate.release()
+        await deletion.value
+        let retryOutcome = await retry.value
+        XCTAssertEqual(retryOutcome, .superseded)
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertFalse(model.playback.showsMiniPlayer)
+        let openRequests = await service.playbackOpenRequests()
+        let closedSessions = await service.playbackCloseSessionIDs()
+        XCTAssertTrue((1...2).contains(openRequests.count))
+        let expectedClosedSessions =
+            openRequests.count == 2
+            ? [
+                PlaybackSessionID(rawValue: "playback-start-session"),
+                PlaybackSessionID(rawValue: "retry-session"),
+            ]
+            : [PlaybackSessionID(rawValue: "playback-start-session")]
+        XCTAssertEqual(
+            closedSessions,
+            expectedClosedSessions
         )
     }
 

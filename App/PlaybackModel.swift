@@ -17,6 +17,11 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+struct RetainedPlaybackIdentity: Equatable, Sendable {
+    let accountID: AccountID
+    let libraryID: LibraryID
+}
+
 enum PlaybackTranscriptNavigationPosition: Equatable, Sendable {
     case active(Double)
     case saved(Double)
@@ -400,6 +405,7 @@ final class PlaybackModel {
     private var localAccountID: AccountID?
     private var preparingAccountID: AccountID?
     private var preparation: AppPlaybackPreparation?
+    private var retainedRetryIdentity: RetainedPlaybackIdentity?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
     private var playbackWatchdogTask: Task<Void, Never>?
@@ -477,6 +483,7 @@ final class PlaybackModel {
 
     var accountID: AccountID? {
         preparingAccountID ?? localAccountID ?? activeAccount?.id
+            ?? retainedRetryIdentity?.accountID
     }
 
     var preparedBookDetail: LibraryBookDetail? {
@@ -485,6 +492,7 @@ final class PlaybackModel {
 
     var libraryID: LibraryID? {
         activeDownloadDetail?.libraryID ?? localPlaybackSession?.libraryID
+            ?? retainedRetryIdentity?.libraryID
     }
 
     var hasActiveBook: Bool {
@@ -497,17 +505,37 @@ final class PlaybackModel {
         case .preparing, .ready, .playing, .paused, .buffering, .ended:
             true
         case .failed:
-            preparation != nil
+            preparation != nil || retainedRetryIdentity != nil
         }
     }
 
     var showsMiniPlayer: Bool {
         switch state {
-        case .idle, .failed:
+        case .idle:
             false
+        case .failed:
+            hasActiveBook
         case .preparing, .ready, .playing, .paused, .buffering, .ended:
             true
         }
+    }
+
+    var canReusePreparedPlayback: Bool {
+        !isPlaybackFailed
+    }
+
+    func retainFailedBookForRetry(
+        accountID: AccountID,
+        libraryID: LibraryID
+    ) {
+        retainedRetryIdentity = RetainedPlaybackIdentity(
+            accountID: accountID,
+            libraryID: libraryID
+        )
+    }
+
+    func clearRetainedFailedBook() {
+        retainedRetryIdentity = nil
     }
 
     func isPrepared(
@@ -868,6 +896,7 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            clearRetainedFailedBook()
             telemetryOutcome = .succeeded
             await diagnostics.record(
                 .transition(
@@ -1106,6 +1135,7 @@ final class PlaybackModel {
                 return
             }
             state = .ready
+            clearRetainedFailedBook()
             telemetryOutcome = .succeeded
             await diagnostics.record(
                 .completed(.openPlayback, category: .playback)
@@ -1909,6 +1939,7 @@ final class PlaybackModel {
         resetPlaybackRecoveryState()
         localPlaybackSession = nil
         itemID = nil
+        clearRetainedFailedBook()
         title = ""
         author = ""
         narrator = ""
