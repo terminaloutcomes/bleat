@@ -1215,6 +1215,7 @@ private struct BookmarkEditorView: View {
     @Environment(\.dismiss) private var dismiss
     let bookmark: AudioBookmark?
     @State private var title: String
+    @State private var saveFailure: AppFailure?
 
     init(
         playback: PlaybackModel,
@@ -1236,6 +1237,13 @@ private struct BookmarkEditorView: View {
                         value: PlaybackTimeFormatter.string(bookmark.time)
                     )
                 }
+                if let saveFailure {
+                    Section {
+                        Text(saveFailure.message)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("bookmark.error")
+                    }
+                }
             }
             .navigationTitle(bookmark == nil ? "New Bookmark" : "Rename")
             .toolbar {
@@ -1246,6 +1254,7 @@ private struct BookmarkEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        saveFailure = nil
                         Task {
                             let saved: Bool
                             if let bookmark {
@@ -1260,6 +1269,10 @@ private struct BookmarkEditorView: View {
                             }
                             if saved {
                                 dismiss()
+                            } else if case .failed(let failure) =
+                                playback.bookmarkState
+                            {
+                                saveFailure = failure
                             }
                         }
                     }
