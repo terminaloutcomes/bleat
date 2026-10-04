@@ -1255,7 +1255,15 @@ Partial books remain inspectable and retryable. Completed files are never silent
 - For automatic cache records, support deletion after each completed chapter,
   immediately after book completion, or 24 hours after book completion; default
   to 24 hours. If the app is suspended at the deadline, perform overdue cleanup
-  at the next launch or app activity.
+  at the next launch or app activity. Both natural playback completion and a
+  successful explicit Mark Finished action persist the local event time before
+  cleanup, including when a playback or transcription pin defers deletion.
+  Startup applies the selected policy to persisted local completion timestamps
+  and schedules future deadlines without resetting them. Starting a reread or
+  explicitly marking unfinished clears the prior deadline. New automatic
+  caches start without a completion timestamp. Never derive one from server
+  finished status or historical completion time; legacy caches without a local
+  timestamp remain until a new local completion event or explicit deletion.
 - Never apply automatic cleanup to an explicit full-book download.
 - Completed automatic files outside the current window continue to count
   toward actual storage while being excluded from window progress.

@@ -4308,6 +4308,13 @@ final class AppModel {
                 revision: revision,
                 confirmedProgress: confirmedProgress
             )
+            await downloads.recordLocalBookCompletion(
+                accountID: expectedAccount.id,
+                itemID: preparedDetail.id,
+                finishedAt: confirmedProgress?.finishedAtMilliseconds.map {
+                    Date(timeIntervalSince1970: Double($0) / 1_000)
+                }
+            )
         }
     }
 
@@ -4939,6 +4946,14 @@ final class AppModel {
                 releaseBookMediaOperation(for: mediaOperationKey)
             }
         }
+        guard playbackStartGeneration == generation else {
+            return .superseded
+        }
+        await downloads.recordLocalBookCompletion(
+            accountID: savedAccount.id,
+            itemID: itemID,
+            finishedAt: nil
+        )
         guard playbackStartGeneration == generation else {
             return .superseded
         }

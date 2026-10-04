@@ -728,7 +728,14 @@ without a connection. Completed files outside the active window still count
 toward device storage until cleanup removes them. Settings can delete
 automatic cache files after each completed chapter, when the book finishes,
 or—by default—24 hours after the book finishes. Cleanup never applies to an
-explicit download. **Download Full Book** promotes an automatic cache in place,
+explicit download. Natural playback completion and a successful **Mark Finished**
+action start cleanup from the local completion time. Launch applies the selected
+policy to persisted local timestamps and schedules future 24-hour deadlines.
+Starting a reread clears the deadline; new caches and older caches without a
+local timestamp remain until a new local completion or explicit deletion.
+Historical server completion never starts cleanup for the current copy, and
+playback or transcription pins defer deletion until their files are released.
+**Download Full Book** promotes an automatic cache in place,
 keeps its verified files, and downloads only the remaining files when requested
 before the current automatic window completes or through Download Series.
 
