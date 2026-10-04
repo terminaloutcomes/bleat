@@ -1418,7 +1418,12 @@
             for account: ServerAccount,
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> [AudioBookmark] {
-            [
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-bookmark-load-failure"
+            ) {
+                throw .bookmark(.requestFailed)
+            }
+            return [
                 AudioBookmark(
                     libraryItemID: itemID,
                     time: 600,
@@ -1434,7 +1439,12 @@
             time: Double,
             title: String
         ) async throws(AppServiceError) -> AudioBookmark {
-            AudioBookmark(
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-bookmark-save-failure"
+            ) {
+                throw .bookmark(.requestFailed)
+            }
+            return AudioBookmark(
                 libraryItemID: itemID,
                 time: time,
                 title: title,
@@ -1447,7 +1457,12 @@
             bookmark: AudioBookmark,
             title: String
         ) async throws(AppServiceError) -> AudioBookmark {
-            AudioBookmark(
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-bookmark-save-failure"
+            ) {
+                throw .bookmark(.requestFailed)
+            }
+            return AudioBookmark(
                 libraryItemID: bookmark.libraryItemID,
                 time: bookmark.time,
                 title: title,

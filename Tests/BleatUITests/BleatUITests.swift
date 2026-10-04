@@ -2916,6 +2916,118 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookmarkEditorShowsFailedSaveAndDismissesAfterSuccess() {
+        let successfulApp = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-delayed-playback-sync"]
+        )
+        XCTAssertTrue(
+            successfulApp.otherElements["app.signedIn"]
+                .waitForExistence(timeout: 3)
+        )
+        successfulApp.buttons["home.book.ui-book.play"].tap()
+        XCTAssertTrue(
+            successfulApp.buttons["player.mini.open"]
+                .waitForExistence(timeout: 3)
+        )
+        successfulApp.buttons["player.mini.open"].tap()
+        successfulApp.buttons["player.bookmarks"].tap()
+        successfulApp.buttons["Add Bookmark"].tap()
+        let successfulTitle = successfulApp.textFields["bookmark.title"]
+        XCTAssertTrue(successfulTitle.waitForExistence(timeout: 3))
+        successfulApp.buttons["bookmark.save"].tap()
+        XCTAssertTrue(successfulTitle.waitForNonExistence(timeout: 5))
+        successfulApp.terminate()
+
+        let failedApp = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-delayed-playback-sync",
+                "--ui-testing-bookmark-save-failure",
+            ]
+        )
+        XCTAssertTrue(
+            failedApp.otherElements["app.signedIn"]
+                .waitForExistence(timeout: 3)
+        )
+        failedApp.buttons["home.book.ui-book.play"].tap()
+        XCTAssertTrue(
+            failedApp.buttons["player.mini.open"].waitForExistence(
+                timeout: 3
+            )
+        )
+        failedApp.buttons["player.mini.open"].tap()
+        failedApp.buttons["player.bookmarks"].tap()
+        failedApp.buttons["Add Bookmark"].tap()
+        let failedTitle = failedApp.textFields["bookmark.title"]
+        XCTAssertTrue(failedTitle.waitForExistence(timeout: 3))
+        XCTAssertFalse(failedApp.staticTexts["bookmark.error"].exists)
+
+        failedApp.buttons["bookmark.save"].tap()
+
+        XCTAssertTrue(
+            failedApp.staticTexts["bookmark.error"].waitForExistence(
+                timeout: 5
+            )
+        )
+        XCTAssertTrue(failedTitle.exists)
+        XCTAssertTrue(failedApp.buttons["bookmark.save"].isEnabled)
+        failedTitle.tap()
+        failedTitle.typeText(" revised")
+        let editedTitle = failedTitle.value as? String
+        XCTAssertTrue(editedTitle?.contains("revised") == true)
+
+        failedApp.buttons["Cancel"].tap()
+        failedApp.buttons["player.bookmarks"].tap()
+        let existingBookmark = failedApp.buttons.matching(
+            NSPredicate(format: "label CONTAINS %@", "A useful moment")
+        ).firstMatch
+        XCTAssertTrue(existingBookmark.waitForExistence(timeout: 3))
+        existingBookmark.tap()
+        failedApp.buttons["Rename"].tap()
+        let renameTitle = failedApp.textFields["bookmark.title"]
+        XCTAssertTrue(renameTitle.waitForExistence(timeout: 3))
+        XCTAssertFalse(failedApp.staticTexts["bookmark.error"].exists)
+        failedApp.buttons["bookmark.save"].tap()
+        XCTAssertTrue(
+            failedApp.staticTexts["bookmark.error"].waitForExistence(
+                timeout: 5
+            )
+        )
+        XCTAssertTrue(renameTitle.exists)
+    }
+
+    @MainActor
+    func testBookmarkEditorDoesNotShowPriorLoadFailure() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-delayed-playback-sync",
+                "--ui-testing-bookmark-load-failure",
+            ]
+        )
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
+        )
+        app.buttons["home.book.ui-book.play"].tap()
+        XCTAssertTrue(
+            app.buttons["player.mini.open"].waitForExistence(timeout: 3)
+        )
+        app.buttons["player.mini.open"].tap()
+        XCTAssertTrue(
+            app.staticTexts["player.bookmarkError"].waitForExistence(
+                timeout: 3
+            )
+        )
+        app.buttons["player.bookmarks"].tap()
+        app.buttons["Add Bookmark"].tap()
+        XCTAssertTrue(
+            app.textFields["bookmark.title"].waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.staticTexts["bookmark.error"].exists)
+    }
+
+    @MainActor
     func testLimitedPermissionsShowPlayWithoutEditOrDownload() {
         let app = launch(scenario: "--ui-testing-limited-permissions")
 
