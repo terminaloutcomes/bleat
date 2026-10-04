@@ -125,6 +125,13 @@ final class BookmarkMutationStore {
         title: String? = nil,
         status: QueuedBookmarkMutationStatus
     ) throws(BookmarkMutationStoreError) -> QueuedBookmarkMutation {
+        #if DEBUG || BLEAT_UI_TESTING
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-bookmark-save-failure"
+            ) {
+                throw .persistenceFailed
+            }
+        #endif
         guard bookmark.time.isFinite, bookmark.time >= 0 else {
             throw .invalidTime
         }
