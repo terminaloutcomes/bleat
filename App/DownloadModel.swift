@@ -271,6 +271,7 @@ private struct DownloadOperationDrainWaiter {
 private enum DownloadOperationKind: Equatable {
     case explicit
     case cellularConfirmation
+    case localCompletion
     case automatic
 }
 
@@ -1052,8 +1053,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         for (task, descriptor) in currentTasks {
             _ = resumeIfAdmitted(task, descriptor: descriptor)
         }
-        await cleanupExpiredAutomaticDownloads()
-        scheduleAutomaticCleanup()
+        await applyCleanupPolicyToFinishedDownloads()
         recordDiagnostic(
             .completed(
                 .restoreDownloads,
@@ -2348,9 +2348,39 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
     }
 
+    func recordLocalBookCompletion(
+        accountID: AccountID,
+        itemID: LibraryItemID,
+        finishedAt: Date?
+    ) async {
+        let key = AutomaticDownloadKey(accountID: accountID, itemID: itemID)
+        guard await acquireDownloadOperation(for: key, kind: .localCompletion)
+        else {
+            return
+        }
+        defer { releaseDownloadOperation(for: key) }
+        guard !Task.isCancelled, !isResettingLocalDownloads, let storage else {
+            return
+        }
+        await updateAutomaticBookCompletion(
+            accountID: accountID,
+            itemID: itemID,
+            finishedAt: finishedAt,
+            storage: storage
+        )
+    }
+
     private func applyAutomaticPlaybackActivity(
         _ activity: AutomaticDownloadActivity
     ) async {
+        if activity.kind == .bookFinished {
+            await recordLocalBookCompletion(
+                accountID: activity.account.id,
+                itemID: activity.detail.id,
+                finishedAt: Date()
+            )
+            return
+        }
         if automaticLookahead == .all, activity.kind == .progress {
             await download(detail: activity.detail, account: activity.account)
             return
@@ -2384,15 +2414,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         accounts[activity.account.id] = activity.account
 
-        if activity.kind == .bookFinished {
-            await finishAutomaticDownload(
-                accountID: activity.account.id,
-                itemID: activity.detail.id,
-                storage: storage
-            )
-            return
-        }
-
         do {
             let plan = try await service.downloadPlan(
                 for: activity.account,
@@ -2405,15 +2426,6 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             if record?.manifest.purpose == .manual {
                 return
             }
-            if let existing = record,
-                existing.manifest.bookFinishedAt != nil
-            {
-                record = try await storage.markBookFinished(
-                    existing,
-                    at: nil
-                )
-            }
-
             let targets = AutomaticDownloadPlanner.targetTrackIndexes(
                 plan: plan,
                 activity: activity,
@@ -2516,35 +2528,37 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    private func finishAutomaticDownload(
+    private func updateAutomaticBookCompletion(
         accountID: AccountID,
         itemID: LibraryItemID,
+        finishedAt: Date?,
         storage: DownloadStorage
     ) async {
         guard
             let record = record(accountID: accountID, itemID: itemID),
-            record.manifest.purpose == .automaticCache
+            record.manifest.purpose == .automaticCache,
+            finishedAt != nil || record.manifest.bookFinishedAt != nil
         else {
             return
         }
-        switch automaticCleanupPolicy {
-        case .afterChapter, .afterBook:
-            await removeAutomatically(record)
-        case .afterTwentyFourHours:
-            do {
-                _ = try await storage.markBookFinished(
-                    record,
-                    at: Date()
-                )
-                await refresh()
-                scheduleAutomaticCleanup()
-            } catch {
-                failure = .transferFailed
+        do {
+            _ = try await storage.markBookFinished(record, at: finishedAt)
+            if finishedAt == nil,
+                case .record = deferredAutomaticCacheCleanup[
+                    record.manifest.downloadID]
+            {
+                deferredAutomaticCacheCleanup[record.manifest.downloadID] = nil
             }
+            await refresh()
+            await applyCleanupPolicyToFinishedDownloads()
+        } catch {
+            failure = storageFailure(error)
         }
     }
 
     private func applyCleanupPolicyToFinishedDownloads() async {
+        automaticCleanupTask?.cancel()
+        automaticCleanupTask = nil
         switch automaticCleanupPolicy {
         case .afterChapter, .afterBook:
             let finished = records.filter {
@@ -2578,6 +2592,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         automaticCleanupTask = nil
         let cleanupDates: [Date] = records.compactMap { record in
             guard record.manifest.purpose == .automaticCache,
+                automaticCachePins[record.manifest.downloadID]?.isEmpty
+                    != false,
                 let finishedAt = record.manifest.bookFinishedAt
             else {
                 return nil
@@ -3532,6 +3548,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         let currentKind = downloadOperationKinds[key]
         let shouldWait =
             kind == .cellularConfirmation
+            || kind == .localCompletion
             || (kind == .explicit && currentKind == .automatic)
         guard shouldWait else {
             return false
@@ -3771,6 +3788,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         if automaticCachePins[pin.downloadID]?.isEmpty == true {
             automaticCachePins[pin.downloadID] = nil
         }
+        scheduleAutomaticCleanup()
         guard deferredAutomaticCacheCleanup[pin.downloadID] != nil else {
             return
         }

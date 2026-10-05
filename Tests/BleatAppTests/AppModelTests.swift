@@ -5233,6 +5233,499 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    private func completedCleanupFixture(
+        storage: DownloadStorage,
+        account: ServerAccount,
+        itemID: String = "item-1",
+        purpose: DownloadPurpose = .automaticCache,
+        finishedAt: Date? = nil
+    ) async throws -> DownloadedBookRecord {
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: itemID, title: "Cleanup", libraryID: fixtureLibrary().id)
+        )
+        let tracks = (0..<2).map { index in
+            DownloadTrackPlan(
+                index: index, inode: "cleanup-track-\(index)",
+                expectedByteLength: 4,
+                mimeType: "audio/mpeg", safeExtension: .mp3,
+                destinationEntry: String(format: "%05d.mp3", index),
+                startOffset: Double(index * 1800), duration: 1800
+            )
+        }
+        var record = try await storage.create(
+            downloadID: DownloadID(rawValue: UUID().uuidString),
+            accountID: account.id,
+            plan: DownloadPlan(itemID: detail.id, tracks: tracks),
+            detail: detail, purpose: purpose,
+            automaticTargetTrackIndexes: purpose == .automaticCache ? [0] : nil
+        )
+        // A full-book cache intentionally promotes to manual; retain a partial window.
+        for track in purpose == .manual ? tracks : [tracks[0]] {
+            let identity = try DownloadTaskIdentity(
+                downloadID: record.manifest.downloadID, accountID: account.id,
+                itemID: detail.id, track: track
+            )
+            let staged = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: staged) }
+            try Data(repeating: 0xAB, count: 4).write(to: staged)
+            record = try await storage.commitChunk(
+                identity, temporaryURL: staged,
+                range: try DownloadByteRange(start: 0, endInclusive: 3),
+                validator: nil
+            )
+        }
+        XCTAssertEqual(record.manifest.purpose, purpose)
+        if let finishedAt {
+            record = try await storage.markBookFinished(record, at: finishedAt)
+        }
+        return record
+    }
+
+    func testExplicitCompletionAppliesAutomaticCleanupPolicies() async throws {
+        for policy in [
+            AutomaticDownloadCleanupPolicy.afterTwentyFourHours, .afterBook,
+            .afterChapter,
+        ] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            let account = try fixtureAccount()
+            let cache = try await completedCleanupFixture(
+                storage: storage, account: account)
+            let manual = try await completedCleanupFixture(
+                storage: storage, account: account, itemID: "manual",
+                purpose: .manual
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(cache.detail))
+            let model = AppModel(
+                service: service, downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("explicit-cleanup")
+            )
+            await model.start()
+            let previousPolicy = model.downloads.automaticCleanupPolicy
+            defer { model.downloads.setAutomaticCleanupPolicy(previousPolicy) }
+            model.downloads.setAutomaticCleanupPolicy(policy)
+            let before = Date()
+            await model.setFinished(true, detail: cache.detail)
+            XCTAssertEqual(model.bookProgressUpdateState, .saved)
+            if policy == .afterTwentyFourHours {
+                let retained = try XCTUnwrap(
+                    model.downloads.record(
+                        accountID: account.id, itemID: cache.detail.id))
+                let finishedAt = try XCTUnwrap(retained.manifest.bookFinishedAt)
+                XCTAssertGreaterThanOrEqual(
+                    finishedAt.timeIntervalSince1970,
+                    before.timeIntervalSince1970 - 0.001)
+                XCTAssertLessThanOrEqual(finishedAt, Date())
+                let persisted = try await storage.records()
+                XCTAssertEqual(
+                    persisted.first(where: {
+                        $0.manifest.downloadID == cache.manifest.downloadID
+                    })?.manifest.bookFinishedAt, finishedAt)
+            } else {
+                XCTAssertNil(
+                    model.downloads.record(
+                        accountID: account.id, itemID: cache.detail.id))
+            }
+            await service.setBookDetail(.success(manual.detail))
+            await model.setFinished(true, detail: manual.detail)
+            XCTAssertEqual(model.bookProgressUpdateState, .saved)
+            XCTAssertEqual(
+                model.downloads.record(
+                    accountID: account.id, itemID: manual.detail.id)?.manifest
+                    .purpose, .manual)
+            XCTAssertNil(
+                model.downloads.record(
+                    accountID: account.id, itemID: manual.detail.id)?.manifest
+                    .bookFinishedAt)
+        }
+    }
+
+    func testFailedExplicitCompletionDoesNotStartAutomaticCleanup() async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let cache = try await completedCleanupFixture(
+            storage: storage, account: account)
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(cache.detail),
+                progressUpdate: .failure(.progress(.unexpectedStatus(503)))
+            ), downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "failed-completion")
+        )
+        await model.start()
+        await model.setFinished(true, detail: cache.detail)
+        XCTAssertNotEqual(model.bookProgressUpdateState, .saved)
+        XCTAssertNotNil(
+            model.downloads.record(
+                accountID: account.id, itemID: cache.detail.id))
+        XCTAssertNil(
+            model.downloads.record(
+                accountID: account.id, itemID: cache.detail.id)?.manifest
+                .bookFinishedAt)
+    }
+
+    func testPlaybackStartClearsLocalCompletionBeforePreparation() async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let cache = try await completedCleanupFixture(
+            storage: storage, account: account)
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(cache.detail)),
+            downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "playback-reread")
+        )
+        let previousPolicy = model.downloads.automaticCleanupPolicy
+        defer { model.downloads.setAutomaticCleanupPolicy(previousPolicy) }
+        model.downloads.setAutomaticCleanupPolicy(.afterTwentyFourHours)
+        await model.start()
+        await model.downloads.recordLocalBookCompletion(
+            accountID: account.id, itemID: cache.detail.id, finishedAt: Date())
+        XCTAssertNotNil(model.downloads.records.first?.manifest.bookFinishedAt)
+        _ = await model.startPlayback(detail: cache.detail, account: account)
+        let persisted = try await storage.records()
+        XCTAssertNil(persisted.first?.manifest.bookFinishedAt)
+        XCTAssertNotNil(persisted.first)
+        await model.playback.stop()
+    }
+
+    func testStartupCleanupUsesPersistedLocalDatesAndSelectedPolicy()
+        async throws
+    {
+        for policy in [
+            AutomaticDownloadCleanupPolicy.afterTwentyFourHours, .afterBook,
+            .afterChapter,
+        ] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer {
+                defaults.removePersistentDomain(forName: suite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            defaults.set(
+                policy.rawValue,
+                forKey: "bleat.downloads.automaticCleanupPolicy.v1")
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            let account = try fixtureAccount()
+            let now = Date()
+            let expired = try await completedCleanupFixture(
+                storage: storage, account: account, itemID: "expired",
+                finishedAt: now.addingTimeInterval(-25 * 3600)
+            )
+            let recent = try await completedCleanupFixture(
+                storage: storage, account: account, itemID: "recent",
+                finishedAt: now.addingTimeInterval(-3600)
+            )
+            let legacy = try await completedCleanupFixture(
+                storage: storage, account: account, itemID: "legacy")
+            let manual = try await completedCleanupFixture(
+                storage: storage, account: account, itemID: "manual",
+                purpose: .manual, finishedAt: now.addingTimeInterval(-25 * 3600)
+            )
+            // Historical server completion is deliberately irrelevant to local cleanup.
+            let historicalProgress = LibraryBookProgress(
+                id: "historical", userID: account.user.id,
+                libraryItemID: legacy.detail.id,
+                bookID: legacy.detail.bookID, duration: legacy.detail.duration,
+                progress: 1, currentTime: legacy.detail.duration,
+                isFinished: true,
+                hideFromContinueListening: false, lastUpdateMilliseconds: 1,
+                startedAtMilliseconds: 1, finishedAtMilliseconds: 1
+            )
+            let historicalRecord = DownloadedBookRecord(
+                manifest: legacy.manifest,
+                detail: legacy.detail.replacingProgress(
+                    with: historicalProgress)
+            )
+            let layout = try DownloadStorageLayout(rootURL: root)
+            try JSONEncoder().encode(historicalRecord).write(
+                to: layout.recordURL(
+                    accountID: account.id, itemID: legacy.detail.id)
+            )
+            for launch in 0..<2 {
+                let model = DownloadModel(
+                    service: TestAppService(activeAccount: .success(nil)),
+                    defaults: defaults,
+                    storageRootURL: root,
+                    backgroundSessionIdentifier: backgroundSessionIdentifier(
+                        "startup-cleanup-\(launch)")
+                )
+                await model.start(account: nil)
+                XCTAssertNil(
+                    model.record(
+                        accountID: account.id, itemID: expired.detail.id))
+                XCTAssertEqual(
+                    model.record(
+                        accountID: account.id, itemID: manual.detail.id)?
+                        .manifest.purpose, .manual)
+                XCTAssertNil(
+                    model.record(
+                        accountID: account.id, itemID: legacy.detail.id)?
+                        .manifest.bookFinishedAt)
+                XCTAssertNotNil(
+                    model.record(
+                        accountID: account.id, itemID: legacy.detail.id))
+                if policy == .afterTwentyFourHours {
+                    XCTAssertEqual(
+                        model.record(
+                            accountID: account.id, itemID: recent.detail.id)?
+                            .manifest.bookFinishedAt,
+                        recent.manifest.bookFinishedAt)
+                } else {
+                    XCTAssertNil(
+                        model.record(
+                            accountID: account.id, itemID: recent.detail.id))
+                }
+            }
+        }
+    }
+
+    func testStartupSchedulesFutureAutomaticCleanup() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let record = try await completedCleanupFixture(
+            storage: storage, account: account,
+            finishedAt: Date().addingTimeInterval(-24 * 3600 + 3)
+        )
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "scheduled-cleanup")
+        )
+        await model.start(account: nil)
+        XCTAssertEqual(
+            model.records.first?.manifest.bookFinishedAt,
+            record.manifest.bookFinishedAt)
+        for _ in 0..<100 where !model.records.isEmpty {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(model.records.isEmpty)
+        let persisted = try await storage.records()
+        XCTAssertTrue(persisted.isEmpty)
+    }
+
+    func testNaturalCompletionIsLocalAndAccountScoped() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let other = try fixtureAccount(accountID: "other-account")
+        let cache = try await completedCleanupFixture(
+            storage: storage, account: account)
+        _ = try await completedCleanupFixture(storage: storage, account: other)
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = DownloadModel(
+            service: service, defaults: defaults, storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "natural-cleanup")
+        )
+        await model.start(account: nil)
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .bookFinished, detail: cache.detail, account: account,
+                currentTime: cache.detail.duration, chapters: [], fileRanges: []
+            ))
+        XCTAssertNotNil(
+            model.record(accountID: account.id, itemID: cache.detail.id)?
+                .manifest.bookFinishedAt)
+        XCTAssertNil(
+            model.record(accountID: other.id, itemID: cache.detail.id)?.manifest
+                .bookFinishedAt)
+        let planRequests = await service.downloadPlanRequests()
+        XCTAssertTrue(planRequests.isEmpty)
+    }
+
+    func testRereadClearsPinnedCompletionEvenWhenPlanFails() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        defaults.set(
+            AutomaticDownloadCleanupPolicy.afterBook.rawValue,
+            forKey: "bleat.downloads.automaticCleanupPolicy.v1")
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let cache = try await completedCleanupFixture(
+            storage: storage, account: account)
+        let model = DownloadModel(
+            service: TestAppService(
+                activeAccount: .success(nil),
+                downloadPlan: .failure(.downloadPlan(.unexpectedStatus(503)))),
+            defaults: defaults, storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "reread-cleanup")
+        )
+        await model.start(account: nil)
+        let pin = try XCTUnwrap(
+            model.pinAutomaticCacheTracks(for: cache, trackIndexes: [0]))
+        await model.recordLocalBookCompletion(
+            accountID: account.id, itemID: cache.detail.id, finishedAt: Date())
+        XCTAssertNotNil(model.records.first?.manifest.bookFinishedAt)
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .progress, detail: cache.detail, account: account,
+                currentTime: 1, chapters: [], fileRanges: []
+            )
+        )
+        // Ongoing playback after Mark Finished is not a new reread.
+        XCTAssertNotNil(model.records.first?.manifest.bookFinishedAt)
+        await model.recordLocalBookCompletion(
+            accountID: account.id, itemID: cache.detail.id, finishedAt: nil
+        )
+        await model.handleAutomaticPlaybackActivity(
+            AutomaticDownloadActivity(
+                kind: .progress, detail: cache.detail, account: account,
+                currentTime: 0, chapters: [], fileRanges: []
+            ))
+        XCTAssertNil(model.records.first?.manifest.bookFinishedAt)
+        model.releaseAutomaticCachePin(pin)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(model.records.count, 1)
+        let persisted = try await storage.records()
+        XCTAssertNil(persisted.first?.manifest.bookFinishedAt)
+    }
+
+    func testLocalCompletionWaitsForInFlightAutomaticWork() async throws {
+        for isFinished in [true, false] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer {
+                defaults.removePersistentDomain(forName: suite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            let account = try fixtureAccount()
+            let originalDate: Date? =
+                isFinished ? nil : Date().addingTimeInterval(-3600)
+            let cache = try await completedCleanupFixture(
+                storage: storage, account: account, finishedAt: originalDate)
+            let service = TestAppService(
+                activeAccount: .success(nil),
+                downloadPlan: .failure(.downloadPlan(.unexpectedStatus(503)))
+            )
+            let gate = AsyncGate()
+            await service.setDownloadPlanGate(gate)
+            let model = DownloadModel(
+                service: service, defaults: defaults, storageRootURL: root,
+                backgroundSessionIdentifier: backgroundSessionIdentifier(
+                    "serialized-completion")
+            )
+            await model.start(account: nil)
+            let progress = Task {
+                await model.handleAutomaticPlaybackActivity(
+                    AutomaticDownloadActivity(
+                        kind: .progress, detail: cache.detail, account: account,
+                        currentTime: 0, chapters: [], fileRanges: []
+                    ))
+            }
+            await gate.waitUntilEntered()
+            let finishedAt: Date? = isFinished ? Date() : nil
+            let completion = Task {
+                await model.recordLocalBookCompletion(
+                    accountID: account.id, itemID: cache.detail.id,
+                    finishedAt: finishedAt)
+            }
+            try await Task.sleep(for: .milliseconds(50))
+            XCTAssertEqual(
+                model.records.first?.manifest.bookFinishedAt, originalDate)
+            await gate.release()
+            await progress.value
+            await completion.value
+            XCTAssertEqual(
+                model.records.first?.manifest.bookFinishedAt, finishedAt)
+            let persisted = try await storage.records()
+            XCTAssertEqual(persisted.first?.manifest.bookFinishedAt, finishedAt)
+        }
+    }
+
+    func testPinnedCompletionDeletesAfterRelease() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        defaults.set(
+            AutomaticDownloadCleanupPolicy.afterBook.rawValue,
+            forKey: "bleat.downloads.automaticCleanupPolicy.v1")
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let account = try fixtureAccount()
+        let cache = try await completedCleanupFixture(
+            storage: storage, account: account)
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            defaults: defaults,
+            storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "pinned-completion")
+        )
+        await model.start(account: nil)
+        let pin = try XCTUnwrap(
+            model.pinAutomaticCacheTracks(for: cache, trackIndexes: [0]))
+        await model.recordLocalBookCompletion(
+            accountID: account.id, itemID: cache.detail.id, finishedAt: Date())
+        XCTAssertNotNil(model.records.first?.manifest.bookFinishedAt)
+        model.releaseAutomaticCachePin(pin)
+        for _ in 0..<100 where !model.records.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(model.records.isEmpty)
+    }
+
     func testExpiredAutomaticCacheIsRemovedWithoutDeletingManualDownload()
         async throws
     {
