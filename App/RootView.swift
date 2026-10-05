@@ -1097,6 +1097,9 @@ private struct OfflineDownloadsSheet: View {
                     }
                 }
         }
+        .onChange(of: model.playback.hasActiveBook) { _, hasActiveBook in
+            if !hasActiveBook { showPlayer = false }
+        }
         .sheet(isPresented: $showPlayer) {
             NowPlaying(
                 playback: model.playback,
@@ -1640,6 +1643,9 @@ private struct SignedInView: View {
             #else
                 mobileTabs(containerHeight: geometry.size.height)
             #endif
+        }
+        .onChange(of: model.playback.hasActiveBook) { _, hasActiveBook in
+            if !hasActiveBook { navigation.showsPlayer = false }
         }
         .sheet(isPresented: $navigation.showsPlayer) {
             if let accountID = model.playback.accountID,

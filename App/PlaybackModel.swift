@@ -372,11 +372,16 @@ private struct CachedContinuationOperation: Equatable {
     var resumePlayback: Bool
 }
 
+private struct PlaybackProgressSyncOperation {
+    let id = UUID()
+    let task: Task<Void, Never>
+}
+
 private struct ActivePlaybackSessionClose {
     let id = UUID()
     let accountID: AccountID
     let sessionID: PlaybackSessionID
-    let task: Task<Bool, Never>
+    let task: Task<Result<Void, AppServiceError>, Never>
 }
 
 @MainActor
@@ -417,6 +422,7 @@ final class PlaybackModel {
         }
     }
     private var activeSessionClose: ActivePlaybackSessionClose?
+    private var progressSyncOperation: PlaybackProgressSyncOperation?
     private var retainedRetryIdentity: RetainedPlaybackIdentity?
     private var localPlaybackSession: LocalPlaybackSession?
     private var sleepTask: Task<Void, Never>?
@@ -512,9 +518,9 @@ final class PlaybackModel {
             return false
         }
         return switch state {
-        case .idle:
+        case .idle, .ended:
             false
-        case .preparing, .ready, .playing, .paused, .buffering, .ended:
+        case .preparing, .ready, .playing, .paused, .buffering:
             true
         case .failed:
             preparation != nil || retainedRetryIdentity != nil
@@ -523,17 +529,17 @@ final class PlaybackModel {
 
     var showsMiniPlayer: Bool {
         switch state {
-        case .idle:
+        case .idle, .ended:
             false
         case .failed:
             hasActiveBook
-        case .preparing, .ready, .playing, .paused, .buffering, .ended:
+        case .preparing, .ready, .playing, .paused, .buffering:
             true
         }
     }
 
     var canReusePreparedPlayback: Bool {
-        !isPlaybackFailed
+        state != .ended && !isPlaybackFailed
     }
 
     func retainFailedBookForRetry(
@@ -2143,9 +2149,12 @@ final class PlaybackModel {
             forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: lastItem,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.handlePlaybackQueueEnded()
+        ) { @Sendable [weak self, weak player] _ in
+            Task { @MainActor [weak self, weak player] in
+                guard let self, let player, self.player === player else {
+                    return
+                }
+                await self.handlePlaybackQueueEnded()
             }
         }
     }
@@ -2206,15 +2215,15 @@ final class PlaybackModel {
         {
             return activeSessionClose
         }
-        let task = Task { [service] in
-            do {
+        let task = Task<Result<Void, AppServiceError>, Never> { [service] in
+            do throws(AppServiceError) {
                 try await service.closePlayback(
                     for: activeAccount,
                     sessionID: sessionID
                 )
-                return true
+                return .success(())
             } catch {
-                return false
+                return .failure(error)
             }
         }
         let close = ActivePlaybackSessionClose(
@@ -2229,13 +2238,14 @@ final class PlaybackModel {
     private func finishActiveSessionClose(
         _ close: ActivePlaybackSessionClose
     ) async {
-        let succeeded = await close.task.value
-        guard !succeeded,
-            activeSessionClose?.id == close.id
-        else {
+        switch await close.task.value {
+        case .success:
             return
+        case .failure:
+            if activeSessionClose?.id == close.id {
+                activeSessionClose = nil
+            }
         }
-        activeSessionClose = nil
     }
 
     private func releaseAutomaticCachedPlaybackWindow() {
@@ -3069,7 +3079,7 @@ final class PlaybackModel {
 
     private func handlePlaybackQueueEnded() async {
         guard automaticCachedPlaybackWindow != nil else {
-            playbackEnded()
+            await playbackEnded()
             return
         }
         await continueBeyondCachedWindow(
@@ -3122,7 +3132,7 @@ final class PlaybackModel {
             continuationOperation.requestedTime != nil
                 || continuationTime < duration - 0.001
         else {
-            playbackEnded()
+            await playbackEnded()
             return
         }
 
@@ -3296,7 +3306,9 @@ final class PlaybackModel {
         }
     }
 
-    private func playbackEnded() {
+    private func playbackEnded() async {
+        guard state != .ended else { return }
+        let operationGeneration = generation
         recordStatisticsSample(isAudibleAndAdvancing: false)
         playbackRequested = false
         pendingPlaybackStartSpan?.end(.succeeded)
@@ -3310,18 +3322,18 @@ final class PlaybackModel {
         releaseAutomaticCachedPlaybackWindow()
         resetCachedStreamingContinuation()
         state = .ended
-        updateNowPlaying()
+        resetPlayer()
+        nowPlayingCoordinator.clear()
         notifyAutomaticDownloadFinished()
-        Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-            if self.preparation?.sessionID != nil {
-                await self.syncProgress()
-            }
-            await self.recordNaturalCompletion()
-            await self.finishStatisticsSession()
+        if preparation?.sessionID != nil {
+            await syncProgress()
         }
+        guard generation == operationGeneration else { return }
+        await recordNaturalCompletion()
+        guard generation == operationGeneration else { return }
+        await finishStatisticsSession()
+        guard generation == operationGeneration else { return }
+        await closeActiveSession()
     }
 
     private var statisticsSessionID: PlaybackSessionID? {
@@ -3427,14 +3439,41 @@ final class PlaybackModel {
     }
 
     private func syncProgress() async {
-        guard syncState != .syncing,
-            let preparation
-        else {
-            return
+        let previousTask = progressSyncOperation?.task
+        let expectedAccountID = accountID
+        let expectedSessionID = preparation?.sessionID
+        let task = Task { @MainActor [weak self] in
+            await previousTask?.value
+            guard let self,
+                self.accountID == expectedAccountID,
+                self.preparation?.sessionID == expectedSessionID
+            else { return }
+            await self.performProgressSync()
         }
+        let operation = PlaybackProgressSyncOperation(task: task)
+        progressSyncOperation = operation
+        await task.value
+        if progressSyncOperation?.id == operation.id {
+            progressSyncOperation = nil
+        }
+    }
+
+    private func performProgressSync() async {
+        guard let preparation else { return }
         guard preparation.sessionID != nil else {
             persistLocalPosition()
             return
+        }
+        if let close = activeSessionClose,
+            close.accountID == accountID,
+            close.sessionID == preparation.sessionID
+        {
+            switch await close.task.value {
+            case .success:
+                return
+            case .failure:
+                break
+            }
         }
         await diagnostics.record(
             .started(.syncPlayback, category: .sync)

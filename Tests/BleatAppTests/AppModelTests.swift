@@ -10075,6 +10075,202 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func testNaturalBookEndClearsPlayerPresentationAndSystemNowPlaying()
+        async throws
+    {
+        for pausesBeforeCompletion in [false, true] {
+            let fixture = try playbackRecoveryFixture()
+            defer { fixture.cleanUp() }
+            let publisher = TestNowPlayingInfoPublisher()
+            let playback = fixture.model(
+                activation: TestAudioSessionActivation(),
+                nowPlayingCoordinator: NowPlayingCoordinator(
+                    infoCenter: publisher,
+                    registersRemoteCommands: false
+                )
+            )
+            await playback.startDownloaded(
+                detail: fixture.detail,
+                trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID,
+                account: nil
+            )
+            XCTAssertTrue(playback.hasActiveBook)
+            XCTAssertTrue(playback.showsMiniPlayer)
+            XCTAssertNotNil(publisher.nowPlayingInfo)
+            if pausesBeforeCompletion {
+                playback.setResumeRewind(.off)
+                playback.pause()
+                XCTAssertEqual(playback.state, .paused)
+            }
+            playback.play()
+            for _ in 0..<200 {
+                if playback.state == .ended { break }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            XCTAssertEqual(playback.state, .ended)
+            XCTAssertEqual(playback.currentTime, playback.duration)
+            XCTAssertFalse(playback.canReusePreparedPlayback)
+            XCTAssertFalse(playback.hasActiveBook)
+            XCTAssertFalse(playback.showsMiniPlayer)
+            XCTAssertNil(publisher.nowPlayingInfo)
+            XCTAssertEqual(publisher.playbackState, .stopped)
+            let position = PlaybackPositionStore(defaults: fixture.defaults)
+                .position(
+                    accountID: fixture.accountID,
+                    itemID: fixture.detail.id
+                )
+            XCTAssertEqual(position, playback.duration)
+            await playback.stop()
+        }
+    }
+
+    func testNaturalStreamedBookEndSyncsAndClosesSession() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let sessionID = PlaybackSessionID(rawValue: "completed-session")
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: sessionID.rawValue
+                    )
+                )
+            ]
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+        await playback.start(detail: fixture.detail, account: account)
+        playback.play()
+        for _ in 0..<200 {
+            if await service.playbackCloseSessionIDs().contains(sessionID) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(playback.state, .ended)
+        XCTAssertEqual(playback.currentTime, playback.duration)
+        XCTAssertFalse(playback.showsMiniPlayer)
+        let synced = await service.playbackSyncSessionIDs()
+        let closed = await service.playbackCloseSessionIDs()
+        XCTAssertTrue(synced.contains(sessionID))
+        XCTAssertEqual(closed, [sessionID])
+        await playback.stop()
+        let closedAfterStop = await service.playbackCloseSessionIDs()
+        let syncedAfterStop = await service.playbackSyncSessionIDs()
+        XCTAssertEqual(closedAfterStop, [sessionID])
+        XCTAssertEqual(syncedAfterStop, synced)
+    }
+
+    func testNaturalCompletionWaitsForPendingSyncBeforeFinalPositionAndClose()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let syncGate = AsyncGate()
+        let sessionID = PlaybackSessionID(rawValue: "pending-final-sync")
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: sessionID.rawValue
+                    ))
+            ],
+            firstPlaybackSyncGate: syncGate
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+        await playback.start(detail: fixture.detail, account: account)
+        playback.play()
+        playback.pause()
+        let syncStarted = await syncGate.waitUntilEntered(timeout: .seconds(2))
+        XCTAssertTrue(syncStarted)
+        playback.play()
+        for _ in 0..<200 {
+            if playback.state == .ended { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(playback.state, .ended)
+        let closedWhileSyncing = await service.playbackCloseSessionIDs()
+        let positionsWhileSyncing = await service.playbackSyncPositions()
+        XCTAssertTrue(closedWhileSyncing.isEmpty)
+        XCTAssertEqual(positionsWhileSyncing.count, 1)
+        await syncGate.release()
+        for _ in 0..<200 {
+            if await service.playbackCloseSessionIDs().contains(sessionID) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let positions = await service.playbackSyncPositions()
+        let closed = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(positions.count, 2)
+        XCTAssertLessThan(try XCTUnwrap(positions.first), playback.duration)
+        XCTAssertEqual(positions.last, playback.duration)
+        XCTAssertEqual(closed, [sessionID])
+        await playback.stop()
+    }
+
+    func testRestartAndAccountSwitchSkipSyncOfNaturallyClosedSessions()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let sessionIDs = [
+            "first-completed-session", "second-completed-session",
+        ]
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: sessionIDs.map { sessionID in
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail,
+                        audioURL: fixture.audioURL,
+                        sessionID: sessionID
+                    )
+                )
+            }
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(),
+            service: service
+        )
+        for (index, sessionID) in sessionIDs.enumerated() {
+            let syncedBeforeStart = await service.playbackSyncSessionIDs()
+            await playback.start(detail: fixture.detail, account: account)
+            let syncedAfterStart = await service.playbackSyncSessionIDs()
+            XCTAssertEqual(syncedAfterStart, syncedBeforeStart)
+            playback.play()
+            for _ in 0..<200 {
+                if await service.playbackCloseSessionIDs().count == index + 1 {
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            XCTAssertEqual(playback.state, .ended)
+            let closed = await service.playbackCloseSessionIDs()
+            XCTAssertEqual(closed.last, PlaybackSessionID(rawValue: sessionID))
+        }
+        let syncedBeforeSwitch = await service.playbackSyncSessionIDs()
+        await playback.stopForAccountSwitch()
+        let syncedAfterSwitch = await service.playbackSyncSessionIDs()
+        XCTAssertEqual(syncedAfterSwitch, syncedBeforeSwitch)
+        XCTAssertEqual(playback.state, .idle)
+    }
+
     func testDownloadedPlaybackCarriesCoverIntoNowPlaying() async throws {
         let fixture = try playbackRecoveryFixture()
         defer {
@@ -17949,6 +18145,11 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(outcome, .started(source: .downloaded))
 
+        model.playback.setResumeRewind(.off)
+        model.playback.pause()
+        XCTAssertEqual(model.playback.state, .paused)
+        model.playback.play()
+
         let didRetry = await waitUntil(timeout: .seconds(4)) {
             model.playback.coverLoadPolicy == .allowNetwork
         }
@@ -22108,6 +22309,9 @@ private struct PlaybackRecoveryFixture {
     func model(
         activation: TestAudioSessionActivation,
         service: TestAppService? = nil,
+        nowPlayingCoordinator: NowPlayingCoordinator = NowPlayingCoordinator(
+            registersRemoteCommands: false
+        ),
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer(),
         queuePlanning:
@@ -22129,6 +22333,7 @@ private struct PlaybackRecoveryFixture {
                 defaults: defaults
             ),
             preferencesStore: PlaybackPreferencesStore(defaults: defaults),
+            nowPlayingCoordinator: nowPlayingCoordinator,
             audioSessionActivation: {
                 activation.activate()
             },
@@ -22391,6 +22596,7 @@ private actor TestAppService: AppServicing {
     private let progressUpdateGate: AsyncGate?
     private let playbackGate: AsyncGate?
     private let playbackCloseGate: AsyncGate?
+    private let firstPlaybackSyncGate: AsyncGate?
     private let statisticsFinishGate: AsyncGate?
     private let statisticsSummaryGate: AsyncGate?
     private let statisticsProvider:
@@ -22618,6 +22824,7 @@ private actor TestAppService: AppServicing {
         progressUpdateGate: AsyncGate? = nil,
         playbackGate: AsyncGate? = nil,
         playbackCloseGate: AsyncGate? = nil,
+        firstPlaybackSyncGate: AsyncGate? = nil,
         statisticsFinishGate: AsyncGate? = nil,
         statisticsSummaryGate: AsyncGate? = nil,
         statisticsProvider: (
@@ -22701,6 +22908,7 @@ private actor TestAppService: AppServicing {
         self.progressUpdateGate = progressUpdateGate
         self.playbackGate = playbackGate
         self.playbackCloseGate = playbackCloseGate
+        self.firstPlaybackSyncGate = firstPlaybackSyncGate
         self.statisticsFinishGate = statisticsFinishGate
         self.statisticsSummaryGate = statisticsSummaryGate
         self.statisticsProvider = statisticsProvider
@@ -23426,6 +23634,11 @@ private actor TestAppService: AppServicing {
         duration: Double
     ) async throws(AppServiceError) {
         recordedPlaybackSyncSessionIDs.append(sessionID)
+        recordedPlaybackSyncPositions.append(currentTime)
+        if recordedPlaybackSyncSessionIDs.count == 1, let firstPlaybackSyncGate
+        {
+            await firstPlaybackSyncGate.enterAndWait()
+        }
     }
 
     func syncLocalPlaybackSessions(
@@ -23858,6 +24071,12 @@ private actor TestAppService: AppServicing {
 
     func playbackCloseSessionIDs() -> [PlaybackSessionID] {
         recordedPlaybackCloseSessionIDs
+    }
+
+    private var recordedPlaybackSyncPositions: [Double] = []
+
+    func playbackSyncPositions() -> [Double] {
+        recordedPlaybackSyncPositions
     }
 
     func playbackSyncSessionIDs() -> [PlaybackSessionID] {
