@@ -51,8 +51,9 @@ Apple developer account.
    pinned App Attest root, the attestation nonce, App ID hash, environment,
    zero initial counter, credential identifier, and consistency between the
    certificate public key and encoded public key.
-4. When validation-category and bundle-version claims are present, the verifier
-   applies the configured allowlists.
+4. Present bundle-version and validation-category claims are structurally parsed
+   and recorded after successful cryptographic verification. Their values never
+   restrict authentication.
 5. The challenge is consumed once and the verified public key is stored against
    an opaque installation identifier. The private key is never supplied to
    Bleat or stored by `bleat-api`.
@@ -87,7 +88,7 @@ and also verifies:
 - the RP ID hash matches Bleat's configured Apple App ID;
 - the App Attest authenticator flag has the expected value;
 - the assertion counter is nonzero and greater than the stored counter;
-- present validation-category and bundle-version claims match policy;
+- present extension claims are structurally valid and covered by cryptographic verification;
 - the challenge digest, purpose, installation binding, expiry, and unconsumed
   state all match; and
 - the counter can be conditionally advanced from the previously read value.
@@ -191,34 +192,23 @@ defense against Apple-platform or developer-account compromise.
 
 ### Missing iOS 27 claims
 
-The current verifier deliberately accepts attestation and assertion
-`authenticatorData` with no validation-category or bundle-version extensions for
-compatibility with supported Apple operating systems before iOS 27. When the
-claims are absent, `AppAttestPolicy::accepts` returns success and neither
-allowlist is enforced. When an extension payload is present, Bleat requires both
-claims to be structurally valid and allowlisted.
-
-This is an explicit compatibility tradeoff. The category allowlist cannot prove
-TestFlight or App Store distribution for evidence that lacks the category claim,
-and the bundle-version allowlist cannot constrain such evidence to a configured
-version. An attacker cannot strip claims from an already-signed modern assertion
-without breaking its signature, but legitimately claim-less evidence receives
-the legacy policy path.
+The verifier accepts attestation and assertion `authenticatorData` without the
+bundle-version and validation-category extensions on supported systems before
+iOS 27. Present extensions must be structurally valid and remain covered by the
+attestation nonce or assertion signature. Removing or modifying signed claims
+invalidates that cryptographic binding. Neither claim's value controls admission:
+authentication verifies the configured application identity and cryptographic
+proof, independent of application releases and distribution categories.
 
 ## Suggested hardening
 
-1. **Plan an enforceable end to the legacy claim-less path.** Measure the share
-   of active installations producing claim-less evidence without logging raw
-   evidence or stable device identifiers. When the supported OS floor permits,
-   add a production configuration that requires both claims and fail closed.
-
-2. **Use Apple's fraud-risk signal if abuse warrants it.** The verifier currently
+1. **Use Apple's fraud-risk signal if abuse warrants it.** The verifier currently
    validates that an attestation receipt exists but does not retain it in the
    verified installation result. Consider securely storing the receipt and
    integrating Apple's App Attest fraud assessment to detect one compromised
    device serving many remote clients.
 
-3. **Treat token theft as a separate control problem.** Keep the JWT lifetime at
+2. **Treat token theft as a separate control problem.** Keep the JWT lifetime at
    the minimum operationally practical value, ensure authorization headers and
    tokens never enter logs or telemetry, and require every receiver to validate
    the signature, issuer, audience, expiration, and optional `nbf`. Do not rely
@@ -227,30 +217,31 @@ the legacy policy path.
    sender-constrained request proof or an online revocation/session mechanism;
    adding a JWT identifier alone does not prevent replay.
 
-4. **Harden and rehearse signing-key operations.** Maintain least-privilege
+3. **Harden and rehearse signing-key operations.** Maintain least-privilege
    access to the mounted JWT key, monitored rotation with JWKS overlap, emergency
    rotation and revocation procedures, and verification that private material is
    absent from images, repositories, logs, crash artifacts, and backups where it
    is not required. Follow `docs/operations/jwks-revocation.md` when compromise
    requires eviction of a revoked key from the Collector's verifier cache.
 
-5. **Protect installation state as authentication data.** Restrict database and
+4. **Protect installation state as authentication data.** Restrict database and
    backup access, audit administrative mutations, preserve counter consistency
    during restore, and provide a tested way to disable suspicious installations.
    A database restore that rolls counters backward should be treated as a
    security event, not only a data-recovery event.
 
-6. **Monitor the existing abuse controls.** Alert on challenge-issuance limiting,
+5. **Monitor the existing abuse controls.** Alert on challenge-issuance limiting,
    signature failures, replay and counter-conflict categories, abnormal
    enrollment volume, and token issuance by environment or claim-presence class.
    Avoid logging assertion objects, key identifiers, JWTs, challenges, or raw
    installation identifiers.
 
-7. **Continuously test the signed boundary.** Keep regression fixtures for both
+6. **Continuously test the signed boundary.** Keep regression fixtures for both
    legacy claim-less and current extension-bearing Apple structures. Tests should
    mutate the flag, RP ID, counter, purpose, challenge identifiers, challenge,
    installation identifier, validation category, and bundle version and prove
-   that each mutation is rejected. Retain concurrent replay and counter-race
+   that unsigned mutations are rejected while newly signed versions and categories
+   are accepted. Retain concurrent replay and counter-race
    tests against the real database implementation.
 
 ## Implementation references

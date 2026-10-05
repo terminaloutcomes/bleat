@@ -39,6 +39,9 @@ internally by Apple services or AVFoundation are outside this count.
 
 Telemetry authentication and telemetry delivery are separate protocols.
 
+For the enrollment, token renewal, cryptographic checks, and metadata rules,
+see [Telemetry authentication](telemetry-authentication.md).
+
 The authentication control plane is:
 
 ```text

@@ -30,7 +30,7 @@ use uuid::Uuid;
 
 use crate::{
     app_attest::{
-        AppAttestPolicy, AppAttestVerificationError, AuthenticatedInstallationPrincipal,
+        AppAttestVerificationError, AuthenticatedInstallationPrincipal,
         InstallationEvidenceVerifier,
     },
     challenge::{
@@ -154,11 +154,6 @@ pub fn router(config: &Config, database: DatabaseConnection) -> Result<Router, R
                 .as_deref()
                 .ok_or(RouterBuildError::AppAttest)?,
             config.app_attest_environment,
-            AppAttestPolicy::new(
-                config.app_attest_bundle_versions.clone(),
-                config.app_attest_validation_categories.iter().copied(),
-            )
-            .map_err(|_| RouterBuildError::AppAttest)?,
         )
         .map_err(|_| RouterBuildError::AppAttest)?,
     };

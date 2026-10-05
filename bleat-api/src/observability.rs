@@ -406,8 +406,6 @@ mod tests {
             apple_team_id: None,
             app_identifier: None,
             app_attest_environment: AppAttestEnvironment::Development,
-            app_attest_bundle_versions: Vec::new(),
-            app_attest_validation_categories: Vec::new(),
             database: DatabaseConfig::new(
                 "postgres://bleat:development@127.0.0.1:5432/bleat".to_owned(),
                 16,

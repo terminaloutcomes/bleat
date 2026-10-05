@@ -82,8 +82,6 @@ Flags and matching environment variables configure the service:
 | `--apple-team-id` | `BLEAT_API_APPLE_TEAM_ID` | unset |
 | `--app-identifier` | `BLEAT_API_APP_IDENTIFIER` | unset |
 | `--app-attest-environment` | `BLEAT_API_APP_ATTEST_ENVIRONMENT` | `development` |
-| `--app-attest-bundle-versions` | `BLEAT_API_APP_ATTEST_BUNDLE_VERSIONS` | unset |
-| `--app-attest-validation-categories` | `BLEAT_API_APP_ATTEST_VALIDATION_CATEGORIES` | unset |
 | `--database-url` | `BLEAT_API_DATABASE_URL` | required; supplied by the local container workflow |
 | `--database-max-connections` | `BLEAT_API_DATABASE_MAX_CONNECTIONS` | `16` |
 | `--database-connect-timeout-seconds` | `BLEAT_API_DATABASE_CONNECT_TIMEOUT_SECONDS` | `5` |
@@ -106,11 +104,8 @@ Flags and matching environment variables configure the service:
 
 Only PostgreSQL URLs are accepted. Production mode also requires an HTTPS
 public issuer, Apple team ID, app identifier, and the production App Attest
-environment. It also requires comma-separated allowlists for accepted Apple
-bundle versions and validation categories. Apple's currently documented
-application categories are `1` through `6` and `10`; configure only the
-categories appropriate to the deployed build, such as TestFlight (`2`) or App
-Store (`4`). Invalid configuration or unavailable database migrations stop
+environment. Bundle versions and validation categories are parsed and recorded
+after successful verification for diagnostics; they do not restrict authentication. Invalid configuration or unavailable database migrations stop
 startup before the listener is bound. The production issuer must be an HTTPS
 origin without credentials, a path, a query, or a fragment. The JWT signing-key
 file contains an unencrypted SEC1 DER P-256 private key supplied through a
@@ -241,8 +236,9 @@ Production enrollment follows Apple's App Attest validation sequence. It
 strictly and boundedly parses the attestation CBOR and authenticator data,
 validates the certificate path, nonce, App ID hash, environment AAGUID,
 credential ID, and certificate and encoded COSE public keys before persisting
-an installation. On iOS 27 and later, it also validates the appended bundle
-version and validation category against the configured application policy.
+an installation. On iOS 27 and later, appended bundle-version and validation-category
+claims are structurally validated and covered by cryptographic verification. Their
+values are diagnostic information, not authentication gates.
 Earlier Apple operating systems do not emit those extensions, so their absence
 does not bypass the certificate, nonce, application, credential, signature, or
 counter checks. Assertions are checked against that stored public key and

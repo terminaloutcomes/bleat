@@ -23,4 +23,4 @@
 # Architecture
 
 - [Logging and Telemetry](architecture-logging.md)
-  
+- [Telemetry Authentication](telemetry-authentication.md)
