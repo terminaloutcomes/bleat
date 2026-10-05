@@ -97,7 +97,6 @@ were corrected; both final focused journeys passed.
 The diagnostic collector for one completed failed UI run stalled; only that
 collector was interrupted, preserving the completed test result bundle.
 
-
 ## Known limitations from independent review
 
 - The initial live-polling P2 triggered full-ledger rebuilds after five-second
