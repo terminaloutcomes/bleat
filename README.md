@@ -606,9 +606,6 @@ intervals. AirPods report only Previous or Next to Bleat, not the originating
 ear or tap count.
 Removing headphones pauses playback. Removing the signed-in account stops
 playback and closes its server session before credentials are deleted.
-Reaching the end of a book dismisses the mini-player and Now Playing screen,
-clears system Now Playing, and preserves the final playback position.
-
 Switching accounts first stops playback and clears the mini-player and system
 Now Playing state, then activates the selected account. If activation fails,
 the current account remains selected while playback stays stopped.
