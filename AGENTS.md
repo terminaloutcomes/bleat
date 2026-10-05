@@ -18,9 +18,7 @@ Use these documents for their specific purposes:
   workflows.
 - `docs/requirements-traceability.md` maps requirements to implementation and
   test evidence.
-- GitHub issues and milestones record remaining release work. The
-  [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
-  is the version 1.0 backlog.
+- GitHub issues and milestones record ongoing and completed work tasks.
 
 Keep these sources aligned when a change affects their subject matter. Do not
 describe a proposed or partially implemented behavior as complete.
@@ -39,7 +37,7 @@ The current targets are:
 - no third-party runtime dependencies in version 1.0.
 
 The Swift package also supports macOS 15 so its host-side tests can run without
-an iOS Simulator.
+an iOS Simulator
 
 Native Audiobookshelf username/password login with rotating access and refresh
 tokens is the active authentication scope. `OpenIDAuthentication.swift` is
@@ -262,6 +260,16 @@ resolution, and temporary directories outside the repository.
 
 Use `docs/development.md` as the canonical reference for supported test and
 validation commands.
+
+If a supported validation command fails because its repository-owned task,
+script, or configuration is broken, repair that entry point and rerun the exact
+supported command before handoff. This applies even when the defect predates
+your changes. Running the underlying tool directly may help diagnose the
+failure, but its success does not satisfy the supported validation gate. Do not
+drop flags, checks, targets, or coverage to make the command pass. A broken
+entry point remains unresolved until the repaired command passes with the
+intended checks actually executed, or the user explicitly defers the repair.
+For external execution blockers, follow the environment-blocker rules above.
 
 Put tests in test targets, not production entry points. Add focused tests with
 each implementation change and use versioned saved fixtures for response
