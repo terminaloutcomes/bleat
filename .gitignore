@@ -25,3 +25,6 @@ TestSupport/ServerHarness/media-large/*
 site/node_modules/
 site/public/
 site/static/styles.css
+
+# mdbook stuff
+book

@@ -1,0 +1,5 @@
+[book]
+title = "Bleat"
+authors = ["James Hodgkinson"]
+language = "en"
+src = "docs"

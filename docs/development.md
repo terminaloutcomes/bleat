@@ -332,7 +332,7 @@ The Rust command uses the live harness for Docker setup and cleanup.
 Run `mise run test:compatibility` to exercise the minimum 2.26.0 and pinned
 current-stable 2.37.0 profiles sequentially. The profile manifests and
 verification results are documented in
-`docs/audiobookshelf-compatibility.md`.
+[Audiobookshelf Compatibility](audiobookshelf-compatibility.md).
 
 Changes spanning the app, HTTPS trust, playback, downloads, offline state, or
 pending synchronization require the disposable live app journeys when
@@ -526,7 +526,7 @@ BLEAT_HOST_SIGNING=unsigned swift test -c release -Xswiftc -DBLEAT_STATISTICS_PE
 The compiler condition keeps this expensive benchmark out of ordinary test
 builds without adding an unexplained skipped test. Record both uncached rebuild
 and cached launch timings; they prove different things. See
-`docs/statistics-validation.md` for the measured environment and results.
+[Statistics Validation](statistics-validation.md) for the measured environment and results.
 
 The issue #26 implementation has an explicitly approved SwiftData boundary:
 statistics fetches and saves use synchronous `ModelContext` APIs on

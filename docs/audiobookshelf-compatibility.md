@@ -4,7 +4,7 @@ Bleat supports Audiobookshelf 2.26.0 or newer. The disposable compatibility
 matrix exercises the minimum supported release and a pinned current-stable
 release with the same `BleatCoreLiveTests` suite on root-hosted and
 `/audiobookshelf` path-prefixed servers. Audiobookshelf 2.36.0 remains the
-source-audited contract baseline in `docs/audiobookshelf-ios-app-spec.md`.
+source-audited contract baseline in [The iOS App Spec](audiobookshelf-ios-app-spec.md).
 
 | Role | Version | Image index digest | Root | Prefix | Verified |
 | --- | --- | --- | --- | --- | --- |
