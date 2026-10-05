@@ -29,14 +29,7 @@ run = "cargo clippy --all-targets --all-features -p bleat-api -- -D warnings"
 [tasks."api:test"]
 description = "Test bleat-api against disposable PostgreSQL"
 depends = ["rust:fmt"]
-run = """cargo test \
-  --quiet \
-  --locked \
-  -p bleat-api
-  --all-features \
-  -- \
-  --nocapture \
-  --test-threads=4"""
+run = "cargo test --quiet --locked -p bleat-api --all-features -- --nocapture --test-threads=4"
 
 [tasks."api:build"]
 description = "Build the bleat-api release binary"
