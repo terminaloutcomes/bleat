@@ -20711,6 +20711,106 @@ final class AppModelTests: XCTestCase {
             coordinator.disconnect()
         }
 
+        func testCarPlayObservationReconnectRejectsStaleRegistrations() async {
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            await model.start()
+            model.playback.setRate(1)
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            for _ in 0..<3 {
+                coordinator.connect(TestCarPlayPresenter())
+            }
+
+            model.playback.setRate(1.25)
+            await waitForCarPlayObservationCallbacks(coordinator, count: 3)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 1)
+
+            model.playback.setRate(1.5)
+            await waitForCarPlayObservationCallbacks(coordinator, count: 4)
+            XCTAssertEqual(coordinator.observationCallbackCountForTesting, 4)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 2)
+        }
+
+        func testCarPlayObservationRejectsCallbackQueuedBeforeReconnect()
+            async
+        {
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            await model.start()
+            model.playback.setRate(1)
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            coordinator.connect(TestCarPlayPresenter())
+
+            model.playback.setRate(1.25)
+            coordinator.disconnect()
+            coordinator.connect(TestCarPlayPresenter())
+            await waitForCarPlayObservationCallbacks(coordinator, count: 1)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 0)
+
+            model.playback.setRate(1.5)
+            await waitForCarPlayObservationCallbacks(coordinator, count: 2)
+            XCTAssertEqual(coordinator.observationCallbackCountForTesting, 2)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 1)
+        }
+
+        func testCarPlayObservationDisconnectedMutationDoesNotRearm() async {
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            await model.start()
+            model.playback.setRate(1)
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            coordinator.connect(TestCarPlayPresenter())
+            coordinator.disconnect()
+
+            model.playback.setRate(1.25)
+            await waitForCarPlayObservationCallbacks(coordinator, count: 1)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 0)
+
+            coordinator.connect(TestCarPlayPresenter())
+            model.playback.setRate(1.5)
+            await waitForCarPlayObservationCallbacks(coordinator, count: 2)
+            XCTAssertEqual(coordinator.observationCallbackCountForTesting, 2)
+            XCTAssertEqual(coordinator.observationRefreshCountForTesting, 1)
+        }
+
+        func testCarPlayObservationRearmsWithinCurrentConnection() async {
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil))
+            )
+            await model.start()
+            model.playback.setRate(1)
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            coordinator.connect(TestCarPlayPresenter())
+
+            for (index, rate) in [Float(1.25), 1.5, 1.75].enumerated() {
+                model.playback.setRate(rate)
+                await waitForCarPlayObservationCallbacks(
+                    coordinator, count: index + 1
+                )
+                XCTAssertEqual(
+                    coordinator.observationRefreshCountForTesting, index + 1
+                )
+            }
+            XCTAssertEqual(coordinator.observationCallbackCountForTesting, 3)
+        }
+
+        private func waitForCarPlayObservationCallbacks(
+            _ coordinator: CarPlayCoordinator,
+            count: Int
+        ) async {
+            let receivedCallbacks = await waitUntil(timeout: .seconds(2)) {
+                coordinator.observationCallbackCountForTesting >= count
+            }
+            XCTAssertTrue(receivedCallbacks)
+        }
+
         func testCarPlayAccountAndLibraryChangesUseSharedBrowsingContext()
             async throws
         {

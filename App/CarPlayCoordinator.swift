@@ -123,6 +123,10 @@
         private var artworkTasks: [Task<Void, Never>] = []
         private var renderedPresentation: TemplatePresentation?
         private var presentationGeneration: UInt64 = 0
+        #if DEBUG
+            private(set) var observationCallbackCountForTesting = 0
+            private(set) var observationRefreshCountForTesting = 0
+        #endif
 
         init(
             model: AppModel,
@@ -901,6 +905,7 @@
             guard presenter != nil else {
                 return
             }
+            let generation = presentationGeneration
             withObservationTracking {
                 _ = model.phase
                 _ = model.account?.id
@@ -916,9 +921,20 @@
                 _ = model.playback.rate
             } onChange: { [weak self] in
                 Task { @MainActor [weak self] in
-                    guard let self, presenter != nil else {
+                    guard let self else {
                         return
                     }
+                    #if DEBUG
+                        observationCallbackCountForTesting += 1
+                    #endif
+                    guard presenter != nil,
+                        generation == presentationGeneration
+                    else {
+                        return
+                    }
+                    #if DEBUG
+                        observationRefreshCountForTesting += 1
+                    #endif
                     refreshTemplates()
                     configureNowPlayingTemplate()
                     observeModel()
