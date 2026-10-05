@@ -47,8 +47,6 @@ fn test_arguments(postgres: &TestPostgres) -> Arguments {
         apple_team_id: None,
         app_identifier: None,
         app_attest_environment: AppAttestEnvironment::Development,
-        app_attest_bundle_versions: Vec::new(),
-        app_attest_validation_categories: Vec::new(),
         database_url: postgres.database_url().to_owned(),
         database_max_connections: 4,
         database_connect_timeout_seconds: 5,
@@ -113,8 +111,6 @@ async fn production_router(postgres: &TestPostgres) -> axum::Router {
     arguments.apple_team_id = Some("TEAM123456".to_owned());
     arguments.app_identifier = Some("com.example.Bleat".to_owned());
     arguments.app_attest_environment = AppAttestEnvironment::Production;
-    arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-    arguments.app_attest_validation_categories = vec![2, 4];
     arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
     let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
         .expect("test configuration should validate");
@@ -136,8 +132,6 @@ async fn production_router_preserves_the_signing_configuration_failure() {
     arguments.apple_team_id = Some("TEAM123456".to_owned());
     arguments.app_identifier = Some("com.example.Bleat".to_owned());
     arguments.app_attest_environment = AppAttestEnvironment::Production;
-    arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-    arguments.app_attest_validation_categories = vec![2, 4];
     arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
     let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
         .expect("test configuration should validate");

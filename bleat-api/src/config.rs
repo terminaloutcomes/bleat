@@ -169,20 +169,6 @@ pub struct Arguments {
     #[arg(long, env = "BLEAT_API_APP_ATTEST_ENVIRONMENT", value_enum, default_value_t = AppAttestEnvironment::Development)]
     pub app_attest_environment: AppAttestEnvironment,
 
-    #[arg(
-        long,
-        env = "BLEAT_API_APP_ATTEST_BUNDLE_VERSIONS",
-        value_delimiter = ','
-    )]
-    pub app_attest_bundle_versions: Vec<String>,
-
-    #[arg(
-        long,
-        env = "BLEAT_API_APP_ATTEST_VALIDATION_CATEGORIES",
-        value_delimiter = ','
-    )]
-    pub app_attest_validation_categories: Vec<u32>,
-
     #[arg(long, env = "BLEAT_API_DATABASE_URL", hide_env_values = true)]
     pub database_url: String,
 
@@ -286,8 +272,6 @@ pub struct Config {
     pub apple_team_id: Option<String>,
     pub app_identifier: Option<String>,
     pub app_attest_environment: AppAttestEnvironment,
-    pub app_attest_bundle_versions: Vec<String>,
-    pub app_attest_validation_categories: Vec<u32>,
     pub database: DatabaseConfig,
     pub challenge_lifetime: Duration,
     pub challenge_cleanup_batch_size: usize,
@@ -397,12 +381,6 @@ impl Config {
             apple_team_id: non_empty(arguments.apple_team_id),
             app_identifier: non_empty(arguments.app_identifier),
             app_attest_environment: arguments.app_attest_environment,
-            app_attest_bundle_versions: arguments
-                .app_attest_bundle_versions
-                .into_iter()
-                .filter_map(|value| non_empty(Some(value)))
-                .collect(),
-            app_attest_validation_categories: arguments.app_attest_validation_categories,
             database,
             challenge_lifetime: Duration::from_secs(arguments.challenge_lifetime_seconds),
             challenge_cleanup_batch_size: arguments.challenge_cleanup_batch_size,
@@ -502,23 +480,6 @@ impl Config {
             if self.app_attest_environment != AppAttestEnvironment::Production {
                 return Err(ConfigError::ProductionAppAttestRequired);
             }
-            if self.app_attest_bundle_versions.is_empty() {
-                return Err(ConfigError::MissingProductionValue(
-                    "App Attest bundle-version allowlist",
-                ));
-            }
-            if self.app_attest_validation_categories.is_empty() {
-                return Err(ConfigError::MissingProductionValue(
-                    "App Attest validation-category allowlist",
-                ));
-            }
-            if self
-                .app_attest_validation_categories
-                .iter()
-                .any(|value| !matches!(value, 1..=6 | 10))
-            {
-                return Err(ConfigError::InvalidAppAttestValidationCategory);
-            }
             if self.jwt_signing_key_file.is_none() {
                 return Err(ConfigError::MissingProductionValue("JWT signing-key file"));
             }
@@ -583,8 +544,6 @@ pub enum ConfigError {
     ProductionAppAttestRequired,
     #[error("JWT signing-key files are accepted only in production mode")]
     ProductionSigningConfigurationOnly,
-    #[error("App Attest validation categories must use an Apple application category")]
-    InvalidAppAttestValidationCategory,
     #[error("trusted forwarding headers require at least one trusted proxy CIDR")]
     ForwardingHeadersRequireTrustedProxies,
     #[error("trusted proxy CIDRs must be valid IPv4 or IPv6 networks")]
@@ -719,8 +678,6 @@ mod tests {
             apple_team_id: None,
             app_identifier: None,
             app_attest_environment: AppAttestEnvironment::Development,
-            app_attest_bundle_versions: Vec::new(),
-            app_attest_validation_categories: Vec::new(),
             database_url: "postgres://bleat:development@127.0.0.1:5432/bleat".to_owned(),
             database_max_connections: 16,
             database_connect_timeout_seconds: 5,
@@ -910,33 +867,10 @@ mod tests {
             ConfigError::ProductionAppAttestRequired
         );
 
-        let missing_bundle_versions = config(|arguments| {
-            production(arguments);
-            arguments.public_issuer =
-                Url::parse("https://telemetry.example").expect("test issuer should parse");
-        });
-        assert_eq!(
-            missing_bundle_versions.expect_err("bundle versions must be required"),
-            ConfigError::MissingProductionValue("App Attest bundle-version allowlist")
-        );
-
-        let missing_validation_categories = config(|arguments| {
-            production(arguments);
-            arguments.public_issuer =
-                Url::parse("https://telemetry.example").expect("test issuer should parse");
-            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-        });
-        assert_eq!(
-            missing_validation_categories.expect_err("validation categories must be required"),
-            ConfigError::MissingProductionValue("App Attest validation-category allowlist")
-        );
-
         let missing_signing_key = config(|arguments| {
             production(arguments);
             arguments.public_issuer =
                 Url::parse("https://telemetry.example").expect("test issuer should parse");
-            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-            arguments.app_attest_validation_categories = vec![4];
         });
         assert_eq!(
             missing_signing_key.expect_err("JWT signing key must be required"),
@@ -947,8 +881,6 @@ mod tests {
             production(arguments);
             arguments.public_issuer =
                 Url::parse("https://telemetry.example/path").expect("test issuer should parse");
-            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-            arguments.app_attest_validation_categories = vec![4];
             arguments.jwt_signing_key_file = Some(PathBuf::from("/run/secrets/jwt.der"));
         });
         assert_eq!(
@@ -974,8 +906,6 @@ mod tests {
             arguments.apple_team_id = Some("TEAM".to_owned());
             arguments.app_identifier = Some("com.example.bleat".to_owned());
             arguments.app_attest_environment = AppAttestEnvironment::Production;
-            arguments.app_attest_bundle_versions = vec!["1".to_owned()];
-            arguments.app_attest_validation_categories = vec![4];
             arguments.jwt_signing_key_file = Some(PathBuf::from("/private/signing-key.der"));
             arguments.jwt_public_key_set_file = Some(PathBuf::from("/private/public-keys.json"));
         })

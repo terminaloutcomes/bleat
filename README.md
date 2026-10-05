@@ -1177,6 +1177,10 @@ physical device.
 
 ## Run bleat-api
 
+See [Telemetry authentication](docs/telemetry-authentication.md) for the complete
+enrollment, token renewal, and Collector authentication flow. App versions and
+distribution categories are diagnostic metadata, never authentication gates.
+
 The Rust telemetry-authentication service lives in `bleat-api/`. It provides
 database-aware health/readiness, PostgreSQL-backed installation state, and
 single-use opaque attestation and token challenges. Its development mode also

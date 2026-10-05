@@ -73,10 +73,6 @@ async fn signing_configuration_failure_happens_before_listener_bind() {
         "com.example.Bleat",
         "--app-attest-environment",
         "production",
-        "--app-attest-bundle-versions",
-        "1",
-        "--app-attest-validation-categories",
-        "2,4",
         "--jwt-signing-key-file",
         &missing_signing_key,
     ]);

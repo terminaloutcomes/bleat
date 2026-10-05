@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::Cursor,
-};
+use std::{collections::BTreeMap, io::Cursor};
 
 use base64::{
     Engine as _,
@@ -119,7 +116,6 @@ pub enum AppAttestVerificationStage {
     AttestationNonceExtension,
     AttestationNonce,
     AttestationApplication,
-    AttestationPolicy,
     AssertionEnvelope,
     AssertionSignature,
     AssertionAuthenticatorLength,
@@ -243,7 +239,6 @@ impl AppAttestVerificationStage {
             Self::AttestationNonceExtension => "attestation.nonce_extension",
             Self::AttestationNonce => "attestation.nonce",
             Self::AttestationApplication => "attestation.application",
-            Self::AttestationPolicy => "attestation.policy",
             Self::AssertionEnvelope => "assertion.envelope",
             Self::AssertionSignature => "assertion.signature",
             Self::AssertionAuthenticatorLength => "assertion.authenticator.length",
@@ -372,52 +367,6 @@ pub struct AuthenticatedInstallationPrincipal {
 }
 
 #[derive(Clone)]
-pub struct AppAttestPolicy {
-    bundle_versions: BTreeSet<String>,
-    validation_categories: BTreeSet<u32>,
-}
-
-impl AppAttestPolicy {
-    pub fn new(
-        bundle_versions: impl IntoIterator<Item = String>,
-        validation_categories: impl IntoIterator<Item = u32>,
-    ) -> Result<Self, AppAttestVerificationError> {
-        let bundle_versions = bundle_versions
-            .into_iter()
-            .map(|value| value.trim().to_owned())
-            .collect::<BTreeSet<_>>();
-        let validation_categories = validation_categories.into_iter().collect::<BTreeSet<_>>();
-        if bundle_versions.is_empty()
-            || bundle_versions
-                .iter()
-                .any(|value| value.is_empty() || value.len() > MAX_BUNDLE_VERSION_BYTES)
-            || validation_categories.is_empty()
-            || validation_categories
-                .iter()
-                .any(|value| !matches!(value, 1..=6 | 10))
-        {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::WrongApplication,
-            ));
-        }
-        Ok(Self {
-            bundle_versions,
-            validation_categories,
-        })
-    }
-
-    fn accepts(&self, claims: Option<&AppAttestClaims>) -> bool {
-        let Some(claims) = claims else {
-            return true;
-        };
-        self.bundle_versions.contains(&claims.bundle_version)
-            && self
-                .validation_categories
-                .contains(&claims.validation_category)
-    }
-}
-
-#[derive(Clone)]
 pub enum InstallationEvidenceVerifier {
     Development,
     Production(ProductionAppAttestVerifier),
@@ -428,15 +377,9 @@ impl InstallationEvidenceVerifier {
         team_id: &str,
         app_identifier: &str,
         environment: AppAttestEnvironment,
-        policy: AppAttestPolicy,
     ) -> Result<Self, AppAttestVerificationError> {
-        ProductionAppAttestVerifier::with_embedded_apple_root(
-            team_id,
-            app_identifier,
-            environment,
-            policy,
-        )
-        .map(Self::Production)
+        ProductionAppAttestVerifier::with_embedded_apple_root(team_id, app_identifier, environment)
+            .map(Self::Production)
     }
 
     pub fn verify_attestation(
@@ -506,7 +449,6 @@ fn map_development_error(error: DevelopmentEvidenceError) -> AppAttestVerificati
 pub struct ProductionAppAttestVerifier {
     app_id: String,
     environment: InstallationEnvironment,
-    policy: AppAttestPolicy,
     trust_anchor: CertificateDer<'static>,
 }
 
@@ -515,7 +457,6 @@ impl ProductionAppAttestVerifier {
         team_id: &str,
         app_identifier: &str,
         environment: AppAttestEnvironment,
-        policy: AppAttestPolicy,
     ) -> Result<Self, AppAttestVerificationError> {
         let trust_anchor = parse_single_pem_certificate(APPLE_ROOT_PEM)?;
         let digest: [u8; 32] = Sha256::digest(trust_anchor.as_ref()).into();
@@ -524,14 +465,13 @@ impl ProductionAppAttestVerifier {
                 AppAttestFailureCategory::InvalidTrustAnchor,
             ));
         }
-        Self::new(team_id, app_identifier, environment, policy, trust_anchor)
+        Self::new(team_id, app_identifier, environment, trust_anchor)
     }
 
     pub fn new(
         team_id: &str,
         app_identifier: &str,
         environment: AppAttestEnvironment,
-        policy: AppAttestPolicy,
         trust_anchor: CertificateDer<'static>,
     ) -> Result<Self, AppAttestVerificationError> {
         if team_id.trim().is_empty() || app_identifier.trim().is_empty() {
@@ -548,7 +488,6 @@ impl ProductionAppAttestVerifier {
                 AppAttestEnvironment::Development => InstallationEnvironment::Development,
                 AppAttestEnvironment::Production => InstallationEnvironment::Production,
             },
-            policy,
             trust_anchor,
         })
     }
@@ -584,12 +523,6 @@ impl ProductionAppAttestVerifier {
                 AppAttestFailureCategory::WrongEnvironment,
             )
             .with_stage(AppAttestVerificationStage::AttestationEnvironment));
-        }
-        if !self.policy.accepts(authenticator.claims.as_ref()) {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::WrongApplication,
-            )
-            .with_stage(AppAttestVerificationStage::AttestationPolicy));
         }
 
         let decoded_key_id = STANDARD.decode(key_id).map_err(|_| {
@@ -644,6 +577,14 @@ impl ProductionAppAttestVerifier {
             );
         }
 
+        if let Some(claims) = &authenticator.claims {
+            tracing::info!(
+                operation = "attestation.verify",
+                app_attest.validation_category = claims.validation_category,
+                app_attest.bundle_version = %claims.bundle_version,
+                "App Attest claims verified"
+            );
+        }
         Ok(VerifiedAttestation {
             public_key: public_key.to_vec(),
             environment: self.environment,
@@ -680,12 +621,6 @@ impl ProductionAppAttestVerifier {
                     .with_stage(AppAttestVerificationStage::AssertionCounter),
             );
         }
-        if !self.policy.accepts(authenticator.claims.as_ref()) {
-            return Err(AppAttestVerificationError::new(
-                AppAttestFailureCategory::WrongApplication,
-            )
-            .with_stage(AppAttestVerificationStage::AssertionExtensions));
-        }
 
         let key = VerifyingKey::from_sec1_bytes(public_key).map_err(|_| {
             AppAttestVerificationError::new(AppAttestFailureCategory::InvalidCredential)
@@ -702,6 +637,14 @@ impl ProductionAppAttestVerifier {
             AppAttestVerificationError::new(AppAttestFailureCategory::InvalidSignature)
                 .with_stage(AppAttestVerificationStage::AssertionSignatureVerification)
         })?;
+        if let Some(claims) = &authenticator.claims {
+            tracing::info!(
+                operation = "assertion.verify",
+                app_attest.validation_category = claims.validation_category,
+                app_attest.bundle_version = %claims.bundle_version,
+                "App Attest claims verified"
+            );
+        }
         Ok(VerifiedAssertion {
             counter: authenticator.counter,
         })
@@ -1262,11 +1205,6 @@ mod tests {
     const BUNDLE_VERSION: &str = "42";
     const VALIDATION_CATEGORY: u32 = 3;
 
-    fn test_policy() -> AppAttestPolicy {
-        AppAttestPolicy::new([BUNDLE_VERSION.to_owned()], [VALIDATION_CATEGORY])
-            .expect("test policy should be valid")
-    }
-
     struct SyntheticEvidence {
         verifier: ProductionAppAttestVerifier,
         signing_key: SigningKey,
@@ -1278,20 +1216,34 @@ mod tests {
 
     impl SyntheticEvidence {
         fn new(client_data_hash: &[u8; 32], environment: AppAttestEnvironment) -> Self {
-            Self::with_extension_support(client_data_hash, environment, true)
+            Self::with_extension_support(
+                client_data_hash,
+                environment,
+                true,
+                VALIDATION_CATEGORY,
+                BUNDLE_VERSION,
+            )
         }
 
         fn without_extensions(
             client_data_hash: &[u8; 32],
             environment: AppAttestEnvironment,
         ) -> Self {
-            Self::with_extension_support(client_data_hash, environment, false)
+            Self::with_extension_support(
+                client_data_hash,
+                environment,
+                false,
+                VALIDATION_CATEGORY,
+                BUNDLE_VERSION,
+            )
         }
 
         fn with_extension_support(
             client_data_hash: &[u8; 32],
             environment: AppAttestEnvironment,
             include_extensions: bool,
+            validation_category: u32,
+            bundle_version: &str,
         ) -> Self {
             let root_key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)
                 .expect("test root key should generate");
@@ -1330,9 +1282,12 @@ mod tests {
                 &key_id_bytes,
                 &public_key,
             );
-            if !include_extensions {
-                let extension_length = encode_cbor_bytes(&app_attest_claims()).len();
-                authenticator_data.truncate(authenticator_data.len() - extension_length);
+            let extension_length = encode_cbor_bytes(&app_attest_claims()).len();
+            authenticator_data.truncate(authenticator_data.len() - extension_length);
+            if include_extensions {
+                authenticator_data.extend_from_slice(&encode_cbor_bytes(
+                    &claims_with_category_and_version(validation_category, bundle_version),
+                ));
             }
             let mut nonce_input = authenticator_data.to_vec();
             nonce_input.extend_from_slice(client_data_hash);
@@ -1361,7 +1316,6 @@ mod tests {
                 TEAM_ID,
                 APP_IDENTIFIER,
                 environment,
-                test_policy(),
                 root_der.clone(),
             )
             .expect("test verifier should initialize");
@@ -1650,21 +1604,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_and_verifier_configuration_reject_invalid_values() {
-        for result in [
-            AppAttestPolicy::new([], [VALIDATION_CATEGORY]),
-            AppAttestPolicy::new([" ".to_owned()], [VALIDATION_CATEGORY]),
-            AppAttestPolicy::new(
-                ["x".repeat(MAX_BUNDLE_VERSION_BYTES + 1)],
-                [VALIDATION_CATEGORY],
-            ),
-            AppAttestPolicy::new([BUNDLE_VERSION.to_owned()], []),
-            AppAttestPolicy::new([BUNDLE_VERSION.to_owned()], [0]),
-            AppAttestPolicy::new([BUNDLE_VERSION.to_owned()], [7]),
-        ] {
-            assert_failure(result, AppAttestFailureCategory::WrongApplication);
-        }
-
+    fn verifier_configuration_rejects_invalid_identity_and_trust_anchor() {
         let root = SyntheticEvidence::new(&[1; 32], AppAttestEnvironment::Production).root;
         for (team_id, app_identifier) in [("", APP_IDENTIFIER), (TEAM_ID, " ")] {
             assert_failure(
@@ -1672,7 +1612,6 @@ mod tests {
                     team_id,
                     app_identifier,
                     AppAttestEnvironment::Production,
-                    test_policy(),
                     root.clone(),
                 ),
                 AppAttestFailureCategory::WrongApplication,
@@ -1683,7 +1622,6 @@ mod tests {
                 TEAM_ID,
                 APP_IDENTIFIER,
                 AppAttestEnvironment::Production,
-                test_policy(),
                 CertificateDer::from(vec![0; 8]),
             ),
             AppAttestFailureCategory::InvalidTrustAnchor,
@@ -1954,6 +1892,62 @@ mod tests {
         );
     }
 
+    fn claims_with_category_and_version(category: u32, bundle_version: &str) -> Value {
+        let mut claims = app_attest_claims();
+        if let Value::Map(entries) = &mut claims {
+            for (key, value) in entries {
+                if key == &Value::Text("apple_validation_category_01".to_owned()) {
+                    *value = Value::Bytes(category.to_le_bytes().to_vec());
+                } else if key == &Value::Text("apple_bundle_version_01".to_owned()) {
+                    *value = Value::Text(bundle_version.to_owned());
+                }
+            }
+        }
+        claims
+    }
+
+    #[test]
+    fn versions_and_categories_do_not_gate_attestation_or_assertion() {
+        let hash = [43; 32];
+        for bundle_version in ["1", "2", "20261005.05.47", "future-version"] {
+            for category in (0..=10).chain([u32::MAX]) {
+                let evidence = SyntheticEvidence::with_extension_support(
+                    &hash,
+                    AppAttestEnvironment::Production,
+                    true,
+                    category,
+                    bundle_version,
+                );
+                evidence
+                    .verifier
+                    .verify_attestation(&evidence.key_id, &evidence.attestation, &hash)
+                    .expect("valid attestation must not be rejected by distribution category");
+                let mut data = assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, 1);
+                data.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
+                data[32] = 0xc0;
+                data.extend_from_slice(&encode_cbor_bytes(&claims_with_category_and_version(
+                    category,
+                    bundle_version,
+                )));
+                let assertion = evidence.sign_assertion(&hash, &data);
+                assert_eq!(
+                    evidence
+                        .verifier
+                        .verify_assertion(
+                            &evidence.public_key,
+                            InstallationEnvironment::Production,
+                            &assertion,
+                            &hash,
+                            0,
+                        )
+                        .expect("valid assertion must not be rejected by distribution category")
+                        .counter,
+                    1
+                );
+            }
+        }
+    }
+
     #[test]
     fn ios_27_assertions_preserve_signature_counter_and_claim_validation() {
         let hash = [43; 32];
@@ -2004,8 +1998,8 @@ mod tests {
             ),
             AppAttestFailureCategory::InvalidSignature,
         );
-        let mut wrong_policy = data.clone();
-        wrong_policy.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
+        let mut changed_version = data.clone();
+        changed_version.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
         let mut claims = app_attest_claims();
         if let Value::Map(entries) = &mut claims {
             for (key, value) in entries {
@@ -2014,10 +2008,23 @@ mod tests {
                 }
             }
         }
-        wrong_policy.extend_from_slice(&encode_cbor_bytes(&claims));
+        changed_version.extend_from_slice(&encode_cbor_bytes(&claims));
+        let tampered_version = encode_assertion(&parsed.signature, &changed_version);
         assert_failure(
-            verify(&wrong_policy, 0),
-            AppAttestFailureCategory::WrongApplication,
+            evidence.verifier.verify_assertion(
+                &evidence.public_key,
+                InstallationEnvironment::Production,
+                &tampered_version,
+                &hash,
+                0,
+            ),
+            AppAttestFailureCategory::InvalidSignature,
+        );
+        assert_eq!(
+            verify(&changed_version, 0)
+                .expect("new signed versions must be accepted")
+                .counter,
+            1
         );
 
         for tail in [vec![0xff], encode_cbor_bytes(&Value::Map(vec![])), {
@@ -2334,7 +2341,6 @@ mod tests {
             TEAM_ID,
             APP_IDENTIFIER,
             AppAttestEnvironment::Production,
-            test_policy(),
         );
         assert!(verifier.is_ok());
     }
@@ -2384,7 +2390,6 @@ mod tests {
                 TEAM_ID,
                 "com.example.other",
                 AppAttestEnvironment::Production,
-                test_policy(),
                 evidence.root.clone(),
             )
             .expect("alternate verifier should initialize")
@@ -2397,23 +2402,7 @@ mod tests {
             ProductionAppAttestVerifier::new(
                 TEAM_ID,
                 APP_IDENTIFIER,
-                AppAttestEnvironment::Production,
-                AppAttestPolicy::new(["43".to_owned()], [VALIDATION_CATEGORY])
-                    .expect("alternate policy should initialize"),
-                evidence.root.clone(),
-            )
-            .expect("alternate verifier should initialize")
-            .verify_attestation(&evidence.key_id, &evidence.attestation, &client_data_hash)
-            .expect_err("wrong bundle version should fail")
-            .category(),
-            AppAttestFailureCategory::WrongApplication
-        );
-        assert_eq!(
-            ProductionAppAttestVerifier::new(
-                TEAM_ID,
-                APP_IDENTIFIER,
                 AppAttestEnvironment::Development,
-                test_policy(),
                 evidence.root.clone(),
             )
             .expect("development verifier should initialize")
@@ -2440,7 +2429,6 @@ mod tests {
                 TEAM_ID,
                 APP_IDENTIFIER,
                 AppAttestEnvironment::Production,
-                test_policy(),
                 other.root,
             )
             .expect("untrusted verifier should initialize")
@@ -2526,7 +2514,6 @@ mod tests {
                 TEAM_ID,
                 "com.example.other",
                 AppAttestEnvironment::Production,
-                test_policy(),
                 evidence.root.clone(),
             )
             .expect("alternate verifier should initialize")
@@ -2538,27 +2525,6 @@ mod tests {
                 1,
             )
             .expect_err("wrong app should fail")
-            .category(),
-            AppAttestFailureCategory::WrongApplication
-        );
-        assert_eq!(
-            ProductionAppAttestVerifier::new(
-                TEAM_ID,
-                APP_IDENTIFIER,
-                AppAttestEnvironment::Production,
-                AppAttestPolicy::new([BUNDLE_VERSION.to_owned()], [4])
-                    .expect("alternate policy should initialize"),
-                evidence.root.clone(),
-            )
-            .expect("alternate verifier should initialize")
-            .verify_assertion(
-                &evidence.public_key,
-                InstallationEnvironment::Production,
-                &assertion,
-                &client_data_hash,
-                1,
-            )
-            .expect_err("wrong validation category should fail")
             .category(),
             AppAttestFailureCategory::WrongApplication
         );
