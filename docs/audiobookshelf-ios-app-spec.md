@@ -1964,7 +1964,9 @@ Production mode uses a structurally separate verifier that validates Apple's
 certificate path and pinned App Attest root, attestation nonce, App ID hash,
 AAGUID environment, credential and certificate/COSE public key consistency,
 and, when supplied by iOS 27 or later, configured bundle-version and
-validation-category policy. Earlier supported Apple operating systems omit
+validation-category policy. Assertion flags accept the observed `0x40` and
+iOS 27 `0xC0` shapes; `0xC0` requires validated appended claims, and all other
+flag values are rejected. Earlier supported Apple operating systems omit
 these recently introduced authenticator-data extensions; their evidence still
 requires the complete certificate, nonce, application, credential, signature,
 and counter checks. It verifies assertions with the stored key and environment

@@ -49,9 +49,22 @@ const APP_ATTEST_KEY_ID_BYTES: usize = 32;
 const COSE_P256_PUBLIC_KEY_BYTES: usize = 65;
 const MAX_BUNDLE_VERSION_BYTES: usize = 64;
 const APP_ATTEST_AUTHENTICATOR_FLAG: u8 = 0x40;
+// WebAuthn section 6.1 defines bit 7 as extension data included (ED).
+// Apple explicitly refers to this extension model for iOS 27 App Attest.
+// https://www.w3.org/TR/webauthn-3/#sctn-authenticator-data
+const AUTHENTICATOR_EXTENSION_DATA_FLAG: u8 = 0x80;
+const APP_ATTEST_AUTHENTICATOR_EXTENSION_FLAG: u8 =
+    APP_ATTEST_AUTHENTICATOR_FLAG | AUTHENTICATOR_EXTENSION_DATA_FLAG;
 const X509_CERTIFICATE_CHAIN_FIELD: &str = "x5c";
 const APP_ATTEST_RECEIPT_FIELD: &str = "receipt";
 const APP_ATTEST_STATEMENT_FIELD: &str = "attStmt";
+
+static APPLE_CERTIFICATE_SIGNATURE_ALGORITHMS: &[&dyn SignatureVerificationAlgorithm] = &[
+    webpki::aws_lc_rs::ECDSA_P256_SHA256,
+    webpki::aws_lc_rs::ECDSA_P256_SHA384,
+    webpki::aws_lc_rs::ECDSA_P384_SHA256,
+    webpki::aws_lc_rs::ECDSA_P384_SHA384,
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppAttestFailureCategory {
@@ -122,6 +135,7 @@ pub enum AppAttestVerificationStage {
 pub enum AppAttestFailureDetail {
     Unspecified,
     AssertionFlagsUnexpectedValue,
+    ExtensionsMissing,
     ExtensionsCbor,
     ExtensionsTrailingData,
     ExtensionsNotMap,
@@ -142,6 +156,7 @@ impl AppAttestFailureDetail {
         match self {
             Self::Unspecified => "unspecified",
             Self::AssertionFlagsUnexpectedValue => "assertion.flags.unexpected_value",
+            Self::ExtensionsMissing => "extensions.missing",
             Self::ExtensionsCbor => "extensions.cbor",
             Self::ExtensionsTrailingData => "extensions.trailing_data",
             Self::ExtensionsNotMap => "extensions.not_map",
@@ -965,16 +980,30 @@ impl AssertionAuthenticatorData {
             );
         }
         let flags = encoded[32];
-        // App Attest uses 0x40 in its simplified assertion authenticator data,
-        // as observed from the supported production client. Do not apply
-        // WebAuthn assertion flag semantics to Apple's App Attest structure.
-        if flags != APP_ATTEST_AUTHENTICATOR_FLAG {
-            return Err(malformed()
-                .with_detail(AppAttestFailureDetail::AssertionFlagsUnexpectedValue)
-                .with_observed_flags(flags)
-                .with_stage(AppAttestVerificationStage::AssertionAuthenticatorFlags));
-        }
+        // Apple documents simplified assertions and iOS 27 extensions using
+        // the WebAuthn extension model. ED (0x80) requires a CBOR extension map.
+        // The 0x40 base and combined 0xc0 bytes are observed Apple encodings,
+        // not an Apple-published exhaustive flag allowlist. Standard WebAuthn's
+        // prohibition of AT in assertions does not describe these encodings.
+        // Retain 0x40 with claims (also seen in Apple's attestation fixture).
+        // https://developer.apple.com/documentation/devicecheck/validating-apps-that-connect-to-your-server
+        // https://developer.apple.com/videos/play/wwdc2026/201/
+        let extensions_flagged = match flags {
+            APP_ATTEST_AUTHENTICATOR_FLAG => false,
+            APP_ATTEST_AUTHENTICATOR_EXTENSION_FLAG => true,
+            _ => {
+                return Err(malformed()
+                    .with_detail(AppAttestFailureDetail::AssertionFlagsUnexpectedValue)
+                    .with_observed_flags(flags)
+                    .with_stage(AppAttestVerificationStage::AssertionAuthenticatorFlags));
+            }
+        };
         let has_extensions = encoded.len() > ASSERTION_AUTHENTICATOR_DATA_BYTES;
+        if extensions_flagged && !has_extensions {
+            return Err(malformed()
+                .with_detail(AppAttestFailureDetail::ExtensionsMissing)
+                .with_stage(AppAttestVerificationStage::AssertionExtensions));
+        }
         let claims = if !has_extensions {
             None
         } else {
@@ -1172,13 +1201,6 @@ fn verify_certificate_chain(
         .map_err(|_| AppAttestVerificationError::new(AppAttestFailureCategory::InvalidChain))?;
     Ok(())
 }
-
-static APPLE_CERTIFICATE_SIGNATURE_ALGORITHMS: &[&dyn SignatureVerificationAlgorithm] = &[
-    webpki::aws_lc_rs::ECDSA_P256_SHA256,
-    webpki::aws_lc_rs::ECDSA_P256_SHA384,
-    webpki::aws_lc_rs::ECDSA_P384_SHA256,
-    webpki::aws_lc_rs::ECDSA_P384_SHA384,
-];
 
 #[derive(Debug)]
 struct AnyExtendedKeyUsage;
@@ -1933,6 +1955,87 @@ mod tests {
     }
 
     #[test]
+    fn ios_27_assertions_preserve_signature_counter_and_claim_validation() {
+        let hash = [43; 32];
+        let evidence = SyntheticEvidence::new(&hash, AppAttestEnvironment::Production);
+        let verify = |data: &[u8], previous_counter| {
+            evidence.verifier.verify_assertion(
+                &evidence.public_key,
+                InstallationEnvironment::Production,
+                &evidence.sign_assertion(&hash, data),
+                &hash,
+                previous_counter,
+            )
+        };
+        let mut data = assertion_authenticator_data(TEAM_ID, APP_IDENTIFIER, 1);
+        data[32] = 0xc0;
+        assert_eq!(
+            verify(&data, 0)
+                .expect("signed iOS 27 assertion should verify")
+                .counter,
+            1
+        );
+        assert_failure(verify(&data, 1), AppAttestFailureCategory::AssertionReplay);
+
+        // The signature covers the flag byte and all appended claims.
+        let signed = evidence.sign_assertion(&hash, &data);
+        let decoded = decode_evidence(&signed, MAX_DECODED_ASSERTION_BYTES)
+            .expect("test assertion should decode");
+        let mut parsed = ParsedAssertion::parse(&decoded).expect("test assertion should parse");
+        parsed.authenticator_data[32] = 0x40;
+        let tampered = encode_assertion(&parsed.signature, &parsed.authenticator_data);
+        assert_failure(
+            evidence.verifier.verify_assertion(
+                &evidence.public_key,
+                InstallationEnvironment::Production,
+                &tampered,
+                &hash,
+                0,
+            ),
+            AppAttestFailureCategory::InvalidSignature,
+        );
+        assert_failure(
+            evidence.verifier.verify_assertion(
+                &evidence.public_key,
+                InstallationEnvironment::Production,
+                &signed,
+                &[44; 32],
+                0,
+            ),
+            AppAttestFailureCategory::InvalidSignature,
+        );
+        let mut wrong_policy = data.clone();
+        wrong_policy.truncate(ASSERTION_AUTHENTICATOR_DATA_BYTES);
+        let mut claims = app_attest_claims();
+        if let Value::Map(entries) = &mut claims {
+            for (key, value) in entries {
+                if key == &Value::Text("apple_bundle_version_01".to_owned()) {
+                    *value = Value::Text("unapproved".to_owned());
+                }
+            }
+        }
+        wrong_policy.extend_from_slice(&encode_cbor_bytes(&claims));
+        assert_failure(
+            verify(&wrong_policy, 0),
+            AppAttestFailureCategory::WrongApplication,
+        );
+
+        for tail in [vec![0xff], encode_cbor_bytes(&Value::Map(vec![])), {
+            let mut tail = encode_cbor_bytes(&app_attest_claims());
+            tail.push(0);
+            tail
+        }] {
+            let mut malformed_data = data[..ASSERTION_AUTHENTICATOR_DATA_BYTES].to_vec();
+            malformed_data.extend_from_slice(&tail);
+            let error = verify(&malformed_data, 0).expect_err("malformed claims must fail");
+            assert_eq!(
+                error.stage(),
+                AppAttestVerificationStage::AssertionExtensions
+            );
+        }
+    }
+
+    #[test]
     fn assertion_authenticator_requires_apple_flag_shape() {
         let authenticator_data = |flags: u8, include_extensions: bool| {
             let mut data = vec![0; ASSERTION_AUTHENTICATOR_DATA_BYTES];
@@ -1950,8 +2053,19 @@ mod tests {
         .expect("Apple assertion without extensions should parse");
         AssertionAuthenticatorData::parse(&authenticator_data(APP_ATTEST_AUTHENTICATOR_FLAG, true))
             .expect("Apple assertion with extensions should parse");
+        AssertionAuthenticatorData::parse(&authenticator_data(0xc0, true))
+            .expect("iOS 27 assertion with flagged extensions should parse");
 
-        for flags in [0x00, 0x01, 0x80, 0xc0] {
+        let error = AssertionAuthenticatorData::parse(&authenticator_data(0xc0, false))
+            .err()
+            .expect("flagged extensions must be present");
+        assert_eq!(
+            error.stage(),
+            AppAttestVerificationStage::AssertionExtensions
+        );
+        assert_eq!(error.detail(), AppAttestFailureDetail::ExtensionsMissing);
+
+        for flags in (0..=u8::MAX).filter(|flags| !matches!(flags, 0x40 | 0xc0)) {
             let error = match AssertionAuthenticatorData::parse(&authenticator_data(flags, false)) {
                 Ok(_) => panic!("invalid assertion flag shape should fail"),
                 Err(error) => error,
