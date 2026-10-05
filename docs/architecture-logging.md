@@ -2,7 +2,7 @@
 
 This document is the source of truth for how Bleat produces, authenticates,
 transports, stores, and queries diagnostic logs and traces. The product and
-privacy rules remain defined in `docs/audiobookshelf-ios-app-spec.md`; this
+privacy rules remain defined in [The App Spec](audiobookshelf-ios-app-spec.md); this
 document defines the deployment topology and component boundaries.
 
 ## Signals and identities
@@ -130,7 +130,7 @@ a nominal request counter.
 Application telemetry is best effort. Collector, ClickHouse, HyperDX,
 Cloudflare, authentication, or network failure must not affect API request
 handling or application behavior. The iOS persistence and retry bounds remain
-defined in `docs/audiobookshelf-ios-app-spec.md`.
+defined in [The App Spec](audiobookshelf-ios-app-spec.md).
 
 ## Initial rollout and monitoring
 
@@ -172,7 +172,7 @@ route; that stronger response is not the normal kill switch.
 
 If the JWT signing private key is compromised, scaling only `bleat-api` to zero
 is insufficient because the key holder can mint new tokens without the API.
-Follow `docs/operations/jwks-revocation.md` to remove the key, replace the
+Follow [JWKS Revocation](operations/jwks-revocation.md) to remove the key, replace the
 Collector's cached verifier state, prove old-key rejection, and restore ingress.
 
 API unavailability is isolated from launch, Audiobookshelf login, browsing,
@@ -189,7 +189,7 @@ telemetry drains before declaring recovery complete. Reconcile any temporary
 deployment override with the declarative infrastructure configuration so a
 later deployment cannot unexpectedly reapply the emergency state.
 
-Follow `docs/operations/bleat-api-scaling.md` for the complete scale-up,
+Follow [API Scaling](operations/bleat-api-scaling.md) for the complete scale-up,
 scale-down, verification, and restoration procedure.
 
 ## Production retention and access
@@ -249,7 +249,7 @@ outage recovery, relaunch without token persistence, and wire privacy behavior
 against generated test credentials. It also resolves and asserts the exact
 Collector limits, exhausts the bounded exporter queue, and proves the capture
 sink remains isolated on its internal network. The criterion-to-test mapping is
-maintained in `docs/requirements-traceability.md`.
+maintained in [Requirements Traceability](requirements-traceability.md).
 
 Production verification must independently prove both receiver paths:
 

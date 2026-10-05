@@ -13,16 +13,3 @@ The published website includes the stable
 linked from Bleat's add-server screen. It documents the canonical
 `bleat://oauth2redirect` callback and the root-hosted and path-prefixed
 Audiobookshelf provider callbacks.
-
-Run the host test suite with code coverage:
-
-```sh
-swift test --enable-code-coverage
-```
-
-Run the complete current validation gate—core unit tests with coverage, Release
-build, and iOS Simulator application unit and UI tests:
-
-```sh
-./scripts/test-core.sh
-```
