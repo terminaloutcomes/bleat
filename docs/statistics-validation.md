@@ -92,6 +92,16 @@ and presentation revisions. Only changed live data schedules an anchored
 - No physical-device or background-execution validation is claimed for this
   observation change.
 
+### PR preparation (2026-10-07)
+
+The statistics branch was rebased onto current `main` without conflicts.
+All 28 focused host statistics tests and strict Swift lint passed again.
+The rebased simulator run executed all 413 `AppModelTests`, with zero failures,
+skips, or runtime warnings. Individual identifiers and outcomes, including
+the statistics regressions, were verified in
+`.build/statistics-pr-rebase.xcresult`. The broader UI and disposable-server
+evidence above predates this rebase; those suites were not repeated.
+
 ## Large ledger
 
 The opt-in Release benchmark stores 250,000 deterministic five-second slices in
