@@ -1,5 +1,6 @@
 //! Repair only closed sessions with measured, account-matched Bleat history.
-//! Contract: Audiobookshelf v2.36.0 PlaybackSessionManager.syncLocalSession.
+//! Contract: Audiobookshelf PlaybackSessionManager.syncLocalSession.
+//! Pinned source: https://github.com/advplyr/audiobookshelf/blob/v2.37.1/server/managers/PlaybackSessionManager.js#L191-L215
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -168,6 +169,20 @@ fn ledger(document: &Document) -> Result<BTreeMap<(String, String), f64>, Repair
     Ok(totals)
 }
 
+fn listening_seconds(session: &Value) -> Result<f64, RepairError> {
+    // The pinned compatibility response permits absent or null listening time,
+    // decoded as zero by AudiobookshelfAPI.listeningSessions as well.
+    let seconds = match &session["timeListening"] {
+        Value::Null => 0.0,
+        Value::Number(value) => value.as_f64().ok_or(RepairError::InvalidListeningTime)?,
+        _ => return Err(RepairError::InvalidListeningTime),
+    };
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err(RepairError::InvalidListeningTime);
+    }
+    Ok(seconds)
+}
+
 fn corrected(
     session: &Value,
     totals: &BTreeMap<(String, String), f64>,
@@ -179,12 +194,7 @@ fn corrected(
     let Some(total) = totals.get(&(portable_id(id), item.to_owned())) else {
         return Ok(None);
     };
-    let existing = session["timeListening"]
-        .as_f64()
-        .ok_or(RepairError::History)?;
-    if !existing.is_finite() || existing < 0.0 {
-        return Err(RepairError::History);
-    }
+    let existing = listening_seconds(session)?;
     if *total <= existing + 0.001 {
         return Ok(None);
     }
@@ -374,9 +384,7 @@ pub async fn run(arguments: Arguments) -> Result<(), RepairError> {
         };
         println!(
             "Closed session: {:.1} → {:.1} listening seconds",
-            session["timeListening"]
-                .as_f64()
-                .ok_or(RepairError::History)?,
+            listening_seconds(&session)?,
             payload["timeListening"]
                 .as_f64()
                 .ok_or(RepairError::History)?
@@ -495,6 +503,30 @@ mod tests {
                 .expect("valid larger total")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn repairs_nullable_compatibility_listening_time_as_zero() {
+        let totals = ledger(&document()).expect("valid ledger");
+        for session in [
+            json!({"id":"session","libraryItemId":"book","timeListening":null}),
+            json!({"id":"session","libraryItemId":"book"}),
+        ] {
+            assert_eq!(
+                listening_seconds(&session).expect("nullable listening time"),
+                0.0
+            );
+            let repaired = corrected(&session, &totals)
+                .expect("valid compatibility session")
+                .expect("measured correction");
+            assert_eq!(repaired["timeListening"].as_f64(), Some(90.0));
+        }
+        for value in [json!("0"), json!(-1)] {
+            assert!(matches!(
+                listening_seconds(&json!({"timeListening":value})),
+                Err(RepairError::InvalidListeningTime)
+            ));
+        }
     }
 
     #[test]

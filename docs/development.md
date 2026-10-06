@@ -565,20 +565,23 @@ and timestamps. The command refuses changed session records and stops on an
 unacknowledged correction or failed read-back. A retry uses cumulative totals
 and skips already-corrected sessions.
 
-Focused evidence on 2026-10-07: 12 `StatisticsTests`, four Rust repair tests,
+Focused evidence on 2026-10-07: 12 `StatisticsTests`, five Rust repair tests,
 and three simulator app tests passed. The final simulator result bundle
 `.build/listening-session-preservation-app.xcresult` has zero skips, failures or runtime
 warnings. `LocalPlaybackSessionLiveTests` executed one test covering root and
 path-prefixed Audiobookshelf 2.37.0 servers, nonzero cumulative uploads,
 idempotent replay and historical correction with protected newer progress and
-preserved timestamps. The Rust HTTP command itself has not yet been applied to
-real account history. The full local gate and physical-device playback were not
+preserved timestamps. The Rust HTTP command was additionally exercised against authenticated
+Audiobookshelf 2.37.1 history, including verified corrections and an idempotent
+read-only preview after repair. The full local gate and physical-device playback were not
 run for this change.
 
 Initial Rust checks found unsupported digest hex formatting, export field-name
 acronym mismatches and an integer-versus-float test assertion; all were corrected
-before the final four-test run. Earlier two-test simulator runs passed and were
-superseded by the final three-test run after adding date and outbox preservation.
+before the four-test run. The live response later exposed nullable listening
+time; a fifth regression now verifies that absent and null compatibility fields
+are decoded as zero, matching the app history adapter. Earlier two-test simulator
+runs passed and were superseded by the final three-test run after adding date and outbox preservation.
 The live build emitted an upstream OpenTelemetry package warning about its
 deprecated watchOS minimum; the selected live test executed and passed. Empty
 unselected SwiftPM test bundles are not counted as additional coverage.
