@@ -771,12 +771,9 @@ before playback; a missing or byte-corrupt track in an explicit download
 changes the book to Partial and exposes Repair. Repair preserves verified
 tracks, downloads only damaged
 entries, and refuses to mix files when the server's plan changed.
-Streamed and local-file playback share an account-scoped position checkpoint,
-saved every five seconds of media progress and on pause, seek, backgrounding,
-completion, and stop. Local-file playback resumes from that checkpoint after
-relaunch, including when earlier listening was streamed. Streamed resume uses
-the fresh position returned by the server playback session unless an explicit
-start position was requested. Local-file position updates
+Local-file playback saves an account-scoped
+position every five seconds and on pause, seek, backgrounding, completion, and
+stop, then resumes from that durable position after relaunch. Position updates
 are queued as Audiobookshelf local sessions and retried with the same UUID until
 the server acknowledges them, including after app or account restoration. When
 both the
