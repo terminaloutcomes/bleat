@@ -4442,11 +4442,6 @@ private struct BookDetailView: View {
                 if let account = model.account {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
-                            Button("View on server", systemImage: "safari") {
-                                openBookOnServer(detail, account: account)
-                            }
-                            .accessibilityIdentifier("book.detail.viewOnServer")
-
                             if canOpenEditor(detail) {
                                 Button("Edit", systemImage: "pencil") {
                                     showMetadataEditor = true
@@ -4495,6 +4490,14 @@ private struct BookDetailView: View {
                                     "book.detail.transcription"
                                 )
 
+                            #endif
+
+                            Button("View on server", systemImage: "safari") {
+                                openBookOnServer(detail, account: account)
+                            }
+                            .accessibilityIdentifier("book.detail.viewOnServer")
+
+                            #if os(iOS)
                                 if hasLocalTranscriptData(detail) {
                                     Button(
                                         "Delete Transcript Data",
