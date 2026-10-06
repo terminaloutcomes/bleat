@@ -787,6 +787,13 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   uses server sequence order without inheriting a Library progress filter.
 - Load home shelves from `GET /api/libraries/<id>/personalized?limit=<n>&include=progress`.
 - Search with `GET /api/libraries/<id>/search?q=<query>&limit=<n>`.
+- Book Detail's actions menu exposes **View on server** regardless of editing
+  permission. Open the associated configured server's `/item/<id>` web route
+  in the external system browser, retaining the base-path prefix and encoding
+  the opaque item ID. Recheck the book/account context at dispatch. Never hand
+  app credentials or tokens to the browser; use the server's normal browser
+  login and destination redirect ([web page](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/client/pages/item/_id/index.vue),
+  [login](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/client/pages/login.vue)).
 - Load book detail with `GET /api/items/<id>?expanded=1&include=progress`.
 - Use server pagination with an initial page size of 40–60 items.
 - Cancel superseded searches and requests when account/library changes.

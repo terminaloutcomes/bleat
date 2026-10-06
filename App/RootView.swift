@@ -4388,6 +4388,8 @@ private struct BookDetailView: View {
     let origin: BookNavigationOrigin
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @State private var serverLinkFailure: BookServerLinkFailure?
     @State private var showMetadataEditor = false
     @State private var showChapterTranscription = false
     @State private var showTranscriptDeletionConfirmation = false
@@ -4437,9 +4439,14 @@ private struct BookDetailView: View {
         }
         .toolbar {
             if let detail = loadedDetail {
-                if canShowActionsMenu(detail) {
+                if let account = model.account {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
+                            Button("View on server", systemImage: "safari") {
+                                openBookOnServer(detail, account: account)
+                            }
+                            .accessibilityIdentifier("book.detail.viewOnServer")
+
                             if canOpenEditor(detail) {
                                 Button("Edit", systemImage: "pencil") {
                                     showMetadataEditor = true
@@ -4517,6 +4524,17 @@ private struct BookDetailView: View {
                     }
                 }
             }
+        }
+        .alert(
+            "Server Page Not Opened",
+            isPresented: Binding(
+                get: { serverLinkFailure != nil },
+                set: { if !$0 { serverLinkFailure = nil } }
+            )
+        ) {
+            Button("OK") { serverLinkFailure = nil }
+        } message: {
+            Text(serverLinkFailure?.message ?? "")
         }
         .sheet(isPresented: $showMetadataEditor) {
             if let detail = loadedDetail {
@@ -4677,9 +4695,30 @@ private struct BookDetailView: View {
         }
     }
 
+    private func openBookOnServer(
+        _ detail: LibraryBookDetail,
+        account: ServerAccount
+    ) {
+        do {
+            try model.openBookOnServer(detail.id, expectedAccount: account) {
+                url in
+                openURL(
+                    url,
+                    completion: BookServerLinkFailure.browserCompletion {
+                        serverLinkFailure = $0
+                    }
+                )
+            }
+        } catch {
+            error.record()
+            serverLinkFailure = error
+        }
+    }
+
     private var loadedDetail: LibraryBookDetail? {
         guard model.selectedBookID == book.id,
-            case .loaded(let detail) = model.bookDetail
+            case .loaded(let detail) = model.bookDetail,
+            detail.id == book.id
         else {
             return nil
         }
@@ -4694,14 +4733,6 @@ private struct BookDetailView: View {
             user: user,
             detail: detail
         ).canOpenEditor
-    }
-
-    private func canShowActionsMenu(_ detail: LibraryBookDetail) -> Bool {
-        #if os(iOS)
-            true
-        #else
-            canOpenEditor(detail)
-        #endif
     }
 
     private var transcriptionMenuIsAvailable: Bool {

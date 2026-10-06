@@ -15506,6 +15506,73 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testViewOnServerBrowserRejectionHopsFromBackgroundToMainActor() async {
+        let rejected = expectation(
+            description: "Browser rejection presented on main actor")
+        let completion = BookServerLinkFailure.browserCompletion { failure in
+            MainActor.assertIsolated()
+            XCTAssertEqual(failure, .browserRejected)
+            rejected.fulfill()
+        }
+        await Task.detached { completion(false) }.value
+        await fulfillment(of: [rejected], timeout: 3)
+    }
+
+    func testViewOnServerDispatchesCurrentBookAndRejectsStaleContext()
+        async throws
+    {
+        let first = try fixtureAccount(server: "https://books.example/abs")
+        let second = try fixtureAccount(
+            accountID: "account-2", userID: "user-2",
+            server: "https://other.example"
+        )
+        let library = fixtureLibrary()
+        let book = fixturePage(libraryID: library.id).items[0]
+        let service = TestAppService(
+            accounts: .success([first, second]),
+            activeAccount: .success(first),
+            libraries: .success([library]),
+            bookDetail: .success(fixtureBookDetail(item: book))
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        var opened: [URL] = []
+        XCTAssertThrowsError(
+            try model.openBookOnServer(book.id, expectedAccount: first) {
+                opened.append($0)
+            }
+        ) { XCTAssertEqual($0 as? BookServerLinkFailure, .selectionChanged) }
+        await model.loadBookDetail(book)
+        try model.openBookOnServer(book.id, expectedAccount: first) {
+            opened.append($0)
+        }
+        XCTAssertEqual(
+            opened.map(\.absoluteString),
+            ["https://books.example/abs/item/\(book.id.rawValue)"])
+        XCTAssertThrowsError(
+            try model.openBookOnServer(
+                LibraryItemID(rawValue: "other-book"), expectedAccount: first
+            ) { opened.append($0) }
+        ) { XCTAssertEqual($0 as? BookServerLinkFailure, .selectionChanged) }
+        await model.switchAccount(to: second)
+        XCTAssertThrowsError(
+            try model.openBookOnServer(book.id, expectedAccount: first) {
+                opened.append($0)
+            }
+        ) { XCTAssertEqual($0 as? BookServerLinkFailure, .selectionChanged) }
+        await model.loadBookDetail(book)
+        try model.openBookOnServer(book.id, expectedAccount: second) {
+            opened.append($0)
+        }
+        XCTAssertEqual(
+            opened.map(\.absoluteString),
+            [
+                "https://books.example/abs/item/\(book.id.rawValue)",
+                "https://other.example/item/\(book.id.rawValue)",
+            ])
+        model.setLiveUpdatesActive(false)
+    }
+
     func testBookDetailBookmarkFailureDoesNotHideDetail() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()

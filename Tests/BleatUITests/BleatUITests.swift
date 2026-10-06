@@ -3047,8 +3047,32 @@ final class BleatUITests: XCTestCase {
         let transcription = app.buttons["book.detail.transcription"]
         XCTAssertTrue(transcription.waitForExistence(timeout: 3))
         XCTAssertFalse(transcription.isEnabled)
+        XCTAssertTrue(app.buttons["book.detail.viewOnServer"].exists)
+        XCTAssertTrue(app.buttons["book.detail.viewOnServer"].isEnabled)
         XCTAssertFalse(app.buttons["book.detail.edit"].exists)
         XCTAssertFalse(app.buttons["book.detail.download"].exists)
+    }
+
+    @MainActor
+    func testViewOnServerOpensSystemBrowserWithoutEditPermission() {
+        let app = launch(scenario: "--ui-testing-limited-permissions")
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 5))
+        app.staticTexts["The Test Audiobook"].tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        let viewOnServer = app.buttons["book.detail.viewOnServer"]
+        XCTAssertTrue(viewOnServer.waitForExistence(timeout: 3))
+        viewOnServer.tap()
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        let opened = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in safari.state == .runningForeground
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [opened], timeout: 15), .completed)
+        XCTAssertNotEqual(app.state, .runningForeground)
     }
 
     @MainActor

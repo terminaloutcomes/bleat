@@ -1069,6 +1069,12 @@ it when the input file is already a standalone chapter and relative timestamps
 are sufficient. Preparation and completion status are written to standard
 error, so the transcript can be redirected independently.
 
+Book Detail's **…** menu includes **View on server** for all users. It opens
+that book's Audiobookshelf web page in the system browser, preserving the
+configured server path prefix. The browser uses its own login session; if
+needed, Audiobookshelf prompts for login and returns to the book. Bleat does
+not pass app credentials or tokens to the browser.
+
 On iOS 26, Book Detail's actions menu exposes **Transcribe Audiobook** when
 `SpeechTranscriber` is available and a disabled availability message when it
 is not. The transcription screen supports one explicit chapter or a Select

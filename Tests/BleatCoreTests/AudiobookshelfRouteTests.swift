@@ -17,6 +17,30 @@ final class AudiobookshelfRouteTests {
     }()
 
     @Test
+    func testWebBookURLPreservesRootAndPrefixAndEncodesOpaqueID() throws {
+        for base in ["https://books.example", "https://books.example/abs/"] {
+            let builder = AudiobookshelfRouteBuilder(
+                server: try NormalizedServerURL(base)
+            )
+            let url = try builder.webBookURL(
+                for: LibraryItemID(rawValue: "book/with space?#%")
+            )
+            let prefix = base.contains("/abs") ? "/abs" : ""
+            #expect(
+                url.absoluteString
+                    == "https://books.example\(prefix)/item/book%2Fwith%20space%3F%23%25"
+            )
+            #expect(url.query == nil)
+            #expect(url.fragment == nil)
+            #expect(url.user == nil)
+            #expect(url.password == nil)
+        }
+        #expect(throws: RouteConstructionError.invalidPathComponent("")) {
+            try Self.builder.webBookURL(for: LibraryItemID(rawValue: ""))
+        }
+    }
+
+    @Test
     func testBuildsEveryAuditedRouteUnderServerPrefix() throws {
         let libraryID = LibraryID(rawValue: "library")
         let itemID = LibraryItemID(rawValue: "item")
