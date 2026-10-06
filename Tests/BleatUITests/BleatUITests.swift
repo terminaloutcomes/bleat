@@ -4047,6 +4047,7 @@ final class BleatLiveUITests: XCTestCase {
         var app = XCUIApplication()
         app.launchArguments = [
             "-bleat.downloads.automaticLookahead.v1", "1",
+            "-bleat.playback.skipForward.v1", "5",
         ]
         app.launch()
 
@@ -4163,6 +4164,12 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["player.skipBackward"].waitForExistence(timeout: 10)
         )
+        // Resume may be near the end of this short fixture. Reset before
+        // exercising transport controls so natural completion cannot remove them.
+        app.buttons["player.chapters"].tap()
+        let firstChapter = app.buttons["player.chapter.0"]
+        XCTAssertTrue(firstChapter.waitForExistence(timeout: 10))
+        firstChapter.tap()
         try await Task.sleep(for: .seconds(12))
         app.buttons["player.skipForward"].tap()
         app.buttons["player.toggle"].tap()
@@ -4268,6 +4275,7 @@ final class BleatLiveUITests: XCTestCase {
     func testLiveOfflineCachedDownloadAndLocalProgress() throws {
         try requireLiveConfiguration()
         let app = XCUIApplication()
+        app.launchArguments = ["-bleat.playback.skipForward.v1", "5"]
         app.launch()
 
         XCTAssertTrue(
@@ -4295,6 +4303,10 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertTrue(
             app.otherElements["player.screen"].waitForExistence(timeout: 10)
         )
+        app.buttons["player.chapters"].tap()
+        let firstChapter = app.buttons["player.chapter.0"]
+        XCTAssertTrue(firstChapter.waitForExistence(timeout: 10))
+        firstChapter.tap()
         app.buttons["player.skipForward"].tap()
         app.buttons["player.toggle"].tap()
         XCTAssertFalse(
