@@ -46,6 +46,7 @@
     "historyImportDetectsChangedPayloadEvenWhenUpdateTimestampIsUnchanged()"
   ],
   "BleatCoreTests.AudiobookshelfRouteTests": [
+    "testWebBookURLPreservesRootAndPrefixAndEncodesOpaqueID()",
     "testBuildsEveryAuditedRouteUnderServerPrefix()",
     "testDiagnosticEndpointsDiscardEveryOpaqueRouteValue()",
     "testPercentEncodesOpaquePathComponents()",

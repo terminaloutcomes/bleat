@@ -1,7 +1,65 @@
 import BleatCore
 import Foundation
+import OSLog
 import Observation
 import SwiftUI
+
+enum BookServerLinkFailure: Error, Equatable, Sendable {
+    case selectionChanged
+    case routeConstruction(RouteConstructionError)
+    case browserRejected
+
+    static func browserCompletion(
+        onFailure:
+            @escaping @MainActor @Sendable (BookServerLinkFailure) -> Void
+    ) -> @Sendable (Bool) -> Void {
+        { accepted in
+            guard !accepted else { return }
+            Task { @MainActor in
+                Self.browserRejected.record()
+                onFailure(.browserRejected)
+            }
+        }
+    }
+
+    func record() {
+        let stage: String
+        let code: String
+        switch self {
+        case .selectionChanged:
+            stage = "context_validation"
+            code = "selection_changed"
+        case .routeConstruction(let cause):
+            stage = "route_construction"
+            switch cause {
+            case .invalidBaseURL: code = "invalid_base_url"
+            case .invalidPathComponent: code = "invalid_path_component"
+            case .invalidReturnedPath: code = "invalid_returned_path"
+            case .returnedAbsoluteURL: code = "returned_absolute_url"
+            case .tokenBearingURL: code = "token_bearing_url"
+            case .invalidTrackIndex: code = "invalid_track_index"
+            case .invalidBookmarkTime: code = "invalid_bookmark_time"
+            }
+        case .browserRejected:
+            stage = "browser_dispatch"
+            code = "browser_rejected"
+        }
+        Logger(subsystem: "Bleat", category: "app").error(
+            "operation=open_book_on_server stage=\(stage, privacy: .public) failure_code=\(code, privacy: .public)"
+        )
+    }
+
+    var message: String {
+        switch self {
+        case .selectionChanged:
+            "The selected book or account changed. Open the book again and retry."
+        case .routeConstruction:
+            "The server web address could not be built for this book."
+        case .browserRejected:
+            "The system browser could not open this book's server page."
+        }
+    }
+}
 
 /// Names of app preferences stored in UserDefaults.
 enum AppPreferenceKey: CaseIterable, Equatable, Sendable {
@@ -3791,6 +3849,28 @@ final class AppModel {
                     failureCode: failure.diagnosticFailureCode
                 )
             )
+        }
+    }
+
+    func openBookOnServer(
+        _ itemID: LibraryItemID,
+        expectedAccount: ServerAccount,
+        open: (URL) -> Void
+    ) throws(BookServerLinkFailure) {
+        guard account == expectedAccount,
+            selectedBookID == itemID,
+            case .loaded(let detail) = bookDetail,
+            detail.id == itemID
+        else {
+            throw .selectionChanged
+        }
+        do {
+            let url = try AudiobookshelfRouteBuilder(
+                server: expectedAccount.server
+            ).webBookURL(for: itemID)
+            open(url)
+        } catch {
+            throw .routeConstruction(error)
         }
     }
 

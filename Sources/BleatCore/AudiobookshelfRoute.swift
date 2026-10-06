@@ -224,6 +224,14 @@ public struct AudiobookshelfRouteBuilder: Sendable {
         )
     }
 
+    /// Web detail route from the pinned Nuxt page:
+    /// https://github.com/advplyr/audiobookshelf/blob/v2.36.0/client/pages/item/_id/index.vue
+    public func webBookURL(
+        for itemID: LibraryItemID
+    ) throws(RouteConstructionError) -> URL {
+        try buildURL(appending: ["item", itemID.rawValue], queryItems: [])
+    }
+
     public func serverRelativeContentURL(
         _ returnedPath: String
     ) throws(RouteConstructionError) -> URL {
