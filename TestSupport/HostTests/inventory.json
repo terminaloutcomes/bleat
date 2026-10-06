@@ -494,6 +494,12 @@
     "testRejectsEmbeddedCredentials()"
   ],
   "BleatCoreTests.StatisticsExplorationTests": [
+    "observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit()",
+    "boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples()",
+    "liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber()",
+    "observationHistoryAndPresentationAreAccountScoped()",
+    "unchangedPausedSamplesDoNotPublishOrFetchAndProgressSurvivesCoalescing()",
+    "failedHistorySaveDoesNotReplaceObservedProgress()",
     "importedHistoryAppearsInChartBookAndSessionWithoutInventingRate()",
     "portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime()",
     "rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset()",

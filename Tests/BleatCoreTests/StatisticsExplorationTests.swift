@@ -11,6 +11,273 @@ struct StatisticsExplorationTests {
     private let date = Date(timeIntervalSince1970: 1_700_000_000)
 
     @Test
+    func observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit()
+        async throws
+    {
+        let repository = try repository()
+        let id = UUID()
+        let query = StatisticsQuery(accountID: account)
+        let stream = await repository.updates(
+            id: id, query: query, accountIDs: [account])
+        var iterator = stream.makeAsyncIterator()
+        let initial = try #require(await iterator.next())
+        if case .unprepared = initial.presentation {
+        } else {
+            Issue.record("Expected unprepared observation")
+        }
+        _ = try await repository.presentation(query: query)
+        let prepared = try #require(await iterator.next())
+        await repository.acknowledgeUpdate(
+            id: id, revision: prepared.presentationRevision)
+        for second in 0...16 {
+            try await repository.record(
+                StatisticsPlaybackSample(
+                    accountID: account, itemID: item,
+                    sessionID: PlaybackSessionID(rawValue: "observed"),
+                    observedAt: date.addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: Double(second), playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: true, chapter: nil, title: "Book",
+                    author: "Author", duration: 100))
+            if second == 0 { continue }
+            let update = try #require(await iterator.next())
+            let value: StatisticsPresentation
+            switch update.presentation {
+            case .live(let presentation), .committed(let presentation):
+                value = presentation
+            case .invalidated, .unprepared:
+                Issue.record("Prepared playback must not become invalidated")
+                return
+            }
+            #expect(
+                value.snapshot.summary.localRealSeconds
+                    + (value.liveSlice?.realSeconds ?? 0) == Double(second))
+            await repository.acknowledgeUpdate(
+                id: id, revision: update.presentationRevision)
+        }
+        try await repository.finish(
+            sessionID: PlaybackSessionID(rawValue: "observed"))
+        let finished = try #require(await iterator.next())
+        guard case .committed(let presentation) = finished.presentation else {
+            Issue.record("Finish must deliver committed data")
+            return
+        }
+        #expect(presentation.liveSlice == nil)
+        #expect(presentation.snapshot.summary.localRealSeconds == 16)
+        await repository.stopUpdates(id: id)
+        #expect(await iterator.next() == nil)
+        #expect(await repository.currentUpdate(id: id) == nil)
+    }
+
+    @Test
+    func boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples()
+        async throws
+    {
+        let repository = try repository()
+        let id = UUID()
+        let stream = await repository.updates(
+            id: id, query: StatisticsQuery(), accountIDs: [account])
+        _ = try await repository.presentation(query: StatisticsQuery())
+        try await repository.updateHistoryProgress(
+            accountID: account, completedPages: 1, totalPages: 3,
+            completed: false, at: date)
+        try await repository.reset(query: StatisticsQuery(accountID: account))
+        try await repository.record(
+            StatisticsPlaybackSample(
+                accountID: account, itemID: item,
+                sessionID: PlaybackSessionID(rawValue: "after-reset"),
+                observedAt: date, monotonicTime: 0, wholeBookPosition: 0,
+                playbackRate: 1, playbackGeneration: 1,
+                isAudibleAndAdvancing: true,
+                chapter: nil, title: "Book", author: "Author", duration: 100))
+        var iterator = stream.makeAsyncIterator()
+        let latest = try #require(await iterator.next())
+        if case .invalidated = latest.presentation {
+        } else {
+            Issue.record("Live sample erased invalidation")
+        }
+        let history = try #require(latest.history[account]).get()
+        #expect(history.completedPages == 0)
+        _ = try await repository.presentation(query: StatisticsQuery())
+        let rebuilt = try #require(await iterator.next())
+        if case .committed = rebuilt.presentation {
+        } else {
+            Issue.record("Explicit load must prepare observation")
+        }
+        await repository.stopUpdates(id: id)
+    }
+
+    @Test
+    func liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber()
+        async throws
+    {
+        let container = try container()
+        let repository = StatisticsRepository(modelContainer: container)
+        try await repository.importArchive(
+            StatisticsArchive(
+                slices: [slice(index: 0)], completions: [], remoteSessions: []))
+        let query = StatisticsQuery(accountID: account)
+        let first = UUID()
+        let second = UUID()
+        let firstStream = await repository.updates(
+            id: first, query: query, accountIDs: [account])
+        _ = try await repository.presentation(query: query)
+        let secondStream = await repository.updates(
+            id: second, query: query, accountIDs: [account])
+        // Remove the persisted snapshot to prove live reads use prepared memory.
+        let context = ModelContext(container)
+        for record in try context.fetch(
+            FetchDescriptor<StatisticsSnapshotRecord>())
+        { context.delete(record) }
+        try context.save()
+        #expect(
+            try await repository.livePresentation(query: query)?.snapshot
+                .summary.localRealSeconds == 5)
+        await repository.stopUpdates(id: first)
+        #expect(
+            try await repository.livePresentation(query: query)?.snapshot
+                .summary.localRealSeconds == 5)
+        await repository.stopUpdates(id: second)
+        #expect(try await repository.livePresentation(query: query) == nil)
+        withExtendedLifetime((firstStream, secondStream)) {}
+    }
+
+    @Test
+    func observationHistoryAndPresentationAreAccountScoped() async throws {
+        let repository = try repository()
+        let other = AccountID(rawValue: "other")
+        let id = UUID()
+        let stream = await repository.updates(
+            id: id, query: StatisticsQuery(accountID: other),
+            accountIDs: [other])
+        _ = try await repository.presentation(
+            query: StatisticsQuery(accountID: other))
+        try await repository.upsertRemoteSessions([session(realSeconds: 90)])
+        try await repository.updateHistoryProgress(
+            accountID: account, completedPages: 1, totalPages: 1,
+            completed: true)
+        var iterator = stream.makeAsyncIterator()
+        let update = try #require(await iterator.next())
+        guard case .committed(let value) = update.presentation else {
+            Issue.record("Expected prepared scoped snapshot")
+            return
+        }
+        #expect(value.snapshot.summary.realSeconds == 0)
+        #expect(value.liveSlice == nil)
+        #expect(update.history[account] == nil)
+        #expect(
+            try #require(update.history[other]).get().lastCompletedAt == nil)
+        await repository.stopUpdates(id: id)
+    }
+
+    @Test
+    func
+        unchangedPausedSamplesDoNotPublishOrFetchAndProgressSurvivesCoalescing()
+        async throws
+    {
+        let container = try container()
+        let repository = StatisticsRepository(modelContainer: container)
+        let id = UUID()
+        let query = StatisticsQuery(accountID: account)
+        let stream = await repository.updates(
+            id: id, query: query, accountIDs: [account])
+        _ = try await repository.presentation(query: query)
+        let prepared = try #require(await repository.currentUpdate(id: id))
+        await repository.acknowledgeUpdate(
+            id: id, revision: prepared.presentationRevision)
+        let context = ModelContext(container)
+        for record in try context.fetch(
+            FetchDescriptor<StatisticsSnapshotRecord>())
+        { context.delete(record) }
+        try context.save()
+        for second in 0...2 {
+            try await repository.record(
+                StatisticsPlaybackSample(
+                    accountID: account, itemID: item,
+                    sessionID: PlaybackSessionID(rawValue: "paused"),
+                    observedAt: date.addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: 0, playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: false, chapter: nil, title: "Book",
+                    author: "Author", duration: 100))
+        }
+        #expect(
+            await repository.currentUpdate(id: id)?.presentationRevision
+                == prepared.presentationRevision)
+        try await repository.updateHistoryProgress(
+            accountID: account, completedPages: 1, totalPages: 2,
+            completed: false, at: date)
+        for second in 3...4 {
+            try await repository.record(
+                StatisticsPlaybackSample(
+                    accountID: account, itemID: item,
+                    sessionID: PlaybackSessionID(rawValue: "paused"),
+                    observedAt: date.addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    wholeBookPosition: Double(second), playbackRate: 1,
+                    playbackGeneration: 1,
+                    isAudibleAndAdvancing: true, chapter: nil, title: "Book",
+                    author: "Author", duration: 100))
+        }
+        var iterator = stream.makeAsyncIterator()
+        let latest = try #require(await iterator.next())
+        guard case .live(let value) = latest.presentation else {
+            Issue.record("Live update read an absent persisted cache")
+            return
+        }
+        #expect(value.snapshot.summary.localRealSeconds == 0)
+        #expect(value.liveSlice?.realSeconds == 1)
+        #expect(try #require(latest.history[account]).get().completedPages == 1)
+        await repository.stopUpdates(id: id)
+    }
+
+    @Test
+    func failedHistorySaveDoesNotReplaceObservedProgress() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("history.store")
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        do {
+            let writable = try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(schema: schema, url: url))
+            let writer = StatisticsRepository(modelContainer: writable)
+            try await writer.updateHistoryProgress(
+                accountID: account, completedPages: 1, totalPages: 3,
+                completed: false, at: date)
+        }
+        let readOnly = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(
+                schema: schema, url: url, allowsSave: false))
+        let repository = StatisticsRepository(modelContainer: readOnly)
+        let id = UUID()
+        let stream = await repository.updates(
+            id: id, query: StatisticsQuery(accountID: account),
+            accountIDs: [account])
+        let before = try #require(await repository.currentUpdate(id: id))
+        do {
+            try await repository.updateHistoryProgress(
+                accountID: account, completedPages: 2, totalPages: 3,
+                completed: false, at: date)
+            Issue.record("Read-only history store must reject the save")
+        } catch { #expect(error == .persistenceFailed) }
+        let after = try #require(await repository.currentUpdate(id: id))
+        #expect(after.revision == before.revision)
+        #expect(try #require(after.history[account]).get().completedPages == 1)
+        #expect(
+            try await repository.historyProgress(accountID: account)
+                .completedPages == 1)
+        await repository.stopUpdates(id: id)
+        withExtendedLifetime(stream) {}
+    }
+
+    @Test
     func importedHistoryAppearsInChartBookAndSessionWithoutInventingRate()
         async throws
     {

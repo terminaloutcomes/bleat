@@ -935,6 +935,151 @@ public actor StatisticsRepository {
     private let modelContainer: ModelContainer
     private var accumulators:
         [StatisticsAggregation.SessionKey: ListeningAccumulator] = [:]
+    private struct Observation {
+        let query: StatisticsQuery
+        let continuation: AsyncStream<StatisticsUpdate>.Continuation
+        var state: StatisticsUpdate
+    }
+    private var observations: [UUID: Observation] = [:]
+    private var preparedSnapshots: [StatisticsQuery: StatisticsSnapshot] = [:]
+    private var updateRevision: UInt64 = 0
+
+    public func updates(
+        id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
+    )
+        -> AsyncStream<StatisticsUpdate>
+    {
+        stopUpdates(id: id)
+        let (stream, continuation) = AsyncStream<StatisticsUpdate>.makeStream(
+            bufferingPolicy: .bufferingNewest(1))
+        var history:
+            [AccountID: Result<
+                StatisticsHistoryProgress, StatisticsRepositoryError
+            >] = [:]
+        for accountID in accountIDs {
+            do {
+                history[accountID] = .success(
+                    try historyProgress(accountID: accountID))
+            } catch { history[accountID] = .failure(error) }
+        }
+        updateRevision &+= 1
+        let presentation: StatisticsUpdate.Presentation
+        if let snapshot = preparedSnapshots[query] {
+            presentation = .committed(
+                StatisticsPresentation(
+                    snapshot: snapshot,
+                    liveSlice: uncommittedSlice(accountID: query.accountID)))
+        } else {
+            presentation = .unprepared
+        }
+        let state = StatisticsUpdate(
+            revision: updateRevision, presentationRevision: updateRevision,
+            presentation: presentation, history: history)
+        observations[id] = Observation(
+            query: query, continuation: continuation, state: state)
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.stopUpdates(id: id) }
+        }
+        continuation.yield(state)
+        return stream
+    }
+
+    public func currentUpdate(id: UUID) -> StatisticsUpdate? {
+        observations[id]?.state
+    }
+
+    public func stopUpdates(id: UUID) {
+        guard let observation = observations.removeValue(forKey: id) else {
+            return
+        }
+        observation.continuation.finish()
+        if !observations.values.contains(where: {
+            $0.query == observation.query
+        }) {
+            preparedSnapshots[observation.query] = nil
+        }
+    }
+
+    private func publishPresentation(
+        liveOnly: Bool = false, query: StatisticsQuery? = nil
+    ) {
+        for id in Array(observations.keys) {
+            guard var observation = observations[id],
+                query == nil || observation.query == query
+            else { continue }
+            let presentation: StatisticsUpdate.Presentation
+            if let snapshot = preparedSnapshots[observation.query] {
+                let value = StatisticsPresentation(
+                    snapshot: snapshot,
+                    liveSlice: uncommittedSlice(
+                        accountID: observation.query.accountID))
+                if liveOnly {
+                    switch observation.state.presentation {
+                    case .live(let previous), .committed(let previous):
+                        if previous.snapshot == value.snapshot,
+                            previous.liveSlice == value.liveSlice
+                        {
+                            continue
+                        }
+                    case .unprepared, .invalidated: break
+                    }
+                }
+                // A pending committed change must survive subsequent live samples.
+                if liveOnly, case .live = observation.state.presentation {
+                    presentation = .live(value)
+                } else if liveOnly,
+                    case .unprepared = observation.state.presentation
+                {
+                    presentation = .live(value)
+                } else {
+                    presentation = .committed(value)
+                }
+            } else {
+                if liveOnly { continue }
+                presentation = .invalidated
+            }
+            updateRevision &+= 1
+            observation.state = StatisticsUpdate(
+                revision: updateRevision, presentationRevision: updateRevision,
+                presentation: presentation, history: observation.state.history)
+            observations[id] = observation
+            observation.continuation.yield(observation.state)
+        }
+    }
+
+    /// Acknowledge delivery so later samples can be throttled independently of
+    /// the last committed update. Revisions prevent acknowledging newer data.
+    public func acknowledgeUpdate(id: UUID, revision: UInt64) {
+        guard var observation = observations[id],
+            observation.state.presentationRevision == revision,
+            case .committed(let value) = observation.state.presentation
+        else { return }
+        observation.state = StatisticsUpdate(
+            revision: observation.state.revision,
+            presentationRevision: revision,
+            presentation: .live(value), history: observation.state.history)
+        observations[id] = observation
+    }
+
+    private func publishHistory(
+        accountID: AccountID,
+        progress: Result<StatisticsHistoryProgress, StatisticsRepositoryError>
+    ) {
+        for id in Array(observations.keys) {
+            guard var observation = observations[id],
+                observation.state.history[accountID] != nil
+            else { continue }
+            var history = observation.state.history
+            history[accountID] = progress
+            updateRevision &+= 1
+            observation.state = StatisticsUpdate(
+                revision: updateRevision,
+                presentationRevision: observation.state.presentationRevision,
+                presentation: observation.state.presentation, history: history)
+            observations[id] = observation
+            observation.continuation.yield(observation.state)
+        }
+    }
 
     public init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -942,6 +1087,18 @@ public actor StatisticsRepository {
 
     public func discardAfterPersistentReset() {
         accumulators.removeAll()
+        preparedSnapshots.removeAll()
+        publishPresentation()
+        for accountID in Set(
+            observations.values.flatMap { $0.state.history.keys })
+        {
+            publishHistory(
+                accountID: accountID,
+                progress: .success(
+                    StatisticsHistoryProgress(
+                        startedAt: nil, lastCompletedAt: nil, completedPages: 0,
+                        totalPages: 0)))
+        }
     }
 
     public func uncommittedSlice(accountID: AccountID?) -> ListeningSlice? {
@@ -957,8 +1114,9 @@ public actor StatisticsRepository {
             account: sample.accountID, session: sample.sessionID)
         var accumulator = accumulators[identity] ?? ListeningAccumulator()
         let slices = try accumulator.ingest(sample)
-        if !slices.isEmpty { try save(slices) }
+        if !slices.isEmpty { try save(slices, publish: false) }
         accumulators[identity] = accumulator
+        publishPresentation(liveOnly: slices.isEmpty)
     }
 
     public func finish(
@@ -969,8 +1127,9 @@ public actor StatisticsRepository {
             var accumulator = value
             return accumulator.finish()
         }
-        if !slices.isEmpty { try save(slices) }
+        if !slices.isEmpty { try save(slices, publish: false) }
         for identity in matching.keys { accumulators[identity] = nil }
+        publishPresentation()
     }
 
     public func recordCompletion(
@@ -1142,6 +1301,14 @@ public actor StatisticsRepository {
                 record.lastCompletedAt = date
             }
             try context.save()
+            publishHistory(
+                accountID: accountID,
+                progress: .success(
+                    StatisticsHistoryProgress(
+                        startedAt: record.startedAt,
+                        lastCompletedAt: record.lastCompletedAt,
+                        completedPages: record.completedPages,
+                        totalPages: record.totalPages)))
         } catch {
             throw .persistenceFailed
         }
@@ -1162,8 +1329,13 @@ public actor StatisticsRepository {
     public func presentation(query: StatisticsQuery)
         throws(StatisticsRepositoryError) -> StatisticsPresentation
     {
-        StatisticsPresentation(
-            snapshot: try snapshot(query: query),
+        let value = try snapshot(query: query)
+        if observations.values.contains(where: { $0.query == query }) {
+            preparedSnapshots[query] = value
+            publishPresentation(query: query)
+        }
+        return StatisticsPresentation(
+            snapshot: value,
             liveSlice: uncommittedSlice(accountID: query.accountID))
     }
 
@@ -1172,7 +1344,13 @@ public actor StatisticsRepository {
     public func livePresentation(query: StatisticsQuery)
         throws(StatisticsRepositoryError) -> StatisticsPresentation?
     {
-        guard let value = try cachedSnapshot(query: query) else { return nil }
+        let snapshot: StatisticsSnapshot?
+        if let prepared = preparedSnapshots[query] {
+            snapshot = prepared
+        } else {
+            snapshot = try cachedSnapshot(query: query)
+        }
+        guard let value = snapshot else { return nil }
         return StatisticsPresentation(
             snapshot: value,
             liveSlice: uncommittedSlice(accountID: query.accountID))
@@ -1731,7 +1909,7 @@ public actor StatisticsRepository {
                 record.completedPages = 0
                 record.totalPages = 0
             }
-            try saveMutation(context)
+            try saveMutation(context, publish: false)
             let removed = accumulators.filter { identity, accumulator in
                 guard
                     query.accountID == nil
@@ -1745,6 +1923,17 @@ public actor StatisticsRepository {
                     accountID: pending.accountID, date: pending.startedAt)
             }.map(\.key)
             for identity in removed { accumulators[identity] = nil }
+            for accountID in Set(
+                observations.values.flatMap { $0.state.history.keys })
+            where query.accountID == nil || query.accountID == accountID {
+                publishHistory(
+                    accountID: accountID,
+                    progress: .success(
+                        StatisticsHistoryProgress(
+                            startedAt: nil, lastCompletedAt: nil,
+                            completedPages: 0, totalPages: 0)))
+            }
+            publishPresentation()
         } catch let error as StatisticsRepositoryError {
             throw error
         } catch {
@@ -1815,7 +2004,7 @@ public actor StatisticsRepository {
     }
 
     private func save(
-        _ slices: [ListeningSlice]
+        _ slices: [ListeningSlice], publish: Bool = true
     ) throws(StatisticsRepositoryError) {
         guard slices.allSatisfy(Self.isValid) else {
             throw .invalidSlice
@@ -1826,7 +2015,7 @@ public actor StatisticsRepository {
             for slice in slices {
                 context.insert(ListeningSliceRecord(slice))
             }
-            try saveMutation(context) { $0.append(slices) }
+            try saveMutation(context, publish: publish) { $0.append(slices) }
         } catch {
             throw .persistenceFailed
         }
@@ -1949,9 +2138,11 @@ public actor StatisticsRepository {
 
     private func saveMutation(
         _ context: ModelContext,
+        publish: Bool = true,
         update: ((inout StatisticsAggregation.State) -> Void)? = nil
     ) throws {
         guard context.hasChanges else { return }
+        var prepared: [StatisticsQuery: StatisticsSnapshot] = [:]
         for cache in try context.fetch(
             FetchDescriptor<StatisticsSnapshotRecord>())
         {
@@ -1963,11 +2154,19 @@ public actor StatisticsRepository {
                 let value = state.snapshot()
                 cache.payload = try JSONEncoder().encode(value)
                 cache.incrementalPayload = try JSONEncoder().encode(state)
+                let query = StatisticsQuery(
+                    accountID: cache.accountID.map { AccountID(rawValue: $0) },
+                    start: cache.start, end: cache.end)
+                if observations.values.contains(where: { $0.query == query }) {
+                    prepared[query] = value
+                }
             } else {
                 context.delete(cache)
             }
         }
         try context.save()
+        preparedSnapshots = prepared
+        if publish { publishPresentation() }
     }
 
     private static func isValid(_ slice: ListeningSlice) -> Bool {

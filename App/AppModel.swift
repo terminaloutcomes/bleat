@@ -1581,6 +1581,20 @@ final class AppModel {
         ResourceState<StatisticsExploration> = .idle
     private(set) var statisticsLiveSlice: ListeningSlice?
     private var statisticsLiveTask: Task<Void, Never>?
+    private var statisticsObservationID: UUID?
+    private var statisticsObservationQuery: StatisticsQuery?
+    private var statisticsObservationAccounts: Set<AccountID> = []
+    private var statisticsUpdatesEnabled = false
+    private var statisticsLoadingGeneration: UInt64?
+    private var statisticsLastUpdateRevision: UInt64 = 0
+    private var statisticsLastPresentationRevision: UInt64 = 0
+    private var statisticsPendingUpdate: StatisticsUpdate?
+    private var statisticsDeliveryTask: Task<Void, Never>?
+    private var statisticsDeliveryID: UUID?
+    private var statisticsDeliverySchedule = StatisticsLiveDeliverySchedule()
+    private let statisticsNow: @Sendable () -> ContinuousClock.Instant
+    private let statisticsSleepUntil:
+        @Sendable (ContinuousClock.Instant) async throws -> Void
     private(set) var statisticsHistoryProgress:
         [AccountID: StatisticsHistoryProgress] = [:]
     private(set) var statisticsHistoryFailure: AppFailure?
@@ -1764,10 +1778,21 @@ final class AppModel {
             {
                 try await Task.sleep(for: $0)
             },
+        statisticsNow: @escaping @Sendable () -> ContinuousClock.Instant = {
+            ContinuousClock().now
+        },
+        statisticsSleepUntil:
+            @escaping @Sendable (ContinuousClock.Instant) async throws -> Void =
+            {
+                try await ContinuousClock().sleep(
+                    until: $0, tolerance: .milliseconds(100))
+            },
         downloadRemovalStorageCheckpoint:
             @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
+        self.statisticsNow = statisticsNow
+        self.statisticsSleepUntil = statisticsSleepUntil
         self.nearbyServerDiscovery = nearbyServerDiscovery
         self.diagnostics = diagnostics
         let consentStore =
@@ -5456,89 +5481,310 @@ final class AppModel {
         return .notImported
     }
 
-    func loadStatistics(query: StatisticsQuery? = nil, cachedOnly: Bool = false)
-        async
-    {
-        if let query {
-            statisticsQuery = query
-        }
-        if !cachedOnly { statisticsLoadGeneration &+= 1 }
+    func loadStatistics(query: StatisticsQuery? = nil) async {
+        if let query { statisticsQuery = query }
+        statisticsLoadGeneration &+= 1
         let generation = statisticsLoadGeneration
-        if !cachedOnly && (query != nil || statistics == .idle) {
+        statisticsLoadingGeneration = generation
+        defer {
+            if statisticsLoadingGeneration == generation {
+                statisticsLoadingGeneration = nil
+            }
+        }
+        cancelStatisticsDelivery()
+        if query != nil || statistics == .idle {
             statistics = .loading
             statisticsExploration = .loading
             statisticsLiveSlice = nil
         }
         let effectiveQuery =
-            statisticsQuery
-            ?? StatisticsQuery(accountID: account?.id)
+            statisticsQuery ?? StatisticsQuery(accountID: account?.id)
+        let observing = statisticsUpdatesEnabled
+        var observationID = statisticsObservationID
+        if observing,
+            statisticsObservationQuery != effectiveQuery
+                || statisticsObservationAccounts != Set(accounts.map(\.id))
+        {
+            observationID = await startStatisticsLiveUpdates(
+                query: effectiveQuery)
+        }
+        guard generation == statisticsLoadGeneration,
+            observationID == statisticsObservationID,
+            !observing || observationID != nil
+        else { return }
         do {
-            let available =
-                try await cachedOnly
-                ? service.statisticsLivePresentation(query: effectiveQuery)
-                : service.statisticsPresentation(query: effectiveQuery)
-            guard let presentation = available else { return }
-            guard generation == statisticsLoadGeneration else { return }
-            let summary = presentation.snapshot.summary
-            statisticsExploration = .loaded(presentation.snapshot.exploration)
-            statisticsLiveSlice = presentation.liveSlice
-            let affectedAccounts = accounts.filter {
-                effectiveQuery.accountID == nil
-                    || effectiveQuery.accountID == $0.id
+            while true {
+                let presentation = try await service.statisticsPresentation(
+                    query: effectiveQuery)
+                let current: StatisticsUpdate?
+                if let observationID {
+                    current = await service.currentStatisticsUpdate(
+                        id: observationID)
+                } else {
+                    current = nil
+                }
+                guard generation == statisticsLoadGeneration,
+                    observationID == statisticsObservationID
+                else { return }
+                let latest = [current, statisticsPendingUpdate].compactMap {
+                    $0
+                }
+                .max { $0.revision < $1.revision }
+                // A mutation may invalidate the cache after the explicit read.
+                // Rebuild once per observed invalidation, never on a timer.
+                if let latest, case .invalidated = latest.presentation {
+                    statisticsPendingUpdate = nil
+                    continue
+                }
+                statisticsLoadingGeneration = nil
+                statisticsPendingUpdate = nil
+                statisticsDeliverySchedule = StatisticsLiveDeliverySchedule()
+                if let latest {
+                    applyStatisticsHistory(latest)
+                    switch latest.presentation {
+                    case .live(let value), .committed(let value):
+                        statisticsLastPresentationRevision =
+                            latest.presentationRevision
+                        applyStatisticsPresentation(
+                            value, query: effectiveQuery)
+                        if let observationID {
+                            await service.acknowledgeStatisticsUpdate(
+                                id: observationID,
+                                revision: latest.presentationRevision)
+                        }
+                    case .unprepared, .invalidated:
+                        applyStatisticsPresentation(
+                            presentation, query: effectiveQuery)
+                    }
+                } else {
+                    applyStatisticsPresentation(
+                        presentation, query: effectiveQuery)
+                }
+                return
             }
-            let stale = affectedAccounts.contains {
-                $0.connectionState != .connected
-                    || statisticsHistoryFailedAccounts.contains($0.id)
-                    || (summary.realTimeCoverage != .thisApp
-                        && statisticsHistoryProgress[$0.id]?
-                            .lastCompletedAt == nil)
-            }
-            statistics = .loaded(
-                stale
-                    ? summary.withCoverage(.stale)
-                    : summary)
-        } catch let error {
-            let diagnosticFailure = AppFailure(
+        } catch {
+            guard generation == statisticsLoadGeneration,
+                observationID == statisticsObservationID
+            else { return }
+            let failure = AppFailure(
                 operation: .loadStatistics, serviceError: error)
+            let current: StatisticsUpdate?
+            if let observationID {
+                current = await service.currentStatisticsUpdate(
+                    id: observationID)
+            } else {
+                current = nil
+            }
             await diagnostics.record(
                 .failed(
                     .loadStatistics, category: .sync,
-                    failureCode: diagnosticFailure.diagnosticFailureCode))
-            guard generation == statisticsLoadGeneration else { return }
-            statisticsLiveSlice = nil
-            statisticsExploration = .failed(
-                AppFailure(operation: .loadStatistics, serviceError: error))
-            statistics = .failed(
-                AppFailure(
-                    operation: .loadStatistics,
-                    serviceError: error
-                )
+                    failureCode: failure.diagnosticFailureCode))
+            guard generation == statisticsLoadGeneration,
+                observationID == statisticsObservationID
+            else { return }
+            statisticsLoadingGeneration = nil
+            if let latest = [current, statisticsPendingUpdate].compactMap({ $0 }
             )
+            .max(by: { $0.revision < $1.revision }) {
+                applyStatisticsHistory(latest)
+                statisticsLastPresentationRevision = max(
+                    statisticsLastPresentationRevision,
+                    latest.presentationRevision)
+            }
+            statisticsPendingUpdate = nil
+            statisticsLiveSlice = nil
+            statisticsExploration = .failed(failure)
+            statistics = .failed(failure)
+            // Fence already-produced presentations behind this failure. A later
+            // mutation or explicit retry may recover, without an automatic retry loop.
         }
     }
 
-    func startStatisticsLiveUpdates() {
-        statisticsLiveTask?.cancel()
-        statisticsLiveTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.loadStatistics(cachedOnly: true)
-                for account in self.accounts {
-                    if let progress = try? await self.service
-                        .statisticsHistoryProgress(for: account.id)
-                    {
-                        self.statisticsHistoryProgress[account.id] = progress
+    private func applyStatisticsPresentation(
+        _ presentation: StatisticsPresentation, query: StatisticsQuery
+    ) {
+        let summary = presentation.snapshot.summary
+        statisticsExploration = .loaded(presentation.snapshot.exploration)
+        statisticsLiveSlice = presentation.liveSlice
+        let stale = accounts.filter {
+            query.accountID == nil || query.accountID == $0.id
+        }.contains {
+            $0.connectionState != .connected
+                || statisticsHistoryFailedAccounts.contains($0.id)
+                || (summary.realTimeCoverage != .thisApp
+                    && statisticsHistoryProgress[$0.id]?.lastCompletedAt == nil)
+        }
+        statistics = .loaded(stale ? summary.withCoverage(.stale) : summary)
+    }
+
+    private func applyStatisticsHistory(_ update: StatisticsUpdate) {
+        guard update.revision > statisticsLastUpdateRevision else { return }
+        statisticsLastUpdateRevision = update.revision
+        for (accountID, result) in update.history {
+            switch result {
+            case .success(let progress):
+                statisticsHistoryProgress[accountID] = progress
+                if statisticsHistoryFailures[accountID]?.operation
+                    == .loadStatistics
+                {
+                    statisticsHistoryFailures[accountID] = nil
+                    statisticsHistoryFailedAccounts.remove(accountID)
+                }
+            case .failure(let error):
+                let failure = AppFailure(
+                    operation: .loadStatistics, serviceError: .statistics(error)
+                )
+                if statisticsHistoryFailures[accountID] != failure {
+                    statisticsHistoryFailures[accountID] = failure
+                    statisticsHistoryFailedAccounts.insert(accountID)
+                    Task {
+                        await diagnostics.record(
+                            .failed(
+                                .loadStatistics, category: .sync,
+                                failureCode: failure.diagnosticFailureCode))
                     }
                 }
-                try? await Task.sleep(for: .seconds(1))
             }
         }
     }
 
+    private func receiveStatisticsUpdate(_ update: StatisticsUpdate, id: UUID)
+        async
+    {
+        guard statisticsObservationID == id, !Task.isCancelled else { return }
+        applyStatisticsHistory(update)
+        guard update.presentationRevision > statisticsLastPresentationRevision
+        else { return }
+        if let pending = statisticsPendingUpdate,
+            pending.revision > update.revision
+        {
+            return
+        }
+        statisticsPendingUpdate = update
+        guard statisticsLoadingGeneration == nil else { return }
+        switch update.presentation {
+        case .unprepared: return
+        case .invalidated:
+            cancelStatisticsDelivery()
+            await loadStatistics()
+        case .committed:
+            await deliverStatisticsUpdate(update, id: id)
+        case .live:
+            if let deadline = statisticsDeliverySchedule.deadline(
+                at: statisticsNow())
+            {
+                guard statisticsDeliveryTask == nil else { return }
+                let deliveryID = UUID()
+                statisticsDeliveryID = deliveryID
+                let sleep = statisticsSleepUntil
+                statisticsDeliveryTask = Task { [weak self] in
+                    do { try await sleep(deadline) } catch { return }
+                    guard let self, !Task.isCancelled,
+                        self.statisticsObservationID == id,
+                        self.statisticsDeliveryID == deliveryID,
+                        self.statisticsLoadingGeneration == nil,
+                        let pending = self.statisticsPendingUpdate
+                    else { return }
+                    await self.deliverStatisticsUpdate(pending, id: id)
+                }
+            } else {
+                await deliverStatisticsUpdate(update, id: id)
+            }
+        }
+    }
+
+    private func deliverStatisticsUpdate(_ update: StatisticsUpdate, id: UUID)
+        async
+    {
+        guard statisticsObservationID == id, statisticsLoadingGeneration == nil,
+            update.presentationRevision > statisticsLastPresentationRevision,
+            let query = statisticsObservationQuery
+        else { return }
+        let value: StatisticsPresentation
+        switch update.presentation {
+        case .live(let presentation):
+            value = presentation
+            statisticsDeliverySchedule.didDeliver(at: statisticsNow())
+        case .committed(let presentation):
+            value = presentation
+            statisticsDeliverySchedule = StatisticsLiveDeliverySchedule()
+        case .unprepared, .invalidated: return
+        }
+        cancelStatisticsDelivery()
+        statisticsPendingUpdate = nil
+        statisticsLastPresentationRevision = update.presentationRevision
+        applyStatisticsPresentation(value, query: query)
+        await service.acknowledgeStatisticsUpdate(
+            id: id, revision: update.presentationRevision)
+    }
+
+    private func cancelStatisticsDelivery() {
+        statisticsDeliveryTask?.cancel()
+        statisticsDeliveryTask = nil
+        statisticsDeliveryID = nil
+    }
+
+    @discardableResult
+    func startStatisticsLiveUpdates(query: StatisticsQuery? = nil) async
+        -> UUID?
+    {
+        guard !Task.isCancelled else { return nil }
+        let effectiveQuery =
+            query ?? statisticsQuery ?? StatisticsQuery(accountID: account?.id)
+        let previousID = statisticsObservationID
+        let previousTask = statisticsLiveTask
+        statisticsLiveTask = nil
+        // A load may restart observation from inside the old consumer task.
+        // Cancel it after registration so cancellation cannot reject its successor.
+        defer { previousTask?.cancel() }
+        if statisticsObservationQuery != effectiveQuery {
+            statistics = .loading
+            statisticsExploration = .loading
+            statisticsLiveSlice = nil
+        }
+        statisticsQuery = effectiveQuery
+        cancelStatisticsDelivery()
+        statisticsPendingUpdate = nil
+        statisticsLastUpdateRevision = 0
+        statisticsLastPresentationRevision = 0
+        statisticsDeliverySchedule = StatisticsLiveDeliverySchedule()
+        statisticsUpdatesEnabled = true
+        statisticsObservationQuery = effectiveQuery
+        statisticsObservationAccounts = Set(accounts.map(\.id))
+        let id = UUID()
+        statisticsObservationID = id
+        if let previousID {
+            await service.stopStatisticsUpdates(id: previousID)
+        }
+        let stream = await service.statisticsUpdates(
+            id: id, query: effectiveQuery, accountIDs: accounts.map(\.id))
+        guard statisticsObservationID == id, !Task.isCancelled else {
+            await service.stopStatisticsUpdates(id: id)
+            if statisticsObservationID == id { stopStatisticsLiveUpdates() }
+            return nil
+        }
+        statisticsLiveTask = Task { [weak self] in
+            for await update in stream {
+                guard let self else { return }
+                await self.receiveStatisticsUpdate(update, id: id)
+            }
+        }
+        return id
+    }
+
     func stopStatisticsLiveUpdates() {
+        let id = statisticsObservationID
+        statisticsObservationID = nil
+        statisticsObservationQuery = nil
+        statisticsObservationAccounts = []
+        statisticsUpdatesEnabled = false
+        statisticsLoadingGeneration = nil
         statisticsLiveTask?.cancel()
         statisticsLiveTask = nil
+        cancelStatisticsDelivery()
+        statisticsPendingUpdate = nil
         statisticsLiveSlice = nil
+        if let id { Task { await service.stopStatisticsUpdates(id: id) } }
     }
 
     func refreshStatisticsHistory(

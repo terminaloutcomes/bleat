@@ -70,6 +70,7 @@
 		CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */; };
 		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
 		F1E8803189D30226BDF5A910 /* BonjourDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF092B4585B9DD5C5509498E /* BonjourDiscovery.swift */; };
+		F2986136829FE13ACAF3D426 /* StatisticsLiveDeliverySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */; };
 		F46108AC1C2239DA623870FD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */; };
 		FC22F3E843FD787E7B0628F8 /* SeriesCoverMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */; };
 		FC27674BAACD209DFB491435 /* BleatDynamicTypeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53087763F622BC88D662C472 /* BleatDynamicTypeUITests.swift */; };
@@ -157,6 +158,7 @@
 		BCA2A9B233BE9C12B1B7C714 /* BleatPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatPerformanceUITests.swift; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsentTests.swift; sourceTree = "<group>"; };
+		C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsLiveDeliverySchedule.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
 		D9AB72375ED47B619ABB13FC /* LegacyDiagnosticLogCleanupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDiagnosticLogCleanupTests.swift; sourceTree = "<group>"; };
 		DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPreferencesStore.swift; sourceTree = "<group>"; };
@@ -311,6 +313,7 @@
 				E0639281D9850EC68335644F /* RootView.swift */,
 				3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */,
 				3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */,
+				C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */,
 				53C7555CCB4D4F3DB0359438 /* TranscriptExport.swift */,
 				F593B2DD285DFB478A5C1DEB /* UITestAppService.swift */,
 			);
@@ -558,6 +561,7 @@
 				B6C10C962CA72B7128D294C9 /* RemoteTelemetryConsent.swift in Sources */,
 				81AC77653B52F97E7610C957 /* RootView.swift in Sources */,
 				789E439A4226ED10D9056596 /* SeriesCoverMotion.swift in Sources */,
+				F2986136829FE13ACAF3D426 /* StatisticsLiveDeliverySchedule.swift in Sources */,
 				7F1D692BCC73087052B9A47C /* TranscriptExport.swift in Sources */,
 				63AC3252D5025C322658B2FC /* UITestAppService.swift in Sources */,
 			);

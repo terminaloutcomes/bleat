@@ -1418,9 +1418,15 @@ portability, date-range exploration including imported-session charts and book
 detail, and confirmed local reset. Summary and live-slice presentation use one
 actor-isolated snapshot. Daily buckets and date-range boundaries use UTC
 Gregorian days, and the chart labels that convention. A derived SwiftData cache survives relaunch and is
-updated incrementally with playback/session mutations. Live polling never
-rebuilds the ledger; bulk archive imports and resets invalidate the cache for
-an explicit reload. Large-ledger
+updated incrementally with playback/session mutations. While the statistics screen
+is visible, repository observations retain prepared snapshots in memory and
+publish coherent committed/live presentations and account-scoped import progress.
+Live-only changes perform no SwiftData reads and are coalesced to an anchored
+one-second monotonic deadline; unchanged samples and idle screens schedule no
+wakeups. Explicit loads fence pending deliveries by request generation and
+observation identity, then reconcile changes received during loading. Bulk
+archive imports and resets invalidate prepared snapshots for a coalesced reload.
+Large-ledger
 measurements and remaining end-to-end evidence are recorded in
 `docs/statistics-validation.md` and tracked in
 [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).

@@ -11559,24 +11559,330 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.statistics, .loaded(.empty))
     }
 
-    func testStatisticsLivePollDoesNotRebuildOrSupersedeExplicitLoad() async {
+    func
+        testStatisticsUpdatesDuringExplicitLoadAreReconciledAndOlderDeliveryRejected()
+        async
+    {
         let gate = AsyncGate()
         let service = TestAppService(
             activeAccount: .success(nil), statisticsSummaryGate: gate)
         let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
         let loading = Task {
             await model.loadStatistics(query: StatisticsQuery())
         }
         await gate.waitUntilEntered()
-        await model.loadStatistics(cachedOnly: true)
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .allDevices))
+        XCTAssertEqual(model.statistics, .loading)
         await gate.release()
         await loading.value
-        XCTAssertEqual(model.statistics, .loaded(.empty))
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.allDevices)))
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .thisApp),
+            updateCurrent: false)
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 3, coverage: .allDevices))
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 3
+        }
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.allDevices)))
         let requests = await service.statisticsSummaryRequestCount
         XCTAssertEqual(requests, 1)
-        await model.loadStatistics(cachedOnly: true)
-        let afterPoll = await service.statisticsSummaryRequestCount
-        XCTAssertEqual(afterPoll, 1)
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsObservationStopsAndRejectsOldSubscriptionAfterRestart()
+        async
+    {
+        let gate = AsyncGate()
+        let service = TestAppService(activeAccount: .success(nil))
+        await service.failNextStatisticsPresentation(after: gate)
+        let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
+        let oldLoad = Task { await model.loadStatistics() }
+        await gate.waitUntilEntered()
+        model.stopStatisticsLiveUpdates()
+        await model.startStatisticsLiveUpdates()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .thisApp))
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 2
+        }
+        XCTAssertTrue(delivered)
+        // No new explicit load increments the request generation: observation
+        // identity alone must reject this non-cancelled, delayed failure.
+        await gate.release()
+        await oldLoad.value
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsRegistrationCompletionCannotReviveReplacedObservation()
+        async
+    {
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
+        await model.loadStatistics()
+        let gate = AsyncGate()
+        await service.blockNextStatisticsRegistration(after: gate)
+        let oldLoad = Task {
+            await model.loadStatistics(
+                query: StatisticsQuery(
+                    accountID: AccountID(rawValue: "old-scope")))
+        }
+        await gate.waitUntilEntered()
+        XCTAssertEqual(model.statistics, .loading)
+        model.stopStatisticsLiveUpdates()
+        await model.startStatisticsLiveUpdates(query: StatisticsQuery())
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .thisApp))
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 2
+        }
+        XCTAssertTrue(delivered)
+        await gate.release()
+        await oldLoad.value
+        let requests = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(
+            requests, 1,
+            "A superseded registration must not start an unobserved read")
+        let subscriptions = await service.statisticsObservationIDs
+        XCTAssertEqual(subscriptions.count, 1)
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsInvalidationDuringExplicitLoadRebuildsOnce() async {
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil), statisticsSummaryGate: gate)
+        let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
+        let loading = Task {
+            await model.loadStatistics(query: StatisticsQuery())
+        }
+        await gate.waitUntilEntered()
+        await service.emitStatisticsUpdate(
+            StatisticsUpdate(
+                revision: 1, presentationRevision: 1,
+                presentation: .invalidated, history: [:]))
+        // The second explicit read prepares a new state, as the repository does.
+        await service.setStatisticsPresentationAfterLoad(
+            statisticsUpdate(revision: 2, coverage: .allDevices))
+        await gate.release()
+        await loading.value
+        let requests = await service.statisticsSummaryRequestCount
+        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.allDevices)))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsSupersededExplicitFailureCannotReplaceNewerSuccess()
+        async
+    {
+        let gate = AsyncGate()
+        let service = TestAppService(activeAccount: .success(nil))
+        await service.failNextStatisticsPresentation(after: gate)
+        let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
+        let older = Task { await model.loadStatistics() }
+        await gate.waitUntilEntered()
+        await model.loadStatistics()
+        await gate.release()
+        await older.value
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsFailedExplicitLoadFencesPendingOlderPresentation() async
+    {
+        let gate = AsyncGate()
+        let service = TestAppService(activeAccount: .success(nil))
+        await service.failNextStatisticsPresentation(after: gate)
+        let model = AppModel(service: service)
+        await model.startStatisticsLiveUpdates()
+        let loading = Task { await model.loadStatistics() }
+        await gate.waitUntilEntered()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .allDevices))
+        await gate.release()
+        await loading.value
+        let expected = ResourceState<StatisticsSummary>.failed(
+            AppFailure(
+                operation: .loadStatistics,
+                serviceError: .statistics(.persistenceFailed)))
+        XCTAssertEqual(model.statistics, expected)
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .allDevices),
+            updateCurrent: false)
+        let historyAccount = AccountID(rawValue: "fence")
+        await service.emitStatisticsUpdate(
+            StatisticsUpdate(
+                revision: 2, presentationRevision: 1,
+                presentation: statisticsUpdate(
+                    revision: 1, coverage: .allDevices
+                ).presentation,
+                history: [
+                    historyAccount: .success(
+                        StatisticsHistoryProgress(
+                            startedAt: nil, lastCompletedAt: nil,
+                            completedPages: 1, totalPages: 1))
+                ]))
+        let received = await waitUntil(timeout: .seconds(2)) {
+            model.statisticsHistoryProgress[historyAccount] != nil
+        }
+        XCTAssertTrue(received)
+        XCTAssertEqual(model.statistics, expected)
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsFirstLiveChangeAfterExplicitLoadDeliversImmediately()
+        async
+    {
+        let gate = AsyncGate()
+        let now = ContinuousClock().now
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(
+            service: service, statisticsNow: { now },
+            statisticsSleepUntil: { _ in
+                await gate.enterAndWait()
+            })
+        await model.startStatisticsLiveUpdates()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .thisApp))
+        await model.loadStatistics()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .allDevices, live: true))
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 2
+        }
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.allDevices)))
+        await gate.release()
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func testStatisticsTrailingDeadlineDeliversNewestLiveState() async {
+        let gate = AsyncGate()
+        let now = ContinuousClock().now
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(
+            service: service, statisticsNow: { now },
+            statisticsSleepUntil: { _ in
+                await gate.enterAndWait()
+            })
+        await model.startStatisticsLiveUpdates()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .thisApp, live: true))
+        let first = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 1
+        }
+        XCTAssertTrue(first)
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .allDevices, live: true))
+        await gate.waitUntilEntered()
+        let historyAccount = AccountID(rawValue: "coalescing")
+        let newest = statisticsUpdate(
+            revision: 3, coverage: .approximate, live: true)
+        await service.emitStatisticsUpdate(
+            StatisticsUpdate(
+                revision: 3, presentationRevision: 3,
+                presentation: newest.presentation,
+                history: [
+                    historyAccount: .success(
+                        StatisticsHistoryProgress(
+                            startedAt: nil, lastCompletedAt: nil,
+                            completedPages: 1, totalPages: 1))
+                ]))
+        let buffered = await waitUntil(timeout: .seconds(2)) {
+            model.statisticsHistoryProgress[historyAccount] != nil
+        }
+        XCTAssertTrue(buffered)
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        await gate.release()
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 3
+        }
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.approximate)))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    func
+        testStatisticsLiveDeliveryScheduleHasAnchoredDeadlinesAndSkipsMissedTicks()
+    {
+        let now = ContinuousClock().now
+        var schedule = StatisticsLiveDeliverySchedule()
+        XCTAssertNil(schedule.deadline(at: now))
+        schedule.didDeliver(at: now)
+        XCTAssertEqual(
+            schedule.deadline(at: now.advanced(by: .milliseconds(100))),
+            now.advanced(by: .seconds(1)))
+        XCTAssertEqual(
+            schedule.deadline(at: now.advanced(by: .milliseconds(900))),
+            now.advanced(by: .seconds(1)))
+        XCTAssertNil(schedule.deadline(at: now.advanced(by: .seconds(20))))
+        schedule.didDeliver(at: now.advanced(by: .seconds(20)))
+        XCTAssertEqual(
+            schedule.deadline(at: now.advanced(by: .milliseconds(20_100))),
+            now.advanced(by: .seconds(21)))
+    }
+
+    func testStatisticsLiveDeliveryCoalescesAndExplicitLoadCancelsDeadline()
+        async
+    {
+        let gate = AsyncGate()
+        let now = ContinuousClock().now
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(
+            service: service, statisticsNow: { now },
+            statisticsSleepUntil: { _ in
+                await gate.enterAndWait()
+            })
+        await model.startStatisticsLiveUpdates()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 1, coverage: .thisApp, live: true))
+        let first = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 1
+        }
+        XCTAssertTrue(first)
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 2, coverage: .allDevices, live: true))
+        await gate.waitUntilEntered()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 3, coverage: .approximate, live: true))
+        await model.loadStatistics()
+        XCTAssertEqual(
+            model.statistics, .loaded(.empty.withCoverage(.approximate)))
+        await gate.release()
+        await service.emitStatisticsUpdate(
+            statisticsUpdate(revision: 4, coverage: .thisApp))
+        let delivered = await waitUntil(timeout: .seconds(2)) {
+            await service.statisticsAcknowledgedRevision == 4
+        }
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(model.statistics, .loaded(.empty))
+        model.stopStatisticsLiveUpdates()
+    }
+
+    private func statisticsUpdate(
+        revision: UInt64, coverage: StatisticsCoverage, live: Bool = false
+    ) -> StatisticsUpdate {
+        let value = StatisticsPresentation(
+            snapshot: StatisticsSnapshot(
+                summary: .empty.withCoverage(coverage), exploration: .empty),
+            liveSlice: nil)
+        return StatisticsUpdate(
+            revision: revision, presentationRevision: revision,
+            presentation: live ? .live(value) : .committed(value), history: [:])
     }
 
     func testStatisticsArchiveFailuresKeepSpecificCausesAndOperations() {
@@ -12163,13 +12469,38 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail)
         )
         await service.setRefreshedBookDetail(.success(detail))
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        defer { model.setLiveUpdatesActive(false) }
+        await model.start()
+        let initialHomeCompletions = await diagnostics.events().filter {
+            $0.operation == .loadHome && $0.name == .operationCompleted
+        }.count
+        try await waitForLiveNetworkObserver(service)
+        await service.emitNetworkPathUpdate()
+        let recovered = await waitUntil(timeout: .seconds(10)) {
+            let homeCompletions = await diagnostics.events().filter {
+                $0.operation == .loadHome && $0.name == .operationCompleted
+            }.count
+            let subscribed = await service.hasLiveUpdatesSubscriber()
+            return homeCompletions > initialHomeCompletions && subscribed
+        }
+        guard recovered else {
+            return XCTFail("Initial network recovery did not complete")
+        }
         let baseline = await service.liveRefreshRequestCounts()
         await service.setBookProgress(
             fixtureBookProgress(progress: 0.25, isFinished: false))
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        let updated = await waitUntil(timeout: .seconds(10)) {
+            guard case .loaded(let shelves) = model.homeShelves else {
+                return false
+            }
+            return shelves.first?.id == "continue-listening"
+                && shelves.first?.items == [detail.summary]
+        }
+        XCTAssertTrue(
+            updated, "Live progress did not create Continue Listening")
         guard case .loaded(let shelves) = model.homeShelves else {
             return XCTFail("Expected shelves")
         }
@@ -12180,7 +12511,6 @@ final class AppModelTests: XCTestCase {
         expected.details += 1
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, expected)
-        model.setLiveUpdatesActive(false)
     }
 
     func testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges()
@@ -23774,12 +24104,87 @@ private actor TestAppService: AppServicing {
             totalPages: 1)
     }
 
+    private var statisticsContinuations:
+        [UUID: AsyncStream<StatisticsUpdate>.Continuation] = [:]
+    private var statisticsStates: [UUID: StatisticsUpdate] = [:]
+    private var statisticsPresentationAfterLoad: StatisticsUpdate?
+    private var statisticsPresentationFailureGate: AsyncGate?
+    private var statisticsRegistrationGate: AsyncGate?
+    private(set) var statisticsAcknowledgedRevision: UInt64 = 0
+    var statisticsObservationIDs: [UUID] { Array(statisticsContinuations.keys) }
+
+    func statisticsUpdates(
+        id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
+    ) async -> AsyncStream<StatisticsUpdate> {
+        if let gate = statisticsRegistrationGate {
+            statisticsRegistrationGate = nil
+            await gate.enterAndWait()
+        }
+        let (stream, continuation) = AsyncStream<StatisticsUpdate>.makeStream(
+            bufferingPolicy: .bufferingNewest(1))
+        statisticsContinuations[id] = continuation
+        return stream
+    }
+
+    func currentStatisticsUpdate(id: UUID) async -> StatisticsUpdate? {
+        statisticsStates[id]
+    }
+    func acknowledgeStatisticsUpdate(id: UUID, revision: UInt64) async {
+        statisticsAcknowledgedRevision = revision
+    }
+    func stopStatisticsUpdates(id: UUID) async {
+        statisticsStates[id] = nil
+        statisticsContinuations.removeValue(forKey: id)?.finish()
+    }
+
+    func emitStatisticsUpdate(
+        _ update: StatisticsUpdate, updateCurrent: Bool = true, id: UUID? = nil
+    ) {
+        for (targetID, continuation) in statisticsContinuations
+        where id == nil || targetID == id {
+            if updateCurrent { statisticsStates[targetID] = update }
+            continuation.yield(update)
+        }
+    }
+
+    func setStatisticsPresentationAfterLoad(_ update: StatisticsUpdate) {
+        statisticsPresentationAfterLoad = update
+    }
+
+    func blockNextStatisticsRegistration(after gate: AsyncGate) {
+        statisticsRegistrationGate = gate
+    }
+
+    func failNextStatisticsPresentation(after gate: AsyncGate) {
+        statisticsPresentationFailureGate = gate
+    }
+
+    func statisticsPresentation(query: StatisticsQuery)
+        async throws(AppServiceError) -> StatisticsPresentation
+    {
+        if let gate = statisticsPresentationFailureGate {
+            statisticsPresentationFailureGate = nil
+            await gate.enterAndWait()
+            throw .statistics(.persistenceFailed)
+        }
+        let summary = try await statisticsSummary(query: query)
+        let exploration = try await statisticsExploration(query: query)
+        return StatisticsPresentation(
+            snapshot: StatisticsSnapshot(
+                summary: summary, exploration: exploration), liveSlice: nil)
+    }
+
     private(set) var statisticsSummaryRequestCount = 0
 
     func statisticsSummary(
         query: StatisticsQuery
     ) async throws(AppServiceError) -> StatisticsSummary {
         statisticsSummaryRequestCount += 1
+        if statisticsSummaryRequestCount > 1,
+            let statisticsPresentationAfterLoad
+        {
+            emitStatisticsUpdate(statisticsPresentationAfterLoad)
+        }
         if let statisticsProvider { return await statisticsProvider(query) }
         if let statisticsSummaryGate {
             await statisticsSummaryGate.enterAndWait()
