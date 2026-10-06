@@ -441,7 +441,7 @@ final class PlaybackModel {
     private var pausedAt: Date?
     private var resumeAfterInterruption = false
     private var lastAttemptedSyncTime: Double = 0
-    private var lastPersistedLocalTime: Double = 0
+    private var lastPersistedTime: Double = 0
     private var activeDownloadDetail: LibraryBookDetail?
     private var localBookDetail: LibraryBookDetail?
     private var lastAutomaticDownloadSignal: AutomaticDownloadSignal?
@@ -870,7 +870,6 @@ final class PlaybackModel {
             max(initialTime ?? detail.progress?.currentTime ?? 0, 0),
             detail.duration
         )
-        lastAttemptedSyncTime = currentTime
         syncState = .idle
         bookmarks = []
         pendingBookmarkMutations = []
@@ -902,13 +901,13 @@ final class PlaybackModel {
             duration = prepared.duration
             currentTime = min(
                 max(
-                    initialTime
-                        ?? detail.progress?.currentTime
-                        ?? prepared.currentTime,
+                    initialTime ?? prepared.currentTime,
                     0
                 ),
                 prepared.duration
             )
+            lastAttemptedSyncTime = currentTime
+            persistPosition()
             try await rebuildQueue(at: currentTime)
             guard generation == operationGeneration else {
                 return
@@ -1016,7 +1015,7 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
-        persistLocalPosition()
+        persistPosition()
         guard generation == operationGeneration else {
             return
         }
@@ -1143,7 +1142,7 @@ final class PlaybackModel {
                 )
             }
             lastAttemptedSyncTime = currentTime
-            lastPersistedLocalTime = currentTime
+            lastPersistedTime = currentTime
             try beginLocalPlaybackSession(
                 detail: detail,
                 accountID: accountID
@@ -1206,7 +1205,7 @@ final class PlaybackModel {
             try await rebuildQueue(at: target)
             currentTime = target
             positionConflict = nil
-            persistLocalPosition()
+            persistPosition()
             state = .ready
             if !useLocalPosition {
                 syncState = .idle
@@ -1607,7 +1606,7 @@ final class PlaybackModel {
             pausedAt = Date()
         }
         updateNowPlaying()
-        persistLocalPosition()
+        persistPosition()
         if preparation?.sessionID != nil {
             Task { @MainActor [weak self] in
                 await self?.syncProgress()
@@ -1781,7 +1780,7 @@ final class PlaybackModel {
         if preparation.sessionID != nil {
             await syncProgress()
         } else {
-            persistLocalPosition()
+            persistPosition()
         }
         guard generation == operationGeneration else {
             if preservingPendingPlaybackStart {
@@ -1830,7 +1829,7 @@ final class PlaybackModel {
                 return
             }
             currentTime = target
-            persistLocalPosition()
+            persistPosition()
             if continuation == .resume {
                 state = .ready
                 play()
@@ -1930,7 +1929,7 @@ final class PlaybackModel {
         if preparation?.sessionID != nil {
             await syncProgress()
         } else {
-            persistLocalPosition()
+            persistPosition()
         }
         guard !allowsSupersession || generation == operationGeneration else {
             return
@@ -2067,7 +2066,7 @@ final class PlaybackModel {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor [weak self] in
-                        self?.persistLocalPosition()
+                        self?.persistPosition()
                         if self?.preparation?.sessionID != nil {
                             await self?.syncProgress()
                         }
@@ -2398,8 +2397,8 @@ final class PlaybackModel {
             pause()
             return
         }
-        if abs(currentTime - lastPersistedLocalTime) >= 5 {
-            persistLocalPosition()
+        if abs(currentTime - lastPersistedTime) >= 5 {
+            persistPosition()
         }
         if preparation?.sessionID != nil,
             isPlaying,
@@ -3279,7 +3278,7 @@ final class PlaybackModel {
         awaitingCachedContinuation = false
         cachedContinuationTimeoutTask?.cancel()
         cachedContinuationTimeoutTask = nil
-        persistLocalPosition()
+        persistPosition()
         await finishStatisticsSession()
         guard generation == operationGeneration else { return }
         localAccountID = nil
@@ -3318,7 +3317,7 @@ final class PlaybackModel {
         playbackRecoveryTask = nil
         currentTime = duration
         setSleepTimer(minutes: nil)
-        persistLocalPosition()
+        persistPosition()
         releaseAutomaticCachedPlaybackWindow()
         resetCachedStreamingContinuation()
         state = .ended
@@ -3407,19 +3406,22 @@ final class PlaybackModel {
         )
     }
 
-    private func persistLocalPosition() {
-        guard let localAccountID,
-            let itemID,
-            preparation?.sessionID == nil
+    private func persistPosition() {
+        guard let accountID = localAccountID ?? activeAccount?.id,
+            let itemID, let preparation
         else {
             return
         }
         do {
             try positionStore.save(
                 currentTime,
-                accountID: localAccountID,
+                accountID: accountID,
                 itemID: itemID
             )
+            guard preparation.sessionID == nil else {
+                lastPersistedTime = currentTime
+                return
+            }
             guard let localPlaybackSession else {
                 syncState = .failed
                 return
@@ -3429,16 +3431,17 @@ final class PlaybackModel {
             )
             try localSessionStore.save(
                 updated,
-                accountID: localAccountID
+                accountID: accountID
             )
             self.localPlaybackSession = updated
-            lastPersistedLocalTime = currentTime
+            lastPersistedTime = currentTime
         } catch {
             syncState = .failed
         }
     }
 
     private func syncProgress() async {
+        persistPosition()
         let previousTask = progressSyncOperation?.task
         let expectedAccountID = accountID
         let expectedSessionID = preparation?.sessionID
@@ -3461,7 +3464,6 @@ final class PlaybackModel {
     private func performProgressSync() async {
         guard let preparation else { return }
         guard preparation.sessionID != nil else {
-            persistLocalPosition()
             return
         }
         if let close = activeSessionClose,
