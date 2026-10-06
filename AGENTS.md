@@ -14,8 +14,9 @@ Use these documents for their specific purposes:
 
 - `docs/audiobookshelf-ios-app-spec.md` defines product scope, protocol behavior,
   security invariants, and acceptance criteria.
-- `README.md` documents current user-visible behavior and supported developer
-  workflows.
+- `README.md` is a human-facing introduction to the app: what it does, its main
+  features, and how to get started. It is not a specification document.
+- `docs/development.md` documents supported developer workflows.
 - `docs/requirements-traceability.md` maps requirements to implementation and
   test evidence.
 - GitHub issues and milestones record remaining release work. The
@@ -362,7 +363,13 @@ validation by creating the release manually.
 
 - Use project-relative paths in documentation, comments, diagnostics, and test
   output. Never write full local filesystem paths into repository files.
-- Keep `README.md` focused on behavior that exists now.
+- Keep `README.md` a concise, human-facing introduction. Do not add implementation
+  details, persistence or synchronization contracts, protocol semantics, internal
+  lifecycle rules, or test evidence there. Put those in the specification,
+  development documentation, or requirements traceability as appropriate.
+- Do not update `README.md` for routine bug fixes or internal changes. Change it
+  only when the app's introduction, main features, or getting-started guidance
+  needs to change, and describe only behavior that exists now.
 - Update `docs/audiobookshelf-ios-app-spec.md` when implementation evidence changes
   a product or architectural assumption.
 - Update `docs/requirements-traceability.md` with implementation and test

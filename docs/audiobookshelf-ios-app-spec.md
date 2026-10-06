@@ -1282,6 +1282,12 @@ Offline download of a server-transcoded replacement format is deferred unless Au
 
 ### 11.1 Durable local progress
 
+Persist an account/item-scoped local position checkpoint for both streamed and
+local-file playback. A later start from downloaded or automatically cached files
+must reuse that checkpoint, including when the earlier playback was streamed.
+For streamed resume, prefer the freshly opened server session's position over
+an older book-detail snapshot; an explicit requested start position still wins.
+
 Persist local playback position:
 
 - at least every five seconds while playing;

@@ -17379,6 +17379,99 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    func testStreamedResumeUsesFreshSessionInsteadOfStaleDetail() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let detail = fixture.detail.replacingProgress(
+            with: fixtureProgress(
+                userID: account.user.id,
+                itemID: fixture.detail.id,
+                isFinished: false
+            )
+        )
+        let preparation = AppPlaybackPreparation(
+            sessionID: PlaybackSessionID(rawValue: "fresh-session"),
+            itemID: detail.id,
+            title: detail.title,
+            duration: 1,
+            currentTime: 0.75,
+            chapters: detail.chapters,
+            source: .direct([
+                AppPlaybackTrack(
+                    url: fixture.audioURL,
+                    startOffset: 0,
+                    duration: 1,
+                    title: "Track 1"
+                )
+            ])
+        )
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [.success(preparation)]
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(), service: service
+        )
+
+        await playback.start(detail: detail, account: account)
+
+        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        await playback.stop()
+    }
+
+    func testStreamedCheckpointResumesDownloadedPlaybackAfterRelaunch()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL
+                    ))
+            ]
+        )
+        let playback = fixture.model(
+            activation: TestAudioSessionActivation(), service: service
+        )
+        await playback.start(detail: fixture.detail, account: account)
+        playback.pause()
+        await playback.seek(to: 0.75)
+        let restoredPositions = PlaybackPositionStore(
+            defaults: fixture.defaults)
+        XCTAssertEqual(
+            restoredPositions.position(
+                accountID: account.id, itemID: fixture.detail.id
+            ), 0.75
+        )
+        XCTAssertNil(
+            restoredPositions.position(
+                accountID: fixture.accountID, itemID: fixture.detail.id
+            ))
+        await playback.stop()
+
+        let relaunched = fixture.model(activation: TestAudioSessionActivation())
+        XCTAssertEqual(
+            relaunched.preferredDownloadedStartTime(
+                detail: fixture.detail, accountID: account.id, initialTime: nil
+            ), 0.75
+        )
+        await relaunched.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: account.id,
+            account: nil
+        )
+
+        XCTAssertEqual(relaunched.currentTime, 0.75, accuracy: 0.01)
+        XCTAssertNil(relaunched.positionConflict)
+        await relaunched.stop()
+    }
+
     func testDownloadedPlaybackUsesExplicitWholeBookPosition()
         async throws
     {
