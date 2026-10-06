@@ -778,6 +778,16 @@ struct PrivateCloudStatisticsDeletion: Equatable, Sendable {
     let accountID: AccountID
 }
 
+public struct StatisticsSessionListeningTime: Equatable, Sendable {
+    public let total: Double
+    public let pending: Double
+
+    public init(total: Double, pending: Double) {
+        self.total = total
+        self.pending = pending
+    }
+}
+
 public struct ListeningAccumulator: Sendable {
     private var previous: StatisticsPlaybackSample?
     private var pending: ListeningSlice?
@@ -2025,6 +2035,14 @@ public actor StatisticsRepository {
         accountID: AccountID,
         sessionID: PlaybackSessionID
     ) throws(StatisticsRepositoryError) -> Double {
+        try sessionListeningTime(accountID: accountID, sessionID: sessionID)
+            .pending
+    }
+
+    public func sessionListeningTime(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) throws(StatisticsRepositoryError) -> StatisticsSessionListeningTime {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
@@ -2050,11 +2068,12 @@ public actor StatisticsRepository {
                     }
                 )
             ).first
-            return max(
-                0,
-                total
-                    - (accounting?.confirmedRealSeconds ?? 0)
-                    - (accounting?.uncertainRealSeconds ?? 0)
+            let reported =
+                (accounting?.confirmedRealSeconds ?? 0)
+                + (accounting?.uncertainRealSeconds ?? 0)
+            return StatisticsSessionListeningTime(
+                total: max(total, reported),
+                pending: max(0, total - reported)
             )
         } catch {
             throw .persistenceFailed

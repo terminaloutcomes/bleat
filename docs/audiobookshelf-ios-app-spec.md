@@ -91,10 +91,10 @@ These media routes work only while the in-memory playback session or stream exis
 
 Do not put access or refresh tokens in media URLs. Although the server still accepts `?token=` for compatibility, this client uses bearer headers only on authenticated API and download requests. Do not use undocumented `AVURLAssetHTTPHeaderFieldsKey`.
 
-### 3.3 Listening time is not media time — post-MVP
+### 3.3 Listening time is not media time
 
 At 2× speed, 30 seconds of real listening advances the book by roughly 60
-seconds. A future time-tracking implementation therefore needs two independent
+seconds. Listening-time tracking therefore uses two independent
 values:
 
 - `currentTime`: position in the book's media timeline;
@@ -102,8 +102,11 @@ values:
 
 Buffering, paused time, interruption time, and time spent seeking must not be counted as listening time.
 
-The MVP does not measure this value and sends `timeListened: 0` during session
-position synchronization.
+Bleat measures monotonic audible playback and sends only newly unreported
+listening seconds during online session synchronization. Offline session uploads
+send the cumulative measured session total because Audiobookshelf replaces
+`timeListening` on each same-ID upload. Confirmed and uncertain accounting must
+never turn a later cumulative upload into a smaller delta.
 
 ### 3.4 The server does not provide every requested statistic — post-MVP
 
@@ -1376,7 +1379,11 @@ Prefer the batch endpoint with:
 
 Each local playback-session object uses UUIDv4 `id`, numeric `playMethod: 3`, cumulative `timeListening`, whole-book `currentTime`, millisecond `updatedAt`, and the current library/item/book identifiers. The batch response is `{ "results": [{ "id": String, "success": Bool, "progressSynced": Bool, "error": String? }] }`.
 
-Delete a pending session only when its matching result has `success == true`. `progressSynced == false` can legitimately mean that server progress was newer; refresh progress before deciding what to show. The single `/api/session/local` endpoint returns only an HTTP success status and is less useful for a durable queue. Do not use the obsolete `/api/me/sync-local-progress` workflow.
+Delete a pending session only when its matching result has `success == true`
+and the persisted record still matches the submitted snapshot. Playback updates
+made while synchronization is in flight remain pending. Uploading listening time
+must retain the persisted listening timestamp rather than replacing it with the
+retry time. `progressSynced == false` can legitimately mean that server progress was newer; refresh progress before deciding what to show. The single `/api/session/local` endpoint returns only an HTTP success status and is less useful for a durable queue. Do not use the obsolete `/api/me/sync-local-progress` workflow.
 
 Bookmarks created offline are queued and reconciled after session/progress sync. The current bookmark API has no idempotency key, so before retrying an ambiguous create, refetch the item's bookmarks and compare item ID, time, and title. A failed mutation remains visible with a retry indicator.
 

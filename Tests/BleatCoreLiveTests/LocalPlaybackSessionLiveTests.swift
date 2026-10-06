@@ -98,7 +98,10 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         let first = try await coordinator.syncLocalPlaybackSessions(
             accountID: accountID,
             server: server,
-            sessions: [initial],
+            sessions: [
+                try initial.updating(
+                    currentTime: initialPosition, timeListening: 12.5)
+            ],
             deviceInfo: deviceInfo
         )
         XCTAssertEqual(first.map(\.id), [initial.id])
@@ -107,6 +110,7 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         let finalPosition = min(initialPosition + 1, detail.duration)
         let updated = try initial.updating(
             currentTime: finalPosition,
+            timeListening: 18,
             now: Date().addingTimeInterval(1)
         )
         let second = try await coordinator.syncLocalPlaybackSessions(
@@ -118,6 +122,32 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         XCTAssertEqual(second.map(\.id), [initial.id])
         XCTAssertTrue(second.allSatisfy(\.success))
 
+        let replay = try await coordinator.syncLocalPlaybackSessions(
+            accountID: accountID, server: server, sessions: [updated],
+            deviceInfo: deviceInfo)
+        XCTAssertTrue(replay.allSatisfy(\.success))
+
+        // Historical correction must leave newer book progress intact.
+        let newer = try LocalPlaybackSession.makeBookSession(
+            libraryID: detail.libraryID, libraryItemID: detail.id,
+            bookID: detail.bookID, title: detail.title,
+            author: initial.displayAuthor,
+            chapters: detail.chapters, duration: detail.duration,
+            currentTime: finalPosition, now: Date().addingTimeInterval(2))
+        _ = try await coordinator.syncLocalPlaybackSessions(
+            accountID: accountID, server: server, sessions: [newer],
+            deviceInfo: deviceInfo)
+        let repaired = try updated.updating(
+            currentTime: updated.currentTime, timeListening: 24,
+            now: Date(
+                timeIntervalSince1970: Double(updated.updatedAtMilliseconds)
+                    / 1_000))
+        let correction = try await coordinator.syncLocalPlaybackSessions(
+            accountID: accountID, server: server, sessions: [repaired],
+            deviceInfo: deviceInfo)
+        XCTAssertTrue(correction.allSatisfy(\.success))
+        XCTAssertTrue(correction.allSatisfy { !$0.progressSynced })
+
         let imported = try await importedSessions(
             coordinator: coordinator,
             accountID: accountID,
@@ -125,7 +155,9 @@ final class LocalPlaybackSessionLiveTests: XCTestCase {
         ).filter { $0.id == initial.id }
         XCTAssertEqual(imported.count, 1)
         XCTAssertEqual(imported[0].currentTime, finalPosition, accuracy: 0.01)
-        XCTAssertEqual(imported[0].timeListening ?? 0, 0)
+        XCTAssertEqual(imported[0].timeListening ?? 0, 24)
+        XCTAssertEqual(imported[0].startedAt, initial.startedAtMilliseconds)
+        XCTAssertEqual(imported[0].updatedAt, updated.updatedAtMilliseconds)
 
         // Exercise the production paginated adapter through both root and
         // path-prefixed pinned servers, including a repeated page.
@@ -194,4 +226,6 @@ private struct ImportedLocalSession: Decodable {
     let id: PlaybackSessionID
     let currentTime: Double
     let timeListening: Double?
+    let startedAt: Int64
+    let updatedAt: Int64
 }

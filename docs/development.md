@@ -535,3 +535,50 @@ async fetch/save API. This exception is limited to statistics persistence and
 its derived-cache aggregation; it can be removed when native asynchronous
 SwiftData operations become available. The opt-in benchmark verifies that a
 main-actor heartbeat continues during the large import.
+
+## Repair Audiobookshelf listening history
+
+Export JSON from Bleat's Statistics screen with the relevant account selected
+and Lifetime selected. Stop playback on that account before previewing repairs.
+The Rust command matches the export's redacted session identity and item identity
+against the authenticated user's existing server history. It only raises totals
+backed by measured slices; it cannot reconstruct missing recordings or create
+missing server sessions from a redacted export.
+
+With `BLEAT_ABS_TOKEN` configured locally, preview corrections with:
+
+```sh
+cargo run -p scripts --bin repair-listening-sessions -- \
+  --archive statistics.json --server https://example.com/audiobookshelf/
+```
+
+Add `--apply` to the same command to apply corrections and verify them by reading
+back history and playback progress. Tokens are sent in authorization headers.
+Reports omit tokens, session IDs and playback routes. The server URL must match
+the export, including its path prefix, and the authenticated user must match the
+export's user. System HTTPS trust is required.
+
+The command skips active sessions and sessions without strictly newer book
+progress: the pinned local-session endpoint would otherwise update progress as
+well as listening time. Each correction retains the server's original position
+and timestamps. The command refuses changed session records and stops on an
+unacknowledged correction or failed read-back. A retry uses cumulative totals
+and skips already-corrected sessions.
+
+Focused evidence on 2026-10-07: 12 `StatisticsTests`, four Rust repair tests,
+and three simulator app tests passed. The final simulator result bundle
+`.build/listening-session-preservation-app.xcresult` has zero skips, failures or runtime
+warnings. `LocalPlaybackSessionLiveTests` executed one test covering root and
+path-prefixed Audiobookshelf 2.37.0 servers, nonzero cumulative uploads,
+idempotent replay and historical correction with protected newer progress and
+preserved timestamps. The Rust HTTP command itself has not yet been applied to
+real account history. The full local gate and physical-device playback were not
+run for this change.
+
+Initial Rust checks found unsupported digest hex formatting, export field-name
+acronym mismatches and an integer-versus-float test assertion; all were corrected
+before the final four-test run. Earlier two-test simulator runs passed and were
+superseded by the final three-test run after adding date and outbox preservation.
+The live build emitted an upstream OpenTelemetry package warning about its
+deprecated watchOS minimum; the selected live test executed and passed. Empty
+unselected SwiftPM test bundles are not counted as additional coverage.

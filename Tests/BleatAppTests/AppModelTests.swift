@@ -10697,7 +10697,7 @@ final class AppModelTests: XCTestCase {
         )
         try restored.removeAcknowledged(
             accountID: accountID,
-            sessionIDs: [first.id]
+            sessions: [first]
         )
 
         XCTAssertEqual(
@@ -10836,6 +10836,59 @@ final class AppModelTests: XCTestCase {
                 [second.id],
             ]
         )
+    }
+
+    func testLocalSessionAcknowledgementPreservesNewerPlayback() throws {
+        let suite = "LocalListeningAcknowledgementTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let accountID = AccountID(rawValue: "account")
+        let original = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169", itemID: "item-1")
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        let newer = try original.updating(currentTime: original.currentTime + 1)
+        try store.save(newer, accountID: accountID)
+        try store.removeAcknowledged(accountID: accountID, sessions: [original])
+        XCTAssertEqual(try store.pending(accountID: accountID), [newer])
+    }
+
+    func testLocalSessionUploadsUseCumulativeMeasuredTime() async throws {
+        let suite = "LocalListeningTimeTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let account = try fixtureAccount()
+        let session = try localSession(
+            id: "d9ef37df-6838-4dd5-9875-266ae49db169", itemID: "item-1")
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            localSessionSync: .success([
+                LocalPlaybackSessionSyncResult(
+                    id: session.id, success: true, progressSynced: true,
+                    error: nil)
+            ]))
+        let playback = PlaybackModel(service: service, localSessionStore: store)
+        for listening in [
+            StatisticsSessionListeningTime(total: 60, pending: 60),
+            StatisticsSessionListeningTime(total: 90, pending: 30),
+            StatisticsSessionListeningTime(total: 90, pending: 0),
+        ] {
+            // An active downloaded session can be persisted again after its
+            // earlier outbox entry was acknowledged and removed.
+            try store.save(session, accountID: account.id)
+            await service.setSessionListeningTime(listening)
+            await playback.syncPendingLocalSessions(for: account)
+        }
+        let requests = await service.localSessionSyncRequests()
+        XCTAssertEqual(
+            requests.map { $0.sessions[0].timeListening }, [60, 90, 90])
+        XCTAssertTrue(
+            requests.allSatisfy {
+                $0.sessions[0].startedAtMilliseconds
+                    == session.startedAtMilliseconds
+                    && $0.sessions[0].updatedAtMilliseconds
+                        == session.updatedAtMilliseconds
+            })
     }
 
     func testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch()
@@ -24204,6 +24257,19 @@ private actor TestAppService: AppServicing {
         {
             await firstPlaybackSyncGate.enterAndWait()
         }
+    }
+
+    private var sessionListeningTime = StatisticsSessionListeningTime(
+        total: 0, pending: 0)
+
+    func setSessionListeningTime(_ value: StatisticsSessionListeningTime) {
+        sessionListeningTime = value
+    }
+
+    func statisticsSessionListeningTime(
+        accountID: AccountID, sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> StatisticsSessionListeningTime {
+        sessionListeningTime
     }
 
     func syncLocalPlaybackSessions(

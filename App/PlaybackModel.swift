@@ -429,6 +429,7 @@ final class PlaybackModel {
     private var playbackWatchdogTask: Task<Void, Never>?
     private var playbackRecoveryTask: Task<Void, Never>?
     private var statisticsRecordingTask: Task<Void, Never>?
+    private var localSessionSyncInProgress = false
     private var cachedStreamingPreparationTask: Task<Void, Never>?
     private var cachedStreamingPreparationGeneration: UInt64 = 0
     private var cachedStreamingPreparation: CachedStreamingPreparation?
@@ -3622,6 +3623,12 @@ final class PlaybackModel {
     }
 
     func syncPendingLocalSessions(for account: ServerAccount) async {
+        guard !localSessionSyncInProgress else { return }
+        localSessionSyncInProgress = true
+        defer { localSessionSyncInProgress = false }
+        if localAccountID == account.id {
+            await finishStatisticsSession()
+        }
         await diagnostics.record(
             .started(.syncLocalSessions, category: .sync)
         )
@@ -3651,7 +3658,7 @@ final class PlaybackModel {
                 }
                 try localSessionStore.removeAcknowledged(
                     accountID: account.id,
-                    sessionIDs: acknowledged
+                    sessions: pending.filter { acknowledged.contains($0.id) }
                 )
                 await diagnostics.record(
                     .completed(
@@ -3694,17 +3701,22 @@ final class PlaybackModel {
         var deltas: [PlaybackSessionID: Double] = [:]
         measured.reserveCapacity(sessions.count)
         for session in sessions {
-            let delta = try await service.pendingStatisticsRealSeconds(
+            let listening = try await service.statisticsSessionListeningTime(
                 accountID: accountID,
                 sessionID: session.id
             )
             measured.append(
                 try session.updating(
                     currentTime: session.currentTime,
-                    timeListening: session.timeListening + delta
+                    // Local-session uploads replace the server total, unlike
+                    // online synchronization which adds an acknowledged delta.
+                    timeListening: max(session.timeListening, listening.total),
+                    now: Date(
+                        timeIntervalSince1970: Double(
+                            session.updatedAtMilliseconds) / 1_000)
                 )
             )
-            deltas[session.id] = delta
+            deltas[session.id] = listening.pending
         }
         return (measured, deltas)
     }

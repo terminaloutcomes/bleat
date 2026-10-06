@@ -725,6 +725,11 @@ protocol AppServicing: Sendable {
         _ milestone: CompletionMilestone
     ) async throws(AppServiceError)
 
+    func statisticsSessionListeningTime(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> StatisticsSessionListeningTime
+
     func pendingStatisticsRealSeconds(
         accountID: AccountID,
         sessionID: PlaybackSessionID
@@ -1113,6 +1118,13 @@ extension AppServicing {
             currentTime: currentTime,
             duration: duration
         )
+    }
+
+    func statisticsSessionListeningTime(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> StatisticsSessionListeningTime {
+        StatisticsSessionListeningTime(total: 0, pending: 0)
     }
 
     func pendingStatisticsRealSeconds(
@@ -3584,6 +3596,19 @@ actor LiveAppService: AppServicing {
     ) async throws(AppServiceError) {
         do {
             try await statisticsRepository.recordCompletion(milestone)
+        } catch let error {
+            throw .statistics(error)
+        }
+    }
+
+    func statisticsSessionListeningTime(
+        accountID: AccountID,
+        sessionID: PlaybackSessionID
+    ) async throws(AppServiceError) -> StatisticsSessionListeningTime {
+        do {
+            return try await statisticsRepository.sessionListeningTime(
+                accountID: accountID, sessionID: sessionID
+            )
         } catch let error {
             throw .statistics(error)
         }
