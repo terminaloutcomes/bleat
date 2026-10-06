@@ -102,6 +102,35 @@ the statistics regressions, were verified in
 `.build/statistics-pr-rebase.xcresult`. The broader UI and disposable-server
 evidence above predates this rebase; those suites were not repeated.
 
+### CI live-progress regression (2026-10-07)
+
+PR #304's iOS smoke job ran 482 tests: 481 passed and
+`AppModelTests.testLiveProgressFetchesOnlyMissingItemToCreateContinueListening`
+failed. Its request counts showed that startup network recovery had not
+finished before the test emitted progress. The test now waits for the next
+completed home-load diagnostic and an active subscription before taking its
+baseline, then waits for the expected shelf rather than sleeping 400 ms.
+Production behavior and request-count assertions are unchanged.
+
+The corrected test passed all five repetitions in
+`.build/pr304-live-progress.xcresult`, with zero skips or runtime warnings;
+each repetition was verified with `xcresulttool`. The first lint attempt found
+an overlong assertion line, which was wrapped; strict Swift lint then passed.
+
+The first local `cargo run --quiet --locked --package scripts --bin ci-smoke --`
+attempt had 480 passes and two test-process kills, in
+`testLiveProgressRefreshesOnlyAffectedOpenDetail` and
+`testStartupSchedulesFutureAutomaticCleanup`. A concurrent validation command
+was using the same named Simulator and application bundle; its run was left
+untouched. The failed bundle is retained in
+`.build/pr304-smoke-shared.xcresult`. The corrected CI regression passed in
+that run. The same supported gate was then rerun with
+`BLEAT_SIMULATOR_DESTINATION` selecting a task-owned Simulator.
+That isolated gate passed all 480 app tests and both UI smoke journeys, with
+zero skips or runtime warnings. All 482 identifiers and individual outcomes
+were verified in `.build/ci-smoke/results.xcresult`, including the corrected
+CI regression and both tests killed in the shared-Simulator attempt.
+
 ## Large ledger
 
 The opt-in Release benchmark stores 250,000 deterministic five-second slices in

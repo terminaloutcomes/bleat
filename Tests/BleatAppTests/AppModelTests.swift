@@ -12469,13 +12469,38 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail)
         )
         await service.setRefreshedBookDetail(.success(detail))
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        defer { model.setLiveUpdatesActive(false) }
+        await model.start()
+        let initialHomeCompletions = await diagnostics.events().filter {
+            $0.operation == .loadHome && $0.name == .operationCompleted
+        }.count
+        try await waitForLiveNetworkObserver(service)
+        await service.emitNetworkPathUpdate()
+        let recovered = await waitUntil(timeout: .seconds(10)) {
+            let homeCompletions = await diagnostics.events().filter {
+                $0.operation == .loadHome && $0.name == .operationCompleted
+            }.count
+            let subscribed = await service.hasLiveUpdatesSubscriber()
+            return homeCompletions > initialHomeCompletions && subscribed
+        }
+        guard recovered else {
+            return XCTFail("Initial network recovery did not complete")
+        }
         let baseline = await service.liveRefreshRequestCounts()
         await service.setBookProgress(
             fixtureBookProgress(progress: 0.25, isFinished: false))
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        let updated = await waitUntil(timeout: .seconds(10)) {
+            guard case .loaded(let shelves) = model.homeShelves else {
+                return false
+            }
+            return shelves.first?.id == "continue-listening"
+                && shelves.first?.items == [detail.summary]
+        }
+        XCTAssertTrue(
+            updated, "Live progress did not create Continue Listening")
         guard case .loaded(let shelves) = model.homeShelves else {
             return XCTFail("Expected shelves")
         }
@@ -12486,7 +12511,6 @@ final class AppModelTests: XCTestCase {
         expected.details += 1
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, expected)
-        model.setLiveUpdatesActive(false)
     }
 
     func testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges()
