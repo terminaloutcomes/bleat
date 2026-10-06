@@ -674,6 +674,14 @@ protocol AppServicing: Sendable {
     func statisticsLivePresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation?
 
+    func statisticsUpdates(
+        id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
+    )
+        async -> AsyncStream<StatisticsUpdate>
+    func currentStatisticsUpdate(id: UUID) async -> StatisticsUpdate?
+    func acknowledgeStatisticsUpdate(id: UUID, revision: UInt64) async
+    func stopStatisticsUpdates(id: UUID) async
+
     func statisticsPresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation
 
@@ -1014,6 +1022,15 @@ extension AppServicing {
     func statisticsLivePresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation?
     { nil }
+
+    func statisticsUpdates(
+        id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
+    )
+        async -> AsyncStream<StatisticsUpdate>
+    { AsyncStream { $0.finish() } }
+    func currentStatisticsUpdate(id: UUID) async -> StatisticsUpdate? { nil }
+    func acknowledgeStatisticsUpdate(id: UUID, revision: UInt64) async {}
+    func stopStatisticsUpdates(id: UUID) async {}
 
     func statisticsPresentation(query: StatisticsQuery)
         async throws(AppServiceError) -> StatisticsPresentation
@@ -3301,6 +3318,27 @@ actor LiveAppService: AppServicing {
         do {
             return try await statisticsRepository.livePresentation(query: query)
         } catch let error { throw .statistics(error) }
+    }
+
+    func statisticsUpdates(
+        id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
+    )
+        async -> AsyncStream<StatisticsUpdate>
+    {
+        await statisticsRepository.updates(
+            id: id, query: query, accountIDs: accountIDs)
+    }
+
+    func currentStatisticsUpdate(id: UUID) async -> StatisticsUpdate? {
+        await statisticsRepository.currentUpdate(id: id)
+    }
+
+    func acknowledgeStatisticsUpdate(id: UUID, revision: UInt64) async {
+        await statisticsRepository.acknowledgeUpdate(id: id, revision: revision)
+    }
+
+    func stopStatisticsUpdates(id: UUID) async {
+        await statisticsRepository.stopUpdates(id: id)
     }
 
     func statisticsPresentation(query: StatisticsQuery)

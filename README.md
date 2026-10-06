@@ -900,8 +900,12 @@ rate and chapter coverage remain specific to this app. Summaries and live slices
 are read together so persisted playback does not disappear from the counters.
 A local derived cache makes repeated Lifetime reads independent of ledger size;
 playback and session updates maintain compact aggregates transactionally.
-Live polling only reads the cache. Bulk archive imports and resets invalidate it
-for rebuilding on the next explicit load.
+While the statistics screen is open, repository changes update its prepared
+snapshot and import progress without periodic database polling. Changes to
+uncommitted listening time are coalesced to a one-second cadence; saved totals
+and range changes update promptly and take precedence over pending updates.
+Bulk archive imports and resets invalidate the cache and reload the visible
+query, or rebuild it on the next explicit load when the screen is closed.
 JSON archives contain
 book titles and listening times, which are personal behavioral data; choose a
 safe destination when exporting them.

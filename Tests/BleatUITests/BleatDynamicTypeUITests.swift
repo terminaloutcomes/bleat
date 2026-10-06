@@ -192,7 +192,9 @@ final class BleatDynamicTypeUITests: XCTestCase {
         app.buttons["player.bookmarks"].tap()
         assertUsable(app.buttons["Add Bookmark"], in: app).tap()
         assertUsable(app.textFields["bookmark.title"], in: app)
-        assertUsable(app.buttons["Cancel"], in: app).tap()
+        assertUsable(
+            app.navigationBars["New Bookmark"].buttons["Cancel"], in: app
+        ).tap()
         XCTAssertTrue(
             app.textFields["bookmark.title"].waitForNonExistence(timeout: 5)
         )

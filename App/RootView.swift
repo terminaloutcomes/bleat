@@ -5688,8 +5688,11 @@ private struct StatisticsView: View {
         .environment(\.timeZone, .gmt)
         .navigationTitle("Listening Statistics")
         .task {
+            guard await model.startStatisticsLiveUpdates(query: query) != nil,
+                !Task.isCancelled
+            else { return }
             await reload()
-            model.startStatisticsLiveUpdates()
+            guard !Task.isCancelled else { return }
             await model.refreshStatisticsHistory(force: false)
         }
         .onDisappear { model.stopStatisticsLiveUpdates() }

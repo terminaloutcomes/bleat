@@ -24,6 +24,74 @@ snapshot cache with a versioned SwiftData migration.
 - `LocalPlaybackSessionLiveTests`: production history adapter paging against
   both root-hosted and path-prefixed pinned Audiobookshelf servers.
 
+## Repository observation regression (2026-10-05)
+
+Statistics presentation now observes repository changes while the screen is
+visible. Prepared snapshots are retained only for active queries; live-only
+updates use memory, and import progress travels with the bounded observation
+state. Invalidations survive skipped samples. Committed snapshots and live
+slices are published after accumulator transitions, avoiding duplicate totals.
+The application suppresses presentation deliveries during explicit loads and
+fences older updates and failures with request generations, observation IDs,
+and presentation revisions. Only changed live data schedules an anchored
+`ContinuousClock` trailing deadline; there is no repeating polling task.
+
+- Focused unsigned host command:
+  `BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter 'StatisticsExplorationTests|StatisticsTests'`:
+  28 tests executed and passed across two suites, including a read-only history
+  save failure that preserves observed progress and the importer's error ownership.
+- The initial focused simulator run executed seven statistics app tests, all
+  passed, with no runtime warnings in `.build/statistics-focused-1.xcresult`.
+- The expanded focused simulator run executed ten statistics app tests, all
+  passed, with no runtime warnings in `.build/statistics-focused-2.xcresult`.
+  Individual identifiers and outcomes were verified with `xcresulttool`.
+- The final focused simulator run executed eleven statistics app tests, all
+  passed, with no runtime warnings in `.build/statistics-focused-3.xcresult`.
+  This includes immediate first live delivery after an explicit load.
+- `mise run swift-lint` passed strict repository-wide Swift formatting checks
+  after the final refinements.
+- An early focused host build failed on typed-throws inference in a
+  nil-coalescing cache lookup. The lookup now uses an explicit branch; only
+  subsequent executed test passes are counted above.
+- The first full local attempt stopped at inventory verification because the
+  five initial new host tests were absent from the checked-in inventory. Its
+  signed tests executed, but that attempt did not pass the complete gate.
+  The inventory now includes all six new host tests. A subsequent attempt
+  verified 504 signed host tests and a Release package build, then was
+  deliberately interrupted before source changes to preserve history failure
+  ownership and refine first live delivery. Neither attempt counts as a
+  completed full gate.
+- The final local run verified 505 signed host tests with zero skips, a Release
+  package build, paid-capability settings, a Release simulator application
+  build, and 458 simulator app tests with zero skips and no runtime warnings.
+  Individual app outcomes in `.build/test-core-results/app-tests.xcresult`
+  include the strengthened stopped-subscription regression, which isolates
+  observation identity from explicit-load generation. The full UI suite
+  executed 105 tests: 98 passed, six expected environment-dependent tests
+  skipped, and one playback accessibility test failed because its `Cancel`
+  selector matched both the bookmark sheet and underlying player. The selector
+  now targets the bookmark navigation bar. That full local command exited 65;
+  the complete UI suite was not rerun. Host output
+  includes intentional read-only SwiftData save failures and the existing
+  declared `TestCleanupTests.retainsOperationFailureWhenCleanupAlsoFails`
+  known issue; the verified XML has zero failures, errors, or skips.
+- After strengthening registration ownership and cancellation, the final
+  simulator run executed all 459 app tests and three targeted UI tests: both
+  statistics journeys and the corrected playback accessibility test. All 462
+  passed with zero skips and no runtime warnings in
+  `.build/statistics-final-app-and-ui.xcresult`. Individual identifiers and
+  outcomes were verified with `xcresulttool`, including the regression proving
+  a delayed registration cannot revive a replaced observation or initiate
+  another explicit read.
+- `mise run test:app-live` passed the final online and offline disposable-server
+  Simulator journeys, one test each, with zero skips and no runtime warnings.
+  Their exact identifiers and outcomes were verified in
+  `TestSupport/ServerHarness/app-live-artifacts/34e751bb-479a-4177-a275-b192a5af2951/online.xcresult`
+  and the adjacent `offline.xcresult`. The harness exited successfully and
+  cleaned up its disposable resources.
+- No physical-device or background-execution validation is claimed for this
+  observation change.
+
 ## Large ledger
 
 The opt-in Release benchmark stores 250,000 deterministic five-second slices in

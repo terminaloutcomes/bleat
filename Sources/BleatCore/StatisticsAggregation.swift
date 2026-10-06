@@ -38,6 +38,38 @@ public struct StatisticsPresentation: Sendable {
     }
 }
 
+/// A bounded observation retains invalidation and all account progress even
+/// when a slow consumer skips intermediate playback samples.
+public struct StatisticsUpdate: Sendable {
+    public enum Presentation: Sendable {
+        case unprepared
+        case invalidated
+        case live(StatisticsPresentation)
+        case committed(StatisticsPresentation)
+    }
+
+    public let revision: UInt64
+    public let presentationRevision: UInt64
+    public let presentation: Presentation
+    public let history:
+        [AccountID: Result<
+            StatisticsHistoryProgress, StatisticsRepositoryError
+        >]
+
+    public init(
+        revision: UInt64, presentationRevision: UInt64,
+        presentation: Presentation,
+        history: [AccountID: Result<
+            StatisticsHistoryProgress, StatisticsRepositoryError
+        >]
+    ) {
+        self.revision = revision
+        self.presentationRevision = presentationRevision
+        self.presentation = presentation
+        self.history = history
+    }
+}
+
 struct StatisticsAccounting: Codable, Sendable {
     let accountID: AccountID
     let sessionID: PlaybackSessionID
