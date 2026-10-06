@@ -4174,6 +4174,8 @@ final class BleatLiveUITests: XCTestCase {
         app.buttons["player.skipForward"].tap()
         app.buttons["player.toggle"].tap()
         app.buttons["player.toggle"].tap()
+        // Keep menu navigation independent of XCTest's accessibility wait time.
+        app.buttons["player.toggle"].tap()
         app.buttons["player.rate"].tap()
         app.buttons["1.25×"].tap()
         let chapters = app.buttons["player.chapters"]
