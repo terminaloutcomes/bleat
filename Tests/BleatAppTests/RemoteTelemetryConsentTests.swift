@@ -429,9 +429,15 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                     "RemoteTelemetryConsentTests-\(UUID().uuidString)",
                     isDirectory: true
                 )
-            defer { try? FileManager.default.removeItem(at: storageRoot) }
             let pipelineBuildGate = OneShotPipelineBuildGate()
-            defer { pipelineBuildGate.release() }
+            let firstGeneration = UUID()
+            let currentGeneration = UUID()
+            let firstDisabled = XCTestExpectation(
+                description: "first generation shutdown finished")
+            let currentDisabled = XCTestExpectation(
+                description: "current generation shutdown finished")
+            let cleanupFinished = XCTestExpectation(
+                description: "runtime cleanup finished")
 
             let controller = RemoteTelemetryController(
                 resource: try RemoteTelemetryResource(
@@ -446,24 +452,47 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 storageRootURL: storageRoot,
                 beforePipelineBuild: {
                     pipelineBuildGate.block()
+                },
+                didDisableForTesting: { generation in
+                    switch generation {
+                    case firstGeneration: firstDisabled.fulfill()
+                    case currentGeneration: currentDisabled.fulfill()
+                    case nil: cleanupFinished.fulfill()
+                    default: break
+                    }
                 }
             )
+            addTeardownBlock { @MainActor in
+                pipelineBuildGate.release()
+                controller.applyRemoteTelemetryConsent(
+                    false, storageGeneration: nil)
+                let result = await XCTWaiter.fulfillment(
+                    of: [cleanupFinished], timeout: 30)
+                XCTAssertEqual(
+                    result, .completed,
+                    "Runtime cleanup timed out; gate: \(pipelineBuildGate.state)"
+                )
+                if result == .completed,
+                    FileManager.default.fileExists(atPath: storageRoot.path)
+                {
+                    try FileManager.default.removeItem(at: storageRoot)
+                }
+            }
 
             controller.tracer.beginSpan(operation: .appLaunch).end(.succeeded)
             XCTAssertFalse(hasPersistedBatch(in: storageRoot))
 
-            let firstGeneration = UUID()
             controller.setRemoteTelemetryForeground(true)
             controller.applyRemoteTelemetryConsent(
                 true,
                 storageGeneration: firstGeneration
             )
 
-            let pipelineBuildWasBlocked =
-                await pipelineBuildGate.waitUntilBlocked()
-            guard pipelineBuildWasBlocked else {
+            await fulfillment(
+                of: [pipelineBuildGate.entryExpectation], timeout: 30)
+            guard pipelineBuildGate.state == .blocked else {
                 XCTFail(
-                    "telemetry pipeline construction did not reach the test gate"
+                    "Pipeline construction did not reach gate: \(pipelineBuildGate.state)"
                 )
                 return
             }
@@ -484,10 +513,10 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 false,
                 storageGeneration: firstGeneration
             )
+            await fulfillment(of: [firstDisabled], timeout: 30)
             try await waitForNoPersistedBatch(in: storageRoot)
             withdrawnSpan.end(.succeeded)
 
-            let currentGeneration = UUID()
             controller.setRemoteTelemetryForeground(true)
             controller.applyRemoteTelemetryConsent(
                 true,
@@ -515,23 +544,71 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 false,
                 storageGeneration: currentGeneration
             )
+            await fulfillment(of: [currentDisabled], timeout: 30)
             try await waitForNoPersistedBatch(in: storageRoot)
         }
 
+        func testWithdrawalDuringBlockedBuildWaitsForShutdown() async throws {
+            let storageRoot = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "RemoteTelemetryCleanup-\(UUID())", isDirectory: true)
+            let gate = OneShotPipelineBuildGate()
+            let disabled = XCTestExpectation(
+                description: "blocked build shutdown completed")
+            let controller = RemoteTelemetryController(
+                resource: try RemoteTelemetryResource(
+                    applicationVersion: "1.2.3", applicationBuild: "68",
+                    platform: .iOS,
+                    operatingSystemMajorVersion: 26,
+                    operatingSystemMinorVersion: 0,
+                    operatingSystemPatchVersion: 0, installationID: UUID()
+                ),
+                storageRootURL: storageRoot,
+                beforePipelineBuild: { gate.block() },
+                didDisableForTesting: { _ in disabled.fulfill() }
+            )
+            addTeardownBlock { @MainActor in
+                gate.release()
+                controller.applyRemoteTelemetryConsent(
+                    false, storageGeneration: nil)
+                let result = await XCTWaiter.fulfillment(
+                    of: [disabled], timeout: 30)
+                XCTAssertEqual(
+                    result, .completed,
+                    "Shutdown timed out; gate: \(gate.state)")
+                if result == .completed,
+                    FileManager.default.fileExists(atPath: storageRoot.path)
+                {
+                    try FileManager.default.removeItem(at: storageRoot)
+                }
+            }
+            controller.applyRemoteTelemetryConsent(
+                true, storageGeneration: UUID())
+            await fulfillment(of: [gate.entryExpectation], timeout: 30)
+            XCTAssertEqual(gate.state, .blocked)
+            XCTAssertFalse(hasPersistedBatch(in: storageRoot))
+        }
+
+        private enum BatchWaitFailure: Error {
+            case persistTimedOut, purgeTimedOut
+        }
+
         private func waitForPersistedBatch(in root: URL) async throws {
-            for _ in 0..<100 {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+            while ContinuousClock.now < deadline {
                 if hasPersistedBatch(in: root) { return }
                 try await Task.sleep(for: .milliseconds(20))
             }
-            XCTFail("telemetry runtime did not persist a batch")
+            throw BatchWaitFailure.persistTimedOut
         }
 
         private func waitForNoPersistedBatch(in root: URL) async throws {
-            for _ in 0..<100 {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+            while ContinuousClock.now < deadline {
                 if !hasPersistedBatch(in: root) { return }
                 try await Task.sleep(for: .milliseconds(20))
             }
-            XCTFail("telemetry runtime did not purge its batch")
+            throw BatchWaitFailure.purgeTimedOut
         }
 
         private func hasPersistedBatch(in root: URL) -> Bool {
@@ -549,59 +626,6 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         }
     #endif
 }
-
-#if DEBUG && os(iOS)
-    private final class OneShotPipelineBuildGate: @unchecked Sendable {
-        private let lock = NSLock()
-        private let continueBuild = DispatchSemaphore(value: 0)
-
-        private var didBlock = false
-        private var didRelease = false
-
-        func block() {
-            let shouldWait = lock.withLock {
-                guard !didBlock else { return false }
-
-                didBlock = true
-                return !didRelease
-            }
-
-            if shouldWait {
-                continueBuild.wait()
-            }
-        }
-
-        func waitUntilBlocked(
-            timeout: Duration = .seconds(5)
-        ) async -> Bool {
-            let clock = ContinuousClock()
-            let deadline = clock.now.advanced(by: timeout)
-
-            while clock.now < deadline {
-                if lock.withLock({ didBlock }) {
-                    return true
-                }
-
-                await Task.yield()
-            }
-
-            return lock.withLock { didBlock }
-        }
-
-        func release() {
-            let shouldSignal = lock.withLock {
-                guard !didRelease else { return false }
-
-                didRelease = true
-                return didBlock
-            }
-
-            if shouldSignal {
-                continueBuild.signal()
-            }
-        }
-    }
-#endif
 
 @MainActor
 private final class RecordingRemoteTelemetryConsentController:

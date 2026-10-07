@@ -36,11 +36,13 @@ reports formatting violations without modifying source files.
 
 `Validate Bleat` runs on pull requests and pushes to `main`, without duplicate
 branch-push runs. Its Apple gate runs strict lint through mise, one Debug iPhone
-Simulator build, and two UI smoke tests: startup and the signed-in library
-before playback. It checks the result bundle for both passing test identifiers.
+Simulator build, the complete `BleatAppTests` bundle, and two UI smoke tests:
+startup and the signed-in library before playback. It checks the result bundle
+for passing app tests and both UI test identifiers.
 It starts the selected Simulator while compiling, then waits for boot readiness
 and installs the built app before starting XCTest on that same Simulator ID.
-This is a compile-and-launch gate, not the full app regression suite.
+This includes app unit regressions and two launch journeys; the broader UI
+regression suite runs through `scripts/test-core.sh`.
 The startup fixture remains suspended until the UI test taps the launching
 screen, so slow automation attachment cannot miss it. The test waits beyond
 the former five-second fixture timeout, checks the startup label, then verifies
@@ -51,8 +53,8 @@ Run the same smoke gate locally with
 `cargo run --quiet --locked --package scripts --bin ci-smoke --`. It uses
 `BLEAT_SIMULATOR_DESTINATION` when set. Run `bundle install` followed by
 `bundle exec slather coverage` to export coverage from that build. Swift
-smoke coverage reflects only those UI journeys. The separate host job runs
-`scripts/test-host.sh` and exports full host-suite LCOV for BleatCore and
+smoke coverage includes the app tests and those two UI journeys. The separate
+host job runs `scripts/test-host.sh` and exports full host-suite LCOV for BleatCore and
 BleatTranscription.
 
 The Linux job checks Rust formatting and Clippy, then runs Tarpaulin with all

@@ -231,7 +231,8 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
         init(
             resource: RemoteTelemetryResource?,
             storageRootURL: URL?,
-            beforePipelineBuild: (@Sendable () -> Void)? = nil
+            beforePipelineBuild: (@Sendable () -> Void)? = nil,
+            didDisableForTesting: (@Sendable (UUID?) -> Void)? = nil
         ) {
             privateCloudEvents = RemoteTelemetryPrivateCloudSyncEventRecorder(
                 tracer: tracer,
@@ -246,6 +247,7 @@ final class RemoteTelemetryController: RemoteTelemetryConsentApplying {
                 storageRootURL: storageRootURL,
                 beforePipelineBuild: beforePipelineBuild
             )
+            worker?.didDisableForTesting = didDisableForTesting
         }
     #endif
 
@@ -385,6 +387,11 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
     private let beforePipelineBuild: (@Sendable () -> Void)?
     private let downstreamExportersFactory:
         (@Sendable () -> AuthenticatedOtlpExporters?)?
+    #if DEBUG && os(iOS)
+        var didDisableForTesting: (@Sendable (UUID?) -> Void)?
+        // Confined to the runtime queue and populated only by lifecycle tests.
+        private var shutdownTasksForTesting: [Task<Void, Never>] = []
+    #endif
     private let queue = DispatchQueue(
         label: "app.bleat.remote-telemetry.runtime",
         qos: .utility
@@ -450,9 +457,23 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 explicitlyRemoving: storageGeneration
             )
             if let oldPipeline {
-                Task {
+                #if DEBUG && os(iOS)
+                    let didDisableForTesting = self?.didDisableForTesting
+                #endif
+                let shutdownTask = Task {
                     await oldPipeline.shutdown()
+                    #if DEBUG && os(iOS)
+                        if storageGeneration != nil {
+                            didDisableForTesting?(storageGeneration)
+                        }
+                    #endif
                 }
+                #if DEBUG && os(iOS)
+                    if didDisableForTesting != nil {
+                        self?.shutdownTasksForTesting.append(shutdownTask)
+                    }
+                #endif
+                _ = shutdownTask
             }
             self?.lock.withLock {
                 guard self?.generation == disabledGeneration,
@@ -460,6 +481,18 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
                 else { return }
                 self?.state = .disabled
             }
+            #if DEBUG && os(iOS)
+                if storageGeneration == nil || oldPipeline == nil,
+                    let didDisableForTesting = self?.didDisableForTesting
+                {
+                    let shutdownTasks = self?.shutdownTasksForTesting ?? []
+                    self?.shutdownTasksForTesting.removeAll()
+                    Task {
+                        for task in shutdownTasks { await task.value }
+                        didDisableForTesting(storageGeneration)
+                    }
+                }
+            #endif
         }
     }
 
@@ -575,9 +608,15 @@ private final class RemoteTelemetryRuntimeWorker: @unchecked Sendable {
             newPipeline.deactivate()
             newPipeline.purge()
 
-            Task {
+            let shutdownTask = Task {
                 await newPipeline.shutdown()
             }
+            #if DEBUG && os(iOS)
+                if didDisableForTesting != nil {
+                    shutdownTasksForTesting.append(shutdownTask)
+                }
+            #endif
+            _ = shutdownTask
 
             return
         }
