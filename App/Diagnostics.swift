@@ -279,6 +279,7 @@ extension AppFailure {
         case (_, .authenticationRequired): .authenticationRequired
         case (_, .permissionDenied): .permissionDenied
         case (_, .itemNotFound): .itemNotFound
+        case (_, .invalidLibraryCategories): .invalidLibraryCategories
         case (_, .invalidServerResponse): .invalidServerResponse
         case (_, .localStorageUnavailable): .localStorageUnavailable
         case (_, .unavailableOffline): .unavailableOffline

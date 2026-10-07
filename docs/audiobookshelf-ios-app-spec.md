@@ -788,6 +788,21 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   author and series IDs. A normal Library request asks the server to collapse
   series; a series detail omits `collapseseries`, filters by its series ID, and
   uses server sequence order without inheriting a Library progress filter.
+- Library defaults to **By Title**. **By Author**, **By Series**, **By
+  Collections**, and **By Narrators** show named category rows with book counts
+  and open their matching books. The current mode stays visible; Back returns
+  to its overview. The mode stays in memory and account reset returns to Title.
+- The status selector sits trailing beside the Library heading. Selecting a
+  status replaces entity selection and returns to Title; selecting a category
+  clears status. Book sorting and direction remain independent. Switching
+  libraries clears entity selection and reloads the current mode's overview.
+- Category overviews use the pinned library `authors`, `series`, `collections`,
+  and `narrators` endpoints. Author/series/narrator drilldowns use the server's
+  single-filter contract; narrator names use padded standard Base64. Collections
+  use the endpoint's expanded member snapshot and sort it locally. Category
+  snapshots are loaded online without a persisted offline fallback. Series and
+  collection endpoints return all expanded members, unlike paginated Title
+  browsing. Books without category metadata have no category entry.
 - Load home shelves from `GET /api/libraries/<id>/personalized?limit=<n>&include=progress`.
 - Search with `GET /api/libraries/<id>/search?q=<query>&limit=<n>`.
 - Book Detail's actions menu exposes **View on server** regardless of editing

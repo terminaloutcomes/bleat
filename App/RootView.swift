@@ -3006,17 +3006,99 @@ private struct LibraryView: View {
     var body: some View {
         NavigationStack(path: navigation.pathBinding(for: .library)) {
             VStack(spacing: 0) {
+                libraryHeader
                 libraryPicker
                 libraryControls
-                BookListContent(
-                    model: model,
-                    navigation: navigation,
-                    origin: .library,
-                    handlePlaybackOutcome: handlePlaybackOutcome
-                )
+                if model.showsLibraryCategories {
+                    LibraryCategoryContent(model: model)
+                } else {
+                    BookListContent(
+                        model: model,
+                        navigation: navigation,
+                        origin: .library,
+                        handlePlaybackOutcome: handlePlaybackOutcome
+                    )
+                }
             }
-            .navigationTitle("Library")
+            .navigationTitle("")
         }
+    }
+
+    private var statusLabel: String {
+        if case .progress = model.libraryBrowseFilter {
+            return model.libraryBrowseFilter.label
+        }
+        return "All Books"
+    }
+
+    private var libraryHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text("Library").accessibilityIdentifier("library.heading").font(
+                    .largeTitle.bold()
+                ).accessibilityAddTraits(
+                    .isHeader)
+                Spacer()
+                statusMenu
+            }
+            VStack(alignment: .leading) {
+                Text("Library").accessibilityIdentifier("library.heading").font(
+                    .largeTitle.bold()
+                ).accessibilityAddTraits(
+                    .isHeader)
+                HStack {
+                    Spacer()
+                    statusMenu
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var statusMenu: some View {
+        Menu {
+            Button {
+                Task {
+                    await model.setLibraryProgressFilter(nil)
+                }
+            } label: {
+                if model.libraryBrowseFilter == .all {
+                    Label("All Books", systemImage: "checkmark")
+                } else {
+                    Text("All Books")
+                }
+            }
+            Divider()
+            ForEach(LibraryProgressFilter.allCases, id: \.self) {
+                filter in
+                Button {
+                    Task {
+                        await model.setLibraryProgressFilter(
+                            filter
+                        )
+                    }
+                } label: {
+                    if model.libraryBrowseFilter
+                        == .progress(filter)
+                    {
+                        Label(
+                            filter.label,
+                            systemImage: "checkmark"
+                        )
+                    } else {
+                        Text(filter.label)
+                    }
+                }
+            }
+        } label: {
+            Label(
+                statusLabel,
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("library.filter")
     }
 
     @ViewBuilder
@@ -3031,9 +3113,16 @@ private struct LibraryView: View {
                         )
                         .font(.subheadline)
                         Spacer()
-                        Button("Clear") {
+                        Button(
+                            model.selectedLibraryCategory == nil
+                                ? "Clear" : "Back"
+                        ) {
                             Task {
-                                await model.setLibraryBrowseFilter(.all)
+                                if model.selectedLibraryCategory != nil {
+                                    await model.returnToLibraryCategories()
+                                } else {
+                                    await model.setLibraryBrowseFilter(.all)
+                                }
                             }
                         }
                         .accessibilityIdentifier("library.activeFilter.clear")
@@ -3101,48 +3190,23 @@ private struct LibraryView: View {
                     Spacer()
 
                     Menu {
-                        Button {
-                            Task {
-                                await model.setLibraryProgressFilter(nil)
-                            }
-                        } label: {
-                            if model.libraryBrowseFilter == .all {
-                                Label("All Books", systemImage: "checkmark")
-                            } else {
-                                Text("All Books")
-                            }
-                        }
-                        Divider()
-                        ForEach(LibraryProgressFilter.allCases, id: \.self) {
-                            filter in
+                        ForEach(LibraryBrowseMode.allCases, id: \.self) {
+                            mode in
                             Button {
-                                Task {
-                                    await model.setLibraryProgressFilter(
-                                        filter
-                                    )
-                                }
+                                Task { await model.setLibraryBrowseMode(mode) }
                             } label: {
-                                if model.libraryBrowseFilter
-                                    == .progress(filter)
-                                {
-                                    Label(
-                                        filter.label,
-                                        systemImage: "checkmark"
-                                    )
+                                if model.libraryBrowseMode == mode {
+                                    Label(mode.label, systemImage: "checkmark")
                                 } else {
-                                    Text(filter.label)
+                                    Text(mode.label)
                                 }
                             }
                         }
                     } label: {
-                        Label(
-                            model.libraryBrowseFilter.label,
-                            systemImage: "line.3.horizontal.decrease.circle"
-                        )
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+                        Text(model.libraryBrowseMode.label)
+                            .frame(minHeight: 44)
                     }
-                    .accessibilityIdentifier("library.filter")
+                    .accessibilityIdentifier("library.browseMode")
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 6)

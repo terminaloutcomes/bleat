@@ -14497,6 +14497,117 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testLibraryCategoryModesAndStatusReplacement() async throws {
+        let account = try fixtureAccount()
+        let book = fixtureBook(
+            id: "collection-member", title: "Collection Member",
+            libraryID: fixtureLibrary().id)
+        let category = LibraryCategory(
+            id: LibraryCategoryID(rawValue: "category-1"), name: "Category",
+            bookCount: 1, books: [book])
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([fixtureLibrary()]),
+            firstPage: .success(fixturePage(libraryID: fixtureLibrary().id)))
+        await service.setCategoryProvider { _, _ in .success([category]) }
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setLibrarySort(.updatedAt)
+        await model.setLibrarySortDescending(true)
+        for mode in LibraryBrowseMode.allCases where mode != .title {
+            await model.setLibraryBrowseMode(mode)
+            XCTAssertTrue(model.showsLibraryCategories)
+            XCTAssertEqual(model.libraryCategories, .loaded([category]))
+            await model.selectLibraryCategory(category)
+            XCTAssertFalse(model.showsLibraryCategories)
+            XCTAssertTrue(model.libraryBrowseFilter.isEntityScoped)
+            XCTAssertEqual(model.libraryBrowseMode, mode)
+            if mode == .collections {
+                guard case .loaded(let page) = model.books else {
+                    return XCTFail("Expected collection books")
+                }
+                XCTAssertEqual(page.items, [book])
+                XCTAssertFalse(page.hasNextPage)
+            }
+            XCTAssertEqual(model.librarySort, .updatedAt)
+            XCTAssertTrue(model.librarySortDescending)
+            await model.returnToLibraryCategories()
+            XCTAssertTrue(model.showsLibraryCategories)
+            await model.setLibraryProgressFilter(nil)
+            XCTAssertEqual(model.libraryBrowseMode, .title)
+            XCTAssertFalse(model.showsLibraryCategories)
+        }
+        await model.setLibraryBrowseMode(.narrators)
+        await model.selectLibraryCategory(category)
+        let selections = await service.pageSelections()
+        XCTAssertEqual(
+            selections.last?.filter, LibraryItemFilter(narrator: category.name))
+        await model.setLibraryProgressFilter(.finished)
+        XCTAssertEqual(model.libraryBrowseMode, .title)
+        XCTAssertEqual(model.libraryBrowseFilter, .progress(.finished))
+    }
+
+    func testLibraryCategoryResponseCannotOverwriteNewMode() async throws {
+        let service = TestAppService(
+            activeAccount: .success(try fixtureAccount()),
+            libraries: .success([fixtureLibrary()]),
+            firstPage: .success(fixturePage(libraryID: fixtureLibrary().id)))
+        let gate = AsyncGate()
+        let category = LibraryCategory(
+            id: LibraryCategoryID(rawValue: "author-1"), name: "Old Author",
+            bookCount: 1)
+        await service.setCategoryProvider { _, kind in
+            if kind == .authors { await gate.enterAndWait() }
+            return .success([category])
+        }
+        let model = AppModel(service: service)
+        await model.start()
+        let pending = Task { await model.setLibraryBrowseMode(.author) }
+        await gate.waitUntilEntered()
+        await model.setLibraryBrowseMode(.collections)
+        await gate.release()
+        await pending.value
+        XCTAssertEqual(model.libraryBrowseMode, .collections)
+        XCTAssertEqual(model.libraryCategories, .loaded([category]))
+        await model.setLibraryBrowseMode(.title)
+        XCTAssertFalse(model.showsLibraryCategories)
+    }
+
+    func testSwitchingLibraryClearsCategorySelection() async throws {
+        let first = fixtureLibrary()
+        let second = LibrarySummary(
+            id: LibraryID(rawValue: "second"), name: "Second", mediaType: .book)
+        let service = TestAppService(
+            activeAccount: .success(try fixtureAccount()),
+            libraries: .success([first, second]),
+            firstPage: .success(fixturePage(libraryID: fixtureLibrary().id)))
+        await service.setCategoryProvider { library, _ in
+            .success([
+                LibraryCategory(
+                    id: LibraryCategoryID(rawValue: library.rawValue),
+                    name: library.rawValue, bookCount: 0)
+            ])
+        }
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setLibraryBrowseMode(.collections)
+        let category = LibraryCategory(
+            id: LibraryCategoryID(rawValue: first.id.rawValue),
+            name: first.id.rawValue, bookCount: 0)
+        await model.selectLibraryCategory(category)
+        await model.selectLibrary(second)
+        XCTAssertNil(model.selectedLibraryCategory)
+        XCTAssertEqual(model.libraryBrowseFilter, .all)
+        XCTAssertTrue(model.showsLibraryCategories)
+        XCTAssertEqual(
+            model.libraryCategories,
+            .loaded([
+                LibraryCategory(
+                    id: LibraryCategoryID(rawValue: "second"), name: "second",
+                    bookCount: 0)
+            ]))
+    }
+
     func testAuthorBrowsePreservesSortAndClearsForAnotherLibrary()
         async throws
     {
@@ -23194,6 +23305,29 @@ private actor TestAppService: AppServicing {
     private var recordedReauthentications: [ReauthenticationRequest] = []
     private var recordedOpenIDReauthentications: [AccountID] = []
     private var recordedAccountUpdates: [AccountUpdateRequest] = []
+    private var categoryProvider:
+        (
+            @Sendable (LibraryID, LibraryCategoryKind) async -> Result<
+                [LibraryCategory], AppServiceError
+            >
+        )?
+
+    func setCategoryProvider(
+        _ provider:
+            @escaping @Sendable (LibraryID, LibraryCategoryKind) async ->
+            Result<[LibraryCategory], AppServiceError>
+    ) {
+        categoryProvider = provider
+    }
+
+    func libraryCategories(
+        for account: ServerAccount, libraryID: LibraryID,
+        kind: LibraryCategoryKind
+    ) async throws(AppServiceError) -> [LibraryCategory] {
+        guard let categoryProvider else { return [] }
+        return try value(from: await categoryProvider(libraryID, kind))
+    }
+
     private var recordedPageRequests: [LibraryID] = []
     private var recordedPageSelections: [PageSelection] = []
     private var recordedHomeRequests: [LibraryID] = []

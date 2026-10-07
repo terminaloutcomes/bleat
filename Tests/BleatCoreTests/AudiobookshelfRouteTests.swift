@@ -105,7 +105,7 @@ final class AudiobookshelfRouteTests {
         let libraryID = LibraryID(rawValue: secret)
         let itemID = LibraryItemID(rawValue: secret)
         let sessionID = PlaybackSessionID(rawValue: secret)
-        let routes: [AudiobookshelfRoute] = [
+        var routes: [AudiobookshelfRoute] = [
             .status, .login, .beginOpenID, .completeOpenID, .refresh,
             .logout, .authorize, .me, .libraries, .libraryItems(libraryID),
             .personalized(libraryID), .search(libraryID), .item(itemID),
@@ -121,6 +121,10 @@ final class AudiobookshelfRouteTests {
             .cover(itemID), .metadata(itemID),
         ]
 
+        for kind in LibraryCategoryKind.allCases {
+            routes.append(
+                .libraryCategories(LibraryID(rawValue: "library"), kind))
+        }
         #expect(
             Set(routes.map(\.diagnosticEndpoint))
                 == Set(DiagnosticEndpoint.allCases).subtracting([.openIDSession]

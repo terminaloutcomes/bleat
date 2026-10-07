@@ -30,6 +30,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case malformedResponse
     case invalidLibrary
     case invalidPage
+    case invalidLibraryCategories
     case invalidLibraryItem
     case invalidBookDetail
     case invalidSearchResults
@@ -170,6 +171,97 @@ public actor AudiobookshelfAPI<
             ),
             correlationID: result.correlationID
         )
+    }
+
+    // Pinned category routes and shapes: server/controllers/LibraryController.js
+    // https://github.com/advplyr/audiobookshelf/blob/96d4021a3cd45f67bf374b65abafbe5d73e926b5/server/controllers/LibraryController.js
+    public func libraryCategories(
+        in libraryID: LibraryID, kind: LibraryCategoryKind
+    ) async throws(AudiobookshelfAPIError) -> [LibraryCategory] {
+        guard !libraryID.rawValue.isEmpty else { throw .invalidLibrary }
+        let response: AudiobookshelfAPIResult<LibraryCategoriesDTO> =
+            try await get(
+                .libraryCategories(libraryID, kind),
+                queryItems: kind == .series
+                    ? [
+                        URLQueryItem(name: "limit", value: "100"),
+                        URLQueryItem(name: "page", value: "0"),
+                    ] : [],
+                as: LibraryCategoriesDTO.self)
+        var entries: [LibraryCategoryDTO]
+        switch kind {
+        case .authors:
+            guard let values = response.value.authors else {
+                throw .invalidLibraryCategories
+            }
+            entries = values
+        case .narrators:
+            guard let values = response.value.narrators else {
+                throw .invalidLibraryCategories
+            }
+            entries = values
+        case .series, .collections:
+            guard let values = response.value.results else {
+                throw .invalidLibraryCategories
+            }
+            entries = values
+        }
+        if kind == .series {
+            guard let total = response.value.total, total >= entries.count,
+                entries.count <= 100
+            else { throw .invalidLibraryCategories }
+            var page = 1
+            while entries.count < total {
+                guard !Task.isCancelled else { throw .cancelled }
+                let next: AudiobookshelfAPIResult<LibraryCategoriesDTO> =
+                    try await get(
+                        .libraryCategories(libraryID, kind),
+                        queryItems: [
+                            URLQueryItem(name: "limit", value: "100"),
+                            URLQueryItem(name: "page", value: String(page)),
+                        ],
+                        as: LibraryCategoriesDTO.self)
+                guard next.value.total == total,
+                    let values = next.value.results,
+                    !values.isEmpty, values.count <= 100,
+                    entries.count + values.count <= total
+                else { throw .invalidLibraryCategories }
+                entries.append(contentsOf: values)
+                page += 1
+            }
+        }
+        var ids: Set<String> = []
+        var categories: [LibraryCategory] = []
+        for entry in entries {
+            guard !entry.id.isEmpty, ids.insert(entry.id).inserted,
+                !entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty,
+                entry.name.rangeOfCharacter(from: .controlCharacters) == nil
+            else { throw .invalidLibraryCategories }
+            var books: [LibraryBookSummary] = []
+            switch kind {
+            case .series, .collections:
+                guard let values = entry.books else {
+                    throw .invalidLibraryCategories
+                }
+                for value in values {
+                    books.append(
+                        try value.domainValue(expectedLibraryID: libraryID))
+                }
+            case .authors, .narrators:
+                guard entry.numBooks != nil else {
+                    throw .invalidLibraryCategories
+                }
+            }
+            let count = entry.numBooks ?? books.count
+            guard count >= 0 else { throw .invalidLibraryCategories }
+            categories.append(
+                LibraryCategory(
+                    id: LibraryCategoryID(rawValue: entry.id), name: entry.name,
+                    bookCount: count,
+                    books: books))
+        }
+        return categories
     }
 
     public func libraryItems(
@@ -517,6 +609,20 @@ private struct ListeningSessionDTO: Decodable, Equatable, Sendable {
         case libraryItemID = "libraryItemId"
         case bookID = "bookId"
     }
+}
+
+private struct LibraryCategoriesDTO: Decodable, Sendable {
+    let total: Int?
+    let authors: [LibraryCategoryDTO]?
+    let narrators: [LibraryCategoryDTO]?
+    let results: [LibraryCategoryDTO]?
+}
+
+private struct LibraryCategoryDTO: Decodable, Sendable {
+    let id: String
+    let name: String
+    let numBooks: Int?
+    let books: [LibraryItemDTO]?
 }
 
 private struct LibraryItemsPageDTO: Decodable, Sendable {

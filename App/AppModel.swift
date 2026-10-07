@@ -572,7 +572,8 @@ enum LibraryPaginationState: Equatable, Sendable {
 enum AppFailureOperation: String, Equatable, Sendable {
     case appStart, login, reauthenticate, switchAccount, removeAccount,
         resetAppData
-    case loadLibraries, loadLibraryPage, loadHome, search, loadBook
+    case loadLibraries, loadLibraryPage, loadLibraryCategories, loadHome,
+        search, loadBook
     case openPlayback, recoverPlayback, loadBookmarks, saveMetadata
     case replaceCover, deleteBook, updateProgress, download, localPlayback
     case loadStatistics, importStatisticsHistory, exportStatistics,
@@ -580,7 +581,8 @@ enum AppFailureOperation: String, Equatable, Sendable {
 
     var isSafeToRetry: Bool {
         switch self {
-        case .loadLibraries, .loadLibraryPage, .loadHome, .search, .loadBook,
+        case .loadLibraries, .loadLibraryPage, .loadLibraryCategories,
+            .loadHome, .search, .loadBook,
             .loadBookmarks, .loadStatistics, .importStatisticsHistory,
             .exportStatistics, .importStatistics, .privateCloudSync:
             true
@@ -599,6 +601,7 @@ enum AppFailureCause: Equatable, Sendable {
         serverNotReady
     case serverUnsupported, localLoginUnavailable, invalidCredentials
     case authenticationRequired, permissionDenied, itemNotFound
+    case invalidLibraryCategories
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
@@ -650,6 +653,7 @@ struct AppFailure: Equatable, Sendable {
         case .itemNotFound: "Audiobook not found"
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
+        case .invalidLibraryCategories: "Invalid library categories"
         case .invalidServerResponse: "Invalid server response"
         case .localStorageUnavailable, .persistenceUnavailable,
             .storedDataMigrationFailed:
@@ -729,6 +733,8 @@ struct AppFailure: Equatable, Sendable {
             "This account is not allowed to perform that action."
         case .itemNotFound:
             "This audiobook may have been removed from the server."
+        case .invalidLibraryCategories:
+            "The server returned incomplete or inconsistent library categories."
         case .invalidServerResponse:
             "The server returned incomplete or inconsistent data."
         case .localStorageUnavailable:
@@ -792,7 +798,8 @@ struct AppFailure: Equatable, Sendable {
             "lock"
         case .itemNotFound: "book.closed"
         case .permissionDenied: "lock"
-        case .invalidServerResponse, .invalidInput, .requestRejected,
+        case .invalidServerResponse, .invalidLibraryCategories, .invalidInput,
+            .requestRejected,
             .authenticationBridgeFailed, .authenticationCallbackInvalid,
             .authenticationCredentialInvalid:
             "exclamationmark.triangle"
@@ -823,6 +830,7 @@ struct AppFailure: Equatable, Sendable {
         }
         return operation.isSafeToRetry
             && (cause == .invalidServerResponse
+                || cause == .invalidLibraryCategories
                 || cause == .statisticsHistoryChanged
                 || cause == .localStorageUnavailable
                 || cause == .unavailableOffline
@@ -1053,6 +1061,7 @@ struct AppFailure: Equatable, Sendable {
     {
         switch error {
         case .authentication(let error): authenticationCause(error)
+        case .invalidLibraryCategories: .invalidLibraryCategories
         case .unexpectedStatus(let status): statusCause(status)
         case .malformedResponse, .invalidLibrary, .invalidPage,
             .invalidLibraryItem, .invalidBookDetail, .invalidSearchResults,
@@ -1218,7 +1227,8 @@ extension AppFailureCause {
         case .serverNotReady, .requestRejected, .itemNotFound,
             .authenticationBridgeFailed:
             .serverRejected
-        case .invalidServerResponse, .playbackIdentityMismatch:
+        case .invalidServerResponse, .invalidLibraryCategories,
+            .playbackIdentityMismatch:
             .invalidResponse
         case .persistenceUnavailable, .storedDataMigrationFailed,
             .localStorageUnavailable, .localDataReset, .statistics:
@@ -1550,6 +1560,13 @@ final class AppModel {
     #endif
     private(set) var librarySort: LibraryItemSort = .title
     private(set) var librarySortDescending = false
+    private(set) var libraryBrowseMode: LibraryBrowseMode = .title
+    private(set) var libraryCategories: ResourceState<[LibraryCategory]> = .idle
+    private(set) var selectedLibraryCategory: LibraryCategory?
+    var showsLibraryCategories: Bool {
+        libraryBrowseMode != .title && selectedLibraryCategory == nil
+    }
+    private var libraryCategoriesGeneration: UInt64 = 0
     private(set) var libraryBrowseFilter: LibraryBrowseFilter = .all
     private(set) var seriesBooks: ResourceState<LibraryItemsPage> = .idle
     private(set) var seriesPaginationState: LibraryPaginationState = .idle
@@ -2948,6 +2965,89 @@ final class AppModel {
         await reloadBooks()
     }
 
+    func setLibraryBrowseMode(_ mode: LibraryBrowseMode) async {
+        libraryCategoriesGeneration &+= 1
+        libraryBrowseMode = mode
+        selectedLibraryCategory = nil
+        libraryBrowseFilter = .all
+        await reloadBooks()
+    }
+
+    func selectLibraryCategory(_ category: LibraryCategory) async {
+        guard case .loaded(let categories) = libraryCategories,
+            categories.contains(category),
+            let kind = libraryBrowseMode.categoryKind
+        else { return }
+        let filter: LibraryBrowseFilter
+        switch kind {
+        case .authors:
+            guard let id = AuthorID(rawValue: category.id.rawValue) else {
+                return
+            }
+            filter = .author(id: id, name: category.name)
+        case .series:
+            guard let id = SeriesID(rawValue: category.id.rawValue) else {
+                return
+            }
+            filter = .series(id: id, name: category.name)
+        case .narrators: filter = .narrator(name: category.name)
+        case .collections: filter = .collection(category)
+        }
+        selectedLibraryCategory = category
+        libraryBrowseFilter = filter
+        await reloadBooks()
+    }
+
+    func returnToLibraryCategories() async {
+        selectedLibraryCategory = nil
+        libraryBrowseFilter = .all
+        await reloadBooks()
+    }
+
+    func reloadLibraryCategories() async {
+        libraryCategoriesGeneration &+= 1
+        let generation = libraryCategoriesGeneration
+        guard let account, let library = selectedLibrary,
+            let kind = libraryBrowseMode.categoryKind
+        else { return }
+        libraryCategories = .loading
+        await diagnostics.record(
+            .started(.loadLibraryCategories, category: .api))
+        do {
+            let categories = try await service.libraryCategories(
+                for: account, libraryID: library.id, kind: kind)
+            guard generation == libraryCategoriesGeneration,
+                self.account?.id == account.id,
+                selectedLibrary?.id == library.id,
+                libraryBrowseMode.categoryKind == kind, !Task.isCancelled
+            else { return }
+            libraryCategories = .loaded(
+                categories.sorted {
+                    let comparison = $0.name.localizedStandardCompare($1.name)
+                    return comparison == .orderedSame
+                        ? $0.id.rawValue < $1.id.rawValue
+                        : comparison == .orderedAscending
+                })
+            await diagnostics.record(
+                .completed(
+                    .loadLibraryCategories, category: .api,
+                    count: categories.count))
+        } catch let error {
+            guard generation == libraryCategoriesGeneration,
+                self.account?.id == account.id,
+                selectedLibrary?.id == library.id,
+                libraryBrowseMode.categoryKind == kind, !Task.isCancelled
+            else { return }
+            let failure = AppFailure(
+                operation: .loadLibraryCategories, serviceError: error)
+            libraryCategories = .failed(failure)
+            await diagnostics.record(
+                .failed(
+                    .loadLibraryCategories, category: .api,
+                    failureCode: failure.diagnosticFailureCode))
+        }
+    }
+
     func setLibraryProgressFilter(
         _ filter: LibraryProgressFilter?
     ) async {
@@ -2956,7 +3056,11 @@ final class AppModel {
     }
 
     func setLibraryBrowseFilter(_ filter: LibraryBrowseFilter) async {
-        guard libraryBrowseFilter != filter else {
+        let wasOverview = showsLibraryCategories
+        libraryBrowseMode = .title
+        selectedLibraryCategory = nil
+        libraryCategoriesGeneration &+= 1
+        guard libraryBrowseFilter != filter || wasOverview else {
             return
         }
         libraryBrowseFilter = filter
@@ -2968,6 +3072,13 @@ final class AppModel {
     ) async {
         libraryPageGeneration &+= 1
         let operationGeneration = libraryPageGeneration
+        if showsLibraryCategories {
+            books = .idle
+            booksRefreshState = .idle
+            libraryPaginationState = .idle
+            await reloadLibraryCategories()
+            return
+        }
         guard let account, let library = selectedLibrary else {
             books = .failed(
                 AppFailure(.loadLibraryPage, .authenticationRequired)
@@ -2995,9 +3106,28 @@ final class AppModel {
             .started(.loadLibraryPage, category: .api)
         )
 
-        do {
+        do throws(AppServiceError) {
             let page: LibraryItemsPage
-            if let retainedPage {
+            if case .collection(let category) = filter {
+                let current: LibraryCategory
+                if preservingLoadedContent {
+                    let categories = try await service.libraryCategories(
+                        for: account, libraryID: library.id, kind: .collections)
+                    guard
+                        let refreshed = categories.first(where: {
+                            $0.id == category.id
+                        })
+                    else {
+                        throw AppServiceError.libraryRepository(
+                            .remote(.unexpectedStatus(404)))
+                    }
+                    current = refreshed
+                } else {
+                    current = category
+                }
+                page = current.page(
+                    sort: librarySort, descending: librarySortDescending)
+            } else if let retainedPage {
                 page = try await refreshedLibraryItemsPage(
                     for: account,
                     library: library,
@@ -6586,6 +6716,9 @@ final class AppModel {
     }
 
     private func clearEntityBrowseFilter() {
+        libraryCategoriesGeneration &+= 1
+        libraryCategories = .idle
+        selectedLibraryCategory = nil
         guard libraryBrowseFilter.isEntityScoped else {
             return
         }
@@ -7258,6 +7391,7 @@ final class AppModel {
         bookFinishedStates = [:]
         bookProgressSnapshots = [:]
         clearEntityBrowseFilter()
+        libraryBrowseMode = .title
         resetSearch()
         resetBookDetail()
         resetSeriesBrowse()
