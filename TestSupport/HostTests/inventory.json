@@ -523,7 +523,8 @@
     "testRangeResetPreservesOtherSessionAccounting()",
     "testRangeResetRejectsPartiallySyncedSplitSession()",
     "testRangeResetRejectsMixedConfirmedAndUncertainSplitSession()",
-    "testRangeResetCannotResendConfirmedRetainedTime()"
+    "testRangeResetCannotResendConfirmedRetainedTime()",
+    "testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()"
   ],
   "BleatCoreTests.TelemetryAuthenticationTests": [
     "testCachedTokenAvailabilityDoesNotRefresh()",

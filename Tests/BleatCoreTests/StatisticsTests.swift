@@ -131,6 +131,37 @@ final class StatisticsTests {
     }
 
     @Test
+    func testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()
+        async throws
+    {
+        let repository = try repository()
+        let start = Date(timeIntervalSince1970: 1_000)
+        for second in [0.0, 6, 12] {
+            try await repository.record(
+                sample(
+                    observedAt: start.addingTimeInterval(second),
+                    monotonicTime: second, position: second * 1.5))
+        }
+        try await repository.finish(sessionID: sessionID)
+        try await repository.confirmSync(
+            accountID: accountID, sessionID: sessionID, realSeconds: 6)
+        #expect(
+            try await repository.sessionListeningTime(
+                accountID: accountID, sessionID: sessionID)
+                == StatisticsSessionListeningTime(total: 12, pending: 6))
+        try await repository.markSyncUncertain(
+            accountID: accountID, sessionID: sessionID, realSeconds: 6)
+        #expect(
+            try await repository.sessionListeningTime(
+                accountID: accountID, sessionID: sessionID)
+                == StatisticsSessionListeningTime(total: 12, pending: 0))
+        #expect(
+            try await repository.sessionListeningTime(
+                accountID: AccountID(rawValue: "other"), sessionID: sessionID)
+                == StatisticsSessionListeningTime(total: 0, pending: 0))
+    }
+
+    @Test
     func testSessionIdentityIncludesAccount() async throws {
         let repository = try repository()
         let start = Date(timeIntervalSince1970: 2_000)

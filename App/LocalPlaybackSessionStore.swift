@@ -62,15 +62,15 @@ final class LocalPlaybackSessionStore {
 
     func removeAcknowledged(
         accountID: AccountID,
-        sessionIDs: Set<PlaybackSessionID>
+        sessions: [LocalPlaybackSession]
     ) throws(LocalPlaybackSessionStoreError) {
-        guard !sessionIDs.isEmpty else {
+        guard !sessions.isEmpty else {
             return
         }
         var stored = try entries()
         stored.removeAll {
             $0.accountID == accountID
-                && sessionIDs.contains($0.session.id)
+                && sessions.contains($0.session)
         }
         try persist(stored)
     }
