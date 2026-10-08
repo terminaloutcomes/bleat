@@ -443,6 +443,8 @@ Its JSON output distinguishes `not_found`, `processing`, `valid`, `failed`, and
 `invalid`. Failed or invalid builds exit unsuccessfully; missing or malformed
 metadata and request failures remain separate typed errors. A valid build has
 finished processing, but has not been submitted for review or distributed.
+Build components are matched numerically: Apple's `20261008.909.41` identifies
+the archive's `20261008.0909.41`. Marketing versions retain their exact spelling.
 
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:

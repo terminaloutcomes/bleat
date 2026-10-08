@@ -91,7 +91,7 @@ async fn sends_exact_build_filters_and_reports_all_processing_states() {
             filters,
             BTreeMap::from([
                 ("filter[app]".into(), "test-app".into()),
-                ("filter[version]".into(), "20261008.0909.41".into()),
+                ("filter[version]".into(), "20261008.909.41".into()),
                 (
                     "filter[preReleaseVersion.version]".into(),
                     "2026.10.08".into()
@@ -212,4 +212,46 @@ async fn connection_failure_retains_its_cause_without_exposing_request_details()
     assert_eq!(error.code(), "connection_failed");
     assert_eq!(error.to_string(), "could not connect to Apple");
     assert!(std::error::Error::source(&error).is_some());
+}
+
+#[tokio::test]
+async fn matches_observed_apple_build_with_truncated_leading_zeros() {
+    let mut body = page("VALID", "2026.10.08");
+    body["data"][0]["attributes"]["version"] = json!("20261008.909.41");
+    let (base, handle) = server(body, 200).await;
+    let status = fetch_status(&arguments(), "fixture-token", &base)
+        .await
+        .expect("status");
+    assert_eq!(status.processing_state, ProcessingState::Valid);
+    assert_eq!(status.build, "20261008.0909.41");
+    handle.await.expect("fixture completes");
+}
+
+#[tokio::test]
+async fn different_and_invalid_builds_do_not_match() {
+    let mut body = page("VALID", "2026.10.08");
+    body["data"][0]["attributes"]["version"] = json!("20261008.909.42");
+    let (base, handle) = server(body, 200).await;
+    let status = fetch_status(&arguments(), "fixture-token", &base)
+        .await
+        .expect("status");
+    assert_eq!(status.processing_state, ProcessingState::NotFound);
+    handle.await.expect("fixture completes");
+
+    let mut body = page("VALID", "2026.10.08");
+    body["data"][0]["attributes"]["version"] = json!("invalid");
+    let (base, handle) = server(body, 200).await;
+    assert!(matches!(
+        fetch_status(&arguments(), "fixture-token", &base).await,
+        Err(BuildStatusError::InvalidRemoteBuild)
+    ));
+    handle.await.expect("fixture completes");
+
+    let mut args = arguments();
+    args.build = "not-a-build".into();
+    let base = Url::parse("http://127.0.0.1:1/v1/").expect("test URL");
+    assert!(matches!(
+        fetch_status(&args, "fixture-token", &base).await,
+        Err(BuildStatusError::InvalidBuildArgument)
+    ));
 }

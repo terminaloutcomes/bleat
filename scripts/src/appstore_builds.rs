@@ -42,6 +42,10 @@ pub enum BuildStatusError {
     Token(#[from] AppStoreTokenError),
     #[error("app, version, and build must be nonempty")]
     EmptyIdentifier,
+    #[error("build must contain one to three nonnegative integer components")]
+    InvalidBuildArgument,
+    #[error("Apple returned an invalid build number")]
+    InvalidRemoteBuild,
     #[error("invalid App Store Connect base URL")]
     Url,
     #[error("could not create the Apple HTTP client")]
@@ -79,6 +83,8 @@ impl BuildStatusError {
             Self::Token(AppStoreTokenError::PrivateKey) => "invalid_private_key",
             Self::Token(AppStoreTokenError::Signing) => "token_signing_failed",
             Self::EmptyIdentifier => "empty_identifier",
+            Self::InvalidBuildArgument => "invalid_build_argument",
+            Self::InvalidRemoteBuild => "invalid_remote_build_number",
             Self::Url => "invalid_url",
             Self::Client(_) => "http_client",
             Self::Timeout(_) => "request_timeout",
@@ -109,6 +115,15 @@ struct PageLinks {
     next: Option<String>,
 }
 
+fn build_components(value: &str) -> Option<[u64; 3]> {
+    crate::release_versions::validate_build_number(value).ok()?;
+    let mut components = [0; 3];
+    for (value, component) in value.split('.').zip(components.iter_mut()) {
+        *component = value.parse().ok()?;
+    }
+    Some(components)
+}
+
 pub async fn build_status(
     args: &BuildStatusArgs,
     options: &CliOpts,
@@ -130,11 +145,22 @@ pub async fn fetch_status(
     {
         return Err(BuildStatusError::EmptyIdentifier);
     }
+    // Apple's CFBundleVersion integer components ignore leading zeros and
+    // interpret missing components as zero. Compare decoded numeric values.
+    // https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleversion
+    let requested_build =
+        build_components(&args.build).ok_or(BuildStatusError::InvalidBuildArgument)?;
+    let query_build = requested_build
+        .iter()
+        .take(args.build.split('.').count())
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(".");
     // Query parameters follow the checked-in Apple OpenAPI /v1/builds contract.
     let mut url = base.join("builds").map_err(|_| BuildStatusError::Url)?;
     url.query_pairs_mut().extend_pairs([
         ("filter[app]", args.app_id.as_str()),
-        ("filter[version]", args.build.as_str()),
+        ("filter[version]", query_build.as_str()),
         ("filter[preReleaseVersion.version]", args.version.as_str()),
         ("filter[preReleaseVersion.platform]", "IOS"),
         ("include", "preReleaseVersion"),
@@ -168,7 +194,8 @@ pub async fn fetch_status(
     for build in page.data {
         let attributes = build.attributes.ok_or(BuildStatusError::MissingBuild)?;
         let number = attributes.version.ok_or(BuildStatusError::MissingBuild)?;
-        if number != args.build {
+        let remote_build = build_components(&number).ok_or(BuildStatusError::InvalidRemoteBuild)?;
+        if remote_build != requested_build {
             continue;
         }
         let version_id = build
