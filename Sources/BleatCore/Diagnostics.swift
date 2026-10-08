@@ -45,6 +45,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case loadLibraries = "load_libraries"
     case loadHome = "load_home"
     case loadLibraryPage = "load_library_page"
+    case loadLibraryCategories = "load_library_categories"
     case search
     case loadStatistics = "load_statistics"
     case importStatisticsHistory = "import_statistics_history"
@@ -200,6 +201,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case permissionDenied = "permission_denied"
     case itemNotFound = "item_not_found"
     case invalidServerResponse = "invalid_server_response"
+    case invalidLibraryCategories = "invalid_library_categories"
     case localStorageUnavailable = "local_storage_unavailable"
     case unavailableOffline = "unavailable_offline"
     case requestRejected = "request_rejected"
@@ -281,6 +283,7 @@ public enum DiagnosticEndpoint: String, Codable, CaseIterable, Sendable {
     case me
     case libraries
     case libraryItems = "library_items"
+    case libraryCategories = "library_categories"
     case personalized
     case search
     case item

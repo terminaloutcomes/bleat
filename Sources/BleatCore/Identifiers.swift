@@ -19,6 +19,7 @@ extension TypedID: CustomStringConvertible {
 public enum AccountIDKind: Sendable {}
 public enum UserIDKind: Sendable {}
 public enum LibraryIDKind: Sendable {}
+public enum LibraryCategoryIDKind: Sendable {}
 public enum LibraryItemIDKind: Sendable {}
 public enum BookIDKind: Sendable {}
 public enum PlaybackSessionIDKind: Sendable {}
@@ -28,6 +29,7 @@ public enum ChapterIDKind: Sendable {}
 public typealias AccountID = TypedID<AccountIDKind>
 public typealias UserID = TypedID<UserIDKind>
 public typealias LibraryID = TypedID<LibraryIDKind>
+public typealias LibraryCategoryID = TypedID<LibraryCategoryIDKind>
 public typealias LibraryItemID = TypedID<LibraryItemIDKind>
 public typealias BookID = TypedID<BookIDKind>
 public typealias PlaybackSessionID = TypedID<PlaybackSessionIDKind>

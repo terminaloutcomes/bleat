@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "id": "series-1",
+      "name": "Fixture series",
+      "futureField": "ignored",
+      "books": [
+        {
+          "id": "item-one",
+          "libraryId": "library-1",
+          "addedAt": 1700000000000,
+          "updatedAt": 1700000001000,
+          "mediaType": "book",
+          "media": {
+            "metadata": {
+              "title": "The First Book",
+              "subtitle": null,
+              "authorName": "First Author",
+              "narratorName": "",
+              "seriesName": "A Series #1",
+              "genres": [
+                "Fiction"
+              ],
+              "publishedYear": "2024",
+              "publisher": null,
+              "explicit": false,
+              "abridged": false,
+              "futureMetadata": "ignored"
+            },
+            "numTracks": 2,
+            "numChapters": 4,
+            "duration": 7200.5,
+            "futureMedia": true
+          },
+          "futureItem": 123
+        }
+      ]
+    }
+  ],
+  "total": 1
+}

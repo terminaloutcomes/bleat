@@ -159,6 +159,35 @@ final class AccountStoreLiveTests: XCTestCase {
                 collapseSeries: false
             )
         )
+        for kind in LibraryCategoryKind.allCases {
+            let categories = try await api.libraryCategories(
+                in: seededLibrary.id, kind: kind)
+            XCTAssertTrue(categories.allSatisfy { $0.bookCount >= 0 })
+            if kind == .authors {
+                XCTAssertTrue(
+                    categories.contains {
+                        $0.id.rawValue == linkedAuthor.id.rawValue
+                    })
+            }
+            if kind == .series {
+                XCTAssertTrue(
+                    categories.contains {
+                        $0.id.rawValue == linkedSeries.id.rawValue
+                    })
+            }
+        }
+        if let narrator = multiMetadataItem.narrators.first {
+            let narratorPage = try await api.libraryItems(
+                in: seededLibrary.id,
+                request: LibraryItemsPageRequest(
+                    page: 0, limit: 10,
+                    filter: LibraryItemFilter(narrator: narrator),
+                    collapseSeries: false))
+            XCTAssertTrue(
+                narratorPage.value.items.contains {
+                    $0.id == multiMetadataItem.id
+                })
+        }
         let collapsedPage = try await api.libraryItems(
             in: seededLibrary.id,
             request: try LibraryItemsPageRequest(

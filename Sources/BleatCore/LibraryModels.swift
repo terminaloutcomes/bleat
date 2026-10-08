@@ -101,6 +101,27 @@ public enum LibraryItemSort: Hashable, Sendable {
     }
 }
 
+public enum LibraryCategoryKind: String, CaseIterable, Hashable, Sendable {
+    case authors, series, collections, narrators
+}
+
+public struct LibraryCategory: Hashable, Sendable, Identifiable {
+    public let id: LibraryCategoryID
+    public let name: String
+    public let bookCount: Int
+    public let books: [LibraryBookSummary]
+
+    public init(
+        id: LibraryCategoryID, name: String, bookCount: Int,
+        books: [LibraryBookSummary] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.bookCount = bookCount
+        self.books = books
+    }
+}
+
 public struct LibraryItemFilter: Hashable, Sendable {
     public let rawValue: String
 
@@ -110,6 +131,10 @@ public struct LibraryItemFilter: Hashable, Sendable {
 
     public init(authorID: AuthorID) {
         rawValue = Self.encoded("authors", value: authorID.rawValue)
+    }
+
+    public init(narrator: String) {
+        rawValue = Self.encoded("narrators", value: narrator)
     }
 
     public init(seriesID: SeriesID) {

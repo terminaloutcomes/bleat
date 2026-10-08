@@ -11,6 +11,7 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
     case me
     case libraries
     case libraryItems(LibraryID)
+    case libraryCategories(LibraryID, LibraryCategoryKind)
     case personalized(LibraryID)
     case search(LibraryID)
     case item(LibraryItemID)
@@ -53,6 +54,8 @@ public enum AudiobookshelfRoute: Hashable, Sendable {
             ["api", "me"]
         case .libraries:
             ["api", "libraries"]
+        case .libraryCategories(let libraryID, let kind):
+            ["api", "libraries", libraryID.rawValue, kind.rawValue]
         case .libraryItems(let libraryID):
             ["api", "libraries", libraryID.rawValue, "items"]
         case .personalized(let libraryID):
@@ -135,6 +138,8 @@ extension AudiobookshelfRoute {
             .me
         case .libraries:
             .libraries
+        case .libraryCategories:
+            .libraryCategories
         case .libraryItems:
             .libraryItems
         case .personalized:

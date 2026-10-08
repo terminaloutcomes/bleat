@@ -6,6 +6,91 @@ import Testing
 
 @Suite(.serialized)
 final class AudiobookshelfAPITests {
+    @Test(arguments: ["", "/audiobookshelf"])
+    func libraryCategoriesUseScopedRoutes(prefix: String) async throws {
+        for kind in LibraryCategoryKind.allCases {
+            let data = try #require(
+                Bundle.module.url(
+                    forResource: "library-categories-\(kind.rawValue)",
+                    withExtension: "json"))
+            let fixture = try APIFixture(
+                responses: [
+                    HTTPResponse(
+                        data: try Data(contentsOf: data), statusCode: 200)
+                ],
+                serverAddress: "https://example.com\(prefix)")
+            let categories = try await fixture.api.libraryCategories(
+                in: LibraryID(rawValue: "library-1"), kind: kind)
+            #expect(categories.count == 1)
+            #expect(categories.first?.bookCount == 1)
+            let request = try #require(
+                await fixture.transport.recordedRequests().first)
+            #expect(
+                request.url?.path
+                    == "\(prefix)/api/libraries/library-1/\(kind.rawValue)")
+        }
+        #expect(
+            LibraryItemFilter(narrator: "Narrator / + é").rawValue
+                == "narrators.\(Data("Narrator / + é".utf8).base64EncodedString())"
+        )
+    }
+
+    @Test
+    func librarySeriesCategoriesLoadEveryPage() async throws {
+        let fixtureURL = try #require(
+            Bundle.module.url(
+                forResource: "library-categories-series", withExtension: "json")
+        )
+        let payload = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: fixtureURL))
+                as? [String: Any])
+        let template = try #require(
+            (payload["results"] as? [[String: Any]])?.first)
+        let entries = (0..<101).map { index in
+            var value = template
+            value["id"] = "series-\(index)"
+            return value
+        }
+        let fixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try JSONSerialization.data(withJSONObject: [
+                    "results": Array(entries.prefix(100)), "total": 101,
+                ]), statusCode: 200),
+            HTTPResponse(
+                data: try JSONSerialization.data(withJSONObject: [
+                    "results": Array(entries.suffix(1)), "total": 101,
+                ]), statusCode: 200),
+        ])
+        let categories = try await fixture.api.libraryCategories(
+            in: LibraryID(rawValue: "library-1"), kind: .series)
+        #expect(categories.count == 101)
+        let requests = await fixture.transport.recordedRequests()
+        #expect(requests.count == 2)
+        let query = try #require(
+            requests.last?.url.flatMap {
+                URLComponents(url: $0, resolvingAgainstBaseURL: false)?
+                    .queryItems
+            })
+        #expect(query.contains(URLQueryItem(name: "page", value: "1")))
+        #expect(query.contains(URLQueryItem(name: "limit", value: "100")))
+    }
+
+    @Test
+    func libraryCategoriesRejectMissingPayloadAndNegativeCounts() async throws {
+        for payload in [
+            "{}", #"{"authors":[{"id":"a","name":"Author","numBooks":-1}]}"#,
+        ] {
+            let fixture = try APIFixture(responses: [
+                HTTPResponse(data: Data(payload.utf8), statusCode: 200)
+            ])
+            do {
+                _ = try await fixture.api.libraryCategories(
+                    in: LibraryID(rawValue: "library-1"), kind: .authors)
+                Issue.record("Expected invalid library categories")
+            } catch { #expect(error == .invalidLibraryCategories) }
+        }
+    }
+
     @Test(arguments: ["2.26.0", "2.37.0"])
     func capturedSupportedLibraryAndDetailShapes(version: String) async throws {
         let pageData = try Self.capturedFixture(

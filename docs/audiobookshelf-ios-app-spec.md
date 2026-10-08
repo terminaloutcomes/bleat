@@ -788,6 +788,29 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   author and series IDs. A normal Library request asks the server to collapse
   series; a series detail omits `collapseseries`, filters by its series ID, and
   uses server sequence order without inheriting a Library progress filter.
+- Library defaults to **By Title**. **By Author**, **By Series**, **By
+  Collections**, and **By Narrators** show named category rows with book counts
+  and open their matching books. The current mode stays visible; Back returns
+  to its overview. The mode stays in memory; account reset returns to Title with All Books.
+- The status selector sits trailing beside the Library heading. Status remains
+  independent of the browse mode and selected category, including across Back
+  and mode changes. The browse selector sits left, with sorting and direction
+  on the right. Category rows use primary text color instead of accent color.
+  Category overviews retain all categories and their total book counts; status
+  filters their drilldown books. Book sorting and direction remain independent. Switching
+  libraries clears entity selection and reloads the current mode's overview.
+- Category overviews use the pinned library `authors`, `series`, `collections`,
+  and `narrators` endpoints. Author/series/narrator drilldowns use the server's
+  single-filter contract; narrator names use padded standard Base64. To combine
+  an entity and status, load complete uncollapsed entity pages and match their
+  members against authoritative account progress using the pinned predicates.
+  Do not send invented compound server filters. Collections
+  use the endpoint's expanded member snapshot and sort it locally. Category
+  refresh keeps usable category rows on failure with a retryable warning, and
+  successful collection refresh retains membership through sort changes. Category
+  snapshots are loaded online without a persisted offline fallback. Series and
+  collection endpoints return all expanded members, unlike paginated Title
+  browsing. Books without category metadata have no category entry.
 - Load home shelves from `GET /api/libraries/<id>/personalized?limit=<n>&include=progress`.
 - Search with `GET /api/libraries/<id>/search?q=<query>&limit=<n>`.
 - Book Detail's actions menu exposes **View on server** regardless of editing

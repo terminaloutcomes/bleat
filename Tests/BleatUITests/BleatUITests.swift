@@ -2188,6 +2188,69 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testLibraryCategoryModesBackAndStatus() {
+        assertLibraryCategoryModes()
+    }
+
+    @MainActor
+    func testLibraryCategoryModesAtLargestDynamicType() {
+        assertLibraryCategoryModes(additionalArguments: [
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+        ])
+    }
+
+    @MainActor
+    private func assertLibraryCategoryModes(additionalArguments: [String] = [])
+    {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: additionalArguments)
+        tabButton("Library", in: app).tap()
+        let modes = app.buttons["library.browseMode"]
+        let status = app.buttons["library.filter"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.isHittable)
+        XCTAssertTrue(modes.isHittable)
+        XCTAssertLessThan(
+            modes.frame.midX, app.buttons["library.sort"].frame.midX)
+        for (label, id) in [
+            ("By Author", "author-1"), ("By Series", "series-1"),
+            ("By Collections", "collection-1"), ("By Narrators", "narrator-1"),
+        ] {
+            modes.tap()
+            app.buttons[label].tap()
+            let category = app.buttons["library.category.\(id)"]
+            XCTAssertTrue(category.waitForExistence(timeout: 5))
+            XCTAssertTrue(category.isHittable)
+            XCTAssertTrue(category.label.contains("1 books"))
+            category.tap()
+            let back = app.buttons["library.activeFilter.clear"]
+            XCTAssertTrue(back.waitForExistence(timeout: 5))
+            XCTAssertEqual(back.label, "Back")
+            back.tap()
+            XCTAssertTrue(category.waitForExistence(timeout: 5))
+        }
+        status.tap()
+        app.collectionViews.buttons["All Books"].tap()
+        XCTAssertTrue(
+            app.buttons["library.category.narrator-1"].waitForExistence(
+                timeout: 5))
+        XCTAssertEqual(modes.label, "By Narrators")
+        status.tap()
+        app.collectionViews.buttons["Not Finished"].tap()
+        XCTAssertEqual(modes.label, "By Narrators")
+        app.buttons["library.category.narrator-1"].tap()
+        XCTAssertTrue(
+            app.buttons["library.activeFilter.clear"].waitForExistence(
+                timeout: 5))
+        status.tap()
+        app.collectionViews.buttons["All Books"].tap()
+        XCTAssertEqual(modes.label, "By Narrators")
+        XCTAssertTrue(app.buttons["library.activeFilter.clear"].exists)
+    }
+
+    @MainActor
     func testLibraryLoadsAnotherPage() {
         let app = launch(scenario: "--ui-testing-signed-in")
 
@@ -2524,7 +2587,7 @@ final class BleatUITests: XCTestCase {
 
         library.tap()
         XCTAssertTrue(
-            app.navigationBars["Library"].waitForExistence(timeout: 3)
+            app.staticTexts["library.heading"].waitForExistence(timeout: 3)
         )
 
         XCTAssertGreaterThan(search.frame.minX, library.frame.maxX)

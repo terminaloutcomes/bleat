@@ -578,6 +578,39 @@
             ]
         }
 
+        func libraryCategories(
+            for account: ServerAccount, libraryID: LibraryID,
+            kind: LibraryCategoryKind
+        ) async throws(AppServiceError) -> [LibraryCategory] {
+            let ids = try Self.fixtureIDs()
+            let id: String
+            let name: String
+            switch kind {
+            case .authors:
+                id = ids.primaryAuthor.rawValue
+                name = "Test Author"
+            case .series:
+                id = ids.primarySeries.rawValue
+                name = "Test Series"
+            case .collections:
+                id = "collection-1"
+                name = "Test Collection"
+            case .narrators:
+                id = "narrator-1"
+                name = "Test Narrator"
+            }
+            return [
+                LibraryCategory(
+                    id: LibraryCategoryID(rawValue: id), name: name,
+                    bookCount: 1,
+                    books: [
+                        Self.book(
+                            id: "ui-book", title: libraryTitle,
+                            libraryID: libraryID, ids: ids)
+                    ])
+            ]
+        }
+
         func page(
             for account: ServerAccount,
             libraryID: LibraryID,

@@ -460,6 +460,11 @@ protocol AppServicing: Sendable {
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary]
 
+    func libraryCategories(
+        for account: ServerAccount, libraryID: LibraryID,
+        kind: LibraryCategoryKind
+    ) async throws(AppServiceError) -> [LibraryCategory]
+
     func page(
         for account: ServerAccount,
         libraryID: LibraryID,
@@ -794,6 +799,13 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func libraryCategories(
+        for account: ServerAccount, libraryID: LibraryID,
+        kind: LibraryCategoryKind
+    ) async throws(AppServiceError) -> [LibraryCategory] {
+        throw .libraryRepository(.remote(.unexpectedStatus(501)))
+    }
+
     func accountSelection() async throws(AppServiceError)
         -> StoredAccountSelection
     {
@@ -2442,6 +2454,17 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .libraryRepository(error)
         }
+    }
+
+    func libraryCategories(
+        for account: ServerAccount, libraryID: LibraryID,
+        kind: LibraryCategoryKind
+    ) async throws(AppServiceError) -> [LibraryCategory] {
+        let api = AudiobookshelfAPI(
+            account: account, authCoordinator: coordinator)
+        do {
+            return try await api.libraryCategories(in: libraryID, kind: kind)
+        } catch let error { throw .libraryRepository(.remote(error)) }
     }
 
     func page(

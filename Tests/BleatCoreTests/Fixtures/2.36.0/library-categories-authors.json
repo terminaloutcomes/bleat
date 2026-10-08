@@ -1,0 +1,10 @@
+{
+  "authors": [
+    {
+      "id": "authors-1",
+      "name": "Fixture authors",
+      "futureField": "ignored",
+      "numBooks": 1
+    }
+  ]
+}
