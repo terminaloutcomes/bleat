@@ -1,0 +1,94 @@
+name: Upload artifact with bounded retries
+description: Three official uploader attempts with backoff and a mandatory final gate
+inputs:
+  name:
+    description: Canonical artifact name, unique to this producer in the workflow run
+    required: true
+  path:
+    description: Exact file for required coverage, directory or glob for optional diagnostics
+    required: true
+  if-no-files-found:
+    description: Missing-file policy (error or warn)
+    default: warn
+  retention-days:
+    description: Artifact retention in days
+    default: '7'
+outputs:
+  artifact-id:
+    description: ID from the successful attempt (replacement changes the ID)
+    value: ${{ steps.attempt3.outputs.artifact-id || steps.attempt2.outputs.artifact-id || steps.attempt1.outputs.artifact-id }}
+  artifact-url:
+    description: URL from the successful attempt
+    value: ${{ steps.attempt3.outputs.artifact-url || steps.attempt2.outputs.artifact-url || steps.attempt1.outputs.artifact-url }}
+  artifact-digest:
+    description: Digest from the successful attempt
+    value: ${{ steps.attempt3.outputs.artifact-digest || steps.attempt2.outputs.artifact-digest || steps.attempt1.outputs.artifact-digest }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare upload orchestration
+      id: prepare
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        ARTIFACT_PATH: ${{ inputs.path }}
+        MISSING_FILES: ${{ inputs.if-no-files-found }}
+      run: |
+        rustc --edition=2024 "$GITHUB_ACTION_PATH/../../../scripts/src/bin/ci-artifact-retry.rs" -o "$RUNNER_TEMP/bleat-ci-artifact-retry"
+        "$RUNNER_TEMP/bleat-ci-artifact-retry" prepare "$ARTIFACT_PATH" "$MISSING_FILES"
+    - name: Upload attempt 1
+      id: attempt1
+      if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+    - name: Backoff before attempt 2
+      id: retry2
+      if: ${{ !cancelled() && steps.attempt1.outcome == 'failure' }}
+      shell: bash
+      env:
+        PREVIOUS_OUTCOME: ${{ steps.attempt1.outcome }}
+      run: '"$RUNNER_TEMP/bleat-ci-artifact-retry" retry "$PREVIOUS_OUTCOME" 2'
+    - name: Upload attempt 2
+      id: attempt2
+      if: ${{ !cancelled() && steps.retry2.outputs.retry == 'true' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+        # Replace an ambiguous/partial upload; only this producer owns this name.
+        overwrite: true
+    - name: Backoff before attempt 3
+      id: retry3
+      if: ${{ !cancelled() && steps.attempt2.outcome == 'failure' }}
+      shell: bash
+      env:
+        PREVIOUS_OUTCOME: ${{ steps.attempt2.outcome }}
+      run: '"$RUNNER_TEMP/bleat-ci-artifact-retry" retry "$PREVIOUS_OUTCOME" 3'
+    - name: Upload attempt 3
+      id: attempt3
+      if: ${{ !cancelled() && steps.retry3.outputs.retry == 'true' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+        # Replace an ambiguous/partial upload; only this producer owns this name.
+        overwrite: true
+    - name: Require a completed upload
+      if: ${{ !cancelled() && steps.attempt1.outcome != 'skipped' }}
+      shell: bash
+      env:
+        ATTEMPT1: ${{ steps.attempt1.outcome }}
+        ATTEMPT2: ${{ steps.attempt2.outcome }}
+        ATTEMPT3: ${{ steps.attempt3.outcome }}
+      run: '"$RUNNER_TEMP/bleat-ci-artifact-retry" finish "$ATTEMPT1" "$ATTEMPT2" "$ATTEMPT3"'

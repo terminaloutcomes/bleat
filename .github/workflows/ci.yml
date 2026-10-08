@@ -74,13 +74,15 @@ jobs:
             report.xpath("//source").each { |source| source.content = "." }
             File.write(path, report.to_xml)
           '
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: ./.github/actions/upload-artifact
+        timeout-minutes: 15
         with:
           name: swift-coverage
           path: .build/coverage/swift/cobertura.xml
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: ./.github/actions/upload-artifact
+        timeout-minutes: 15
         if: always()
         with:
           name: ios-smoke-results
@@ -136,13 +138,15 @@ jobs:
         env:
           BLEAT_HOST_SIGNING: unsigned
         run: zsh scripts/test-host.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: ./.github/actions/upload-artifact
+        timeout-minutes: 15
         with:
           name: swift-host-coverage
           path: .build/coverage/swift-host/lcov.info
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: ./.github/actions/upload-artifact
+        timeout-minutes: 15
         if: always()
         with:
           name: swift-host-results
@@ -184,7 +188,8 @@ jobs:
       - name: Full Rust coverage including container integration tests
         run: |
           ./scripts/coverage-bleat-api.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: ./.github/actions/upload-artifact
+        timeout-minutes: 15
         with:
           name: rust-coverage
           path: .build/coverage/bleat-api/lcov.info
