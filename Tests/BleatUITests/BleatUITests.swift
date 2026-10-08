@@ -1110,6 +1110,24 @@ final class BleatUITests: XCTestCase {
             app.buttons["player.mini.open"].waitForExistence(timeout: 3)
         )
 
+        // Keep the five-second fixture active while exercising the context menu.
+        let miniToggle = app.buttons["player.mini.toggle"]
+        let playbackReady = expectation(
+            for: NSPredicate(format: "label == %@", "Pause"),
+            evaluatedWith: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackReady], timeout: 10), .completed
+        )
+        miniToggle.tap()
+        let playbackPaused = expectation(
+            for: NSPredicate(format: "label == %@", "Play"),
+            evaluatedWith: miniToggle
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackPaused], timeout: 3), .completed
+        )
+
         let homeBook = app.descendants(matching: .any)["home.book.ui-book"]
         XCTAssertTrue(homeBook.waitForExistence(timeout: 3))
         homeBook.press(forDuration: 1)
@@ -1121,7 +1139,6 @@ final class BleatUITests: XCTestCase {
         app.buttons["Mark Unplayed"].tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 3))
 
-        let miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
         let start = miniToggle.coordinate(
             withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)

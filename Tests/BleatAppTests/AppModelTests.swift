@@ -3260,29 +3260,40 @@ final class AppModelTests: XCTestCase {
                 downloads: appModel.downloads,
                 appModel: appModel
             )
-            let transcriberStarted = await transcriberGate.waitUntilEntered(
-                timeout: .seconds(2)
-            )
-            guard transcriberStarted else {
+            addTeardownBlock { @MainActor in
+                coordinator.releaseTranscriptCache(for: visibleBookKey)
                 coordinator.cancel()
                 await transcriberGate.release()
-                XCTFail("Timed out waiting for transcription to start")
+                let terminal = await self.waitForTranscriptionTerminalState(
+                    in: coordinator, bookKey: activeBookKey
+                )
+                XCTAssertNotNil(
+                    terminal,
+                    "Transcription cleanup timed out: \(coordinator.state)")
+            }
+            await fulfillment(
+                of: [await transcriberGate.entryExpectation], timeout: 30
+            )
+            guard await transcriberGate.hasEntered else {
+                XCTFail("Transcriber did not enter: \(coordinator.state)")
                 return
             }
-            await Task.yield()
 
             NotificationCenter.default.post(
                 name: UIApplication.didReceiveMemoryWarningNotification,
                 object: nil
             )
-            for _ in 0..<20 {
-                await Task.yield()
-            }
-
             let inactiveBookKey = ChapterTranscriptionBookKey(
                 accountID: account.id,
                 itemID: details[0].id
             )
+            let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+            while coordinator.isCached(
+                chapterID: cachedChapter.id, for: inactiveBookKey),
+                ContinuousClock.now < deadline
+            {
+                try await Task.sleep(for: .milliseconds(20))
+            }
             XCTAssertFalse(
                 coordinator.isCached(
                     chapterID: cachedChapter.id, for: inactiveBookKey)
@@ -3300,13 +3311,6 @@ final class AppModelTests: XCTestCase {
                 )
             )
 
-            coordinator.releaseTranscriptCache(for: visibleBookKey)
-            coordinator.cancel()
-            await transcriberGate.release()
-            _ = await waitForTranscriptionTerminalState(
-                in: coordinator,
-                bookKey: activeBookKey
-            )
         }
     #endif
 
@@ -24904,61 +24908,6 @@ private actor GatedClosePlaybackDiagnosticRecorder: DiagnosticRecording {
         }
         didGate = true
         await gate.enterAndWait()
-    }
-}
-
-private actor AsyncGate {
-    private var entered = false
-    private var released = false
-    private var enteredContinuations: [CheckedContinuation<Void, Never>] = []
-    private var releaseContinuations: [CheckedContinuation<Void, Never>] = []
-
-    func enterAndWait() async {
-        entered = true
-        let continuations = enteredContinuations
-        enteredContinuations.removeAll()
-        for continuation in continuations {
-            continuation.resume()
-        }
-
-        guard !released else {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            releaseContinuations.append(continuation)
-        }
-    }
-
-    func waitUntilEntered() async {
-        guard !entered else {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            enteredContinuations.append(continuation)
-        }
-    }
-
-    func waitUntilEntered(timeout: Duration) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !entered, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return entered
-    }
-
-    func release() {
-        released = true
-        let continuations = releaseContinuations
-        releaseContinuations.removeAll()
-        for continuation in continuations {
-            continuation.resume()
-        }
-    }
-
-    func reset() {
-        entered = false
-        released = false
     }
 }
 
