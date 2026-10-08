@@ -336,6 +336,173 @@ final class RemoteTelemetryTests {
     }
 
     @Test
+    func testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals() async {
+        let probe = CloudSpanProbe()
+        let recorder = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: probe, logger: probe)
+        let ids = (0..<200).map { _ in UUID() }
+        for (index, id) in ids.enumerated() {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: id, operation: .synchronize, phase: .started)
+            )
+            #expect(probe.endings.count == max(0, index + 1 - 64))
+        }
+        #expect(probe.endings.map(\.index) == Array(0..<136))
+        #expect(
+            probe.endings.allSatisfy {
+                $0.outcome == .trackingAbandoned(.capacityExceeded)
+            })
+        for id in ids {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: id, operation: .synchronize,
+                    phase: .completed))
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: id, operation: .synchronize,
+                    phase: .completed))
+        }
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: UUID(), operation: .synchronize,
+                phase: .completed))
+        #expect(probe.endings.count == 200)
+        #expect(
+            probe.endings.suffix(64).allSatisfy { $0.outcome == .succeeded })
+        #expect(probe.loggedSpanPresence.count == 601)
+        #expect(probe.loggedSpanPresence[200..<472].allSatisfy { !$0 })
+        #expect(probe.loggedSpanPresence.last == false)
+    }
+
+    @Test
+    func testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder()
+        async
+    {
+        let probe = CloudSpanProbe()
+        let recorder = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: probe, logger: probe)
+        let ids = (0..<64).map { _ in UUID() }
+        for id in ids {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: id, operation: .synchronize, phase: .started)
+            )
+        }
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: ids[0], operation: .synchronize, phase: .started)
+        )
+        #expect(probe.endings.count == 1)
+        #expect(probe.endings[0].index == 0)
+        #expect(probe.endings[0].outcome == .trackingAbandoned(.duplicateStart))
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: UUID(), operation: .synchronize, phase: .started)
+        )
+        #expect(probe.endings[1].index == 1)
+        #expect(
+            probe.endings[1].outcome == .trackingAbandoned(.capacityExceeded))
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: ids[0], operation: .synchronize,
+                phase: .completed))
+        #expect(probe.endings.last?.index == 64)
+        #expect(probe.endings.last?.outcome == .succeeded)
+    }
+
+    @Test
+    func testCloudKitTerminalOutcomesFreeCapacity() async {
+        let probe = CloudSpanProbe()
+        let recorder = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: probe, logger: probe)
+        let ids = (0..<64).map { _ in UUID() }
+        for id in ids {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: id, operation: .synchronize, phase: .started)
+            )
+        }
+        let phases: [PrivateCloudSyncEventPhase] = [
+            .completed,
+            .failed(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: .persistenceFailed)),
+            .failed(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: .cancelled)),
+        ]
+        for (index, phase) in phases.enumerated() {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: ids[index], operation: .synchronize,
+                    phase: phase))
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: UUID(), operation: .synchronize,
+                    phase: .started))
+        }
+        #expect(
+            probe.endings.map(\.outcome) == [
+                .succeeded, .failed(.localStorage), .cancelled,
+            ])
+    }
+
+    @Test
+    func testCloudKitAbandonmentExportsReviewedReasonAndStage() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let exporter = RecordingSpanExporter()
+        let tracer = RemoteTelemetryTracer()
+        let pipeline = try RemoteTelemetryPipeline(
+            resource: try resource(version: "1", build: "1"),
+            storageURL: directory,
+            tracerFacade: tracer, downstreamExporter: exporter)
+        let recorder = RemoteTelemetryPrivateCloudSyncEventRecorder(
+            tracer: tracer, logger: InactiveRemoteTelemetryLogger())
+        let id = UUID()
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: id, operation: .synchronize, phase: .started))
+        await recorder.record(
+            PrivateCloudSyncEvent(
+                correlationID: id, operation: .synchronize, phase: .started))
+        for _ in 0..<64 {
+            await recorder.record(
+                PrivateCloudSyncEvent(
+                    correlationID: UUID(), operation: .synchronize,
+                    phase: .started))
+        }
+        await pipeline.flush(timeout: 2)
+        let spans = exporter.recordedSpans
+        #expect(spans.count == 2)
+        for reason in ["duplicate_start", "capacity_exceeded"] {
+            #expect(
+                spans.filter {
+                    $0.attributes["bleat.telemetry.abandonment_reason"]
+                        == .string(reason)
+                }.count == 1)
+        }
+        for span in spans {
+            #expect(
+                span.attributes["bleat.outcome"]
+                    == .string("tracking_abandoned"))
+            #expect(
+                span.attributes["bleat.telemetry.stage"]
+                    == .string("private_cloud_span_tracking"))
+            #expect(
+                Set(span.attributes.keys) == [
+                    "bleat.subsystem", "bleat.outcome", "bleat.retry.bucket",
+                    "bleat.telemetry.abandonment_reason",
+                    "bleat.telemetry.stage",
+                ])
+        }
+        pipeline.deactivate()
+        pipeline.purge()
+        await pipeline.shutdown()
+    }
+
+    @Test
 
     func testCloudKitLifecycleProducesReviewedLogsAndSpan() async throws {
         let directory = temporaryDirectory()
@@ -1696,5 +1863,43 @@ private final class CancellableBlockingSpanExporter:
 
     func waitUntilFinished(timeout: TimeInterval) -> DispatchTimeoutResult {
         finished.wait(timeout: .now() + timeout)
+    }
+}
+
+private final class CloudSpanProbe: RemoteTelemetryTracing,
+    RemoteTelemetryLogging, @unchecked Sendable
+{
+    struct Ending: Sendable {
+        let index: Int
+        let outcome: RemoteTelemetryOutcome
+    }
+    private let lock = NSLock()
+    private var nextIndex = 0
+    private var recordedEndings: [Ending] = []
+    private var recordedSpanPresence: [Bool] = []
+
+    var endings: [Ending] { lock.withLock { recordedEndings } }
+    var loggedSpanPresence: [Bool] { lock.withLock { recordedSpanPresence } }
+
+    func beginSpan(
+        operation: RemoteTelemetryOperation, source: RemoteTelemetrySource?,
+        retryBucket: RemoteTelemetryRetryBucket
+    ) -> RemoteTelemetrySpan {
+        let index = lock.withLock {
+            let index = nextIndex
+            nextIndex += 1
+            return index
+        }
+        return RemoteTelemetrySpan { [self] outcome in
+            lock.withLock {
+                recordedEndings.append(Ending(index: index, outcome: outcome))
+            }
+        }
+    }
+
+    func recordPrivateCloudEvent(
+        _ event: PrivateCloudSyncEvent, span: RemoteTelemetrySpan?
+    ) {
+        lock.withLock { recordedSpanPresence.append(span != nil) }
     }
 }

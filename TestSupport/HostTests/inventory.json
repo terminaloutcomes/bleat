@@ -434,6 +434,10 @@
     "testMissingProgressAndValidationRemainTyped()"
   ],
   "BleatCoreTests.RemoteTelemetryTests": [
+    "testCloudKitAbandonmentExportsReviewedReasonAndStage()",
+    "testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder()",
+    "testCloudKitTerminalOutcomesFreeCapacity()",
+    "testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals()",
     "testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome()",
     "testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint()",
     "testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes()",
