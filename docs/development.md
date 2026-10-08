@@ -41,6 +41,11 @@ startup and the signed-in library before playback. It checks the result bundle
 for passing app tests and both UI test identifiers.
 It starts the selected Simulator while compiling, then waits for boot readiness
 and installs the built app before starting XCTest on that same Simulator ID.
+The smoke runner initializes and prints the available Simulator inventory, then
+selects the newest installed iOS 26-or-newer iPhone 17 Pro by UDID before querying
+Xcode build settings. This avoids the implicit `OS:latest` requirement of a
+name-only destination. An unavailable device fails before compilation with an
+inventory diagnostic; `BLEAT_SIMULATOR_DESTINATION` remains an explicit override.
 This includes app unit regressions and two launch journeys; the broader UI
 regression suite runs through `scripts/test-core.sh`.
 The startup fixture remains suspended until the UI test taps the launching
