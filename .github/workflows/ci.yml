@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Prepare CI environment file
         run: touch .envrc
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           install: false
       - name: Install zsh
@@ -42,13 +42,13 @@ jobs:
           "$RUNNER_TEMP/bleat-ci-cache-keys" ios
       - name: Restore iOS Swift packages
         id: swift-packages
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build/ci-smoke/derived/SourcePackages
           key: ${{ steps.cache-keys.outputs.dependencies }}
       - name: Restore iOS build outputs from main
         id: build-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .build/ci-smoke/derived/Build
@@ -56,7 +56,7 @@ jobs:
           key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
           restore-keys: |
             ${{ steps.cache-keys.outputs.build }}-
-      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # 14594264cd68ce8a2345dd349bc3d138a4ef85c8
         with:
           ruby-version: "3.4"
           bundler-cache: true
@@ -74,13 +74,13 @@ jobs:
             report.xpath("//source").each { |source| source.content = "." }
             File.write(path, report.to_xml)
           '
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: swift-coverage
           path: .build/coverage/swift/cobertura.xml
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: ios-smoke-results
@@ -89,13 +89,13 @@ jobs:
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build/ci-smoke/derived/SourcePackages
           key: ${{ steps.cache-keys.outputs.dependencies }}
       - name: Refresh iOS build outputs from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .build/ci-smoke/derived/Build
@@ -123,7 +123,7 @@ jobs:
           "$RUNNER_TEMP/bleat-ci-cache-keys" host
       - name: Restore host Swift packages
         id: swift-packages
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .build/repositories
@@ -136,13 +136,13 @@ jobs:
         env:
           BLEAT_HOST_SIGNING: unsigned
         run: zsh scripts/test-host.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: swift-host-coverage
           path: .build/coverage/swift-host/lcov.info
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: swift-host-results
@@ -151,7 +151,7 @@ jobs:
           retention-days: 7
       - name: Seed host Swift packages from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .build/repositories
@@ -166,7 +166,7 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
       - name: Prepare CI environment file
@@ -175,8 +175,8 @@ jobs:
         with:
           components: rustfmt,clippy
           rust-src-dir: bleat-api/
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install zsh for coverage scripts
         run: sudo apt-get install -y zsh
       - name: Rust validation and checking
@@ -184,7 +184,7 @@ jobs:
       - name: Full Rust coverage including container integration tests
         run: |
           ./scripts/coverage-bleat-api.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: rust-coverage
           path: .build/coverage/bleat-api/lcov.info
@@ -209,14 +209,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: "*-coverage"
           path: coverage
       - name: Publish Swift smoke coverage
         id: swift
         continue-on-error: true
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # 8d6379e14d29928660c4ba802d8e85393440b329
         with:
           github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           file: coverage/swift-coverage/cobertura.xml
@@ -225,7 +225,7 @@ jobs:
       - name: Publish Swift host coverage
         id: host
         continue-on-error: true
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # 8d6379e14d29928660c4ba802d8e85393440b329
         with:
           github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           file: coverage/swift-host-coverage/lcov.info
@@ -234,7 +234,7 @@ jobs:
       - name: Publish full Rust coverage
         id: rust
         continue-on-error: true
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # 8d6379e14d29928660c4ba802d8e85393440b329
         with:
           github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           file: coverage/rust-coverage/lcov.info
@@ -243,7 +243,7 @@ jobs:
       - name: Finish combined coverage report
         id: finish
         continue-on-error: true
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # 8d6379e14d29928660c4ba802d8e85393440b329
         with:
           github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           parallel-finished: true
