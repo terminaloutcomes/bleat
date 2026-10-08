@@ -138,6 +138,26 @@ async fn main() -> Result<ExitCode, ExitCode> {
         Commands::AppStatus(statusargs) => {
             appstatus(statusargs, &cli_opts).await?;
         }
+        Commands::BuildStatus(arguments) => {
+            let status = scripts::appstore_builds::build_status(&arguments, &cli_opts)
+                .await
+                .map_err(|error| {
+                    eprintln!("build_status/{}: {error}", error.code());
+                    ExitCode::FAILURE
+                })?;
+            let output = serde_json::to_string(&status).map_err(|_| {
+                eprintln!("build_status/output_serialization: could not serialize build status");
+                ExitCode::FAILURE
+            })?;
+            println!("{output}");
+            if matches!(
+                status.processing_state,
+                scripts::appstore_builds::ProcessingState::Failed
+                    | scripts::appstore_builds::ProcessingState::Invalid
+            ) {
+                return Ok(ExitCode::FAILURE);
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }

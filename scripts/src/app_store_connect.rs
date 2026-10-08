@@ -790,6 +790,7 @@ pub enum Commands {
     UpdateSpec(UpdateArgs),
     UpdateCodegen,
     AppStatus(StatusArgs),
+    BuildStatus(crate::appstore_builds::BuildStatusArgs),
     CreateReport,
     OneTimeSnapshot {
         #[clap(long, env = "APPSTORE_CONNECT_DOWNLOAD_DIR", hide_env_values = true)]

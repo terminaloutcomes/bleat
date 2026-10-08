@@ -432,6 +432,20 @@ external TestFlight groups or an App Store version. A successful upload is
 delivery evidence only; processing and App Store review submission are
 separate gates.
 
+Check processing for an exact iOS version and build with the Rust App Store CLI:
+
+```sh
+mise run appstore:connect-admin build-status --version 2026.10.08 --build 20261008.0909.41
+```
+
+The command uses `APPSTORE_CONNECT_APP_ID` and the task's Keychain credentials.
+Its JSON output distinguishes `not_found`, `processing`, `valid`, `failed`, and
+`invalid`. Failed or invalid builds exit unsuccessfully; missing or malformed
+metadata and request failures remain separate typed errors. A valid build has
+finished processing, but has not been submitted for review or distributed.
+Build components are matched numerically: Apple's `20261008.909.41` identifies
+the archive's `20261008.0909.41`. Marketing versions retain their exact spelling.
+
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:
 
