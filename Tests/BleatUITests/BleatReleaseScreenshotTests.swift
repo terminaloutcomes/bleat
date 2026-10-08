@@ -232,8 +232,15 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let miniPlayer = app.buttons["player.mini.open"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 45))
         XCTAssertTrue(miniPlayer.isHittable)
+        let playbackReady = expectation(
+            for: NSPredicate(format: "label == %@", "Pause"),
+            evaluatedWith: app.buttons["player.mini.toggle"]
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackReady], timeout: 45), .completed)
+        waitForLoadingIndicatorsToDisappear(in: app)
         attachScreenshot(named: "05-mini-player.png")
-        miniPlayer.tap()
+        miniPlayer.swipeUp(velocity: .fast)
         XCTAssertTrue(
             app.otherElements["player.screen"].waitForExistence(timeout: 20)
         )
