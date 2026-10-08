@@ -2212,6 +2212,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(modes.waitForExistence(timeout: 5))
         XCTAssertTrue(status.isHittable)
         XCTAssertTrue(modes.isHittable)
+        XCTAssertLessThan(
+            modes.frame.midX, app.buttons["library.sort"].frame.midX)
         for (label, id) in [
             ("By Author", "author-1"), ("By Series", "series-1"),
             ("By Collections", "collection-1"), ("By Narrators", "narrator-1"),
@@ -2232,8 +2234,20 @@ final class BleatUITests: XCTestCase {
         status.tap()
         app.collectionViews.buttons["All Books"].tap()
         XCTAssertTrue(
-            app.staticTexts["The Test Audiobook"].waitForExistence(timeout: 5))
-        XCTAssertEqual(modes.label, "By Title")
+            app.buttons["library.category.narrator-1"].waitForExistence(
+                timeout: 5))
+        XCTAssertEqual(modes.label, "By Narrators")
+        status.tap()
+        app.collectionViews.buttons["Not Finished"].tap()
+        XCTAssertEqual(modes.label, "By Narrators")
+        app.buttons["library.category.narrator-1"].tap()
+        XCTAssertTrue(
+            app.buttons["library.activeFilter.clear"].waitForExistence(
+                timeout: 5))
+        status.tap()
+        app.collectionViews.buttons["All Books"].tap()
+        XCTAssertEqual(modes.label, "By Narrators")
+        XCTAssertTrue(app.buttons["library.activeFilter.clear"].exists)
     }
 
     @MainActor

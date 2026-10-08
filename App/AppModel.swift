@@ -1560,11 +1560,14 @@ final class AppModel {
     #endif
     private(set) var librarySort: LibraryItemSort = .title
     private(set) var librarySortDescending = false
+    private(set) var libraryProgressFilter: LibraryProgressFilter?
     private(set) var libraryBrowseMode: LibraryBrowseMode = .title
     private(set) var libraryCategories: ResourceState<[LibraryCategory]> = .idle
+    private(set) var libraryCategoriesRefreshState: ResourceRefreshState = .idle
     private(set) var selectedLibraryCategory: LibraryCategory?
     var showsLibraryCategories: Bool {
-        libraryBrowseMode != .title && selectedLibraryCategory == nil
+        selectedLibrary != nil && libraryBrowseMode != .title
+            && selectedLibraryCategory == nil
     }
     private var libraryCategoriesGeneration: UInt64 = 0
     private(set) var libraryBrowseFilter: LibraryBrowseFilter = .all
@@ -2928,6 +2931,14 @@ final class AppModel {
                 return failure.remoteTelemetryOutcome
             }
         }
+        if showsLibraryCategories {
+            if case .failed(let failure) = libraryCategoriesRefreshState {
+                return failure.remoteTelemetryOutcome
+            }
+            if case .failed(let failure) = libraryCategories {
+                return failure.remoteTelemetryOutcome
+            }
+        }
         if case .failed(let failure) = booksRefreshState {
             return failure.remoteTelemetryOutcome
         }
@@ -2969,7 +2980,10 @@ final class AppModel {
         libraryCategoriesGeneration &+= 1
         libraryBrowseMode = mode
         selectedLibraryCategory = nil
-        libraryBrowseFilter = .all
+        libraryBrowseFilter =
+            mode == .title
+            ? libraryProgressFilter.map(LibraryBrowseFilter.progress) ?? .all
+            : .all
         await reloadBooks()
     }
 
@@ -3004,13 +3018,20 @@ final class AppModel {
         await reloadBooks()
     }
 
-    func reloadLibraryCategories() async {
+    func reloadLibraryCategories(preservingLoadedContent: Bool = false) async {
         libraryCategoriesGeneration &+= 1
         let generation = libraryCategoriesGeneration
         guard let account, let library = selectedLibrary,
             let kind = libraryBrowseMode.categoryKind
         else { return }
-        libraryCategories = .loading
+        let retainsLoadedContent: Bool
+        if preservingLoadedContent, case .loaded = libraryCategories {
+            retainsLoadedContent = true
+        } else {
+            retainsLoadedContent = false
+            libraryCategories = .loading
+            libraryCategoriesRefreshState = .idle
+        }
         await diagnostics.record(
             .started(.loadLibraryCategories, category: .api))
         do {
@@ -3028,6 +3049,7 @@ final class AppModel {
                         ? $0.id.rawValue < $1.id.rawValue
                         : comparison == .orderedAscending
                 })
+            libraryCategoriesRefreshState = .idle
             await diagnostics.record(
                 .completed(
                     .loadLibraryCategories, category: .api,
@@ -3040,7 +3062,12 @@ final class AppModel {
             else { return }
             let failure = AppFailure(
                 operation: .loadLibraryCategories, serviceError: error)
-            libraryCategories = .failed(failure)
+            if retainsLoadedContent {
+                libraryCategoriesRefreshState = .failed(failure)
+            } else {
+                libraryCategories = .failed(failure)
+                libraryCategoriesRefreshState = .idle
+            }
             await diagnostics.record(
                 .failed(
                     .loadLibraryCategories, category: .api,
@@ -3051,12 +3078,22 @@ final class AppModel {
     func setLibraryProgressFilter(
         _ filter: LibraryProgressFilter?
     ) async {
-        await setLibraryBrowseFilter(
-            filter.map(LibraryBrowseFilter.progress) ?? .all)
+        libraryProgressFilter = filter
+        if libraryBrowseMode != .title || libraryBrowseFilter.isEntityScoped {
+            await reloadBooks()
+        } else {
+            await setLibraryBrowseFilter(
+                filter.map(LibraryBrowseFilter.progress) ?? .all)
+        }
     }
 
     func setLibraryBrowseFilter(_ filter: LibraryBrowseFilter) async {
         let wasOverview = showsLibraryCategories
+        switch filter {
+        case .progress(let progress): libraryProgressFilter = progress
+        case .all: libraryProgressFilter = nil
+        default: break
+        }
         libraryBrowseMode = .title
         selectedLibraryCategory = nil
         libraryCategoriesGeneration &+= 1
@@ -3076,7 +3113,8 @@ final class AppModel {
             books = .idle
             booksRefreshState = .idle
             libraryPaginationState = .idle
-            await reloadLibraryCategories()
+            await reloadLibraryCategories(
+                preservingLoadedContent: preservingLoadedContent)
             return
         }
         guard let account, let library = selectedLibrary else {
@@ -3102,12 +3140,14 @@ final class AppModel {
             libraryPaginationState = .idle
         }
         let filter = libraryBrowseFilter
+        let progressFilter = libraryProgressFilter
         await diagnostics.record(
             .started(.loadLibraryPage, category: .api)
         )
 
         do throws(AppServiceError) {
-            let page: LibraryItemsPage
+            var page: LibraryItemsPage
+            var refreshedCollection: LibraryCategory?
             if case .collection(let category) = filter {
                 let current: LibraryCategory
                 if preservingLoadedContent {
@@ -3122,11 +3162,16 @@ final class AppModel {
                             .remote(.unexpectedStatus(404)))
                     }
                     current = refreshed
+                    refreshedCollection = refreshed
                 } else {
                     current = category
                 }
                 page = current.page(
                     sort: librarySort, descending: librarySortDescending)
+            } else if filter.isEntityScoped, progressFilter != nil {
+                page = try await completeEntityPage(
+                    for: account, library: library, filter: filter,
+                    refreshing: preservingLoadedContent)
             } else if let retainedPage {
                 page = try await refreshedLibraryItemsPage(
                     for: account,
@@ -3155,13 +3200,44 @@ final class AppModel {
                     )
                 }
             }
+            if filter.isEntityScoped, let progressFilter {
+                let progress = try await service.allBookProgress(for: account)
+                var snapshots: [LibraryItemID: LibraryBookProgress] = [:]
+                for value in progress {
+                    guard
+                        snapshots.updateValue(
+                            value, forKey: value.libraryItemID) == nil
+                    else {
+                        throw AppServiceError.libraryRepository(
+                            .remote(.invalidLibraryItem))
+                    }
+                }
+                let items = page.items.filter {
+                    progressMatches(progressFilter, progress: snapshots[$0.id])
+                }
+                page = LibraryItemsPage(
+                    items: items, total: items.count, page: 0,
+                    limit: max(1, items.count))
+            }
             guard !Task.isCancelled,
                 operationGeneration == libraryPageGeneration,
                 self.account?.id == account.id,
                 selectedLibrary?.id == library.id,
-                libraryBrowseFilter == filter
+                libraryBrowseFilter == filter,
+                libraryProgressFilter == progressFilter
             else {
                 return
+            }
+            if let refreshedCollection {
+                selectedLibraryCategory = refreshedCollection
+                libraryBrowseFilter = .collection(refreshedCollection)
+                if case .loaded(let categories) = libraryCategories {
+                    libraryCategories = .loaded(
+                        categories.map {
+                            $0.id == refreshedCollection.id
+                                ? refreshedCollection : $0
+                        })
+                }
             }
             let loadedState = ResourceState.loaded(page)
             if books != loadedState {
@@ -6718,11 +6794,15 @@ final class AppModel {
     private func clearEntityBrowseFilter() {
         libraryCategoriesGeneration &+= 1
         libraryCategories = .idle
+        libraryCategoriesRefreshState = .idle
         selectedLibraryCategory = nil
         guard libraryBrowseFilter.isEntityScoped else {
             return
         }
-        libraryBrowseFilter = .all
+        libraryBrowseFilter =
+            libraryBrowseMode == .title
+            ? libraryProgressFilter.map(LibraryBrowseFilter.progress) ?? .all
+            : .all
     }
 
     func setLiveUpdatesActive(_ active: Bool) {
@@ -7018,7 +7098,7 @@ final class AppModel {
         } else {
             removeFromContinueListening(event.itemID)
         }
-        if case .progress(let filter) = libraryBrowseFilter,
+        if let filter = libraryProgressFilter,
             progressMatches(filter, progress: previous)
                 != progressMatches(filter, progress: progress)
         {
@@ -7049,7 +7129,7 @@ final class AppModel {
                     selectedLibrary?.id == libraryID,
                     !playback.isPrepared(accountID: account.id, itemID: itemID)
                 else { continue }
-                if case .progress(let filter) = libraryBrowseFilter {
+                if let filter = libraryProgressFilter {
                     filteredPageChanged =
                         filteredPageChanged
                         || progressMatches(
@@ -7234,6 +7314,45 @@ final class AppModel {
         }
     }
 
+    private func completeEntityPage(
+        for account: ServerAccount, library: LibrarySummary,
+        filter: LibraryBrowseFilter, refreshing: Bool
+    ) async throws(AppServiceError) -> LibraryItemsPage {
+        var items: [LibraryBookSummary] = []
+        var ids: Set<LibraryItemID> = []
+        var number = 0
+        var total: Int?
+        while true {
+            guard !Task.isCancelled else {
+                throw .libraryRepository(.cancelled)
+            }
+            let request = try makeLibraryItemsPageRequest(
+                page: number, limit: 100, sort: librarySort,
+                descending: librarySortDescending, filter: filter.itemFilter,
+                collapseSeries: false)
+            let page: LibraryItemsPage
+            if refreshing {
+                page = try await service.refreshedPage(
+                    for: account, libraryID: library.id, request: request)
+            } else {
+                page = try await service.page(
+                    for: account, libraryID: library.id, request: request)
+            }
+            guard page.page == number, page.limit > 0,
+                total == nil || total == page.total,
+                page.items.allSatisfy({ ids.insert($0.id).inserted }),
+                !page.hasNextPage || !page.items.isEmpty
+            else { throw .libraryRepository(.remote(.invalidPage)) }
+            total = page.total
+            items.append(contentsOf: page.items)
+            if !page.hasNextPage { break }
+            number += 1
+        }
+        return LibraryItemsPage(
+            items: items, total: items.count, page: 0,
+            limit: max(1, items.count))
+    }
+
     private func refreshedLibraryItemsPage(
         for account: ServerAccount,
         library: LibrarySummary,
@@ -7392,6 +7511,8 @@ final class AppModel {
         bookProgressSnapshots = [:]
         clearEntityBrowseFilter()
         libraryBrowseMode = .title
+        libraryProgressFilter = nil
+        libraryBrowseFilter = .all
         resetSearch()
         resetBookDetail()
         resetSeriesBrowse()

@@ -15,6 +15,20 @@ struct LibraryCategoryContent: View {
                 Button("Retry") { Task { await model.reloadBooks() } }
                     .accessibilityIdentifier("library.categories.retry")
             case .loaded(let categories):
+                if case .failed(let failure) = model
+                    .libraryCategoriesRefreshState
+                {
+                    RefreshFailureBanner(
+                        failure: failure,
+                        accessibilityIdentifier:
+                            "library.categories.refreshFailure"
+                    ) {
+                        Task {
+                            await model.reloadBooks(
+                                preservingLoadedContent: true)
+                        }
+                    }
+                }
                 if categories.isEmpty {
                     ContentUnavailableView(
                         "No categories", systemImage: "books.vertical")
@@ -27,18 +41,21 @@ struct LibraryCategoryContent: View {
                             Text(category.name).foregroundStyle(.primary)
                             Spacer()
                             Text("\(category.bookCount) books").foregroundStyle(
-                                .secondary)
+                                .primary)
                             Image(systemName: "chevron.right").foregroundStyle(
                                 .secondary)
                         }
                         .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
                     .accessibilityIdentifier("library.category.\(category.id)")
                     .accessibilityLabel(
                         "\(category.name), \(category.bookCount) books")
                 }
             }
         }
-        .refreshable { await model.reloadBooks() }
+        .refreshable { await model.reloadBooks(preservingLoadedContent: true) }
     }
 }

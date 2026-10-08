@@ -3025,8 +3025,8 @@ private struct LibraryView: View {
     }
 
     private var statusLabel: String {
-        if case .progress = model.libraryBrowseFilter {
-            return model.libraryBrowseFilter.label
+        if let filter = model.libraryProgressFilter {
+            return LibraryBrowseFilter.progress(filter).label
         }
         return "All Books"
     }
@@ -3062,7 +3062,7 @@ private struct LibraryView: View {
                     await model.setLibraryProgressFilter(nil)
                 }
             } label: {
-                if model.libraryBrowseFilter == .all {
+                if model.libraryProgressFilter == nil {
                     Label("All Books", systemImage: "checkmark")
                 } else {
                     Text("All Books")
@@ -3078,9 +3078,7 @@ private struct LibraryView: View {
                         )
                     }
                 } label: {
-                    if model.libraryBrowseFilter
-                        == .progress(filter)
-                    {
+                    if model.libraryProgressFilter == filter {
                         Label(
                             filter.label,
                             systemImage: "checkmark"
@@ -3131,6 +3129,25 @@ private struct LibraryView: View {
                     .padding(.top, 4)
                 }
                 HStack {
+                    Menu {
+                        ForEach(LibraryBrowseMode.allCases, id: \.self) {
+                            mode in
+                            Button {
+                                Task { await model.setLibraryBrowseMode(mode) }
+                            } label: {
+                                if model.libraryBrowseMode == mode {
+                                    Label(mode.label, systemImage: "checkmark")
+                                } else {
+                                    Text(mode.label)
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(model.libraryBrowseMode.label)
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("library.browseMode")
+                    Spacer()
                     Menu {
                         ForEach(
                             [
@@ -3187,26 +3204,6 @@ private struct LibraryView: View {
                     )
                     .accessibilityIdentifier("library.sortDirection")
 
-                    Spacer()
-
-                    Menu {
-                        ForEach(LibraryBrowseMode.allCases, id: \.self) {
-                            mode in
-                            Button {
-                                Task { await model.setLibraryBrowseMode(mode) }
-                            } label: {
-                                if model.libraryBrowseMode == mode {
-                                    Label(mode.label, systemImage: "checkmark")
-                                } else {
-                                    Text(mode.label)
-                                }
-                            }
-                        }
-                    } label: {
-                        Text(model.libraryBrowseMode.label)
-                            .frame(minHeight: 44)
-                    }
-                    .accessibilityIdentifier("library.browseMode")
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
@@ -3494,7 +3491,7 @@ private struct BookListContent: View {
     }
 }
 
-private struct RefreshFailureBanner: View {
+struct RefreshFailureBanner: View {
     let failure: AppFailure
     let accessibilityIdentifier: String
     let retry: () -> Void
