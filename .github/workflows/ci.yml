@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Prepare CI environment file
         run: touch .envrc
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           install: false
       - name: Install zsh
@@ -42,13 +42,13 @@ jobs:
           "$RUNNER_TEMP/bleat-ci-cache-keys" ios
       - name: Restore iOS Swift packages
         id: swift-packages
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build/ci-smoke/derived/SourcePackages
           key: ${{ steps.cache-keys.outputs.dependencies }}
       - name: Restore iOS build outputs from main
         id: build-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/ci-smoke/derived/Build
@@ -89,13 +89,13 @@ jobs:
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build/ci-smoke/derived/SourcePackages
           key: ${{ steps.cache-keys.outputs.dependencies }}
       - name: Refresh iOS build outputs from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/ci-smoke/derived/Build
@@ -123,7 +123,7 @@ jobs:
           "$RUNNER_TEMP/bleat-ci-cache-keys" host
       - name: Restore host Swift packages
         id: swift-packages
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/repositories
@@ -151,7 +151,7 @@ jobs:
           retention-days: 7
       - name: Seed host Swift packages from successful main validation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.swift-packages.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/repositories
@@ -175,7 +175,7 @@ jobs:
         with:
           components: rustfmt,clippy
           rust-src-dir: bleat-api/
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # c2a87611a18de5b3828c5652fe268e992400cb5c
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install zsh for coverage scripts
         run: sudo apt-get install -y zsh
