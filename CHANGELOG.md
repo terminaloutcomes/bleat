@@ -8,7 +8,7 @@
 - “View on server” action for books.
 - Pull-to-refresh on book details.
 - Remaining sleep-timer display.
-- Tools for repairing historical listening-session totals and collecting App Store analytics reports.
+- Tools for repairing historical listening-session totals, collecting App Store analytics reports, and checking build processing.
 
 ### Improved
 
