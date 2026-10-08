@@ -71,8 +71,30 @@ uploaded to Coveralls.
 
 Swift smoke, Swift host, and Rust coverage artifacts are sent together to Coveralls using the
 `COVERALLS_REPO_TOKEN` repository secret. Fork pull requests still generate
-reports but do not upload them to Coveralls. Upload failures are warnings, not
+reports but do not upload them to Coveralls. Coveralls upload failures are warnings, not
 test failures. No custom job timeout is imposed; GitHub's runner limits apply.
+
+CI artifact uploads use `.github/actions/upload-artifact`, which retains the
+official uploader pinned at v7.0.1 and allows three total attempts with 5- and
+15-second backoff, within a 15-minute timeout per invocation. The pinned
+[`@actions/artifact` transport](https://github.com/actions/toolkit/blob/6fe3c0f3e61b5f34b85f28067d82e7e3ffcb312f/packages/artifact/src/internal/shared/artifact-twirp-client.ts#L105-L106)
+already retries selected HTTP 429/5xx responses but immediately throws for
+recognized network errors, including `ENOTFOUND`. Its own retry limits remain
+in effect inside each attempt. The action exposes success/failure without typed
+error outputs, so the wrapper retries upload failures generally; it does not
+classify logs. Missing required coverage files fail before uploading. Optional
+diagnostic inputs retain the upstream glob/directory and warn-on-missing policy.
+
+Attempts two and three use the upstream `overwrite` option to replace partial
+or ambiguously completed uploads under the same canonical name. Each producer
+must exclusively own its artifact name in the workflow run; replacement changes
+the artifact ID, and outputs come from the completed attempt. An existing
+artifact or a persistent name conflict never counts as success. Exhaustion
+fails the producer job and keeps the downstream coverage dependency gate.
+Diagnostic uploads still run after failed tests; uploading diagnostics cannot
+make those tests pass. Cancellation stops retries. Test the retry policy and
+workflow contracts with `mise exec -- cargo test --locked --package scripts
+--test ci_artifact_retry`.
 
 The manual `Full Apple validation` workflow retains host tests, iPhone and iPad
 regression suites, accessibility checks, and unsigned archive validation.
