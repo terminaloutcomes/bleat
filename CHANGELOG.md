@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026.10.08 - 2026-10-08
+
+### Added
+
+- Library browsing by author, series, collection, and narrator.
+- “View on server” action for books.
+- Pull-to-refresh on book details.
+- Remaining sleep-timer display.
+- Tools for repairing historical listening-session totals and collecting App Store analytics reports.
+
+### Improved
+
+- Listening statistics update directly when records change.
+- Library status filters preserve the selected category and browse mode.
+- Playback controls and download actions are clearer and more consistent.
+- Improved compatibility with Audiobookshelf 2.26.0 and 2.37.0.
+- Reduced diagnostic memory use and improved diagnostic authentication.
+
+### Fixed
+
+- Playback losing its position when resuming streamed or cached audio.
+- Failed playback becoming inaccessible; retry and cancel remain available.
+- Playback controls remaining open after a book finishes.
+- Offline synchronization overwriting cumulative listening-session totals.
+- Automatic cache cleanup losing completion deadlines across restarts.
+- iCloud account selection getting stuck after synchronization failures.
+- Bookmark save failures disappearing without feedback.
+- Book refreshes overriding bookmark changes and edits.
+- Download alerts appearing in the wrong context and transfers continuing during account removal.
+- Stale CarPlay updates after reconnecting.
+
 ## 2026.09.23 - 2026-09-23
 
 ### Added
