@@ -263,3 +263,18 @@ Production verification must independently prove both receiver paths:
   `service.name=bleat` logs or spans in ClickHouse and HyperDX;
 - Collector refusal, export-failure, and queue metrics remain healthy;
 - the unauthenticated API receiver is absent from every public route.
+
+### Private-cloud span tracking
+
+The private-cloud telemetry recorder retains at most 64 started spans in actor
+processing order. A new distinct start at capacity ends the oldest span; a
+duplicate correlation ID ends its previous span and inserts the replacement as
+newest. Terminal events remove tracked spans and remain logged even when the
+span is unknown or already evicted. Tracking abandonment does not cancel or
+time out CloudKit work.
+
+Abandoned spans encode `bleat.outcome=tracking_abandoned`,
+`bleat.telemetry.stage=private_cloud_span_tracking`, and the closed reason
+allowlist `bleat.telemetry.abandonment_reason=capacity_exceeded|duplicate_start`.
+These attributes contain no correlation IDs or user data and do not invent a
+CloudKit failure category.

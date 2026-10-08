@@ -321,6 +321,9 @@ public struct PrivateCloudSyncEvent: Equatable, Sendable {
     }
 }
 
+/// Pair each started correlation ID with a completed or failed event.
+/// Remote telemetry bounds unmatched tracking to 64 spans, ending the oldest
+/// on overflow. This does not time out or cancel the underlying CloudKit work.
 public protocol PrivateCloudSyncEventRecording: Sendable {
     func record(_ event: PrivateCloudSyncEvent) async
 }

@@ -347,6 +347,8 @@ public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
     private let tracer: any RemoteTelemetryTracing
     private let logger: any RemoteTelemetryLogging
     private var spans: [UUID: RemoteTelemetrySpan] = [:]
+    private var insertionOrder: [UUID] = []
+    private let maximumTrackedSpans = 64
 
     public init(
         tracer: any RemoteTelemetryTracing,
@@ -359,23 +361,38 @@ public actor RemoteTelemetryPrivateCloudSyncEventRecorder:
     public func record(_ event: PrivateCloudSyncEvent) {
         switch event.phase {
         case .started:
+            if let previous = removeSpan(for: event.correlationID) {
+                previous.end(.trackingAbandoned(.duplicateStart))
+            } else if insertionOrder.count >= maximumTrackedSpans,
+                let oldest = insertionOrder.first
+            {
+                removeSpan(for: oldest)?.end(
+                    .trackingAbandoned(.capacityExceeded))
+            }
             let span = tracer.beginSpan(
                 operation: .privateCloudSync
             )
             spans[event.correlationID] = span
+            insertionOrder.append(event.correlationID)
             logger.recordPrivateCloudEvent(event, span: span)
         case .completed:
-            let span = spans.removeValue(forKey: event.correlationID)
+            let span = removeSpan(for: event.correlationID)
             logger.recordPrivateCloudEvent(event, span: span)
             span?.end(.succeeded)
         case .failed(let failure):
-            let span = spans.removeValue(forKey: event.correlationID)
+            let span = removeSpan(for: event.correlationID)
             logger.recordPrivateCloudEvent(event, span: span)
             span?.end(
                 failure.remoteTelemetryOutcome
             )
         }
     }
+
+    private func removeSpan(for id: UUID) -> RemoteTelemetrySpan? {
+        insertionOrder.removeAll { $0 == id }
+        return spans.removeValue(forKey: id)
+    }
+
 }
 
 extension PrivateCloudSyncFailure {
@@ -457,6 +474,15 @@ public enum RemoteTelemetryOutcome: Equatable, Sendable {
     case cancelled
     case failed(RemoteTelemetryFailureCategory)
     case liveUpdateFailed(RemoteTelemetryLiveUpdateFailure)
+    case trackingAbandoned(RemoteTelemetryTrackingAbandonmentReason)
+}
+
+/// Local tracking ended; the underlying synchronization operation continues.
+public enum RemoteTelemetryTrackingAbandonmentReason: String, Equatable,
+    Sendable
+{
+    case capacityExceeded = "capacity_exceeded"
+    case duplicateStart = "duplicate_start"
 }
 
 public struct RemoteTelemetryLiveUpdateFailure: Equatable, Sendable {
@@ -615,6 +641,9 @@ public struct RemoteTelemetrySpanDescriptor: Equatable, Sendable {
             attributes["bleat.live_update.failure_code"] =
                 failure.code.rawValue
             attributes["bleat.live_update.stage"] = failure.stage.rawValue
+        case .trackingAbandoned(let reason):
+            attributes["bleat.telemetry.abandonment_reason"] = reason.rawValue
+            attributes["bleat.telemetry.stage"] = "private_cloud_span_tracking"
         case .succeeded, .cancelled:
             break
         }
@@ -654,6 +683,8 @@ extension RemoteTelemetryOutcome {
             "cancelled"
         case .failed, .liveUpdateFailed:
             "failed"
+        case .trackingAbandoned:
+            "tracking_abandoned"
         }
     }
 }
