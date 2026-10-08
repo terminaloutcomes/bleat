@@ -469,6 +469,12 @@ before treating it as installable.
 
 ## Release screenshots
 
+The harness builds the app and test targets in Release. CarPlay observation
+regressions that use Debug-only counters run in Debug app tests; their tests
+and helper share the counters' `#if DEBUG` condition so Release test builds
+remain valid. The live screenshot journey waits for active playback before
+capturing the mini-player and uses its upward swipe to open Now Playing.
+
 The release screenshot journey can optionally record the Simulator screen for
 local inspection:
 
