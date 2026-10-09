@@ -489,6 +489,102 @@ final class AudiobookshelfAPITests {
         }
     }
 
+    @Test(
+        arguments: ["", "/audiobookshelf"],
+        [
+            nil, "", "Single line", "First\r\nSecond", "First\nSecond",
+            "First\rSecond", "First\tSecond",
+        ] as [String?]
+    )
+    func bookDetailPreservesSynopsisWhitespace(
+        prefix: String, description: String?
+    ) async throws {
+        let data = try Self.bookDetailJSON(
+            metadataField: "descriptionPlain", value: description)
+        let fixture = try APIFixture(
+            responses: [HTTPResponse(data: data, statusCode: 200)],
+            serverAddress: "https://example.com\(prefix)"
+        )
+        let detail = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        ).value
+        #expect(
+            detail.descriptionPlain
+                == (description?.isEmpty == true ? nil : description))
+        let request = try #require(
+            await fixture.transport.recordedRequests().first)
+        #expect(request.url?.path == "\(prefix)/api/items/item")
+    }
+
+    @Test(arguments: ["", "/audiobookshelf"])
+    func bookDetailAcceptsObservedMultilineSynopsis(prefix: String) async throws
+    {
+        let url = try #require(
+            Bundle.module.url(
+                forResource: "multiline-book-detail-2.37.1",
+                withExtension: "json")
+        )
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(data: try Data(contentsOf: url), statusCode: 200)
+            ],
+            serverAddress: "https://example.com\(prefix)"
+        )
+        let detail = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        ).value
+        #expect(
+            detail.descriptionPlain
+                == String(repeating: "Redacted paragraph.\r\n", count: 30))
+        #expect(detail.progress == nil)
+        #expect(detail.trackCount == 32)
+        #expect(detail.chapters.count == 32)
+    }
+
+    @Test(arguments: [
+        "\u{0}", "\u{7}", "\u{B}", "\u{C}", "\u{1B}", "\u{7F}", "\u{85}",
+        "\u{202E}",
+    ])
+    func bookDetailRejectsInappropriateSynopsisControls(control: String)
+        async throws
+    {
+        let fixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try Self.bookDetailJSON(
+                    metadataField: "descriptionPlain",
+                    value: "First\(control)Second"),
+                statusCode: 200
+            )
+        ])
+        await #expect(throws: AudiobookshelfAPIError.invalidBookDetail) {
+            try await fixture.api.bookDetail(
+                for: LibraryItemID(rawValue: "item"),
+                in: LibraryID(rawValue: "library")
+            )
+        }
+    }
+
+    @Test(arguments: ["title", "subtitle", "publisher"], ["\r", "\n", "\t"])
+    func bookDetailStillRejectsWhitespaceControlsInOtherMetadata(
+        field: String, control: String
+    ) async throws {
+        let fixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try Self.bookDetailJSON(
+                    metadataField: field, value: "First\(control)Second"),
+                statusCode: 200
+            )
+        ])
+        await #expect(throws: AudiobookshelfAPIError.invalidBookDetail) {
+            try await fixture.api.bookDetail(
+                for: LibraryItemID(rawValue: "item"),
+                in: LibraryID(rawValue: "library")
+            )
+        }
+    }
+
     @Test
     func testHomeRequestValidationAndExactQueryContract() throws {
         for limit in [0, 101] {
@@ -1561,6 +1657,21 @@ final class AudiobookshelfAPITests {
           }
         }
         """
+    }
+
+    private static func bookDetailJSON(metadataField: String, value: String?)
+        throws -> Data
+    {
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: expandedBookDetailJSON())
+                as? [String: Any]
+        )
+        var media = try #require(payload["media"] as? [String: Any])
+        var metadata = try #require(media["metadata"] as? [String: Any])
+        metadata[metadataField] = value.map { $0 as Any } ?? NSNull()
+        media["metadata"] = metadata
+        payload["media"] = media
+        return try JSONSerialization.data(withJSONObject: payload)
     }
 
     private static func expandedBookDetailJSON() -> Data {

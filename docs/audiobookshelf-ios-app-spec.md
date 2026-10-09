@@ -840,6 +840,12 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
 - Do not preload expanded details for every item.
 - Cache cover thumbnails separately from original cover images.
 
+Expanded detail preserves ordinary multiline synopsis whitespace in
+`media.metadata.descriptionPlain`, including CR/LF, LF, CR, and tabs, through
+API decoding and account-scoped cache persistence. Audiobookshelf strips HTML
+tags without removing that whitespace. Synopsis validation rejects other
+control characters; single-line metadata retains its stricter validation.
+
 ### 8.2 Metadata editor
 
 The editor supports, when returned/supported by the server:

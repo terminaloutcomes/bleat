@@ -974,6 +974,30 @@ final class LibraryCacheTests {
     }
 
     @Test
+    func bookDetailCachePreservesMultilineSynopsisAfterRelaunch() async throws {
+        let fixture = try LibraryCacheFixture()
+        let libraryID = LibraryID(rawValue: "library")
+        let itemID = LibraryItemID(rawValue: "item")
+        let accountID = AccountID(rawValue: "account")
+        let userID = UserID(rawValue: "user")
+        let description =
+            String(repeating: "Paragraph.\r\n", count: 30)
+            + "Indented\ttext\nLast line"
+        let detail = Self.detail(
+            libraryID: libraryID, itemID: itemID.rawValue, userID: userID,
+            descriptionPlain: description
+        )
+        try await fixture.cache.saveBookDetail(
+            detail, userID: userID, accountID: accountID)
+        let relaunched = LibraryCache(modelContainer: fixture.container)
+        let cached = try await relaunched.bookDetail(
+            for: itemID, in: libraryID, userID: userID, accountID: accountID
+        )
+        #expect(cached?.detail == detail)
+        #expect(cached?.detail.descriptionPlain == description)
+    }
+
+    @Test
     func testInvalidationAndAccountRemovalAreScoped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountA = AccountID(rawValue: "a")
@@ -1175,7 +1199,8 @@ final class LibraryCacheTests {
         libraryID: LibraryID,
         itemID: String,
         userID: UserID,
-        title: String = "Book"
+        title: String = "Book",
+        descriptionPlain: String = "Description"
     ) -> LibraryBookDetail {
         let typedItemID = LibraryItemID(rawValue: itemID)
         let bookID = BookID(rawValue: "book-\(itemID)")
@@ -1198,7 +1223,7 @@ final class LibraryCacheTests {
             publishedYear: "2024",
             publishedDate: nil,
             publisher: nil,
-            descriptionPlain: "Description",
+            descriptionPlain: descriptionPlain,
             isbn: nil,
             asin: nil,
             language: "English",
