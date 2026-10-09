@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026.10.09 - 2026-10-10
+
+### Fixed
+
+- Fixed book details failing to load when a synopsis contains line breaks or tabs.
+- Preserved multiline synopses in cached book details after restarting the app.
+
+### Improved
+
+- Added CLI support for assigning processed builds to TestFlight groups, saving test notes, and submitting beta review.
+- Improved release screenshot generation and distribution IPA inspection.
+
 ## 2026.10.08 - 2026-10-08
 
 ### Added
