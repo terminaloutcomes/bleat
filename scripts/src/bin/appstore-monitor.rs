@@ -138,6 +138,34 @@ async fn main() -> Result<ExitCode, ExitCode> {
         Commands::AppStatus(statusargs) => {
             appstatus(statusargs, &cli_opts).await?;
         }
+        Commands::TestflightStatus(arguments) => {
+            let api = scripts::appstore_testflight::Api::production(&cli_opts)
+                .map_err(testflight_error)?;
+            let status = api.status(&arguments).await.map_err(testflight_error)?;
+            print_testflight(&status)?;
+            if matches!(
+                status.processing_state,
+                scripts::appstore_builds::ProcessingState::Failed
+                    | scripts::appstore_builds::ProcessingState::Invalid
+            ) {
+                return Ok(ExitCode::FAILURE);
+            }
+        }
+        Commands::TestflightGroups(arguments) => {
+            let api = scripts::appstore_testflight::Api::production(&cli_opts)
+                .map_err(testflight_error)?;
+            let groups = api
+                .app_groups(&arguments.app_id)
+                .await
+                .map_err(testflight_error)?;
+            print_testflight(&groups)?;
+        }
+        Commands::TestflightRelease(arguments) => {
+            let api = scripts::appstore_testflight::Api::production(&cli_opts)
+                .map_err(testflight_error)?;
+            let status = api.release(&arguments).await.map_err(testflight_error)?;
+            print_testflight(&status)?;
+        }
         Commands::BuildStatus(arguments) => {
             let status = scripts::appstore_builds::build_status(&arguments, &cli_opts)
                 .await
@@ -160,4 +188,18 @@ async fn main() -> Result<ExitCode, ExitCode> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn testflight_error(error: scripts::appstore_testflight::Failure) -> ExitCode {
+    eprintln!("testflight: {}: {error}", error.diagnostic());
+    ExitCode::FAILURE
+}
+
+fn print_testflight(value: &impl serde::Serialize) -> Result<(), ExitCode> {
+    let output = serde_json::to_string(value).map_err(|_| {
+        eprintln!("testflight/output_serialization: could not serialize status");
+        ExitCode::FAILURE
+    })?;
+    println!("{output}");
+    Ok(())
 }

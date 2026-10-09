@@ -36,6 +36,12 @@ pub struct BuildStatus {
     pub processing_state: ProcessingState,
 }
 
+#[derive(Debug)]
+pub struct ResolvedBuild {
+    pub id: String,
+    pub processing_state: ProcessingState,
+}
+
 #[derive(Debug, Error)]
 pub enum BuildStatusError {
     #[error(transparent)]
@@ -139,6 +145,20 @@ pub async fn fetch_status(
     token: &str,
     base: &Url,
 ) -> Result<BuildStatus, BuildStatusError> {
+    let resolved = fetch_build(args, token, base).await?;
+    Ok(BuildStatus {
+        version: args.version.clone(),
+        build: args.build.clone(),
+        processing_state: resolved
+            .map_or(ProcessingState::NotFound, |build| build.processing_state),
+    })
+}
+
+pub async fn fetch_build(
+    args: &BuildStatusArgs,
+    token: &str,
+    base: &Url,
+) -> Result<Option<ResolvedBuild>, BuildStatusError> {
     if [&args.app_id, &args.version, &args.build]
         .iter()
         .any(|value| value.trim().is_empty())
@@ -190,7 +210,7 @@ pub async fn fetch_status(
     if page.links.and_then(|links| links.next).is_some() {
         return Err(BuildStatusError::Incomplete);
     }
-    let mut state = ProcessingState::NotFound;
+    let mut resolved = None;
     for build in page.data {
         let attributes = build.attributes.ok_or(BuildStatusError::MissingBuild)?;
         let number = attributes.version.ok_or(BuildStatusError::MissingBuild)?;
@@ -214,10 +234,10 @@ pub async fn fetch_status(
         if version != &args.version {
             continue;
         }
-        if state != ProcessingState::NotFound {
+        if resolved.is_some() {
             return Err(BuildStatusError::Ambiguous);
         }
-        state = match attributes
+        let processing_state = match attributes
             .processing_state
             .ok_or(BuildStatusError::MissingState)?
         {
@@ -226,10 +246,10 @@ pub async fn fetch_status(
             BuildAttributesProcessingState::Failed => ProcessingState::Failed,
             BuildAttributesProcessingState::Invalid => ProcessingState::Invalid,
         };
+        resolved = Some(ResolvedBuild {
+            id: build.id,
+            processing_state,
+        });
     }
-    Ok(BuildStatus {
-        version: args.version.clone(),
-        build: args.build.clone(),
-        processing_state: state,
-    })
+    Ok(resolved)
 }
