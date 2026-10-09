@@ -18551,11 +18551,13 @@ final class AppModelTests: XCTestCase {
             detail: detail
         )
         let service = TestAppService(activeAccount: .success(account))
+        let seekGate = AsyncGate()
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("downloaded-chapter-playback")
+                backgroundSessionIdentifier("downloaded-chapter-playback"),
+            diagnostics: GatedSeekDiagnosticRecorder(gate: seekGate)
         )
         await model.start()
 
@@ -18565,18 +18567,33 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(initialOutcome, .started(source: .downloaded))
         XCTAssertEqual(model.playback.libraryID, detail.libraryID)
+        model.playback.pause()
 
-        let chapterOutcome = await model.startPlayback(
-            detail: detail,
-            account: account,
-            position: .chapter(chapter)
-        )
+        let chapterTask = Task {
+            await model.startPlayback(
+                detail: detail,
+                account: account,
+                position: .chapter(chapter)
+            )
+        }
+        // Measure the completed seek before AppModel resumes the active player.
+        await fulfillment(of: [await seekGate.entryExpectation], timeout: 30)
 
-        XCTAssertEqual(chapterOutcome, .started(source: .activePlayer))
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
         XCTAssertEqual(
             model.playback.currentTime,
             chapter.start,
             accuracy: 0.01
+        )
+        await seekGate.release()
+        let chapterOutcome = await chapterTask.value
+        XCTAssertEqual(chapterOutcome, .started(source: .activePlayer))
+        XCTAssertEqual(model.playback.libraryID, detail.libraryID)
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        XCTAssertTrue(
+            model.playback.state == .buffering
+                || model.playback.state == .playing
         )
         let playbackRequests = await service.playbackOpenRequests()
         XCTAssertTrue(playbackRequests.isEmpty)
@@ -25227,6 +25244,23 @@ private actor AppDiagnosticRecorderSpy: DiagnosticRecording {
 
     func events() -> [DiagnosticEvent] {
         recordedEvents
+    }
+}
+
+private actor GatedSeekDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+
+    init(gate: AsyncGate) {
+        self.gate = gate
+    }
+
+    func record(_ event: DiagnosticEvent) async {
+        guard event.operation == .seek,
+            event.name == .operationCompleted
+        else {
+            return
+        }
+        await gate.enterAndWait()
     }
 }
 
