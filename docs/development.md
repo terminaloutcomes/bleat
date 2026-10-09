@@ -424,6 +424,8 @@ mise run appstore:upload
 
 The Rust workflow in `scripts/src/app_store_connect.rs` uses the ignored Apple
 team, bundle identifier, and production telemetry settings from `.envrc`. It
+invokes IPA inspection through `mise exec -- python3`, using the repository's
+pinned Python 3.13 environment rather than the caller's ambient interpreter. It
 retains the signed archive, inspected distribution IPA, SHA-256 checksum,
 export options, redacted Xcode logs, and upload report below
 `.build/app-store-connect/`. Its export options omit

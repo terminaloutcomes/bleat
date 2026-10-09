@@ -316,8 +316,9 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     let ipa_path = single_ipa(&local_export_directory)?;
     run_inherited_command(
         "distribution IPA inspection",
-        Command::new("python3")
+        Command::new("mise")
             .current_dir(&repository_root)
+            .args(["exec", "--", "python3"])
             .arg(repository_root.join("scripts/inspect-testflight-ipa.py"))
             .arg("--ipa")
             .arg(&ipa_path)
