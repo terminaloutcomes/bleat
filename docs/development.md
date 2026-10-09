@@ -424,6 +424,8 @@ mise run appstore:upload
 
 The Rust workflow in `scripts/src/app_store_connect.rs` uses the ignored Apple
 team, bundle identifier, and production telemetry settings from `.envrc`. It
+invokes IPA inspection through `mise exec -- python3`, using the repository's
+pinned Python 3.13 environment rather than the caller's ambient interpreter. It
 retains the signed archive, inspected distribution IPA, SHA-256 checksum,
 export options, redacted Xcode logs, and upload report below
 `.build/app-store-connect/`. Its export options omit
@@ -445,6 +447,27 @@ metadata and request failures remain separate typed errors. A valid build has
 finished processing, but has not been submitted for review or distributed.
 Build components are matched numerically: Apple's `20261008.909.41` identifies
 the archive's `20261008.0909.41`. Marketing versions retain their exact spelling.
+
+Inspect TestFlight beta states and existing app-owned groups through the same API:
+
+```sh
+mise run appstore:connect-admin testflight-groups
+mise run appstore:connect-admin testflight-status --version 2026.10.08 --build 20261008.0909.41
+```
+
+Assign an exact processed build to explicitly selected existing groups, save its
+localized test notes, and submit beta review when Apple reports it ready:
+
+```sh
+mise run appstore:connect-admin testflight-release --version 2026.10.08 --build 20261008.0909.41 --group-id EXISTING_GROUP_ID --locale en-AU --whats-new 'Describe the changes to test.'
+```
+
+Repeat `--group-id` for additional groups. The command verifies app ownership and
+resulting membership, preserves pending review, and avoids duplicate review or
+membership submissions. Export-compliance, rejected, and expired states block
+external release with a specific diagnostic. Request failures retain their stage;
+inspect status before retrying an uncertain mutation. Group output excludes tester
+identities. Assignment and pending beta review do not confirm tester availability.
 
 Upload a signed build that can be installed only by internal App Store Connect
 testers with:

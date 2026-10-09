@@ -735,7 +735,7 @@ extension LibraryBookDetail {
             && Self.isValidOptionalString(publishedYear)
             && Self.isValidOptionalString(publishedDate)
             && Self.isValidOptionalString(publisher)
-            && Self.isValidOptionalString(descriptionPlain)
+            && Self.isValidDescription(descriptionPlain)
             && Self.isValidOptionalString(isbn)
             && Self.isValidOptionalString(asin)
             && Self.isValidOptionalString(language)
@@ -804,6 +804,16 @@ extension LibraryBookDetail {
             return true
         }
         return value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isValidDescription(_ value: String?) -> Bool {
+        guard let value else { return true }
+        // Audiobookshelf's HTML stripping preserves ordinary prose whitespace.
+        // Source: https://github.com/advplyr/audiobookshelf/blob/v2.37.1/server/utils/htmlSanitizer.js.
+        let invalidCharacters = CharacterSet.controlCharacters.subtracting(
+            CharacterSet(charactersIn: "\t\n\r")
+        )
+        return value.rangeOfCharacter(from: invalidCharacters) == nil
     }
 }
 

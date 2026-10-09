@@ -316,8 +316,9 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     let ipa_path = single_ipa(&local_export_directory)?;
     run_inherited_command(
         "distribution IPA inspection",
-        Command::new("python3")
+        Command::new("mise")
             .current_dir(&repository_root)
+            .args(["exec", "--", "python3"])
             .arg(repository_root.join("scripts/inspect-testflight-ipa.py"))
             .arg("--ipa")
             .arg(&ipa_path)
@@ -791,6 +792,9 @@ pub enum Commands {
     UpdateCodegen,
     AppStatus(StatusArgs),
     BuildStatus(crate::appstore_builds::BuildStatusArgs),
+    TestflightStatus(crate::appstore_builds::BuildStatusArgs),
+    TestflightGroups(crate::appstore_testflight::GroupArgs),
+    TestflightRelease(crate::appstore_testflight::ReleaseArgs),
     CreateReport,
     OneTimeSnapshot {
         #[clap(long, env = "APPSTORE_CONNECT_DOWNLOAD_DIR", hide_env_values = true)]

@@ -2,6 +2,7 @@
 _.file = { path = ".envrc", required = true }
 
 [tools]
+python = "3.13"
 gitleaks = "latest"
 node = "24"
 pnpm = "11.17.0"
