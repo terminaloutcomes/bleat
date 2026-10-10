@@ -155,6 +155,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case credentialStore(TokenVaultError)
     case accountIdentityMigration(AccountIdentityMigrationFailure)
     case libraryRepository(LibraryRepositoryError)
+    case libraryCatalogChanged
     case pageRequest(LibraryPageRequestError)
     case homeRequest(LibraryHomeRequestError)
     case searchRequest(LibrarySearchRequestError)

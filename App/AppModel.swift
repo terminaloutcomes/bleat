@@ -616,6 +616,7 @@ enum AppFailureCause: Equatable, Sendable {
     case statisticsResetSplitSession
     case statistics(StatisticsRepositoryError)
     case statisticsHistoryChanged
+    case libraryCatalogChanged
     case localDataReset(LocalDataResetFailure)
     case privateCloud(PrivateCloudSyncFailure)
 
@@ -649,6 +650,7 @@ struct AppFailure: Equatable, Sendable {
         case .invalidPlaybackChapterOffset: "Invalid chapter position"
         case .statisticsResetSplitSession: "Reset needs a wider range"
         case .statisticsHistoryChanged: "History changed during import"
+        case .libraryCatalogChanged: "Library changed"
         case .statistics(let error): error.presentationTitle
         case .itemNotFound: "Audiobook not found"
         case .permissionDenied: "Access denied"
@@ -739,6 +741,8 @@ struct AppFailure: Equatable, Sendable {
             "The server returned incomplete or inconsistent data."
         case .localStorageUnavailable:
             "Bleat could not save or read the required data on this device."
+        case .libraryCatalogChanged:
+            "The library changed while loading. Loaded books are retained. Retry to reload the updated library."
         case .statisticsHistoryChanged:
             "The server history changed while it was being read. Saved sessions are retained. Pull to refresh to try again."
         case .statistics(let error): error.presentationMessage
@@ -793,6 +797,7 @@ struct AppFailure: Equatable, Sendable {
             "exclamationmark.triangle"
         case .statisticsResetSplitSession: "calendar.badge.exclamationmark"
         case .statistics, .statisticsHistoryChanged: "chart.bar.xaxis"
+        case .libraryCatalogChanged: "books.vertical"
         case .inaccessibleLibrary, .inaccessibleTags,
             .explicitContentDenied:
             "lock"
@@ -832,6 +837,7 @@ struct AppFailure: Equatable, Sendable {
             && (cause == .invalidServerResponse
                 || cause == .invalidLibraryCategories
                 || cause == .statisticsHistoryChanged
+                || cause == .libraryCatalogChanged
                 || cause == .localStorageUnavailable
                 || cause == .unavailableOffline
                 || cause == .serverUnavailable || cause == .requestRejected
@@ -948,6 +954,7 @@ struct AppFailure: Equatable, Sendable {
             return .localDataReset(error)
         case .privateCloud(let error):
             return .privateCloud(error)
+        case .libraryCatalogChanged: return .libraryCatalogChanged
         case .libraryRepository(let error), .bookDetail(let error):
             return repositoryCause(error)
         case .pageRequest, .homeRequest, .searchRequest, .metadataPatch:
@@ -1239,6 +1246,7 @@ extension AppFailureCause {
             .unsupported
         case .invalidInput, .serverRequiresHTTPS,
             .statisticsResetSplitSession, .statisticsHistoryChanged,
+            .libraryCatalogChanged,
             .authenticationSessionInProgress, .accountUnavailable,
             .invalidPlaybackPosition, .unknownPlaybackChapter,
             .invalidPlaybackChapterOffset,
@@ -3282,6 +3290,31 @@ final class AppModel {
         }
     }
 
+    func recordCarPlayCatalogValidationFailure(changed: Bool = false) async {
+        await diagnostics.record(
+            .failed(
+                .loadCarPlayLibraryPage, category: .api,
+                failureCode: changed
+                    ? .libraryCatalogChanged : .carPlayLibraryPageInvalid,
+                stage: .pageValidation)
+        )
+    }
+
+    func recordCarPlayBrowserFailure(_ failure: CarPlayLibraryBrowser.Failure)
+        async
+    {
+        let code: DiagnosticFailureCode
+        switch failure {
+        case .itemLimit: code = .carPlayItemLimitInsufficient
+        case .sectionLimit: code = .carPlaySectionLimitInsufficient
+        case .depthLimit: code = .carPlayNavigationDepthExceeded
+        }
+        await diagnostics.record(
+            .failed(
+                .loadCarPlayLibraryPage, category: .api,
+                failureCode: code, stage: .listConstruction))
+    }
+
     func carPlayLibraryPage(_ number: Int) async throws(AppServiceError)
         -> LibraryRepositoryResult<LibraryItemsPage>
     {
@@ -3310,7 +3343,7 @@ final class AppModel {
             switch stage {
             case .contextValidation: code = .carPlayLibraryContextMissing
             case .pageValidation: code = .carPlayLibraryPageInvalid
-            case .requestConstruction, .pageRequest:
+            case .requestConstruction, .pageRequest, .listConstruction:
                 code =
                     AppFailure(operation: .loadLibraryPage, serviceError: error)
                     .diagnosticFailureCode

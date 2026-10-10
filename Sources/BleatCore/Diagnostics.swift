@@ -192,6 +192,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case invalidInput = "invalid_input"
     case statisticsResetSplitSession = "statistics_reset_split_session"
     case statisticsHistoryChanged = "statistics_history_changed"
+    case libraryCatalogChanged = "library_catalog_changed"
     case statisticsInvalidSample = "statistics_sample_invalid"
     case statisticsInvalidSlice = "statistics_slice_invalid"
     case statisticsInvalidCompletion = "statistics_completion_invalid"
@@ -203,6 +204,9 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case itemNotFound = "item_not_found"
     case invalidServerResponse = "invalid_server_response"
     case carPlayLibraryContextMissing = "carplay_library_context_missing"
+    case carPlayItemLimitInsufficient = "carplay_item_limit_insufficient"
+    case carPlaySectionLimitInsufficient = "carplay_section_limit_insufficient"
+    case carPlayNavigationDepthExceeded = "carplay_navigation_depth_exceeded"
     case carPlayLibraryPageInvalid = "carplay_library_page_invalid"
     case invalidLibraryCategories = "invalid_library_categories"
     case localStorageUnavailable = "local_storage_unavailable"
@@ -349,6 +353,7 @@ public enum DiagnosticStage: String, Codable, Sendable {
     case requestConstruction = "request_construction"
     case pageRequest = "page_request"
     case pageValidation = "page_validation"
+    case listConstruction = "list_construction"
 }
 
 public struct DiagnosticEvent: Codable, Equatable, Sendable {

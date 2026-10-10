@@ -201,15 +201,50 @@ corrected before these runs. Swift lint and diff checks passed. A fresh
 independent complete-change review reported no findings. These checks do not
 confirm recovered screen space on a physical head unit.
 
+The approved list/folder design supersedes the window/paging implementation above.
+Library automatically loads all uncollapsed server pages, then presents one
+scrollable list if it fits the runtime limit, or alphabetic/title-range folders.
+There are no Next/Previous controls. Three folder pushes leave room for Now
+Playing within five navigation levels. Restrictive limits produce distinct typed
+item/section/depth failures rather than silently truncating the catalog. Later
+page failures retain fetched books and resume only the failed page on retry.
+Changed catalog totals/page sizes produce a distinct typed failure and restart
+from page zero on retry.
+List/folder validation on 2026-10-10:
+
+- The final iOS 26.5 app unit bundle passed 512 tests, including all 27 CarPlay
+  tests, with zero failures, skips, or runtime warnings. Exact test identifiers
+  and outcomes were verified from the result bundle. Coverage includes 10,000
+  books, Unicode/duplicate titles, changing vehicle limits, folder selection
+  off the main actor, stale callbacks, partial cache, retry/resume, and changed
+  catalog restart.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh` passed 520 host tests with
+  zero skips, Release compilation, and the paid-capability build matrix.
+- `mise run swift-lint` and `git diff --check` passed.
+- `./scripts/test-app-live.sh` passed the disposable Audiobookshelf 2.37.0
+  online login/playback/download and offline cached-download/local-progress
+  journeys: one test each, zero skips or runtime warnings. These phone-app
+  journeys do not establish CarPlay head-unit presentation.
+- Two initial focused attempts failed compilation because the coordinator
+  accessed a file-private resource-state helper. This was corrected; the next
+  focused run passed six tests, followed by the final complete app bundle above.
+- Two independent complete-change review cycles: the first found one P2 for
+  inconsistent totals across catalog pages/retries. Stable snapshot validation,
+  typed changed-catalog diagnostics, and restart regression coverage resolve it;
+  the second review reported no findings.
+- The revised `mise run iphone` attempt failed at device build with status 70:
+  Xcode could not find the requested physical-device destination. This version
+  was not installed by that attempt.
+
 Remaining release evidence:
 
 - iOS 26 and iOS 27 CarPlay Simulator index and list presentation, including
-  ordinary-list fallback, reduced runtime limits, disconnect/reconnect, and
+  scrolling lists and folders, reduced runtime limits, disconnect/reconnect, and
   online/cached/missing-cache transitions.
 - Touch and rotary selection, larger/bold text, Voice Control, and light/dark
-  presentation on the new Library windows.
+  presentation on the new Library lists and folders.
 - A physical head-unit run recording app build, iOS version, head-unit model,
-  letter-index availability, and forward/backward reachability beyond the former
+  alphabetic-folder presentation, and reachability beyond the former
   clipped prefix.
 
 [Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) remains open
