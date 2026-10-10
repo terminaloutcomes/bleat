@@ -17,7 +17,6 @@
     enum CarPlayAction: Equatable, Sendable {
         case playBook(LibraryBookSummary)
         case playDownload(DownloadID)
-        case selectLibrary(LibrarySummary)
         case nextWindow
         case previousWindow
         case retryHome
@@ -113,7 +112,6 @@
             let libraries: ResourceState<[LibrarySummary]>
             let homeShelves: ResourceState<[LibraryBookShelf]>
             let books: ResourceState<LibraryItemsPage>
-            let cachedPage: Bool
             let libraryPaginationState: LibraryPaginationState
             let previousPaginationState: LibraryPaginationState
             let libraryGeneration: UInt64
@@ -143,7 +141,6 @@
         private var renderedPresentation: TemplatePresentation?
         private var presentationGeneration: UInt64 = 0
         private var libraryPage: ResourceState<LibraryItemsPage> = .idle
-        private var libraryPageSource: LibraryRepositorySource = .remote
         private var libraryBoundaryFailure: AppFailure?
         private enum LibraryPageDirection { case next, previous }
         private var failedPageRequest:
@@ -322,7 +319,7 @@
                 )
                 libraryTemplate = makeTabTemplate(
                     title: "Library",
-                    systemImage: "books.vertical"
+                    systemImage: "books.vertical", showsTitle: false
                 )
                 downloadsTemplate = makeTabTemplate(
                     title: "Downloads",
@@ -337,7 +334,6 @@
             }
             updateHomeTemplate(homeTemplate, presentation: presentation)
             updateLibraryTemplate(libraryTemplate, presentation: presentation)
-            configureLibraryHeaderButtons(libraryTemplate)
             updateDownloadsTemplate(
                 downloadsTemplate,
                 downloads: presentation.downloads,
@@ -399,31 +395,13 @@
 
         private func makeTabTemplate(
             title: String,
-            systemImage: String
+            systemImage: String, showsTitle: Bool = true
         ) -> CPListTemplate {
-            let template = CPListTemplate(title: title, sections: [])
+            let template = CPListTemplate(
+                title: showsTitle ? title : nil, sections: [])
             template.tabTitle = title
             template.tabImage = UIImage(systemName: systemImage)
             return template
-        }
-
-        private func configureLibraryHeaderButtons(
-            _ library: CPListTemplate
-        ) {
-            guard let librariesImage = UIImage(systemName: "books.vertical")
-            else {
-                library.headerGridButtons = nil
-                return
-            }
-            let librariesButton = CPGridButton(
-                titleVariants: ["Libraries"],
-                image: librariesImage
-            ) { @Sendable [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.showLibraryPicker()
-                }
-            }
-            library.headerGridButtons = [librariesButton]
         }
 
         private func updateHomeTemplate(
@@ -530,12 +508,6 @@
                     titleOrder: presentation.titleOrder
                 )
                 windowStart = window.range.lowerBound
-                let base = page.page * page.limit
-                let scope =
-                    presentation.cachedPage ? "Cached portion" : "Window"
-                let rangeLabel =
-                    "\(scope) \(base + window.range.lowerBound + 1)–\(base + window.range.upperBound) • Letters here"
-
                 var sections = window.groups.map { group in
                     CPListSection(
                         items: group.books.map {
@@ -543,14 +515,9 @@
                                 book: $0, account: presentation.account,
                                 playback: presentation.playback)
                         },
-                        header: group.indexTitle,
+                        header: nil,
                         sectionIndexTitle: group.indexTitle
                     )
-                }
-                if let first = sections.first {
-                    sections[0] = CPListSection(
-                        items: first.items, header: rangeLabel,
-                        sectionIndexTitle: first.sectionIndexTitle)
                 }
                 let hasNext =
                     window.range.upperBound < page.items.count
@@ -612,8 +579,7 @@
             switch state {
             case .idle:
                 label = title
-                detail =
-                    action == .nextWindow ? "Letters apply to this window" : nil
+                detail = nil
                 enabled = true
             case .loading:
                 label = "Loading \(title)…"
@@ -661,7 +627,6 @@
                     context == model.libraryPageGeneration
                 else { return }
                 libraryPage = .loaded(result.value)
-                libraryPageSource = result.source
                 previousWindowStarts = []
                 let limits = contentLimits()
                 let capacity =
@@ -821,7 +786,6 @@
                 libraries: model.libraries,
                 homeShelves: model.homeShelves,
                 books: libraryPage,
-                cachedPage: libraryPageSource == .cache,
                 libraryPaginationState: paginationState(.next),
                 previousPaginationState: paginationState(.previous),
                 libraryGeneration: model.libraryPageGeneration,
@@ -983,38 +947,6 @@
             )
         }
 
-        private func showLibraryPicker() {
-            guard case .loaded(let libraries) = model.libraries else {
-                return
-            }
-            let items = libraries.map { library in
-                let selected = model.selectedLibrary?.id == library.id
-                let item = CPListItem(
-                    text: library.name,
-                    detailText: selected ? "Selected" : nil
-                )
-                item.handler = { @Sendable [weak self] _, completion in
-                    let completed = CarPlaySelectionCompletion(completion)
-                    Task { @MainActor [weak self] in
-                        await self?.perform(.selectLibrary(library))
-                        completed()
-                    }
-                }
-                return item
-            }
-            let template = CPListTemplate(
-                title: "Libraries",
-                sections: [
-                    CPListSection(
-                        items: items,
-                        header: nil,
-                        sectionIndexTitle: nil
-                    )
-                ]
-            )
-            presenter?.push(template)
-        }
-
         private func perform(_ action: CarPlayAction) async {
             switch action {
             case .playBook(let book):
@@ -1030,9 +962,6 @@
                     return
                 }
                 await play(record)
-            case .selectLibrary(let library):
-                await model.selectLibrary(library)
-                presenter?.pop()
             case .nextWindow:
                 guard !libraryLoading, let presentation = renderedPresentation,
                     case .loaded(let page) = libraryPage

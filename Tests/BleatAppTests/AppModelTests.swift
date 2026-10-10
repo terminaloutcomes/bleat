@@ -21593,10 +21593,16 @@ final class AppModelTests: XCTestCase {
             )
             XCTAssertEqual(home.sections.first?.header, "Continue Listening")
             XCTAssertEqual(home.sections.first?.items.count, 1)
-            XCTAssertEqual(
-                libraryTemplate.headerGridButtons?.map(\.titleVariants),
-                [["Libraries"]]
-            )
+            XCTAssertTrue(libraryTemplate.headerGridButtons?.isEmpty != false)
+            XCTAssertNil(libraryTemplate.title)
+            XCTAssertTrue(
+                libraryTemplate.sections.allSatisfy { $0.header == nil })
+            XCTAssertTrue(
+                libraryTemplate.sections.flatMap(\.items).compactMap {
+                    $0 as? CPListItem
+                }.allSatisfy {
+                    $0.detailText != "Letters apply to this window"
+                })
             XCTAssertTrue(home.trailingNavigationBarButtons.isEmpty)
             XCTAssertTrue(libraryTemplate.leadingNavigationBarButtons.isEmpty)
             XCTAssertTrue(libraryTemplate.trailingNavigationBarButtons.isEmpty)
@@ -21903,9 +21909,7 @@ final class AppModelTests: XCTestCase {
             await coordinator.waitForLibraryLoad()
             let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
             let template = try XCTUnwrap(root.templates[1] as? CPListTemplate)
-            XCTAssertTrue(
-                template.sections.first?.header?.hasPrefix("Cached portion")
-                    == true)
+            XCTAssertTrue(template.sections.allSatisfy { $0.header == nil })
             let next = try XCTUnwrap(
                 template.sections.last?.items.last as? CPListItem)
             await selectCarPlayItem(next)

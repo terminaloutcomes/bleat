@@ -188,9 +188,22 @@ letter group. Locale fixtures cover accents, case, numbers, punctuation, emoji,
 CJK, right-to-left titles, duplicate titles/IDs, and server article keys. These
 are app-hosted/model tests, not evidence that a head unit displays an index.
 
+Library presentation simplification on 2026-10-10 removes the range/index
+explanations, per-section headings, Library page title, and Libraries grid
+image/title control. The native letter index, tab label, and Next/Previous
+navigation remain. Library selection follows the phone. Cached pages retain
+their books and typed adjacent-page failure behavior without a cached-range
+banner. This supersedes the range/cached-banner and chooser descriptions above.
+All 26 CarPlay app-hosted tests passed on iOS 26.5 with zero skips or runtime
+warnings; the two directly affected presentation/cache tests also passed as a
+focused selection. An initial test-only protocol/concrete-item compile error was
+corrected before these runs. Swift lint and diff checks passed. A fresh
+independent complete-change review reported no findings. These checks do not
+confirm recovered screen space on a physical head unit.
+
 Remaining release evidence:
 
-- iOS 26 and iOS 27 CarPlay Simulator index and page/range presentation, including
+- iOS 26 and iOS 27 CarPlay Simulator index and list presentation, including
   ordinary-list fallback, reduced runtime limits, disconnect/reconnect, and
   online/cached/missing-cache transitions.
 - Touch and rotary selection, larger/bold text, Voice Control, and light/dark
