@@ -123,3 +123,58 @@ details.
   wireless reconnect, whole-book head-unit controls, and simultaneous phone use.
 - This is maintainer-reported vehicle evidence; it is separate from the
   2026-08-31 Simulator and 2026-09-01 signed-artifact checks above.
+
+## Alphabet index and bounded Library windows — issue #331
+
+The older Simulator and maintainer-reported vehicle journeys above predate this
+change and do not validate the new index or paging behavior. Implementation adds
+an uncollapsed, bounded server-page feed, current-window letter sections,
+Next/Previous navigation, runtime limit adaptation, explicit cached portions,
+and generation-safe loading/retry.
+
+Automated validation on 2026-10-10:
+
+- The final focused `xcodebuild` CarPlay selection ran all 20 requested app-hosted
+  tests on iPhone 17 Pro / iOS 26.5: 20 passed, zero skipped, zero runtime warnings.
+  Native list and bar callback regressions enter off the main actor and verify
+  the explicit UI hop. The final complete app bundle passed all 505 tests, including these 20
+  CarPlay tests, without skips or runtime warnings.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh` passed: three Rust release-version
+  checks, 520 signed host tests with zero skips, host Release build, and the paid
+  capability/build-mode matrix. The first attempt rejected the new decoder test
+  until `TestSupport/HostTests/inventory.json` was updated. The host suite's one
+  intentional cleanup known issue and injected SwiftData save failures are
+  test-fixture evidence; the existing dependency watchOS deprecation warning is
+  unrelated to this change.
+- The focused title-key/legacy-cache decoder test ran and passed (1/1). An initial
+  selection before the test existed executed zero tests and provided no coverage.
+- `./scripts/test-live.sh` passed against current-stable Audiobookshelf 2.37.0:
+  13 passed, eight unrelated OIDC/telemetry tests skipped by this harness lane.
+- `./scripts/test-app-live.sh` passed online and offline journeys (1/1 each) with
+  zero result-bundle runtime warnings. The first attempt collided with the core
+  harness's ports; a retry used the supported isolated root/prefix/OIDC port
+  overrides. Both runners removed their disposable resources. Xcode's debugger
+  metadata lookup messages did not produce test or runtime-warning failures.
+- `mise run swift-lint` and `git diff --check` passed. Initial compilation issues
+  (project generation, typed catch, test enum, Objective-C completion transfer)
+  and the mutable-capture fixture warnings were corrected before final validation.
+
+The 10,000-book
+fixture exercises reachability under changing row limits, including one large
+letter group. Locale fixtures cover accents, case, numbers, punctuation, emoji,
+CJK, right-to-left titles, duplicate titles/IDs, and server article keys. These
+are app-hosted/model tests, not evidence that a head unit displays an index.
+
+Remaining release evidence:
+
+- iOS 26 and iOS 27 CarPlay Simulator index and page/range presentation, including
+  ordinary-list fallback, reduced runtime limits, disconnect/reconnect, and
+  online/cached/missing-cache transitions.
+- Touch and rotary selection, larger/bold text, Voice Control, and light/dark
+  presentation on the new Library windows.
+- A physical head-unit run recording app build, iOS version, head-unit model,
+  letter-index availability, and forward/backward reachability beyond the former
+  clipped prefix.
+
+[Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) remains open
+until this evidence is available; existing CarPlay approval is unaffected.

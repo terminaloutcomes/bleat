@@ -69,6 +69,7 @@
 		B94D1706742AC05BE9F9F1E6 /* ChapterTranscriptionJobSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442E1B9B0CEB4D9FC6C8D00E /* ChapterTranscriptionJobSupport.swift */; };
 		C1224783D3F9B1CC7057759A /* AppService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12995342C7E6318A5F929A2 /* AppService.swift */; };
 		C17545E7FE86937506709C5D /* LibraryBrowseModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */; };
+		C6C615A2FDA94EC5070805B7 /* CarPlayLibraryWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA9534E0FAFBE2DA463A53E /* CarPlayLibraryWindow.swift */; };
 		CA30409A7B8350281DF6BFD0 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BC7735A08B9D198087831D /* AboutView.swift */; };
 		CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */; };
 		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
@@ -155,6 +156,7 @@
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
 		AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttesterTests.swift; sourceTree = "<group>"; };
 		AE0DE6DBF9374F5CC3336E34 /* Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
+		AEA9534E0FAFBE2DA463A53E /* CarPlayLibraryWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayLibraryWindow.swift; sourceTree = "<group>"; };
 		B2BC7735A08B9D198087831D /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		B458AC215D720282F4321F56 /* Bleat.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Bleat.icon; sourceTree = "<group>"; };
@@ -295,6 +297,7 @@
 				A9F16612F5D186DFAED140F6 /* BookCoverView.swift */,
 				F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */,
 				C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */,
+				AEA9534E0FAFBE2DA463A53E /* CarPlayLibraryWindow.swift */,
 				442E1B9B0CEB4D9FC6C8D00E /* ChapterTranscriptionJobSupport.swift */,
 				6462208874E3752B46A8D7AC /* ChapterTranscriptionModel.swift */,
 				E890D74C6F56A62319D7C32C /* ChapterTranscriptionSourceValidator.swift */,
@@ -548,6 +551,7 @@
 				297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */,
 				E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */,
 				AA52BE76FF8BA97DA914DC49 /* CarPlayCoordinator.swift in Sources */,
+				C6C615A2FDA94EC5070805B7 /* CarPlayLibraryWindow.swift in Sources */,
 				B94D1706742AC05BE9F9F1E6 /* ChapterTranscriptionJobSupport.swift in Sources */,
 				52920A99096E21066DCAAC51 /* ChapterTranscriptionModel.swift in Sources */,
 				1194E9B9599CE01CE2C84728 /* ChapterTranscriptionSourceValidator.swift in Sources */,

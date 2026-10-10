@@ -18,9 +18,20 @@
         case playBook(LibraryBookSummary)
         case playDownload(DownloadID)
         case selectLibrary(LibrarySummary)
-        case loadMore
+        case nextWindow
+        case previousWindow
         case retryHome
         case retryLibrary
+    }
+
+    /// Transfers CarPlay's unannotated Objective-C completion block to the UI
+    /// task. Each selection creates one box, owned by one task, and invokes the
+    /// block exactly once after processing; the box never carries app state.
+    private struct CarPlaySelectionCompletion: @unchecked Sendable {
+        let callback: () -> Void
+
+        init(_ callback: @escaping () -> Void) { self.callback = callback }
+        func callAsFunction() { callback() }
     }
 
     @MainActor
@@ -100,7 +111,12 @@
             let selectedLibraryID: LibraryID?
             let homeShelves: ResourceState<[LibraryBookShelf]>
             let books: ResourceState<LibraryItemsPage>
+            let cachedPage: Bool
             let libraryPaginationState: LibraryPaginationState
+            let libraryGeneration: UInt64
+            let titleOrder: Bool
+            let maximumItems: Int
+            let maximumSections: Int
             let downloads: [DownloadPresentation]
             let playback: PlaybackPresentation
         }
@@ -123,6 +139,17 @@
         private var artworkTasks: [Task<Void, Never>] = []
         private var renderedPresentation: TemplatePresentation?
         private var presentationGeneration: UInt64 = 0
+        private var libraryPage: ResourceState<LibraryItemsPage> = .idle
+        private var libraryPageSource: LibraryRepositorySource = .remote
+        private var libraryNextFailure: AppFailure?
+        private var failedPageRequest: (number: Int, start: Int?)?
+        private var libraryLoading = false
+        private(set) var libraryTask: Task<Void, Never>?
+        private var libraryContext: UInt64?
+        private var limitObservationTask: Task<Void, Never>?
+        private var windowStart = 0
+        private var previousWindowStarts: [Int] = []
+        private let contentLimits: @MainActor () -> (items: Int, sections: Int)
         #if DEBUG
             private(set) var observationCallbackCountForTesting = 0
             private(set) var observationRefreshCountForTesting = 0
@@ -130,10 +157,18 @@
 
         init(
             model: AppModel,
-            coverLoader: BookCoverImageLoader = .shared
+            coverLoader: BookCoverImageLoader = .shared,
+            contentLimits:
+                @escaping @MainActor () -> (items: Int, sections: Int) = {
+                    (
+                        CPListTemplate.maximumItemCount,
+                        CPListTemplate.maximumSectionCount
+                    )
+                }
         ) {
             self.model = model
             self.coverLoader = coverLoader
+            self.contentLimits = contentLimits
             super.init()
             artworkCache.countLimit = 256
         }
@@ -145,6 +180,17 @@
             configureNowPlayingTemplate()
             refreshTemplates()
             observeModel()
+            let connection = presentationGeneration
+            limitObservationTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(1)) } catch {
+                        return
+                    }
+                    guard let self, self.presentationGeneration == connection
+                    else { return }
+                    self.refreshTemplates()
+                }
+            }
             Task { @MainActor [weak self] in
                 guard let self else {
                     return
@@ -154,8 +200,21 @@
             }
         }
 
+        func waitForLibraryLoad() async {
+            await libraryTask?.value
+        }
+
         func disconnect() {
             presentationGeneration &+= 1
+            libraryTask?.cancel()
+            limitObservationTask?.cancel()
+            limitObservationTask = nil
+            libraryTask = nil
+            libraryContext = nil
+            libraryPage = .idle
+            libraryNextFailure = nil
+            failedPageRequest = nil
+            libraryLoading = false
             for task in artworkTasks {
                 task.cancel()
             }
@@ -167,13 +226,45 @@
             downloadsTemplate = nil
             tabTemplate = nil
             renderedPresentation = nil
+            windowStart = 0
+            previousWindowStarts = []
         }
 
         func refreshTemplates() {
             guard presenter != nil else {
                 return
             }
+            if libraryContext != model.libraryPageGeneration {
+                libraryContext = model.libraryPageGeneration
+                libraryTask?.cancel()
+                libraryPage = .idle
+                libraryNextFailure = nil
+                failedPageRequest = nil
+                libraryLoading = false
+                windowStart = 0
+                previousWindowStarts = []
+                if model.account != nil, model.selectedLibrary != nil {
+                    libraryPage = .loading
+                    let connection = presentationGeneration
+                    let context = model.libraryPageGeneration
+                    libraryTask = Task { @MainActor [weak self] in
+                        await self?.loadLibraryPage(
+                            0, start: 0, connection: connection,
+                            context: context)
+                    }
+                }
+            }
             let presentation = makeTemplatePresentation()
+            if let previous = renderedPresentation,
+                previous.account != presentation.account
+                    || previous.selectedLibraryID
+                        != presentation.selectedLibraryID
+                    || previous.libraryGeneration
+                        != presentation.libraryGeneration
+            {
+                windowStart = 0
+                previousWindowStarts = []
+            }
             guard renderedPresentation != presentation else {
                 return
             }
@@ -322,7 +413,7 @@
             let librariesButton = CPGridButton(
                 titleVariants: ["Libraries"],
                 image: librariesImage
-            ) { [weak self] _ in
+            ) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.showLibraryPicker()
                 }
@@ -394,6 +485,7 @@
             _ template: CPListTemplate,
             presentation: TemplatePresentation
         ) {
+            template.trailingNavigationBarButtons = []
             switch libraryState(for: presentation) {
             case .loading:
                 template.updateSections([])
@@ -409,71 +501,200 @@
                 template.showsSpinnerWhileEmpty = false
                 template.emptyViewTitleVariants = []
                 template.emptyViewSubtitleVariants = []
-                template.updateSections([
-                    failureSection(
-                        failure,
-                        retry:
-                            failure.allowsRetry ? .retryLibrary : nil
-                    )
-                ])
+                template.updateSections(
+                    presentation.maximumSections > 0
+                        ? [
+                            failureSection(
+                                failure,
+                                retry:
+                                    failure.allowsRetry ? .retryLibrary : nil,
+                                maximumItems: presentation.maximumItems
+                            )
+                        ] : [])
             case .loaded(let page):
                 template.showsSpinnerWhileEmpty = false
                 template.emptyViewTitleVariants = []
                 template.emptyViewSubtitleVariants = []
-                let hasTrailingAction =
-                    page.hasNextPage
-                    || presentation.libraryPaginationState != .idle
-                let maximum = max(
-                    CPListTemplate.maximumItemCount
-                        - (hasTrailingAction ? 1 : 0),
-                    1
+                let window = CarPlayLibraryWindow(
+                    books: page.items, start: windowStart,
+                    maximumItems: presentation.maximumItems,
+                    maximumSections: presentation.maximumSections,
+                    titleOrder: presentation.titleOrder
                 )
-                var items = page.items.prefix(maximum).map {
-                    makeBookItem(
-                        book: $0,
-                        account: presentation.account,
-                        playback: presentation.playback
-                    )
-                }
-                if case .failed(let failure) =
-                    presentation.libraryPaginationState
-                {
-                    let retry = CPListItem(
-                        text: "Load More Failed",
-                        detailText: failure.message
-                    )
-                    retry.handler = { [weak self] _, completion in
-                        Task { @MainActor [weak self] in
-                            await self?.perform(.loadMore)
-                            completion()
-                        }
-                    }
-                    items.append(retry)
-                } else if page.hasNextPage {
-                    let more = CPListItem(
-                        text:
-                            presentation.libraryPaginationState == .loading
-                            ? "Loading More…" : "Load More",
-                        detailText: nil
-                    )
-                    more.isEnabled =
-                        presentation.libraryPaginationState != .loading
-                    more.handler = { [weak self] _, completion in
-                        Task { @MainActor [weak self] in
-                            await self?.perform(.loadMore)
-                            completion()
-                        }
-                    }
-                    items.append(more)
-                }
-                template.updateSections([
+                windowStart = window.range.lowerBound
+                let base = page.page * page.limit
+                let scope =
+                    presentation.cachedPage ? "Cached portion" : "Window"
+                let rangeLabel =
+                    "\(scope) \(base + window.range.lowerBound + 1)–\(base + window.range.upperBound) • Letters here"
+
+                var sections = window.groups.map { group in
                     CPListSection(
-                        items: Array(items),
-                        header: nil,
-                        sectionIndexTitle: nil
+                        items: group.books.map {
+                            makeBookItem(
+                                book: $0, account: presentation.account,
+                                playback: presentation.playback)
+                        },
+                        header: group.indexTitle,
+                        sectionIndexTitle: group.indexTitle
                     )
-                ])
+                }
+                if let first = sections.first {
+                    sections[0] = CPListSection(
+                        items: first.items, header: rangeLabel,
+                        sectionIndexTitle: first.sectionIndexTitle)
+                }
+                let hasNext =
+                    window.range.upperBound < page.items.count
+                    || page.hasNextPage || libraryNextFailure != nil
+                let generation = presentation.libraryGeneration
+                var navigation: [CPListItem] = []
+                var barActions: [(String, CarPlayAction)] = []
+                if windowStart > 0 || page.page > 0 {
+                    barActions.append(("Previous", .previousWindow))
+                    navigation.append(
+                        windowActionItem(
+                            title: "Previous", detail: nil,
+                            action: .previousWindow,
+                            libraryGeneration: generation
+                        ))
+                }
+                if hasNext {
+                    let title: String
+                    let detail: String?
+                    switch presentation.libraryPaginationState {
+                    case .idle:
+                        title = "Next"
+                        detail = "Letters apply to this window"
+                    case .loading:
+                        title = "Loading Next…"
+                        detail = nil
+                    case .failed(let failure):
+                        title = "Retry Page"
+                        detail = failure.message
+                    }
+                    let next = windowActionItem(
+                        title: title, detail: detail, action: .nextWindow,
+                        libraryGeneration: generation
+                    )
+                    next.isEnabled =
+                        presentation.libraryPaginationState != .loading
+                    navigation.append(next)
+                    if next.isEnabled {
+                        barActions.append((title, .nextWindow))
+                    }
+                }
+                if presentation.maximumItems >= 3, let last = sections.popLast()
+                {
+                    sections.append(
+                        CPListSection(
+                            items: last.items + navigation, header: last.header,
+                            sectionIndexTitle: last.sectionIndexTitle
+                        ))
+                    template.trailingNavigationBarButtons = []
+                } else {
+                    // With fewer than three rows, keep navigation outside the row budget.
+                    template.trailingNavigationBarButtons = barActions.map {
+                        title, action in
+                        CPBarButton(
+                            title: title, handler: windowBarHandler(action))
+                    }
+                }
+                template.updateSections(sections)
+
             }
+        }
+
+        private func loadLibraryPage(
+            _ number: Int, start: Int?, connection: UInt64, context: UInt64
+        ) async {
+            guard !libraryLoading, presenter != nil,
+                connection == presentationGeneration,
+                context == model.libraryPageGeneration
+            else { return }
+            libraryLoading = true
+            libraryNextFailure = nil
+            failedPageRequest = nil
+            refreshTemplates()
+            do throws(AppServiceError) {
+                let result = try await model.carPlayLibraryPage(number)
+                guard !Task.isCancelled, presenter != nil,
+                    connection == presentationGeneration,
+                    context == model.libraryPageGeneration
+                else { return }
+                guard !result.value.items.isEmpty || result.value.total == 0
+                else {
+                    throw AppServiceError.libraryRepository(
+                        .remote(.invalidPage))
+                }
+                libraryPage = .loaded(result.value)
+                libraryPageSource = result.source
+                previousWindowStarts = []
+                let limits = contentLimits()
+                let capacity =
+                    limits.items >= 3 ? limits.items - 2 : max(1, limits.items)
+                if let start {
+                    windowStart = start
+                } else {
+                    windowStart = max(
+                        0,
+                        ((result.value.items.count - 1) / capacity) * capacity)
+                    previousWindowStarts = stride(
+                        from: 0, to: windowStart, by: capacity
+                    ).map { $0 }
+                }
+                libraryLoading = false
+                refreshTemplates()
+            } catch let error {
+                guard !Task.isCancelled, presenter != nil,
+                    connection == presentationGeneration,
+                    context == model.libraryPageGeneration
+                else { return }
+                let failure = AppFailure(
+                    operation: .loadLibraryPage, serviceError: error)
+                if case .loaded = libraryPage {
+                    libraryNextFailure = failure
+                    failedPageRequest = (number, start)
+                } else {
+                    libraryPage = .failed(failure)
+                }
+                libraryLoading = false
+                refreshTemplates()
+            }
+        }
+
+        func windowBarHandler(_ action: CarPlayAction)
+            -> @Sendable (CPBarButton) -> Void
+        {
+            let connection = presentationGeneration
+            let generation = model.libraryPageGeneration
+            return { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.presentationGeneration == connection,
+                        self.model.libraryPageGeneration == generation
+                    else { return }
+                    await self.perform(action)
+                }
+            }
+        }
+
+        private func windowActionItem(
+            title: String, detail: String?, action: CarPlayAction,
+            libraryGeneration: UInt64
+        ) -> CPListItem {
+            let item = CPListItem(text: title, detailText: detail)
+            let connection = presentationGeneration
+            item.handler = { @Sendable [weak self] _, completion in
+                let completed = CarPlaySelectionCompletion(completion)
+                Task { @MainActor [weak self] in
+                    defer { completed() }
+                    guard let self, self.presentationGeneration == connection,
+                        self.model.libraryPageGeneration == libraryGeneration
+                    else { return }
+                    await self.perform(action)
+                }
+            }
+            return item
         }
 
         private func updateDownloadsTemplate(
@@ -545,6 +766,7 @@
         private func makeTemplatePresentation(
             accountID: AccountID?
         ) -> TemplatePresentation {
+            let limits = contentLimits()
             let account = model.account.map {
                 AccountPresentation(id: $0.id, server: $0.server)
             }
@@ -553,8 +775,15 @@
                 account: account,
                 selectedLibraryID: model.selectedLibrary?.id,
                 homeShelves: model.homeShelves,
-                books: model.books,
-                libraryPaginationState: model.libraryPaginationState,
+                books: libraryPage,
+                cachedPage: libraryPageSource == .cache,
+                libraryPaginationState: libraryLoading
+                    ? .loading
+                    : libraryNextFailure.map(LibraryPaginationState.failed)
+                        ?? .idle,
+                libraryGeneration: model.libraryPageGeneration,
+                titleOrder: true,
+                maximumItems: limits.items, maximumSections: limits.sections,
                 downloads: availableDownloadPresentations(
                     accountID: accountID
                 ),
@@ -622,10 +851,11 @@
             item.isPlaying =
                 playback.itemID == book.id
                 && playback.accountID == account?.id
-            item.handler = { [weak self] _, completion in
+            item.handler = { @Sendable [weak self] _, completion in
+                let completed = CarPlaySelectionCompletion(completion)
                 Task { @MainActor [weak self] in
                     await self?.perform(.playBook(book))
-                    completion()
+                    completed()
                 }
             }
             loadArtwork(
@@ -660,12 +890,13 @@
             item.isPlaying =
                 playback.itemID == download.itemID
                 && playback.accountID == download.accountID
-            item.handler = { [weak self] _, completion in
+            item.handler = { @Sendable [weak self] _, completion in
+                let completed = CarPlaySelectionCompletion(completion)
                 Task { @MainActor [weak self] in
                     await self?.perform(
                         .playDownload(download.downloadID)
                     )
-                    completion()
+                    completed()
                 }
             }
             loadArtwork(
@@ -678,7 +909,8 @@
 
         private func failureSection(
             _ failure: AppFailure,
-            retry: CarPlayAction?
+            retry: CarPlayAction?,
+            maximumItems: Int = CPListTemplate.maximumItemCount
         ) -> CPListSection {
             var items: [CPListItem] = []
             let message = CPListItem(
@@ -692,16 +924,17 @@
                     text: "Try Again",
                     detailText: nil
                 )
-                retryItem.handler = { [weak self] _, completion in
+                retryItem.handler = { @Sendable [weak self] _, completion in
+                    let completed = CarPlaySelectionCompletion(completion)
                     Task { @MainActor [weak self] in
                         await self?.perform(retry)
-                        completion()
+                        completed()
                     }
                 }
                 items.append(retryItem)
             }
             return CPListSection(
-                items: items,
+                items: Array(items.suffix(max(0, maximumItems))),
                 header: nil,
                 sectionIndexTitle: nil
             )
@@ -717,10 +950,11 @@
                     text: library.name,
                     detailText: selected ? "Selected" : nil
                 )
-                item.handler = { [weak self] _, completion in
+                item.handler = { @Sendable [weak self] _, completion in
+                    let completed = CarPlaySelectionCompletion(completion)
                     Task { @MainActor [weak self] in
                         await self?.perform(.selectLibrary(library))
-                        completion()
+                        completed()
                     }
                 }
                 return item
@@ -756,15 +990,56 @@
             case .selectLibrary(let library):
                 await model.selectLibrary(library)
                 presenter?.pop()
-            case .loadMore:
-                await model.loadNextBooksPage()
+            case .nextWindow:
+                if let failedPageRequest {
+                    await loadLibraryPage(
+                        failedPageRequest.number,
+                        start: failedPageRequest.start,
+                        connection: presentationGeneration,
+                        context: model.libraryPageGeneration)
+                    return
+                }
+                guard !libraryLoading, let presentation = renderedPresentation,
+                    case .loaded(let page) = libraryPage
+                else { return }
+                let end = CarPlayLibraryWindow(
+                    books: page.items, start: windowStart,
+                    maximumItems: presentation.maximumItems,
+                    maximumSections: presentation.maximumSections
+                ).range.upperBound
+                if end < page.items.count {
+                    previousWindowStarts.append(windowStart)
+                    windowStart = end
+                    renderedPresentation = nil
+                    refreshTemplates()
+                } else if page.hasNextPage {
+                    await loadLibraryPage(
+                        page.page + 1, start: 0,
+                        connection: presentationGeneration,
+                        context: model.libraryPageGeneration)
+                }
+            case .previousWindow:
+                guard !libraryLoading, case .loaded(let page) = libraryPage
+                else { return }
+                if windowStart > 0 {
+                    windowStart = previousWindowStarts.popLast() ?? 0
+                    renderedPresentation = nil
+                    refreshTemplates()
+                } else if page.page > 0 {
+                    await loadLibraryPage(
+                        page.page - 1, start: nil,
+                        connection: presentationGeneration,
+                        context: model.libraryPageGeneration)
+                }
             case .retryHome:
                 guard let library = model.selectedLibrary else {
                     return
                 }
                 await model.selectLibrary(library)
             case .retryLibrary:
-                await model.reloadBooks()
+                await loadLibraryPage(
+                    0, start: 0, connection: presentationGeneration,
+                    context: model.libraryPageGeneration)
             }
         }
 
@@ -844,7 +1119,7 @@
             let ok = CPAlertAction(
                 title: "OK",
                 style: .cancel
-            ) { [weak self] _ in
+            ) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.presenter?.dismiss()
                 }
@@ -873,7 +1148,7 @@
             }
             let decreaseButton = CPNowPlayingImageButton(
                 image: decreaseImage
-            ) { [weak self] _ in
+            ) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     _ = self?.model.playback
                         .stepFeaturedPlaybackRate(.decrease)
@@ -881,7 +1156,7 @@
             }
             let increaseButton = CPNowPlayingImageButton(
                 image: increaseImage
-            ) { [weak self] _ in
+            ) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     _ = self?.model.playback
                         .stepFeaturedPlaybackRate(.increase)
@@ -914,6 +1189,9 @@
                 _ = model.homeShelves
                 _ = model.books
                 _ = model.libraryPaginationState
+                _ = model.libraryPageGeneration
+                _ = model.librarySort
+                _ = model.showsLibraryCategories
                 _ = model.downloads.records
                 _ = model.playback.itemID
                 _ = model.playback.accountID
@@ -1033,6 +1311,10 @@
     final class CarPlaySceneDelegate:
         UIResponder, CPTemplateApplicationSceneDelegate
     {
+        func sceneDidBecomeActive(_ scene: UIScene) {
+            BleatAppDelegate.current?.carPlayCoordinator.refreshTemplates()
+        }
+
         func templateApplicationScene(
             _ templateApplicationScene: CPTemplateApplicationScene,
             didConnect interfaceController: CPInterfaceController

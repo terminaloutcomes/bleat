@@ -1114,6 +1114,29 @@ signed-in root is a three-tab interface:
   and a chooser for that account's audiobook libraries;
 - Downloads presents verified whole-book-complete records only.
 
+Library owns an uncollapsed, ascending-title server page of at most 100 books,
+independent of the phone's appended pages, sort, categories, and filters. The
+account and library remain shared. Phone browsing reloads reset the CarPlay
+window and reject older work instead of leaving a category overview loading.
+Next/Previous visit bounded windows within a page and request adjacent pages
+only at its boundaries. Books, navigation, loading, and retry rows count against
+runtime item limits. Small row budgets use native navigation-bar buttons;
+reduced section limits fall back to a single ordinary list without dropping books.
+Runtime limits are rechecked while connected and when the scene becomes active.
+
+Each visible window is alphabetized with the server-provided prefix-at-end title
+key when present, otherwise its original title. The same locale-aware key assigns
+single-grapheme letter buckets; numbers, punctuation, and emoji use `#`. Original
+display titles remain unchanged. Server page membership remains authoritative:
+this local window ordering is not a globally sorted catalog or a whole-library
+letter lookup. The section header identifies its range and current-window scope.
+Cached pages are explicitly labeled as a cached portion; absent adjacent caches
+produce a typed retry failure while preserving the current page and Downloads.
+The Library tab, library chooser, and Now Playing remain within audio-template
+depth limits. New index/paging vehicle and accessibility evidence is tracked
+separately in `docs/release-evidence/carplay.md` and
+[issue #331](https://github.com/terminaloutcomes/bleat/issues/331).
+
 CarPlay's
 [`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate)
 is restricted to navigation applications and is not an allowed template for an

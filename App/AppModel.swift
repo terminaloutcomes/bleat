@@ -1425,7 +1425,7 @@ final class AppModel {
     private let initialLaunchStage: AppLaunchStage
     private var hasStarted = false
     private var librariesGeneration: UInt64 = 0
-    private var libraryPageGeneration: UInt64 = 0
+    private(set) var libraryPageGeneration: UInt64 = 0
     private var homeShelvesGeneration: UInt64 = 0
     private var bookProgressGeneration: UInt64 = 0
     private var seriesPageGeneration: UInt64 = 0
@@ -3280,6 +3280,18 @@ final class AppModel {
                 )
             )
         }
+    }
+
+    func carPlayLibraryPage(_ number: Int) async throws(AppServiceError)
+        -> LibraryRepositoryResult<LibraryItemsPage>
+    {
+        guard let account, let library = selectedLibrary else {
+            throw .libraryRepository(.remote(.invalidLibrary))
+        }
+        let request = try makeLibraryItemsPageRequest(
+            page: number, limit: 100, sort: .title, collapseSeries: false)
+        return try await service.carPlayPage(
+            for: account, libraryID: library.id, request: request)
     }
 
     func loadNextBooksPage() async {

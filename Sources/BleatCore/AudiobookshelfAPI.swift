@@ -790,6 +790,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
             libraryID == expectedLibraryID,
             mediaType == "book",
             Self.isValidDisplayString(media.metadata.title),
+            Self.isValidOptionalDisplayString(media.metadata.titleIgnorePrefix),
             Self.isValidOptionalDisplayString(media.metadata.subtitle),
             Self.isValidOptionalDisplayString(media.metadata.authorName),
             Self.isValidOptionalDisplayString(media.metadata.narratorName),
@@ -820,6 +821,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
             id: id,
             libraryID: libraryID,
             title: media.metadata.title,
+            titleIndexKey: Self.nonEmpty(media.metadata.titleIgnorePrefix),
             subtitle: Self.nonEmpty(media.metadata.subtitle),
             authorName: Self.nonEmpty(media.metadata.authorName),
             narratorName: Self.nonEmpty(media.metadata.narratorName),
@@ -917,8 +919,11 @@ private struct LibraryBookDTO: Decodable, Sendable {
     }
 }
 
+// Pinned titleIgnorePrefix is the server-provided prefix-at-end display key:
+// https://github.com/advplyr/audiobookshelf/blob/v2.36.0/server/models/Book.js#L548-L552
 private struct LibraryBookMetadataDTO: Decodable, Sendable {
     let title: String
+    let titleIgnorePrefix: String?
     let subtitle: String?
     let authorName: String?
     let narratorName: String?
@@ -933,6 +938,7 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case title
+        case titleIgnorePrefix
         case subtitle
         case authorName
         case narratorName
@@ -949,6 +955,8 @@ private struct LibraryBookMetadataDTO: Decodable, Sendable {
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         title = try values.decode(String.self, forKey: .title)
+        titleIgnorePrefix = try values.decodeIfPresent(
+            String.self, forKey: .titleIgnorePrefix)
         subtitle = try values.decodeIfPresent(String.self, forKey: .subtitle)
         authorName = try values.decodeIfPresent(
             String.self,

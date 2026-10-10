@@ -471,6 +471,11 @@ protocol AppServicing: Sendable {
         request: LibraryItemsPageRequest
     ) async throws(AppServiceError) -> LibraryItemsPage
 
+    func carPlayPage(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryRepositoryResult<LibraryItemsPage>
+
     func homeShelves(
         for account: ServerAccount,
         libraryID: LibraryID
@@ -799,6 +804,18 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func carPlayPage(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryRepositoryResult<LibraryItemsPage>
+    {
+        let value = try await page(
+            for: account, libraryID: libraryID, request: request)
+        return LibraryRepositoryResult(
+            value: value, source: .remote,
+            refreshedAt: Date(), correlationID: nil)
+    }
+
     func libraryCategories(
         for account: ServerAccount, libraryID: LibraryID,
         kind: LibraryCategoryKind
@@ -2465,6 +2482,19 @@ actor LiveAppService: AppServicing {
         do {
             return try await api.libraryCategories(in: libraryID, kind: kind)
         } catch let error { throw .libraryRepository(.remote(error)) }
+    }
+
+    func carPlayPage(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibraryItemsPageRequest
+    ) async throws(AppServiceError) -> LibraryRepositoryResult<LibraryItemsPage>
+    {
+        do {
+            return try await repository(for: account).libraryItems(
+                in: libraryID, request: request)
+        } catch let error {
+            throw .libraryRepository(error)
+        }
     }
 
     func page(

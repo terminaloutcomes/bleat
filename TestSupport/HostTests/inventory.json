@@ -38,6 +38,7 @@
     "testSearchMapsTypedAuthorAndSeriesGroups()",
     "testSearchFailuresRemainTyped()",
     "testPageRequestValidationAndExactQueryContract()",
+    "testLibraryTitleIndexKeyRetainsServerArticleFormAndLegacyCache()",
     "testLibraryItemsMapsPinnedFixtureAndPagination()",
     "testLibraryItemsMapsCollapsedSeriesBrowseEntry()",
     "testSeriesFilteredExpandedPageMapsTheMatchingSequence()",
