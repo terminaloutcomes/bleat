@@ -602,6 +602,7 @@ enum AppFailureCause: Equatable, Sendable {
     case serverUnsupported, localLoginUnavailable, invalidCredentials
     case authenticationRequired, permissionDenied, itemNotFound
     case invalidLibraryCategories
+    case invalidBookMetadata(BookMetadataFailure)
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
@@ -656,7 +657,8 @@ struct AppFailure: Equatable, Sendable {
         case .permissionDenied: "Access denied"
         case .authenticationRequired: "Sign in again"
         case .invalidLibraryCategories: "Invalid library categories"
-        case .invalidServerResponse: "Invalid server response"
+        case .invalidServerResponse, .invalidBookMetadata:
+            "Invalid server response"
         case .localStorageUnavailable, .persistenceUnavailable,
             .storedDataMigrationFailed:
             "Local storage unavailable"
@@ -737,6 +739,16 @@ struct AppFailure: Equatable, Sendable {
             "This audiobook may have been removed from the server."
         case .invalidLibraryCategories:
             "The server returned incomplete or inconsistent library categories."
+        case .invalidBookMetadata(let field):
+            switch field {
+            case .title: "The audiobook has no usable title."
+            case .duration: "The audiobook has an invalid audio duration."
+            case .trackCount: "The audiobook has an invalid track count."
+            case .audioFileCount:
+                "The audiobook has an inconsistent audio file count."
+            case .timestamps:
+                "The audiobook has invalid added or updated timestamps."
+            }
         case .invalidServerResponse:
             "The server returned incomplete or inconsistent data."
         case .localStorageUnavailable:
@@ -803,7 +815,8 @@ struct AppFailure: Equatable, Sendable {
             "lock"
         case .itemNotFound: "book.closed"
         case .permissionDenied: "lock"
-        case .invalidServerResponse, .invalidLibraryCategories, .invalidInput,
+        case .invalidServerResponse, .invalidBookMetadata,
+            .invalidLibraryCategories, .invalidInput,
             .requestRejected,
             .authenticationBridgeFailed, .authenticationCallbackInvalid,
             .authenticationCredentialInvalid:
@@ -1068,6 +1081,7 @@ struct AppFailure: Equatable, Sendable {
     {
         switch error {
         case .authentication(let error): authenticationCause(error)
+        case .invalidBookMetadata(let field): .invalidBookMetadata(field)
         case .invalidLibraryCategories: .invalidLibraryCategories
         case .unexpectedStatus(let status): statusCause(status)
         case .malformedResponse, .invalidLibrary, .invalidPage,
@@ -1234,7 +1248,8 @@ extension AppFailureCause {
         case .serverNotReady, .requestRejected, .itemNotFound,
             .authenticationBridgeFailed:
             .serverRejected
-        case .invalidServerResponse, .invalidLibraryCategories,
+        case .invalidServerResponse, .invalidBookMetadata,
+            .invalidLibraryCategories,
             .playbackIdentityMismatch:
             .invalidResponse
         case .persistenceUnavailable, .storedDataMigrationFailed,

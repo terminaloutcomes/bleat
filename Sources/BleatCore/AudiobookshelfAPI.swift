@@ -33,9 +33,16 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidLibraryCategories
     case invalidLibraryItem
     case invalidBookDetail
+    case invalidBookMetadata(BookMetadataFailure)
     case invalidSearchResults
     case invalidPersonalizedShelves
     case invalidListeningSessions
+}
+
+public enum BookMetadataFailure: String, Error, Equatable, Sendable,
+    CaseIterable
+{
+    case title, duration, trackCount, audioFileCount, timestamps
 }
 
 public actor AudiobookshelfAPI<
@@ -789,25 +796,7 @@ private struct LibraryItemDTO: Decodable, Sendable {
         guard !id.rawValue.isEmpty,
             libraryID == expectedLibraryID,
             mediaType == "book",
-            Self.isValidDisplayString(media.metadata.title),
-            Self.isValidOptionalDisplayString(media.metadata.titleIgnorePrefix),
-            Self.isValidOptionalDisplayString(media.metadata.subtitle),
-            Self.isValidOptionalDisplayString(media.metadata.authorName),
-            Self.isValidOptionalDisplayString(media.metadata.narratorName),
-            Self.isValidOptionalDisplayString(media.metadata.seriesName),
-            Self.isValidOptionalDisplayString(media.metadata.publisher),
-            Self.isValidOptionalDisplayString(
-                media.metadata.publishedYear
-            ),
-            (media.metadata.authors ?? []).allSatisfy({
-                Self.isValidDisplayString($0.name)
-            }),
-            (media.metadata.series ?? []).allSatisfy({
-                Self.isValidDisplayString($0.name)
-                    && Self.isValidOptionalDisplayString($0.sequence)
-            }),
-            media.metadata.genres.allSatisfy(Self.isValidDisplayString),
-            (media.tags ?? []).allSatisfy(Self.isValidDisplayString),
+            !LibraryMetadataText.sanitize(media.metadata.title).isEmpty,
             media.duration.isFinite,
             media.duration >= 0,
             media.numTracks >= 0,
@@ -820,19 +809,34 @@ private struct LibraryItemDTO: Decodable, Sendable {
         return LibraryBookSummary(
             id: id,
             libraryID: libraryID,
-            title: media.metadata.title,
-            titleIndexKey: Self.nonEmpty(media.metadata.titleIgnorePrefix),
-            subtitle: Self.nonEmpty(media.metadata.subtitle),
-            authorName: Self.nonEmpty(media.metadata.authorName),
-            narratorName: Self.nonEmpty(media.metadata.narratorName),
-            seriesName: Self.nonEmpty(media.metadata.seriesName),
-            authors: media.metadata.authors ?? [],
-            series: media.metadata.series ?? [],
+            title: LibraryMetadataText.sanitize(media.metadata.title),
+            titleIndexKey: LibraryMetadataText.optional(
+                media.metadata.titleIgnorePrefix),
+            subtitle: LibraryMetadataText.optional(media.metadata.subtitle),
+            authorName: LibraryMetadataText.optional(media.metadata.authorName),
+            narratorName: LibraryMetadataText.optional(
+                media.metadata.narratorName),
+            seriesName: LibraryMetadataText.optional(media.metadata.seriesName),
+            authors: (media.metadata.authors ?? []).compactMap {
+                guard let name = LibraryMetadataText.optional($0.name) else {
+                    return nil
+                }
+                return LibraryBookContributor(id: $0.id, name: name)
+            },
+            series: (media.metadata.series ?? []).compactMap {
+                guard let name = LibraryMetadataText.optional($0.name) else {
+                    return nil
+                }
+                return LibraryBookSeries(
+                    id: $0.id, name: name,
+                    sequence: LibraryMetadataText.optional($0.sequence))
+            },
             collapsedSeries: try collapsedSeries?.domainValue(),
-            genres: media.metadata.genres,
+            genres: LibraryMetadataText.names(media.metadata.genres),
             tags: media.tags ?? [],
-            publisher: Self.nonEmpty(media.metadata.publisher),
-            publishedYear: Self.nonEmpty(media.metadata.publishedYear),
+            publisher: LibraryMetadataText.optional(media.metadata.publisher),
+            publishedYear: LibraryMetadataText.optional(
+                media.metadata.publishedYear),
             duration: media.duration,
             trackCount: media.numTracks,
             chapterCount: media.numChapters,
@@ -843,30 +847,6 @@ private struct LibraryItemDTO: Decodable, Sendable {
         )
     }
 
-    private static func nonEmpty(_ value: String?) -> String? {
-        guard let value,
-            !value.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            ).isEmpty
-        else {
-            return nil
-        }
-        return value
-    }
-
-    private static func isValidDisplayString(_ value: String) -> Bool {
-        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && value.rangeOfCharacter(from: .controlCharacters) == nil
-    }
-
-    private static func isValidOptionalDisplayString(
-        _ value: String?
-    ) -> Bool {
-        guard let value else {
-            return true
-        }
-        return value.rangeOfCharacter(from: .controlCharacters) == nil
-    }
 }
 
 // v2.26.0 search results include expanded media arrays without count fields.
@@ -1103,6 +1083,21 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
         else {
             throw .invalidBookDetail
         }
+        guard media.duration.isFinite, media.duration >= 0 else {
+            throw .invalidBookMetadata(.duration)
+        }
+        guard media.numTracks >= 0 else {
+            throw .invalidBookMetadata(.trackCount)
+        }
+        guard media.numAudioFiles >= media.numTracks else {
+            throw .invalidBookMetadata(.audioFileCount)
+        }
+        guard addedAt >= 0, updatedAt >= 0 else {
+            throw .invalidBookMetadata(.timestamps)
+        }
+        guard !LibraryMetadataText.sanitize(media.metadata.title).isEmpty else {
+            throw .invalidBookMetadata(.title)
+        }
         let progress: LibraryBookProgress?
         if let userMediaProgress {
             progress = try userMediaProgress.domainValue(
@@ -1117,32 +1112,41 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
             id: id,
             libraryID: libraryID,
             bookID: media.id,
-            title: media.metadata.title,
-            subtitle: Self.nonEmpty(media.metadata.subtitle),
-            authors: media.metadata.authors,
-            narrators: media.metadata.narrators,
-            series: media.metadata.series.map {
-                LibraryBookSeries(
-                    id: $0.id,
-                    name: $0.name,
-                    sequence: Self.nonEmpty($0.sequence)
-                )
+            title: LibraryMetadataText.sanitize(media.metadata.title),
+            subtitle: LibraryMetadataText.optional(media.metadata.subtitle),
+            authors: media.metadata.authors.compactMap {
+                let name = LibraryMetadataText.sanitize($0.name)
+                return name.isEmpty
+                    ? nil : LibraryBookContributor(id: $0.id, name: name)
             },
-            genres: media.metadata.genres,
+            narrators: LibraryMetadataText.names(media.metadata.narrators),
+            series: media.metadata.series.compactMap {
+                let name = LibraryMetadataText.sanitize($0.name)
+                guard !name.isEmpty else { return nil }
+                return
+                    LibraryBookSeries(
+                        id: $0.id,
+                        name: name,
+                        sequence: LibraryMetadataText.optional($0.sequence)
+                    )
+            },
+            genres: LibraryMetadataText.names(media.metadata.genres),
             tags: media.tags,
-            publishedYear: Self.nonEmpty(media.metadata.publishedYear),
-            publishedDate: Self.nonEmpty(media.metadata.publishedDate),
-            publisher: Self.nonEmpty(media.metadata.publisher),
-            descriptionPlain: Self.nonEmpty(
-                media.metadata.descriptionPlain
+            publishedYear: LibraryMetadataText.optional(
+                media.metadata.publishedYear),
+            publishedDate: LibraryMetadataText.optional(
+                media.metadata.publishedDate),
+            publisher: LibraryMetadataText.optional(media.metadata.publisher),
+            descriptionPlain: LibraryMetadataText.optional(
+                media.metadata.descriptionPlain, multiline: true
             ),
-            isbn: Self.nonEmpty(media.metadata.isbn),
-            asin: Self.nonEmpty(media.metadata.asin),
-            language: Self.nonEmpty(media.metadata.language),
+            isbn: LibraryMetadataText.optional(media.metadata.isbn),
+            asin: LibraryMetadataText.optional(media.metadata.asin),
+            language: LibraryMetadataText.optional(media.metadata.language),
             duration: media.duration,
             trackCount: media.numTracks,
             audioFileCount: media.numAudioFiles,
-            chapters: media.chapters,
+            chapters: Self.chapters(media.chapters, duration: media.duration),
             addedAtMilliseconds: addedAt,
             updatedAtMilliseconds: updatedAt,
             isExplicit: media.metadata.explicit,
@@ -1160,16 +1164,25 @@ private struct LibraryBookDetailDTO: Decodable, Sendable {
         return detail
     }
 
-    private static func nonEmpty(_ value: String?) -> String? {
-        guard let value,
-            !value.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            ).isEmpty
-        else {
-            return nil
+    private static func chapters(_ values: [PlaybackChapter], duration: Double)
+        -> [PlaybackChapter]
+    {
+        var ids: Set<Int> = []
+        return values.compactMap { chapter in
+            guard chapter.start.isFinite, chapter.start >= 0,
+                chapter.end.isFinite, chapter.end > chapter.start,
+                // Zero means unprobed audio: retain valid chapter timing until a
+                // playback session provides an authoritative duration.
+                duration == 0 || chapter.start < duration
+            else { return nil }
+            guard ids.insert(chapter.id).inserted else { return nil }
+            return PlaybackChapter(
+                id: chapter.id, start: chapter.start,
+                end: duration > 0 ? min(chapter.end, duration) : chapter.end,
+                title: LibraryMetadataText.optional(chapter.title) ?? "")
         }
-        return value
     }
+
 }
 
 // Expanded media counts are absent in v2.26.0 and included in v2.37.0.

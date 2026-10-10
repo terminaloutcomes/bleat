@@ -27,8 +27,10 @@
     "testBookDetailFailuresRemainTyped()",
     "bookDetailPreservesSynopsisWhitespace(prefix:description:)",
     "bookDetailAcceptsObservedMultilineSynopsis(prefix:)",
-    "bookDetailRejectsInappropriateSynopsisControls(control:)",
-    "bookDetailStillRejectsWhitespaceControlsInOtherMetadata(field:control:)",
+    "bookDetailRepairsSynopsisControls(control:)",
+    "bookDetailRepairsSingleLineWhitespace(field:control:)",
+    "bookDetailRepairsOddMetadataAndCachesAfterRelaunch(prefix:unprobed:)",
+    "bookDetailUnusableMetadataHasTypedFieldFailure()",
     "testHomeRequestValidationAndExactQueryContract()",
     "testPersonalizedShelvesMapOnlyAudioBooksAndExactRoute()",
     "testContinueListeningLoadsTenItemsWithoutProgressRequests()",
@@ -275,6 +277,7 @@
     "testCorruptedStoredRecordsRemainTyped()",
     "testBookDetailCacheIsAccountUserLibraryAndItemScoped()",
     "bookDetailCachePreservesMultilineSynopsisAfterRelaunch()",
+    "bookDetailCacheRejectsUnsanitizedControls()",
     "testInvalidationAndAccountRemovalAreScoped()"
   ],
   "BleatCoreTests.LibraryRepositoryTests": [

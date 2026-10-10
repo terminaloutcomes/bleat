@@ -998,6 +998,24 @@ final class LibraryCacheTests {
     }
 
     @Test
+    func bookDetailCacheRejectsUnsanitizedControls() async throws {
+        let fixture = try LibraryCacheFixture()
+        let user = UserID(rawValue: "user")
+        for (title, description) in [
+            ("Book\u{0}", "Description"), ("Book", "Description\u{7}"),
+        ] {
+            let detail = Self.detail(
+                libraryID: LibraryID(rawValue: "library"), itemID: "item",
+                userID: user, title: title, descriptionPlain: description)
+            await #expect(throws: LibraryCacheError.invalidBookDetail) {
+                try await fixture.cache.saveBookDetail(
+                    detail, userID: user,
+                    accountID: AccountID(rawValue: "account"))
+            }
+        }
+    }
+
+    @Test
     func testInvalidationAndAccountRemovalAreScoped() async throws {
         let fixture = try LibraryCacheFixture()
         let accountA = AccountID(rawValue: "a")

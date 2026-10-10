@@ -202,6 +202,15 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case authenticationRequired = "authentication_required"
     case permissionDenied = "permission_denied"
     case itemNotFound = "item_not_found"
+    case bookMetadataTitleInvalid = "book_metadata_normalization_title_invalid"
+    case bookMetadataDurationInvalid =
+        "book_metadata_normalization_duration_invalid"
+    case bookMetadataTrackCountInvalid =
+        "book_metadata_normalization_track_count_invalid"
+    case bookMetadataAudioFileCountInvalid =
+        "book_metadata_normalization_audio_file_count_invalid"
+    case bookMetadataTimestampsInvalid =
+        "book_metadata_normalization_timestamps_invalid"
     case invalidServerResponse = "invalid_server_response"
     case carPlayLibraryContextMissing = "carplay_library_context_missing"
     case carPlayItemLimitInsufficient = "carplay_item_limit_insufficient"

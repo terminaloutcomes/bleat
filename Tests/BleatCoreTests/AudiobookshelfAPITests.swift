@@ -424,7 +424,6 @@ final class AudiobookshelfAPITests {
             ("\"mediaItemId\": \"book\"", "\"mediaItemId\": \"other\""),
             ("\"numChapters\": 2", "\"numChapters\": 3"),
             ("\"progress\": 0.25", "\"progress\": 1.25"),
-            ("\"numTracks\": 1", "\"numTracks\": 0"),
         ]
         let valid = try #require(
             String(
@@ -547,7 +546,7 @@ final class AudiobookshelfAPITests {
         "\u{0}", "\u{7}", "\u{B}", "\u{C}", "\u{1B}", "\u{7F}", "\u{85}",
         "\u{202E}",
     ])
-    func bookDetailRejectsInappropriateSynopsisControls(control: String)
+    func bookDetailRepairsSynopsisControls(control: String)
         async throws
     {
         let fixture = try APIFixture(responses: [
@@ -558,16 +557,18 @@ final class AudiobookshelfAPITests {
                 statusCode: 200
             )
         ])
-        await #expect(throws: AudiobookshelfAPIError.invalidBookDetail) {
-            try await fixture.api.bookDetail(
-                for: LibraryItemID(rawValue: "item"),
-                in: LibraryID(rawValue: "library")
-            )
-        }
+        let detail = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        ).value
+        #expect(
+            detail.descriptionPlain
+                == (control == "\u{202E}"
+                    ? "First\(control)Second" : "FirstSecond"))
     }
 
     @Test(arguments: ["title", "subtitle", "publisher"], ["\r", "\n", "\t"])
-    func bookDetailStillRejectsWhitespaceControlsInOtherMetadata(
+    func bookDetailRepairsSingleLineWhitespace(
         field: String, control: String
     ) async throws {
         let fixture = try APIFixture(responses: [
@@ -577,11 +578,171 @@ final class AudiobookshelfAPITests {
                 statusCode: 200
             )
         ])
-        await #expect(throws: AudiobookshelfAPIError.invalidBookDetail) {
-            try await fixture.api.bookDetail(
-                for: LibraryItemID(rawValue: "item"),
-                in: LibraryID(rawValue: "library")
-            )
+        let detail = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        ).value
+        switch field {
+        case "title": #expect(detail.title == "First Second")
+        case "subtitle": #expect(detail.subtitle == "First Second")
+        default: #expect(detail.publisher == "First Second")
+        }
+    }
+
+    @Test(arguments: ["", "/audiobookshelf"], [false, true])
+    func bookDetailRepairsOddMetadataAndCachesAfterRelaunch(
+        prefix: String, unprobed: Bool
+    ) async throws {
+        let url = try #require(
+            Bundle.module.url(
+                forResource: "odd-metadata-book-detail-2.37.1",
+                withExtension: "json"))
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url))
+                as? [String: Any])
+        var oddMedia = try #require(payload["media"] as? [String: Any])
+        var oddMetadata = try #require(oddMedia["metadata"] as? [String: Any])
+        oddMetadata["titleIgnorePrefix"] = "Children\u{0092}s\u{200d}\t"
+        oddMedia["metadata"] = oddMetadata
+        payload["media"] = oddMedia
+        if unprobed {
+            var media = try #require(payload["media"] as? [String: Any])
+            media["duration"] = 0
+            media["numTracks"] = 0
+            payload["media"] = media
+        }
+        let fixture = try APIFixture(
+            responses: [
+                HTTPResponse(
+                    data: try JSONSerialization.data(withJSONObject: payload),
+                    statusCode: 200)
+            ], serverAddress: "https://example.com\(prefix)")
+        let detail = try await fixture.api.bookDetail(
+            for: LibraryItemID(rawValue: "item"),
+            in: LibraryID(rawValue: "library")
+        ).value
+        #expect(detail.title == "Saturn’s Children\u{200d}")
+        #expect(detail.subtitle == "Soft\u{ad}hyphen text")
+        #expect(detail.authors.first?.name == "An Author")
+        #expect(detail.narrators == ["A Narrator"])
+        #expect(detail.series.first?.name == "A Series")
+        #expect(detail.series.first?.sequence == "2")
+        #expect(detail.genres == ["Fiction"])
+        #expect(detail.tags == ["Tag\t"])
+        #expect(detail.publisher == "Publisher")
+        #expect(detail.isbn == "9780000000000")
+        #expect(detail.asin == "B000000000")
+        #expect(detail.language == "English")
+        #expect(detail.descriptionPlain == "First\r\nSecond\tSaturn’s\u{200d}")
+        #expect(detail.duration == (unprobed ? 0 : 120))
+        #expect(detail.trackCount == (unprobed ? 0 : 1))
+        #expect(
+            detail.chapters.map(\.id) == (unprobed ? [0, 1, 2, 3] : [0, 1]))
+        #expect(detail.chapters[0].title == "First")
+        #expect(detail.chapters[1].end == (unprobed ? 150 : 120))
+        let summaryFixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try JSONSerialization.data(withJSONObject: [
+                    "results": [payload], "total": 1, "page": 0, "limit": 1,
+                ]), statusCode: 200)
+        ])
+        let page = try await summaryFixture.api.libraryItems(
+            in: detail.libraryID,
+            request: LibraryItemsPageRequest(page: 0, limit: 1)
+        ).value
+        #expect(page.items.first?.title == detail.title)
+        #expect(page.items.first?.titleIndexKey == "Children’s\u{200d}")
+        #expect(
+            page.items.first?.isValidForStorage(in: detail.libraryID) == true)
+        let container = try ModelContainer(
+            for: CachedLibraryBookDetailRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let cache = LibraryCache(modelContainer: container)
+        let user = UserID(rawValue: "user")
+        let account = AccountID(rawValue: "account")
+        try await cache.saveBookDetail(detail, userID: user, accountID: account)
+        let relaunched = LibraryCache(modelContainer: container)
+        let restored = try await relaunched.bookDetail(
+            for: detail.id, in: detail.libraryID, userID: user,
+            accountID: account)
+        #expect(restored?.detail == detail)
+        let wrongUser = try await relaunched.bookDetail(
+            for: detail.id, in: detail.libraryID,
+            userID: UserID(rawValue: "other"), accountID: account)
+        #expect(wrongUser == nil)
+        // Permission keys must survive display repair and offline cache reload.
+        let cachedDetail = try #require(restored?.detail)
+        for denied in [false, true] {
+            for selectedTag in ["Tag\t", "Tag"] {
+                let restrictedUser = AuthenticatedUser(
+                    id: user, username: "user", type: .user,
+                    permissions: UserPermissions(
+                        download: true, update: false, delete: false,
+                        upload: false, createEReader: false,
+                        accessAllLibraries: true,
+                        accessAllTags: false,
+                        accessExplicitContent: true,
+                        selectedTagsNotAccessible: denied),
+                    accessibleLibraryIDs: [], selectedItemTags: [selectedTag])
+                let matches = selectedTag == "Tag\t"
+                let expected: LibraryItemAccessDecision =
+                    (denied ? !matches : matches) ? .allowed : .inaccessibleTags
+                #expect(
+                    BookActionAvailability(user: restrictedUser, detail: detail)
+                        .access == expected)
+                #expect(
+                    BookActionAvailability(
+                        user: restrictedUser, detail: cachedDetail
+                    ).access == expected)
+                let summary = try #require(page.items.first)
+                #expect(
+                    BookActionAvailability(
+                        user: restrictedUser, summary: summary
+                    ).access == expected)
+            }
+        }
+
+    }
+
+    @Test
+    func bookDetailUnusableMetadataHasTypedFieldFailure() async throws {
+        let cases: [(String, String, AudiobookshelfAPIError)] = [
+            (
+                "\"title\": \"Expanded Book\"", "\"title\": \"\\u0000\"",
+                .invalidBookMetadata(.title)
+            ),
+            (
+                "\"duration\": 120", "\"duration\": -1",
+                .invalidBookMetadata(.duration)
+            ),
+            (
+                "\"numTracks\": 1", "\"numTracks\": -1",
+                .invalidBookMetadata(.trackCount)
+            ),
+            (
+                "\"numAudioFiles\": 1", "\"numAudioFiles\": 0",
+                .invalidBookMetadata(.audioFileCount)
+            ),
+            (
+                "\"addedAt\": 1000", "\"addedAt\": -1",
+                .invalidBookMetadata(.timestamps)
+            ),
+        ]
+        let valid = try #require(
+            String(data: Self.expandedBookDetailJSON(), encoding: .utf8))
+        for (target, replacement, expected) in cases {
+            let fixture = try APIFixture(responses: [
+                HTTPResponse(
+                    data: Data(
+                        valid.replacingOccurrences(
+                            of: target, with: replacement
+                        ).utf8), statusCode: 200)
+            ])
+            await #expect(throws: expected) {
+                try await fixture.api.bookDetail(
+                    for: LibraryItemID(rawValue: "item"),
+                    in: LibraryID(rawValue: "library"))
+            }
         }
     }
 

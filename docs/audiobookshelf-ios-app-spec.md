@@ -843,8 +843,22 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
 Expanded detail preserves ordinary multiline synopsis whitespace in
 `media.metadata.descriptionPlain`, including CR/LF, LF, CR, and tabs, through
 API decoding and account-scoped cache persistence. Audiobookshelf strips HTML
-tags without removing that whitespace. Synopsis validation rejects other
-control characters; single-line metadata retains its stricter validation.
+tags without removing that whitespace. Network display metadata replaces common
+Windows-1252 punctuation decoded as Latin-1, removes other Unicode control (Cc)
+characters, and preserves Unicode format (Cf) characters such as soft hyphens
+and emoji joiners. Single-line fields replace tabs and line breaks with spaces;
+empty optional names are omitted. Opaque identifiers and tags are never repaired:
+tags are exact authorization keys and must continue matching the authenticated
+user's allow/deny selections, including after offline cache reload.
+Expanded network chapters with negative/non-finite timing, reversed or empty
+ranges, duplicate IDs, or starts at/past a known audio end are omitted; ends
+are clamped to a known duration. Cache validation still rejects unsanitized
+control characters and invalid identity, timing, and counts. Zero duration or
+track count represents unprobed media and may be displayed and cached; chapter
+timing is retained when duration is unknown. Playback still requires a valid
+session/media plan. Unusable titles, negative duration/counts, inconsistent audio
+file counts, and invalid timestamps preserve typed field failures through the UI
+and field-specific `book_metadata_normalization_*_invalid` diagnostic codes.
 
 ### 8.2 Metadata editor
 

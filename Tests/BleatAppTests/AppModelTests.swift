@@ -20943,6 +20943,25 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.phase, .signedOut)
     }
 
+    func testBookMetadataFailuresPreserveFieldAndNormalizationStage() {
+        let codes: [BookMetadataFailure: DiagnosticFailureCode] = [
+            .title: .bookMetadataTitleInvalid,
+            .duration: .bookMetadataDurationInvalid,
+            .trackCount: .bookMetadataTrackCountInvalid,
+            .audioFileCount: .bookMetadataAudioFileCountInvalid,
+            .timestamps: .bookMetadataTimestampsInvalid,
+        ]
+        for field in BookMetadataFailure.allCases {
+            let failure = AppFailure(
+                operation: .loadBook,
+                serviceError: .bookDetail(.remote(.invalidBookMetadata(field))))
+            XCTAssertEqual(failure.cause, .invalidBookMetadata(field))
+            XCTAssertEqual(failure.diagnosticFailureCode, codes[field])
+            XCTAssertFalse(failure.message.isEmpty)
+            XCTAssertFalse(failure.allowsRetry)
+        }
+    }
+
     func testServiceErrorsMapToStablePresentationFailures() {
         let cases: [(AppFailureOperation, AppServiceError, AppFailureCause)] = [
             (.login, .invalidServerURL(.empty), .invalidInput),

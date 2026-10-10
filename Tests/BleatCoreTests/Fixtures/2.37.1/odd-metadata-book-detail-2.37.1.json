@@ -1,0 +1,105 @@
+{
+  "id": "item",
+  "libraryId": "library",
+  "addedAt": 1000,
+  "updatedAt": 2000,
+  "mediaType": "book",
+  "media": {
+    "id": "book",
+    "libraryItemId": "item",
+    "metadata": {
+      "title": "Saturn\u0092s Children\u200d",
+      "subtitle": "Soft\u00adhyphen\ttext",
+      "authors": [
+        {
+          "id": "author",
+          "name": "An\tAuthor"
+        }
+      ],
+      "narrators": [
+        "A\nNarrator"
+      ],
+      "series": [
+        {
+          "id": "series",
+          "name": "A\rSeries",
+          "sequence": "2\t"
+        }
+      ],
+      "genres": [
+        "Fiction\t"
+      ],
+      "publishedYear": "2024\t",
+      "publishedDate": "2024-01-02\t",
+      "publisher": "Publisher\u0000",
+      "descriptionPlain": "First\r\nSecond\tSaturn\u0092s\u200d\u0000",
+      "isbn": "9780000000000\t",
+      "asin": "B000000000\t",
+      "language": "English\t",
+      "explicit": false,
+      "abridged": false,
+      "futureMetadataField": true
+    },
+    "tags": [
+      "Tag\t"
+    ],
+    "numTracks": 1,
+    "numAudioFiles": 1,
+    "numChapters": 8,
+    "duration": 120,
+    "chapters": [
+      {
+        "id": 0,
+        "start": 0,
+        "end": 60,
+        "title": "First\t"
+      },
+      {
+        "id": 1,
+        "start": 60,
+        "end": 150,
+        "title": "Second\u0092s\u200d"
+      },
+      {
+        "id": 2,
+        "start": 120,
+        "end": 140,
+        "title": "At end"
+      },
+      {
+        "id": 3,
+        "start": 150,
+        "end": 170,
+        "title": "Past end"
+      },
+      {
+        "id": 4,
+        "start": 80,
+        "end": 70,
+        "title": "Reversed"
+      },
+      {
+        "id": 5,
+        "start": -1,
+        "end": 10,
+        "title": "Negative"
+      },
+      {
+        "id": 0,
+        "start": 10,
+        "end": 20,
+        "title": "Duplicate"
+      },
+      {
+        "id": 6,
+        "start": 100,
+        "end": 100,
+        "title": "Empty"
+      }
+    ],
+    "futureMediaField": true,
+    "tracks": [],
+    "audioFiles": []
+  },
+  "futureItemField": true
+}
