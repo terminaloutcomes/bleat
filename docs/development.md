@@ -416,6 +416,30 @@ propagated unchanged. Update `MARKETING_VERSION` in `project.yml`, add the
 matching dated changelog section, and regenerate the Xcode project when
 publishing a new GitHub release.
 
+Use the App Store Connect CLI for release operations wherever it supports the
+operation, including metadata, build selection, and status checks.
+Check the binary's available commands before using a browser; use the web console
+only for a specific operation the CLI cannot perform. Do not default to a browser
+sign-in or manual release preparation workflow.
+
+Final App Store review submission belongs to the user. Automation may upload and
+inspect the build, verify processing, prepare the App Store version and localized
+release notes, and attach the selected build. Stop with the prepared version
+ready for the user's review; never submit it to App Store review automatically.
+The user performs the final submission manually. This rule concerns App Store
+review submission; the supported TestFlight beta-review workflow is separate.
+
+The current `appstore:connect-admin` and `appstore:connect-download` tasks invoke
+the repository's `appstore-monitor` binary with Keychain credentials. Its commands
+cover build processing, TestFlight distribution, app status, and analytics; it
+does not currently implement App Store version creation, localized release notes,
+build attachment to an App Store version, or App Store review submission and
+verification. TestFlight distribution operates on an already uploaded build;
+IPA upload is handled by `upload-app-store-connect` through `appstore:upload`.
+Keep release automation in these repository binaries and extend the CLI for
+missing API-supported operations instead of making browser automation the
+standard release workflow.
+
 Archive, inspect, and upload an App Store-eligible build with:
 
 ```sh
