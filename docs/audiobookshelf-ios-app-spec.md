@@ -1132,6 +1132,12 @@ this local window ordering is not a globally sorted catalog or a whole-library
 letter lookup. The section header identifies its range and current-window scope.
 Cached pages are explicitly labeled as a cached portion; absent adjacent caches
 produce a typed retry failure while preserving the current page and Downloads.
+A failed adjacent-page request remains attached to its Next or Previous boundary;
+local windows remain navigable, and terminal authentication or permission failures
+do not offer retry. Accounts with no audiobook libraries show an empty Library
+state. Library discovery failures retry discovery rather than page loading.
+Independent CarPlay page loads emit lifecycle diagnostics with a typed failure
+code and rejection stage, without account identifiers or book titles.
 The Library tab, library chooser, and Now Playing remain within audio-template
 depth limits. New index/paging vehicle and accessibility evidence is tracked
 separately in `docs/release-evidence/carplay.md` and

@@ -21910,9 +21910,280 @@ final class AppModelTests: XCTestCase {
                 template.sections.last?.items.last as? CPListItem)
             await selectCarPlayItem(next)
             XCTAssertEqual(
-                template.sections.last?.items.last?.text, "Retry Page")
+                template.sections.last?.items.last?.text, "Retry Next Page")
             XCTAssertEqual(template.sections.first?.items.first?.text, "Book")
             XCTAssertFalse(template.showsSpinnerWhileEmpty)
+        }
+
+        func testCarPlayFailedNextPagePreservesLocalNavigation() async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(
+                    LibraryItemsPage(
+                        items: (0..<4).map {
+                            fixtureBook(
+                                id: "book-\($0)", title: "Book \($0)",
+                                libraryID: library.id)
+                        },
+                        total: 200, page: 0, limit: 100)),
+                nextPage: .failure(.libraryRepository(.noCachedValue)))
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(
+                model: model, contentLimits: { (4, 4) })
+            defer { coordinator.disconnect() }
+            coordinator.connect(presenter)
+            await coordinator.waitForLibraryLoad()
+            let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+            let template = try XCTUnwrap(root.templates[1] as? CPListTemplate)
+            await selectCarPlayItem(
+                try XCTUnwrap(template.sections.last?.items.last as? CPListItem)
+            )
+            await selectCarPlayItem(
+                try XCTUnwrap(template.sections.last?.items.last as? CPListItem)
+            )
+            XCTAssertEqual(
+                template.sections.last?.items.last?.text, "Retry Next Page")
+            let requestsAfterFailure = await service.pageSelections().count
+            let previous = try XCTUnwrap(
+                template.sections.flatMap(\.items).first {
+                    $0.text == "Previous"
+                } as? CPListItem)
+            await selectCarPlayItem(previous)
+            XCTAssertEqual(template.sections.first?.items.first?.text, "Book 0")
+            XCTAssertEqual(template.sections.last?.items.last?.text, "Next")
+            await selectCarPlayItem(
+                try XCTUnwrap(template.sections.last?.items.last as? CPListItem)
+            )
+            XCTAssertEqual(template.sections.first?.items.first?.text, "Book 2")
+            let requestsAfterLocalNext = await service.pageSelections().count
+            XCTAssertEqual(requestsAfterLocalNext, requestsAfterFailure)
+            XCTAssertEqual(
+                template.sections.last?.items.last?.text, "Retry Next Page")
+        }
+
+        func testCarPlayTerminalPageFailuresDisableRetry() async throws {
+            for status in [401, 403] {
+                let account = try fixtureAccount()
+                let library = fixtureLibrary()
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([library]),
+                    firstPage: .success(
+                        LibraryItemsPage(
+                            items: [
+                                fixtureBook(
+                                    id: "book", title: "Book",
+                                    libraryID: library.id)
+                            ], total: 200, page: 0, limit: 100)),
+                    nextPage: .failure(
+                        .libraryRepository(.remote(.unexpectedStatus(status)))))
+                let model = AppModel(service: service)
+                await model.start()
+                let presenter = TestCarPlayPresenter()
+                let coordinator = CarPlayCoordinator(model: model)
+                coordinator.connect(presenter)
+                await coordinator.waitForLibraryLoad()
+                let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+                let template = try XCTUnwrap(
+                    root.templates[1] as? CPListTemplate)
+                await selectCarPlayItem(
+                    try XCTUnwrap(
+                        template.sections.last?.items.last as? CPListItem))
+                let retry = try XCTUnwrap(
+                    template.sections.last?.items.last as? CPListItem)
+                XCTAssertFalse(retry.isEnabled)
+                let requestCount = await service.pageSelections().count
+                await selectCarPlayItem(retry)
+                let afterCount = await service.pageSelections().count
+                XCTAssertEqual(afterCount, requestCount)
+                coordinator.disconnect()
+            }
+        }
+
+        func testCarPlayAccountWithoutLibrariesShowsEmptyState() async throws {
+            let service = TestAppService(
+                activeAccount: .success(try fixtureAccount()),
+                libraries: .success([]))
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            coordinator.connect(presenter)
+            let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+            let template = try XCTUnwrap(root.templates[1] as? CPListTemplate)
+            XCTAssertFalse(template.showsSpinnerWhileEmpty)
+            XCTAssertEqual(template.emptyViewTitleVariants, ["No audiobooks"])
+        }
+
+        func testCarPlayPageDiagnosticsRecordLifecycleAndFailureStage()
+            async throws
+        {
+            let library = fixtureLibrary()
+            let recorder = AppDiagnosticRecorderSpy()
+            let page = fixturePage(libraryID: library.id)
+            let service = TestAppService(
+                activeAccount: .success(try fixtureAccount()),
+                libraries: .success([library]),
+                firstPage: .success(page),
+                asyncPageProvider: { _, request in
+                    switch request.page {
+                    case 0: return .success(page)
+                    case 1: return .failure(.libraryRepository(.noCachedValue))
+                    default:
+                        return .success(
+                            LibraryItemsPage(
+                                items: [], total: 100, page: request.page,
+                                limit: 100))
+                    }
+                })
+            let model = AppModel(service: service, diagnostics: recorder)
+            await model.start()
+            _ = try await model.carPlayLibraryPage(0)
+            for page in [1, 2] {
+                do {
+                    _ = try await model.carPlayLibraryPage(page)
+                    XCTFail("Expected failure")
+                } catch {}
+            }
+            let events = await recorder.events().filter {
+                $0.operation == .loadCarPlayLibraryPage
+            }
+            XCTAssertEqual(
+                events.filter { $0.name == .operationStarted }.count, 3)
+            XCTAssertEqual(
+                events.filter { $0.name == .operationCompleted }.count, 1)
+            XCTAssertTrue(
+                events.contains {
+                    $0.stage == .pageRequest
+                        && $0.failureCode == .unavailableOffline
+                })
+            XCTAssertTrue(
+                events.contains {
+                    $0.stage == .pageValidation
+                        && $0.failureCode == .carPlayLibraryPageInvalid
+                })
+            let signedOut = AppModel(
+                service: TestAppService(activeAccount: .success(nil)),
+                diagnostics: recorder)
+            do {
+                _ = try await signedOut.carPlayLibraryPage(0)
+                XCTFail("Expected missing context")
+            } catch {}
+            let finalEvents = await recorder.events()
+            XCTAssertTrue(
+                finalEvents.contains {
+                    $0.stage == .contextValidation
+                        && $0.failureCode == .carPlayLibraryContextMissing
+                })
+            XCTAssertTrue(
+                finalEvents.contains {
+                    $0.text.contains("stage=page_validation")
+                })
+        }
+
+        func testCarPlayFailedPreviousPageKeepsDirectionAndRetryPolicy()
+            async throws
+        {
+            for error in [
+                LibraryRepositoryError.noCachedValue,
+                .remote(.unexpectedStatus(403)),
+            ] {
+                let library = fixtureLibrary()
+                let books = (0..<2).map {
+                    fixtureBook(
+                        id: "book-\($0)", title: "Book \($0)",
+                        libraryID: library.id)
+                }
+                let service = TestAppService(
+                    activeAccount: .success(try fixtureAccount()),
+                    libraries: .success([library]),
+                    firstPage: .success(
+                        LibraryItemsPage(
+                            items: books, total: 300, page: 0, limit: 100)),
+                    nextPage: .success(
+                        LibraryItemsPage(
+                            items: books, total: 300, page: 1, limit: 100)))
+                let model = AppModel(service: service)
+                await model.start()
+                let presenter = TestCarPlayPresenter()
+                let coordinator = CarPlayCoordinator(
+                    model: model, contentLimits: { (3, 4) })
+                coordinator.connect(presenter)
+                await coordinator.waitForLibraryLoad()
+                let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+                let template = try XCTUnwrap(
+                    root.templates[1] as? CPListTemplate)
+                for _ in 0..<2 {
+                    await selectCarPlayItem(
+                        try XCTUnwrap(
+                            template.sections.last?.items.last as? CPListItem))
+                }
+                await service.setFirstPage(.failure(.libraryRepository(error)))
+                let previous = try XCTUnwrap(
+                    template.sections.flatMap(\.items).first {
+                        $0.text == "Previous"
+                    } as? CPListItem)
+                await selectCarPlayItem(previous)
+                let retry = try XCTUnwrap(
+                    template.sections.flatMap(\.items).first {
+                        $0.text == "Retry Previous Page"
+                    } as? CPListItem)
+                XCTAssertEqual(retry.isEnabled, error == .noCachedValue)
+                if !retry.isEnabled {
+                    let count = await service.pageSelections().count
+                    await selectCarPlayItem(retry)
+                    let after = await service.pageSelections().count
+                    XCTAssertEqual(after, count)
+                }
+                XCTAssertEqual(template.sections.last?.items.last?.text, "Next")
+                await selectCarPlayItem(
+                    try XCTUnwrap(
+                        template.sections.last?.items.last as? CPListItem))
+                await service.setNextPage(
+                    .success(
+                        LibraryItemsPage(
+                            items: books, total: 300, page: 2, limit: 100)))
+                await selectCarPlayItem(
+                    try XCTUnwrap(
+                        template.sections.last?.items.last as? CPListItem))
+                let requests = await service.pageSelections()
+                XCTAssertEqual(requests.last?.page, 2)
+                coordinator.disconnect()
+            }
+        }
+
+        func testCarPlayLibraryDiscoveryFailureRetriesDiscovery() async throws {
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(try fixtureAccount()),
+                libraries: .failure(
+                    .libraryRepository(.remote(.unexpectedStatus(503)))),
+                firstPage: .success(fixturePage(libraryID: library.id)))
+            let model = AppModel(service: service)
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            defer { coordinator.disconnect() }
+            coordinator.connect(presenter)
+            let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+            let template = try XCTUnwrap(root.templates[1] as? CPListTemplate)
+            let retry = try XCTUnwrap(
+                template.sections.flatMap(\.items).first {
+                    $0.text == "Try Again"
+                } as? CPListItem)
+            await service.setLibraries(.success([library]))
+            await selectCarPlayItem(retry)
+            coordinator.refreshTemplates()
+            await coordinator.waitForLibraryLoad()
+            XCTAssertEqual(model.selectedLibrary?.id, library.id)
+            XCTAssertFalse(template.showsSpinnerWhileEmpty)
+            XCTAssertFalse(template.sections.isEmpty)
         }
 
         func testCarPlayBarCallbackCanEnterOffMainActor() async throws {
@@ -25300,6 +25571,10 @@ private actor TestAppService: AppServicing {
         _ result: Result<LibraryItemsPage, AppServiceError>
     ) {
         firstPageResult = result
+    }
+
+    func setNextPage(_ result: Result<LibraryItemsPage, AppServiceError>) {
+        nextPageResult = result
     }
 
     func setHomeShelves(

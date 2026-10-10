@@ -159,6 +159,29 @@ Automated validation on 2026-10-10:
   (project generation, typed catch, test enum, Objective-C completion transfer)
   and the mutable-capture fixture warnings were corrected before final validation.
 
+Follow-up review fixes on 2026-10-10:
+
+- Failed adjacent-page requests retain their navigation direction. Next/Previous
+  traverse retained windows before retrying the corresponding page boundary.
+  Terminal authentication and permission failures disable retry at either
+  boundary. Accounts without audiobook libraries show an empty state, and a
+  library-discovery failure retries discovery.
+- Independent page loads emit started/completed/failed events under
+  `load_carplay_library_page`. Failures include typed context-validation,
+  request-construction, page-request, or page-validation stages and privacy-safe
+  failure codes. Validation remains inside the asynchronous page loader.
+- All six focused app-hosted regressions passed with zero skips or runtime
+  warnings. The final
+  complete app bundle passed 511 tests, including all 26 CarPlay tests, with
+  zero skips or runtime warnings; the intermediate bundle passed 509 tests. The host gate again passed all
+  520 tests, Release build, capability matrix, and three Rust checks. Swift lint
+  and diff checks passed. The existing live-suite results above remain prior
+  validation and were not rerun for this UI/diagnostic follow-up.
+- Two fresh independent complete-change review cycles covered this follow-up.
+  The first found two additional P2s (Previous-request direction and discovery
+  retry), which were fixed and regression-tested. The second reported no findings.
+  All four original P2s and both follow-up P2s are resolved.
+
 The 10,000-book
 fixture exercises reachability under changing row limits, including one large
 letter group. Locale fixtures cover accents, case, numbers, punctuation, emoji,

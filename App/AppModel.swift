@@ -3285,13 +3285,42 @@ final class AppModel {
     func carPlayLibraryPage(_ number: Int) async throws(AppServiceError)
         -> LibraryRepositoryResult<LibraryItemsPage>
     {
-        guard let account, let library = selectedLibrary else {
-            throw .libraryRepository(.remote(.invalidLibrary))
+        await diagnostics.record(
+            .started(.loadCarPlayLibraryPage, category: .api))
+        var stage = DiagnosticStage.contextValidation
+        do throws(AppServiceError) {
+            guard let account, let library = selectedLibrary else {
+                throw .libraryRepository(.remote(.invalidLibrary))
+            }
+            stage = .requestConstruction
+            let request = try makeLibraryItemsPageRequest(
+                page: number, limit: 100, sort: .title, collapseSeries: false)
+            stage = .pageRequest
+            let result = try await service.carPlayPage(
+                for: account, libraryID: library.id, request: request)
+            stage = .pageValidation
+            guard !result.value.items.isEmpty || result.value.total == 0 else {
+                throw .libraryRepository(.remote(.invalidPage))
+            }
+            await diagnostics.record(
+                .completed(.loadCarPlayLibraryPage, category: .api))
+            return result
+        } catch let error {
+            let code: DiagnosticFailureCode
+            switch stage {
+            case .contextValidation: code = .carPlayLibraryContextMissing
+            case .pageValidation: code = .carPlayLibraryPageInvalid
+            case .requestConstruction, .pageRequest:
+                code =
+                    AppFailure(operation: .loadLibraryPage, serviceError: error)
+                    .diagnosticFailureCode
+            }
+            await diagnostics.record(
+                .failed(
+                    .loadCarPlayLibraryPage, category: .api, failureCode: code,
+                    stage: stage))
+            throw error
         }
-        let request = try makeLibraryItemsPageRequest(
-            page: number, limit: 100, sort: .title, collapseSeries: false)
-        return try await service.carPlayPage(
-            for: account, libraryID: library.id, request: request)
     }
 
     func loadNextBooksPage() async {

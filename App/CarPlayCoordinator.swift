@@ -22,6 +22,7 @@
         case previousWindow
         case retryHome
         case retryLibrary
+        case retryLibraryDiscovery
     }
 
     /// Transfers CarPlay's unannotated Objective-C completion block to the UI
@@ -109,10 +110,12 @@
             let phase: AppPhase
             let account: AccountPresentation?
             let selectedLibraryID: LibraryID?
+            let libraries: ResourceState<[LibrarySummary]>
             let homeShelves: ResourceState<[LibraryBookShelf]>
             let books: ResourceState<LibraryItemsPage>
             let cachedPage: Bool
             let libraryPaginationState: LibraryPaginationState
+            let previousPaginationState: LibraryPaginationState
             let libraryGeneration: UInt64
             let titleOrder: Bool
             let maximumItems: Int
@@ -141,8 +144,10 @@
         private var presentationGeneration: UInt64 = 0
         private var libraryPage: ResourceState<LibraryItemsPage> = .idle
         private var libraryPageSource: LibraryRepositorySource = .remote
-        private var libraryNextFailure: AppFailure?
-        private var failedPageRequest: (number: Int, start: Int?)?
+        private var libraryBoundaryFailure: AppFailure?
+        private enum LibraryPageDirection { case next, previous }
+        private var failedPageRequest:
+            (number: Int, start: Int?, direction: LibraryPageDirection)?
         private var libraryLoading = false
         private(set) var libraryTask: Task<Void, Never>?
         private var libraryContext: UInt64?
@@ -212,7 +217,7 @@
             libraryTask = nil
             libraryContext = nil
             libraryPage = .idle
-            libraryNextFailure = nil
+            libraryBoundaryFailure = nil
             failedPageRequest = nil
             libraryLoading = false
             for task in artworkTasks {
@@ -238,7 +243,7 @@
                 libraryContext = model.libraryPageGeneration
                 libraryTask?.cancel()
                 libraryPage = .idle
-                libraryNextFailure = nil
+                libraryBoundaryFailure = nil
                 failedPageRequest = nil
                 libraryLoading = false
                 windowStart = 0
@@ -507,7 +512,10 @@
                             failureSection(
                                 failure,
                                 retry:
-                                    failure.allowsRetry ? .retryLibrary : nil,
+                                    failure.allowsRetry
+                                    ? (failure.operation == .loadLibraries
+                                        ? .retryLibraryDiscovery
+                                        : .retryLibrary) : nil,
                                 maximumItems: presentation.maximumItems
                             )
                         ] : [])
@@ -546,42 +554,31 @@
                 }
                 let hasNext =
                     window.range.upperBound < page.items.count
-                    || page.hasNextPage || libraryNextFailure != nil
+                    || page.hasNextPage
                 let generation = presentation.libraryGeneration
                 var navigation: [CPListItem] = []
                 var barActions: [(String, CarPlayAction)] = []
                 if windowStart > 0 || page.page > 0 {
-                    barActions.append(("Previous", .previousWindow))
-                    navigation.append(
-                        windowActionItem(
-                            title: "Previous", detail: nil,
-                            action: .previousWindow,
-                            libraryGeneration: generation
-                        ))
+                    let previous = navigationItem(
+                        "Previous",
+                        state: windowStart > 0
+                            ? .idle : presentation.previousPaginationState,
+                        action: .previousWindow, generation: generation)
+                    navigation.append(previous)
+                    if previous.isEnabled {
+                        barActions.append(
+                            (previous.text ?? "Previous", .previousWindow))
+                    }
                 }
                 if hasNext {
-                    let title: String
-                    let detail: String?
-                    switch presentation.libraryPaginationState {
-                    case .idle:
-                        title = "Next"
-                        detail = "Letters apply to this window"
-                    case .loading:
-                        title = "Loading Next…"
-                        detail = nil
-                    case .failed(let failure):
-                        title = "Retry Page"
-                        detail = failure.message
-                    }
-                    let next = windowActionItem(
-                        title: title, detail: detail, action: .nextWindow,
-                        libraryGeneration: generation
-                    )
-                    next.isEnabled =
-                        presentation.libraryPaginationState != .loading
+                    let next = navigationItem(
+                        "Next",
+                        state: window.range.upperBound < page.items.count
+                            ? .idle : presentation.libraryPaginationState,
+                        action: .nextWindow, generation: generation)
                     navigation.append(next)
                     if next.isEnabled {
-                        barActions.append((title, .nextWindow))
+                        barActions.append((next.text ?? "Next", .nextWindow))
                     }
                 }
                 if presentation.maximumItems >= 3, let last = sections.popLast()
@@ -605,6 +602,47 @@
             }
         }
 
+        private func navigationItem(
+            _ title: String, state: LibraryPaginationState,
+            action: CarPlayAction, generation: UInt64
+        ) -> CPListItem {
+            let label: String
+            let detail: String?
+            let enabled: Bool
+            switch state {
+            case .idle:
+                label = title
+                detail =
+                    action == .nextWindow ? "Letters apply to this window" : nil
+                enabled = true
+            case .loading:
+                label = "Loading \(title)…"
+                detail = nil
+                enabled = false
+            case .failed(let failure):
+                label = "Retry \(title) Page"
+                detail = failure.message
+                enabled = failure.allowsRetry
+            }
+            let item = windowActionItem(
+                title: label, detail: detail, action: action,
+                libraryGeneration: generation)
+            item.isEnabled = enabled
+            return item
+        }
+
+        private func paginationState(_ direction: LibraryPageDirection)
+            -> LibraryPaginationState
+        {
+            if libraryLoading { return .loading }
+            if failedPageRequest?.direction == direction,
+                let libraryBoundaryFailure
+            {
+                return .failed(libraryBoundaryFailure)
+            }
+            return .idle
+        }
+
         private func loadLibraryPage(
             _ number: Int, start: Int?, connection: UInt64, context: UInt64
         ) async {
@@ -613,7 +651,7 @@
                 context == model.libraryPageGeneration
             else { return }
             libraryLoading = true
-            libraryNextFailure = nil
+            libraryBoundaryFailure = nil
             failedPageRequest = nil
             refreshTemplates()
             do throws(AppServiceError) {
@@ -622,11 +660,6 @@
                     connection == presentationGeneration,
                     context == model.libraryPageGeneration
                 else { return }
-                guard !result.value.items.isEmpty || result.value.total == 0
-                else {
-                    throw AppServiceError.libraryRepository(
-                        .remote(.invalidPage))
-                }
                 libraryPage = .loaded(result.value)
                 libraryPageSource = result.source
                 previousWindowStarts = []
@@ -652,9 +685,11 @@
                 else { return }
                 let failure = AppFailure(
                     operation: .loadLibraryPage, serviceError: error)
-                if case .loaded = libraryPage {
-                    libraryNextFailure = failure
-                    failedPageRequest = (number, start)
+                if case .loaded(let page) = libraryPage {
+                    libraryBoundaryFailure = failure
+                    failedPageRequest = (
+                        number, start, number < page.page ? .previous : .next
+                    )
                 } else {
                     libraryPage = .failed(failure)
                 }
@@ -750,7 +785,16 @@
             for presentation: TemplatePresentation
         ) -> CarPlayContentState<LibraryItemsPage> {
             switch presentation.books {
-            case .idle, .loading:
+            case .idle:
+                guard presentation.selectedLibraryID == nil else {
+                    return .loading
+                }
+                switch presentation.libraries {
+                case .idle, .loading: return .loading
+                case .loaded: return .empty
+                case .failed(let failure): return .failed(failure)
+                }
+            case .loading:
                 return .loading
             case .loaded(let page):
                 return page.items.isEmpty ? .empty : .loaded(page)
@@ -774,13 +818,12 @@
                 phase: model.phase,
                 account: account,
                 selectedLibraryID: model.selectedLibrary?.id,
+                libraries: model.libraries,
                 homeShelves: model.homeShelves,
                 books: libraryPage,
                 cachedPage: libraryPageSource == .cache,
-                libraryPaginationState: libraryLoading
-                    ? .loading
-                    : libraryNextFailure.map(LibraryPaginationState.failed)
-                        ?? .idle,
+                libraryPaginationState: paginationState(.next),
+                previousPaginationState: paginationState(.previous),
                 libraryGeneration: model.libraryPageGeneration,
                 titleOrder: true,
                 maximumItems: limits.items, maximumSections: limits.sections,
@@ -991,14 +1034,6 @@
                 await model.selectLibrary(library)
                 presenter?.pop()
             case .nextWindow:
-                if let failedPageRequest {
-                    await loadLibraryPage(
-                        failedPageRequest.number,
-                        start: failedPageRequest.start,
-                        connection: presentationGeneration,
-                        context: model.libraryPageGeneration)
-                    return
-                }
                 guard !libraryLoading, let presentation = renderedPresentation,
                     case .loaded(let page) = libraryPage
                 else { return }
@@ -1012,6 +1047,17 @@
                     windowStart = end
                     renderedPresentation = nil
                     refreshTemplates()
+                } else if let failedPageRequest,
+                    failedPageRequest.direction == .next
+                {
+                    guard libraryBoundaryFailure?.allowsRetry == true else {
+                        return
+                    }
+                    await loadLibraryPage(
+                        failedPageRequest.number,
+                        start: failedPageRequest.start,
+                        connection: presentationGeneration,
+                        context: model.libraryPageGeneration)
                 } else if page.hasNextPage {
                     await loadLibraryPage(
                         page.page + 1, start: 0,
@@ -1025,6 +1071,17 @@
                     windowStart = previousWindowStarts.popLast() ?? 0
                     renderedPresentation = nil
                     refreshTemplates()
+                } else if let failedPageRequest,
+                    failedPageRequest.direction == .previous
+                {
+                    guard libraryBoundaryFailure?.allowsRetry == true else {
+                        return
+                    }
+                    await loadLibraryPage(
+                        failedPageRequest.number,
+                        start: failedPageRequest.start,
+                        connection: presentationGeneration,
+                        context: model.libraryPageGeneration)
                 } else if page.page > 0 {
                     await loadLibraryPage(
                         page.page - 1, start: nil,
@@ -1036,6 +1093,8 @@
                     return
                 }
                 await model.selectLibrary(library)
+            case .retryLibraryDiscovery:
+                await model.loadLibraries()
             case .retryLibrary:
                 await loadLibraryPage(
                     0, start: 0, connection: presentationGeneration,
