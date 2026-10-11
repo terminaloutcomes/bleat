@@ -853,6 +853,30 @@
             ]
         }
 
+        func carPlaySearch(
+            for account: ServerAccount, libraryID: LibraryID,
+            request: LibrarySearchRequest
+        ) async throws(LibraryRepositoryError)
+            -> LibraryRepositoryResult<LibrarySearchResults>
+        {
+            do {
+                let results = try await search(
+                    for: account, libraryID: libraryID, query: request.query)
+                return LibraryRepositoryResult(
+                    value: results, source: .remote, refreshedAt: Date(),
+                    correlationID: nil)
+            } catch {
+                switch error {
+                case .libraryRepository(let cause): throw cause
+                case .searchCoordinator(.repository(let cause)): throw cause
+                case .searchCoordinator(.cancelled),
+                    .searchCoordinator(.superseded):
+                    throw .cancelled
+                default: throw .remote(.malformedResponse)
+                }
+            }
+        }
+
         func search(
             for account: ServerAccount,
             libraryID: LibraryID,

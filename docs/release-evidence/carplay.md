@@ -56,7 +56,7 @@ contents, or other signing material.
 ## CarPlay Simulator
 
 - [x] Home shelves and verified downloads render in the expected order.
-- [x] Library selection and bounded pagination work; the navigation-only
+- [x] Library selection and bounded pagination work; the iOS 26 audio-unsupported
   `CPSearchTemplate` is not used by the audio-entitled scene.
 - [x] Online and verified offline playback reach Now Playing.
 - [x] Artwork remains correct across account, library, and playback changes.
@@ -92,7 +92,7 @@ and result for each journey.
 - An intermediate build exposed
   [`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate),
   but direct interaction terminated the app with an
-  `NSInvalidArgumentException` because that navigation-only template is not
+  `NSInvalidArgumentException` because that template is not supported for iOS 26 audio scenes and is not
   allowed for an audio-entitled scene. The unsupported control and
   search-template code were removed; the final build uses only supported
   Library templates.
@@ -273,3 +273,111 @@ Manual acceptance on 2026-10-11:
 
 [Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) is complete
 per the user's manual acceptance. Existing CarPlay approval is unaffected.
+
+## Native audio search — issue #333
+
+Apple's CarPlay Developer Guide dated 2026-06-08 (printed pages 14 and 24)
+permits the Search template for Audio/video on iOS 27 and later. The earlier
+search-template exception above was observed on iOS 26; it does not establish
+an all-version navigation-only restriction.
+
+Implementation adds Library's native header-grid Search control only for enabled
+iOS 27+ audio scenes. It keeps Library and Downloads available when vehicle
+keyboard restrictions change. CarPlay owns its own debounced session, repository
+cache provenance, title/author destinations, typed failure/retry and exact-once
+completion lifecycle. Search data and author lists are bounded and explicitly
+partial when necessary; saved queries never imply a complete offline index.
+
+Automated validation on 2026-10-11:
+
+- `swift test --filter LibrarySearchCoordinatorTests`: all 8 intended tests passed.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh`: 526 signed-host tests
+  passed with no skips, 3 Rust release tests passed, and the Release package
+  build and paid-capability build-mode matrix passed. The existing cleanup
+  known-issue fixture reported its expected issue; read-only persistence
+  fixtures emitted expected Core Data errors. An external dependency manifest
+  reports its watchOS-version deprecation.
+- App-hosted focused cancellation checks: all 4 intended tests passed with no
+  skips or runtime warnings, covering ordinary phone caller cancellation,
+  delayed CarPlay detail/stream preparation, newer phone playback, and a
+  diagnostic suspension resumed after cancellation.
+- `./scripts/test-app-live.sh`: the final online login/playback/download and
+  offline cached-download/local-progress journeys each passed (1 test each),
+  with exact identifiers, no skips and no runtime warnings verified in the
+  result bundles. This validates the shared app flows against disposable
+  Audiobookshelf, not native CarPlay rendering. Xcode printed its debugger
+  version lookup warning; the test runtime-warning arrays were empty.
+- `BLEAT_SKIP_HOST=1 ./scripts/test-core.sh` on a fresh iOS 26.5 Simulator:
+  Release simulator build passed and all 525 app tests passed, including the
+  40 CarPlay/cancellation identifiers, with no skips or runtime warnings.
+  The broader UI gate failed its rotation/playback label assertion, and was
+  interrupted for focused base-revision classification. It is not a passed
+  complete local gate. Its finalized bundle contains 6 passes, the rotation
+  assertion failure, 6 supported opt-in skips, and one cancelled unrelated
+  author/series test. Runtime-warning arrays are empty. The invocation exited
+  75 after interruption and diagnostic cleanup. The isolated unchanged base
+  revision `dd490f1` passed the focused rotation test (1 pass, no skips/runtime warnings). The final-source focused run failed
+  the unchanged orientation helper's geometry timeout before reaching the
+  original playback assertion (1 failure, no skips/runtime warnings). The
+  failed broad run recorded `playback_recovery_exhausted` before its assertion;
+  its unchanged UI fixture uses a missing media file. Review found no introduced
+  mechanism, but these execution results do not establish that the original
+  failure is pre-existing. Both UI failures remain unresolved. No further
+  reruns are used to erase them; the PR remains draft. Completed focused
+  outcomes were preserved before stopping its stalled diagnostic collector.
+- `mise run swift-lint` and `git diff --check` passed.
+
+Earlier attempts are retained as superseded evidence: initial integration builds
+needed protocol-witness, typed-throw, and fixture corrections. A preliminary app
+run passed 522 tests but printed an unexplained Xcode compiler message with exit
+code zero; mutable-capture warnings were corrected. The subsequent full app run
+passed 524 tests and failed the existing ordinary caller-cancellation test;
+the cancellation policy is now scoped to CarPlay. Xcode's diagnostic collector
+stalled after that run and was stopped after preserving the completed test
+outcomes. That reused Simulator also logged an unknown persisted model version;
+the final gate uses a fresh disposable Simulator and that migration warning
+did not recur in its app diagnostics. One focused diagnostic test
+then failed to enter its gate and timed out because its summary request lacked
+its detail fixture; the corrected fixture passed the complete four-test rerun.
+None of these unsuccessful attempts is counted as coverage.
+
+The installed SDK is iOS 27, but the available Simulator runtime is iOS 26.5.
+No iOS 27 CarPlay Simulator or physical-head-unit search evidence is claimed.
+
+Outstanding manual acceptance for #333:
+
+- iOS 26 audio scene has no Search control and never pushes `CPSearchTemplate`;
+  iOS 27 enabled scene presents native Search without an entitlement exception.
+- Title playback and author navigation select the active account/library,
+  including phone searches in progress, account/library switching, and reconnect.
+- Rapid/duplicate input, clearing, retry, query caps, cached/missing offline
+  queries, native back navigation, and delayed responses remain accurate.
+- Disabling the keyboard during a session leaves Library folders and verified
+  Downloads usable; restricted lists retain accurate limited-result labels.
+- Native labels, touch and rotary input, larger/bold text, and Voice Control.
+- Record exact build, OS, head-unit model, restriction transitions, and outcomes
+  separately from app-hosted and ordinary Simulator tests.
+
+Issue #333 remains open until these evidence requirements are satisfied.
+
+Independent review ran four complete-change cycles. The blocking stale-playback
+finding was repaired with an explicit CarPlay cancellation policy in the shared
+playback start lifecycle, checks after preparation suspensions, and rejection of
+obsolete Now Playing publication. Ordinary phone playback retains its existing
+behavior of continuing after caller cancellation. The latest review reports no P0/P1 findings.
+
+Four P2 findings remain unresolved under the invoked review-and-ship skill's
+severity policy:
+
+- `App/CarPlaySearchController.swift:236`: capacity rerender replaces action
+  identities while native keyboard rows retain their previous identities, so
+  those visible rows can stop responding.
+- `App/CarPlaySearchController.swift:87`: removing an author template leaves
+  its pending load/selection completion waiting for a server response.
+- `App/CarPlaySearchController.swift:392`: a retained previous author's result
+  can populate another author's loading page after a capacity change.
+- `App/CarPlaySearchController.swift:408`: cached/limited author status rows
+  can exceed an effective zero-row or zero-section limit.
+
+These findings and the manual evidence gaps prevent claiming that every #333
+acceptance criterion is complete.
