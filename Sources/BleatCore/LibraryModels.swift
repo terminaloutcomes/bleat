@@ -354,6 +354,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     public let id: LibraryItemID
     public let libraryID: LibraryID
     public let title: String
+    public let titleIndexKey: String?
     public let subtitle: String?
     public let authorName: String?
     public let narratorName: String?
@@ -377,6 +378,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         id: LibraryItemID,
         libraryID: LibraryID,
         title: String,
+        titleIndexKey: String? = nil,
         subtitle: String?,
         authorName: String?,
         narratorName: String?,
@@ -399,6 +401,7 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         self.id = id
         self.libraryID = libraryID
         self.title = title
+        self.titleIndexKey = titleIndexKey
         self.subtitle = subtitle
         self.authorName = authorName
         self.narratorName = narratorName
@@ -420,7 +423,8 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, libraryID, title, subtitle, authorName, narratorName,
+        case id, libraryID, title, titleIndexKey, subtitle, authorName,
+            narratorName,
             seriesName
         case authors, series, collapsedSeries, genres, tags, publisher,
             publishedYear
@@ -433,6 +437,8 @@ public struct LibraryBookSummary: Codable, Hashable, Sendable {
         id = try values.decode(LibraryItemID.self, forKey: .id)
         libraryID = try values.decode(LibraryID.self, forKey: .libraryID)
         title = try values.decode(String.self, forKey: .title)
+        titleIndexKey = try values.decodeIfPresent(
+            String.self, forKey: .titleIndexKey)
         subtitle = try values.decodeIfPresent(String.self, forKey: .subtitle)
         authorName = try values.decodeIfPresent(
             String.self, forKey: .authorName)

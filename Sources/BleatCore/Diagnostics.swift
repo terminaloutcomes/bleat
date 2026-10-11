@@ -45,6 +45,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case loadLibraries = "load_libraries"
     case loadHome = "load_home"
     case loadLibraryPage = "load_library_page"
+    case loadCarPlayLibraryPage = "load_carplay_library_page"
     case loadLibraryCategories = "load_library_categories"
     case search
     case loadStatistics = "load_statistics"
@@ -191,6 +192,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case invalidInput = "invalid_input"
     case statisticsResetSplitSession = "statistics_reset_split_session"
     case statisticsHistoryChanged = "statistics_history_changed"
+    case libraryCatalogChanged = "library_catalog_changed"
     case statisticsInvalidSample = "statistics_sample_invalid"
     case statisticsInvalidSlice = "statistics_slice_invalid"
     case statisticsInvalidCompletion = "statistics_completion_invalid"
@@ -201,6 +203,11 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case permissionDenied = "permission_denied"
     case itemNotFound = "item_not_found"
     case invalidServerResponse = "invalid_server_response"
+    case carPlayLibraryContextMissing = "carplay_library_context_missing"
+    case carPlayItemLimitInsufficient = "carplay_item_limit_insufficient"
+    case carPlaySectionLimitInsufficient = "carplay_section_limit_insufficient"
+    case carPlayNavigationDepthExceeded = "carplay_navigation_depth_exceeded"
+    case carPlayLibraryPageInvalid = "carplay_library_page_invalid"
     case invalidLibraryCategories = "invalid_library_categories"
     case localStorageUnavailable = "local_storage_unavailable"
     case unavailableOffline = "unavailable_offline"
@@ -341,6 +348,14 @@ public enum DiagnosticEventName: String, Codable, Sendable {
     case stateTransition = "state_transition"
 }
 
+public enum DiagnosticStage: String, Codable, Sendable {
+    case contextValidation = "context_validation"
+    case requestConstruction = "request_construction"
+    case pageRequest = "page_request"
+    case pageValidation = "page_validation"
+    case listConstruction = "list_construction"
+}
+
 public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let category: DiagnosticCategory
     public let level: DiagnosticLevel
@@ -355,6 +370,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let fromState: DiagnosticState?
     public let toState: DiagnosticState?
     public let failureCode: DiagnosticFailureCode?
+    public let stage: DiagnosticStage?
     public let privateCloud: PrivateCloudDiagnosticDetail?
 
     private init(
@@ -371,6 +387,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         fromState: DiagnosticState? = nil,
         toState: DiagnosticState? = nil,
         failureCode: DiagnosticFailureCode? = nil,
+        stage: DiagnosticStage? = nil,
         privateCloud: PrivateCloudDiagnosticDetail? = nil
     ) {
         self.category = category
@@ -386,6 +403,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.fromState = fromState
         self.toState = toState
         self.failureCode = failureCode
+        self.stage = stage
         self.privateCloud = privateCloud
     }
 
@@ -440,7 +458,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         endpoint: DiagnosticEndpoint? = nil,
         method: DiagnosticHTTPMethod? = nil,
         correlationID: UUID? = nil,
-        durationMilliseconds: Int? = nil
+        durationMilliseconds: Int? = nil,
+        stage: DiagnosticStage? = nil
     ) -> DiagnosticEvent {
         DiagnosticEvent(
             category: category,
@@ -451,7 +470,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
             method: method,
             correlationID: correlationID,
             durationMilliseconds: durationMilliseconds,
-            failureCode: failureCode
+            failureCode: failureCode,
+            stage: stage
         )
     }
 
@@ -531,6 +551,9 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         ]
         if let operation {
             fields.append("operation=\(operation.rawValue)")
+        }
+        if let stage {
+            fields.append("stage=\(stage.rawValue)")
         }
         if let endpoint {
             fields.append("endpoint=\(endpoint.rawValue)")

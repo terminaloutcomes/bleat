@@ -1110,9 +1110,49 @@ signed-in root is a three-tab interface:
 
 - Home presents personalized shelves in server order followed by verified
   completed downloads;
-- Library presents the active audiobook library, explicit bounded pagination,
-  and a chooser for that account's audiobook libraries;
+- Library presents one scrollable list for the phone-selected library when it
+  fits the car's item limit, otherwise alphabetical folders;
 - Downloads presents verified whole-book-complete records only.
+
+Library loads uncollapsed, ascending-title server pages automatically, independently
+of the phone's appended pages, sort, categories, and filters. The account and
+library remain shared; library selection stays on the phone. Phone browsing
+reloads cancel and supersede older catalog loads and close older folder paths.
+CarPlay catalog context includes account identity, selected library identity and
+the browse generation. Context changes rebuild the native tab/list hierarchy
+instead of sharing child templates between replacement tab bars.
+No Next/Previous controls, page title, grid banner, section headings, or
+index-scope explanations appear in Library.
+
+The complete fetched catalog is alphabetized using the server-provided
+prefix-at-end title key when present, otherwise the original title, with
+locale-aware case/diacritic comparison and opaque identifiers breaking ties.
+Original display titles remain unchanged. A catalog fitting the runtime item
+limit renders as one native scrollable list. Larger catalogs use alphabetical
+folders; numbers, punctuation, and emoji share `#`, while CJK and right-to-left
+letters are retained. Large buckets split into smaller title-range folders.
+Each template respects the current row and section limits. At most three folder
+pushes reserve the fifth audio-template navigation level for Now Playing.
+If the car's limits cannot represent the catalog within that depth, a typed,
+stage-specific diagnostic and a visible instruction to browse on iPhone replace
+the list; books are never silently trimmed. Runtime limits are rechecked while
+connected and when the scene becomes active, including open folder templates.
+
+If a later server/cache page fails, already loaded books and verified Downloads
+remain available. A typed failure row explains the incomplete catalog and, only
+for retryable causes, resumes the failed page without refetching retained pages.
+Every page must retain the same total and page size. If either changes, a distinct
+Library changed failure retains loaded books; retry restarts from page zero to
+avoid combining inconsistent catalogs.
+Terminal authentication and permission failures do not offer retry. Accounts
+without audiobook libraries show an empty Library state. Library discovery
+failures retry discovery. Catalog and folder callbacks reject stale library or
+connection contexts, including callbacks invoked outside the main actor.
+Independent page loads emit lifecycle diagnostics with a typed failure code and
+rejection stage, without account identifiers or book titles. Vehicle and
+accessibility evidence for this list/folder design is tracked separately in
+`docs/release-evidence/carplay.md` and
+[issue #331](https://github.com/terminaloutcomes/bleat/issues/331).
 
 CarPlay's
 [`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate)

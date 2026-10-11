@@ -1109,6 +1109,35 @@ final class AudiobookshelfAPITests {
     }
 
     @Test
+    func testLibraryTitleIndexKeyRetainsServerArticleFormAndLegacyCache()
+        async throws
+    {
+        let fixture = try APIFixture(responses: [
+            HTTPResponse(
+                data: try Self.fixture(named: "library-items-title-prefix"),
+                statusCode: 200)
+        ])
+        let result = try await fixture.api.libraryItems(
+            in: LibraryID(rawValue: "library"),
+            request: LibraryItemsPageRequest(page: 0, limit: 2))
+        let book = try #require(result.value.items.first)
+        #expect(book.title == "The Example")
+        #expect(book.titleIndexKey == "Example, The")
+        let encoded = try JSONEncoder().encode(book)
+        #expect(
+            try JSONDecoder().decode(LibraryBookSummary.self, from: encoded)
+                == book)
+        var legacy = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "titleIndexKey")
+        let restored = try JSONDecoder().decode(
+            LibraryBookSummary.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        #expect(restored.titleIndexKey == nil)
+        #expect(restored.title == book.title)
+    }
+
+    @Test
     func testLibraryItemsMapsPinnedFixtureAndPagination() async throws {
         let fixture = try APIFixture(
             responses: [

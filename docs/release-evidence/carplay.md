@@ -123,3 +123,153 @@ details.
   wireless reconnect, whole-book head-unit controls, and simultaneous phone use.
 - This is maintainer-reported vehicle evidence; it is separate from the
   2026-08-31 Simulator and 2026-09-01 signed-artifact checks above.
+
+## Alphabet index and bounded Library windows — issue #331
+
+The older Simulator and maintainer-reported vehicle journeys above predate this
+change and do not validate the new index or paging behavior. Implementation adds
+an uncollapsed, bounded server-page feed, current-window letter sections,
+Next/Previous navigation, runtime limit adaptation, explicit cached portions,
+and generation-safe loading/retry.
+
+Automated validation on 2026-10-10:
+
+- The final focused `xcodebuild` CarPlay selection ran all 20 requested app-hosted
+  tests on iPhone 17 Pro / iOS 26.5: 20 passed, zero skipped, zero runtime warnings.
+  Native list and bar callback regressions enter off the main actor and verify
+  the explicit UI hop. The final complete app bundle passed all 505 tests, including these 20
+  CarPlay tests, without skips or runtime warnings.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh` passed: three Rust release-version
+  checks, 520 signed host tests with zero skips, host Release build, and the paid
+  capability/build-mode matrix. The first attempt rejected the new decoder test
+  until `TestSupport/HostTests/inventory.json` was updated. The host suite's one
+  intentional cleanup known issue and injected SwiftData save failures are
+  test-fixture evidence; the existing dependency watchOS deprecation warning is
+  unrelated to this change.
+- The focused title-key/legacy-cache decoder test ran and passed (1/1). An initial
+  selection before the test existed executed zero tests and provided no coverage.
+- `./scripts/test-live.sh` passed against current-stable Audiobookshelf 2.37.0:
+  13 passed, eight unrelated OIDC/telemetry tests skipped by this harness lane.
+- `./scripts/test-app-live.sh` passed online and offline journeys (1/1 each) with
+  zero result-bundle runtime warnings. The first attempt collided with the core
+  harness's ports; a retry used the supported isolated root/prefix/OIDC port
+  overrides. Both runners removed their disposable resources. Xcode's debugger
+  metadata lookup messages did not produce test or runtime-warning failures.
+- `mise run swift-lint` and `git diff --check` passed. Initial compilation issues
+  (project generation, typed catch, test enum, Objective-C completion transfer)
+  and the mutable-capture fixture warnings were corrected before final validation.
+
+Follow-up review fixes on 2026-10-10:
+
+- Failed adjacent-page requests retain their navigation direction. Next/Previous
+  traverse retained windows before retrying the corresponding page boundary.
+  Terminal authentication and permission failures disable retry at either
+  boundary. Accounts without audiobook libraries show an empty state, and a
+  library-discovery failure retries discovery.
+- Independent page loads emit started/completed/failed events under
+  `load_carplay_library_page`. Failures include typed context-validation,
+  request-construction, page-request, or page-validation stages and privacy-safe
+  failure codes. Validation remains inside the asynchronous page loader.
+- All six focused app-hosted regressions passed with zero skips or runtime
+  warnings. The final
+  complete app bundle passed 511 tests, including all 26 CarPlay tests, with
+  zero skips or runtime warnings; the intermediate bundle passed 509 tests. The host gate again passed all
+  520 tests, Release build, capability matrix, and three Rust checks. Swift lint
+  and diff checks passed. The existing live-suite results above remain prior
+  validation and were not rerun for this UI/diagnostic follow-up.
+- Two fresh independent complete-change review cycles covered this follow-up.
+  The first found two additional P2s (Previous-request direction and discovery
+  retry), which were fixed and regression-tested. The second reported no findings.
+  All four original P2s and both follow-up P2s are resolved.
+
+The 10,000-book
+fixture exercises reachability under changing row limits, including one large
+letter group. Locale fixtures cover accents, case, numbers, punctuation, emoji,
+CJK, right-to-left titles, duplicate titles/IDs, and server article keys. These
+are app-hosted/model tests, not evidence that a head unit displays an index.
+
+Library presentation simplification on 2026-10-10 removes the range/index
+explanations, per-section headings, Library page title, and Libraries grid
+image/title control. The native letter index, tab label, and Next/Previous
+navigation remain. Library selection follows the phone. Cached pages retain
+their books and typed adjacent-page failure behavior without a cached-range
+banner. This supersedes the range/cached-banner and chooser descriptions above.
+All 26 CarPlay app-hosted tests passed on iOS 26.5 with zero skips or runtime
+warnings; the two directly affected presentation/cache tests also passed as a
+focused selection. An initial test-only protocol/concrete-item compile error was
+corrected before these runs. Swift lint and diff checks passed. A fresh
+independent complete-change review reported no findings. These checks do not
+confirm recovered screen space on a physical head unit.
+
+The approved list/folder design supersedes the window/paging implementation above.
+Library automatically loads all uncollapsed server pages, then presents one
+scrollable list if it fits the runtime limit, or alphabetic/title-range folders.
+There are no Next/Previous controls. Three folder pushes leave room for Now
+Playing within five navigation levels. Restrictive limits produce distinct typed
+item/section/depth failures rather than silently truncating the catalog. Later
+page failures retain fetched books and resume only the failed page on retry.
+Changed catalog totals/page sizes produce a distinct typed failure and restart
+from page zero on retry.
+List/folder validation on 2026-10-10:
+
+- The final iOS 26.5 app unit bundle passed 512 tests, including all 27 CarPlay
+  tests, with zero failures, skips, or runtime warnings. Exact test identifiers
+  and outcomes were verified from the result bundle. Coverage includes 10,000
+  books, Unicode/duplicate titles, changing vehicle limits, folder selection
+  off the main actor, stale callbacks, partial cache, retry/resume, and changed
+  catalog restart.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh` passed 520 host tests with
+  zero skips, Release compilation, and the paid-capability build matrix.
+- `mise run swift-lint` and `git diff --check` passed.
+- `./scripts/test-app-live.sh` passed the disposable Audiobookshelf 2.37.0
+  online login/playback/download and offline cached-download/local-progress
+  journeys: one test each, zero skips or runtime warnings. These phone-app
+  journeys do not establish CarPlay head-unit presentation.
+- Two initial focused attempts failed compilation because the coordinator
+  accessed a file-private resource-state helper. This was corrected; the next
+  focused run passed six tests, followed by the final complete app bundle above.
+- Two independent complete-change review cycles: the first found one P2 for
+  inconsistent totals across catalog pages/retries. Stable snapshot validation,
+  typed changed-catalog diagnostics, and restart regression coverage resolve it;
+  the second review reported no findings.
+- The revised `mise run iphone` attempt failed at device build with status 70:
+  Xcode could not find the requested physical-device destination. This version
+  was not installed by that attempt.
+
+Account-switch regression follow-up on 2026-10-11:
+
+- A physical-head-unit report found a completely blank CarPlay Library after
+  switching accounts, despite the phone showing books. The user subsequently
+  confirmed all manual testing passed after installing the fix.
+- The strengthened account-switch test caught all three native child list
+  templates being reused across replacement tab bars. Catalog context now
+  includes account ID, selected library ID and browse generation. Every new
+  signed-in root creates fresh native child lists, including catalog-restart
+  retries; ordinary content refreshes retain the current hierarchy.
+- The regression verifies both fresh child-template identity and the new
+  account's catalog. Artwork, discovery-retry and phone-browse tests inspect the
+  active replacement hierarchy rather than detached old templates.
+- The complete app unit bundle passed 512 tests after the initial hierarchy
+  fix. After consolidating root construction, all 27 CarPlay tests passed.
+  Result bundles verified exact test identities and zero skips/runtime warnings.
+  Strict Swift lint and diff checks passed. Three read-only complete-change
+  review passes reported no findings; reviewer test-quality notes were addressed.
+- `mise run iphone` built, installed and launched this fix on the physical
+  iPhone successfully. This confirms deployment, not CarPlay rendering.
+- These app-hosted checks establish model/template behavior, not actual native
+  head-unit attachment or rendering. The user supplied the separate manual
+  confirmation recorded below.
+
+Manual acceptance on 2026-10-11:
+
+- After installing the account-switch fix, the user confirmed: "yeah all my
+  manual testing looks good now" and requested that issue #331 be marked done
+  and PR #335 set for auto-merge. This records user-reported completion of the
+  manual plan in #331, including the account-switch retest.
+- No head-unit model, exact app build/iOS version, photos, or separate iOS 27
+  CarPlay Simulator run were supplied. Those details are not inferred from the
+  manual confirmation or app-hosted tests. The user approved closure with the
+  available automated and manual evidence.
+
+[Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) is complete
+per the user's manual acceptance. Existing CarPlay approval is unaffected.

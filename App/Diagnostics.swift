@@ -268,6 +268,7 @@ extension AppFailure {
         case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput
         case (_, .statisticsHistoryChanged): .statisticsHistoryChanged
+        case (_, .libraryCatalogChanged): .libraryCatalogChanged
         case (_, .statistics(let error)): error.diagnosticFailureCode
         case (_, .statisticsResetSplitSession):
             .statisticsResetSplitSession
