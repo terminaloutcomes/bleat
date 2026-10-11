@@ -1172,9 +1172,40 @@ accessibility evidence for this list/folder design is tracked separately in
 
 CarPlay's
 [`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate)
-is restricted to navigation applications and is not an allowed template for an
-audio-entitled scene. Bleat must not expose or push it from the CarPlay audio
-interface.
+is supported for audio-entitled scenes on iOS 27 and later, per Apple's
+[CarPlay Developer Guide](https://developer.apple.com/download/files/CarPlay-Developer-Guide.pdf)
+(2026-06-08, printed pages 14 and 24). This is an entitlement/version boundary;
+the template has existed for navigation apps since iOS 12. Bleat never pushes
+it from an iOS 26 audio scene or a build with CarPlay disabled.
+
+On supported scenes, Library's native header grid offers Search. Search owns
+an independent 300 ms debounced `LibrarySearchCoordinator` and captures the
+active account, library, and connection; it cannot replace phone search or
+browse state. Native keyboard matches interleave book playback and explicit
+author-book navigation. The keyboard list uses a compact five-row budget bounded
+by current vehicle row/section limits. The server request caps each result group
+at 50 and has no page cursor. Capped or display-limited results ask for a more
+specific title/author query; they never claim completeness or invent pagination.
+Author lists use an independent author-filtered repository page and identify
+limited or cached book lists explicitly. All playback uses the shared scoped
+preparation/permission lifecycle before showing Now Playing.
+
+Empty queries clear results; nonempty queries distinguish loading, no title or
+author matches, exact-query cached matches, and typed failure/retry. Cached
+matches are saved query results, not an exhaustive offline index. Missing cache
+and server failures retain their existing typed causes. Supersession, removal of
+the native search template, account/library changes,
+keyboard restriction and disconnect cancel owned tasks, discharge pending
+completions once, and reject late results and stale selections. Author-page back
+navigation and changing-limit edge cases still have the review gaps recorded in
+`docs/release-evidence/carplay.md`. Callback entry points hop explicitly to the
+main actor.
+Vehicles can disable the keyboard; Search then disables while Library and
+Downloads remain available. Session restrictions and runtime content limits are
+rechecked while connected. iOS 27 CarPlay Simulator, physical keyboard
+restrictions, and input/accessibility evidence remain tracked in
+[issue #333](https://github.com/terminaloutcomes/bleat/issues/333) and
+`docs/release-evidence/carplay.md`.
 
 CarPlay uses the phone's active account and shared library selection. Account
 switching, authentication, bookmark editing, sleep timers, Stop, and download

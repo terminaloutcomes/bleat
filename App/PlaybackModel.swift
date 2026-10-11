@@ -786,6 +786,7 @@ final class PlaybackModel {
         account: ServerAccount,
         initialTime: Double? = nil
     ) async {
+        guard !Task.isCancelled else { return }
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
             operation: .playbackPreparation,
             source: .streamed
@@ -795,6 +796,7 @@ final class PlaybackModel {
         await diagnostics.record(
             .started(.openPlayback, category: .playback)
         )
+        guard !Task.isCancelled else { return }
         let availability = BookActionAvailability(
             user: account.user,
             detail: detail
@@ -821,12 +823,15 @@ final class PlaybackModel {
         playbackRecoveryTask = nil
         player?.pause()
         await syncProgress()
-        guard generation == operationGeneration else {
+        guard generation == operationGeneration, !Task.isCancelled else {
             return
         }
         await finishStatisticsSession()
+        guard generation == operationGeneration, !Task.isCancelled else {
+            return
+        }
         await closeActiveSession()
-        guard generation == operationGeneration else {
+        guard generation == operationGeneration, !Task.isCancelled else {
             return
         }
         notifyAutomaticDownloadBandwidthReleased()
@@ -855,6 +860,9 @@ final class PlaybackModel {
                 to: .preparing
             )
         )
+        guard generation == operationGeneration, !Task.isCancelled else {
+            return
+        }
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
@@ -883,7 +891,7 @@ final class PlaybackModel {
                 preference: .automatic,
                 deviceInfo: Self.deviceInfo()
             )
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 if let sessionID = prepared.sessionID {
                     try? await service.closePlayback(
                         for: account,
@@ -910,7 +918,7 @@ final class PlaybackModel {
             lastAttemptedSyncTime = currentTime
             persistPosition()
             try await rebuildQueue(at: currentTime)
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             state = .ready
@@ -926,10 +934,13 @@ final class PlaybackModel {
             await diagnostics.record(
                 .completed(.openPlayback, category: .playback)
             )
+            guard generation == operationGeneration, !Task.isCancelled else {
+                return
+            }
             play()
             await loadBookmarks()
         } catch let error as AppServiceError {
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             activeAccount = nil
@@ -950,7 +961,7 @@ final class PlaybackModel {
                 )
             )
         } catch {
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             await closeActiveSession()
@@ -984,6 +995,7 @@ final class PlaybackModel {
         defer {
             automaticCachePinReleaser?(unownedAutomaticCachePin)
         }
+        guard !Task.isCancelled else { return }
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
             operation: .playbackPreparation,
             source: .downloaded
@@ -997,6 +1009,7 @@ final class PlaybackModel {
                 count: trackURLs.count
             )
         )
+        guard !Task.isCancelled else { return }
         guard !trackURLs.isEmpty || automaticCachedWindow != nil else {
             state = .failed(.mediaUnavailable)
             telemetryOutcome = .failed(.media)
@@ -1017,12 +1030,15 @@ final class PlaybackModel {
         playbackRecoveryTask = nil
         player?.pause()
         persistPosition()
-        guard generation == operationGeneration else {
+        guard generation == operationGeneration, !Task.isCancelled else {
             return
         }
         await finishStatisticsSession()
+        guard generation == operationGeneration, !Task.isCancelled else {
+            return
+        }
         closeActiveSessionWithoutWaiting()
-        guard generation == operationGeneration else {
+        guard generation == operationGeneration, !Task.isCancelled else {
             return
         }
         notifyAutomaticDownloadBandwidthReleased()
@@ -1044,6 +1060,9 @@ final class PlaybackModel {
         setSleepTimer(minutes: nil)
         pausedAt = nil
         state = .preparing
+        guard generation == operationGeneration, !Task.isCancelled else {
+            return
+        }
         itemID = detail.id
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
@@ -1099,7 +1118,7 @@ final class PlaybackModel {
             guard !tracks.isEmpty else {
                 throw AppPlaybackBuildError.missingTracks
             }
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             let prepared = AppPlaybackPreparation(
@@ -1149,7 +1168,7 @@ final class PlaybackModel {
                 accountID: accountID
             )
             try await rebuildQueue(at: currentTime)
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             state = .ready
@@ -1158,6 +1177,9 @@ final class PlaybackModel {
             await diagnostics.record(
                 .completed(.openPlayback, category: .playback)
             )
+            guard generation == operationGeneration, !Task.isCancelled else {
+                return
+            }
             if positionConflict == nil {
                 play()
             } else {
@@ -1171,7 +1193,7 @@ final class PlaybackModel {
             }
             await loadBookmarks()
         } catch {
-            guard generation == operationGeneration else {
+            guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
             activeAccount = nil

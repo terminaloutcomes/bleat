@@ -497,6 +497,12 @@ protocol AppServicing: Sendable {
         libraryID: LibraryID
     ) async throws(AppServiceError) -> [LibraryBookShelf]
 
+    func carPlaySearch(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibrarySearchResults>
+
     func search(
         for account: ServerAccount,
         libraryID: LibraryID,
@@ -2585,6 +2591,16 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func carPlaySearch(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibrarySearchResults>
+    {
+        try await repository(for: account).search(
+            in: libraryID, request: request)
+    }
+
     func search(
         for account: ServerAccount,
         libraryID: LibraryID,
@@ -3974,5 +3990,16 @@ actor LiveAppService: AppServicing {
             remote: api,
             cache: libraryCache
         )
+    }
+}
+
+extension UnavailableAppService {
+    func carPlaySearch(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibrarySearchResults>
+    {
+        throw .cache(.persistenceFailed)
     }
 }
