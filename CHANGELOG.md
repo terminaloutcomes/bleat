@@ -2,7 +2,16 @@
 
 ## 2026.10.11 - 2026-10-11
 
+### Added
+
+- Native title and author search from an icon-only CarPlay tab on supported iOS 27 scenes.
+
 ### Fixed
+
+- Keep CarPlay search rows selectable when vehicle limits change.
+- Cancel author-page loads promptly after Back and prevent stale author results.
+- Respect zero-row and zero-section limits for search and author pages.
+- Reconcile Search navigation after tab switches and reject stale launcher callbacks.
 
 - Fixed a CloudKit callback assertion that could crash Bleat during startup or synchronization.
 - Load restored download accounts before resuming transfers.
