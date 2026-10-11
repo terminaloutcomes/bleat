@@ -102,6 +102,21 @@
             }
         }
 
+        func reconcileNavigation(contains: (ObjectIdentifier) -> Bool) -> Bool {
+            guard contains(ObjectIdentifier(template)) else {
+                invalidate()
+                return false
+            }
+            if let authorTemplate, !contains(ObjectIdentifier(authorTemplate)) {
+                templateRemoved(ObjectIdentifier(authorTemplate))
+            }
+            if let resultsTemplate, !contains(ObjectIdentifier(resultsTemplate))
+            {
+                templateRemoved(ObjectIdentifier(resultsTemplate))
+            }
+            return true
+        }
+
         func updateLimits(keyboardAvailable: Bool) {
             guard self.keyboardAvailable != keyboardAvailable else {
                 if renderedCapacity != maximumItems() {

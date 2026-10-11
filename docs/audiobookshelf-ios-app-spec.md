@@ -1187,7 +1187,10 @@ is supported for audio-entitled scenes on iOS 27 and later, per Apple's
 the template has existed for navigation apps since iOS 12. Bleat never pushes
 it from an iOS 26 audio scene or a build with CarPlay disabled.
 
-On supported scenes, Library's native header grid offers Search. Search owns
+On supported scenes with room for a fourth tab, a magnifying-glass-only tab
+opens Search when selected. Its supported grid root provides a launcher after
+returning from the keyboard; Search itself is not a supported tab root (guide,
+printed page 25). The tab has an image and an empty title. Search owns
 an independent 300 ms debounced `LibrarySearchCoordinator` and captures the
 active account, library, and connection; it cannot replace phone search or
 browse state. Native keyboard matches interleave book playback and explicit

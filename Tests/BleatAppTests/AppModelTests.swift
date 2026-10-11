@@ -21732,6 +21732,7 @@ final class AppModelTests: XCTestCase {
             disabled.openSearch()
             let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
             let list = try XCTUnwrap(root.templates[1] as? CPListTemplate)
+            XCTAssertEqual(root.templates.count, 3)
             XCTAssertTrue(list.headerGridButtons?.isEmpty != false)
             XCTAssertFalse(list.sections.isEmpty)
             XCTAssertTrue(presenter.pushed.isEmpty)
@@ -21740,13 +21741,52 @@ final class AppModelTests: XCTestCase {
                 model: model, searchEnabled: { true })
             enabled.connect(presenter)
             await enabled.waitForLibraryLoad()
-            enabled.openSearch()
-            if #available(iOS 27.0, *) {
+            let enabledRoot = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+            let enabledLibrary = try XCTUnwrap(
+                enabledRoot.templates[1] as? CPListTemplate)
+            XCTAssertTrue(enabledLibrary.headerGridButtons?.isEmpty != false)
+            if #available(iOS 27.0, *), CPTabBarTemplate.maximumTabCount >= 4 {
+                XCTAssertEqual(enabledRoot.templates.count, 4)
+                let search = try XCTUnwrap(
+                    enabledRoot.templates.last as? CPGridTemplate)
+                XCTAssertEqual(search.tabTitle, "")
+                XCTAssertNotNil(search.tabImage)
+                let opened = expectation(
+                    description: "Search tab opens keyboard")
+                enabledRoot.select(search)
+                enabled.tabBarTemplate(enabledRoot, didSelect: search)
+                Task { @MainActor in
+                    for _ in 0..<10 where presenter.pushed.isEmpty {
+                        await Task.yield()
+                    }
+                    opened.fulfill()
+                }
+                await fulfillment(of: [opened], timeout: 2)
                 XCTAssertTrue(presenter.pushed.last is CPSearchTemplate)
             } else {
+                XCTAssertEqual(enabledRoot.templates.count, 3)
+                enabled.openSearch()
                 XCTAssertTrue(presenter.pushed.isEmpty)
             }
             enabled.disconnect()
+        }
+
+        func testCarPlaySearchReconcilesRemovedKeyboard() async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account), search: .success([]))
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { _ in })
+            XCTAssertFalse(controller.reconcileNavigation { _ in false })
+            let rows = await carPlaySearchRows(controller, query: "stale")
+            XCTAssertTrue(rows.isEmpty)
+            let requests = await service.searchRequests()
+            XCTAssertTrue(requests.isEmpty)
         }
 
         func testCarPlaySearchIsScopedAndDoesNotChangePhoneSearch() async throws
@@ -21965,7 +22005,10 @@ final class AppModelTests: XCTestCase {
             let entered = await gate.waitUntilEntered(timeout: .seconds(2))
             XCTAssertTrue(entered)
             let list = try XCTUnwrap(pushed.last as? CPListTemplate)
-            controller.templateRemoved(ObjectIdentifier(list))
+            XCTAssertTrue(
+                controller.reconcileNavigation {
+                    $0 == ObjectIdentifier(controller.template)
+                })
             await fulfillment(of: [selected], timeout: 2)
             await gate.release()
             let settled = expectation(description: "Late response settles")

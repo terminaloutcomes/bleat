@@ -94,7 +94,7 @@
 
     @MainActor
     final class CarPlayCoordinator: NSObject, CPSessionConfigurationDelegate,
-        CPInterfaceControllerDelegate
+        CPInterfaceControllerDelegate, CPTabBarTemplateDelegate
     {
         private struct AccountPresentation: Equatable, Sendable {
             let id: AccountID
@@ -137,6 +137,7 @@
             case unavailable
         }
 
+        private var searchTab: CPGridTemplate?
         private var searchController: CarPlaySearchController?
         private var sessionConfiguration: CPSessionConfiguration?
         private var keyboardAvailable = true
@@ -273,6 +274,7 @@
             libraryTemplate = nil
             downloadsTemplate = nil
             tabTemplate = nil
+            searchTab = nil
             renderedPresentation = nil
         }
 
@@ -392,13 +394,13 @@
             guard rootContext != context || tabTemplate == nil else {
                 return
             }
-            let tabs = CPTabBarTemplate(
-                templates: [
-                    homeTemplate,
-                    libraryTemplate,
-                    downloadsTemplate,
-                ]
-            )
+            searchTab = makeSearchTab()
+            var templates: [CPTemplate] = [
+                homeTemplate, libraryTemplate, downloadsTemplate,
+            ]
+            if let searchTab { templates.append(searchTab) }
+            let tabs = CPTabBarTemplate(templates: templates)
+            tabs.delegate = self
             tabTemplate = tabs
             rootContext = context
             presenter?.setRoot(tabs)
@@ -516,7 +518,6 @@
             presentation: TemplatePresentation
         ) {
             template.trailingNavigationBarButtons = []
-            updateSearchButton(template)
             switch libraryState(for: presentation) {
             case .loading:
                 template.updateSections([])
@@ -552,15 +553,12 @@
             }
         }
 
-        private func updateSearchButton(_ template: CPListTemplate) {
-            guard searchEnabled(), #available(iOS 27.0, *),
-                model.account != nil, model.selectedLibrary != nil,
-                CPListTemplate.maximumHeaderGridButtonCount > 0,
+        private func makeSearchTab() -> CPGridTemplate? {
+            guard #available(iOS 27.0, *), searchEnabled(),
+                model.selectedLibrary != nil,
+                CPTabBarTemplate.maximumTabCount >= 4,
                 let image = UIImage(systemName: "magnifyingglass")
-            else {
-                template.headerGridButtons = []
-                return
-            }
+            else { return nil }
             let connection = presentationGeneration
             let context = libraryContext
             let button = CPGridButton(titleVariants: ["Search"], image: image) {
@@ -569,11 +567,46 @@
                     guard let self, self.presentationGeneration == connection,
                         self.libraryContext == context
                     else { return }
-                    self.openSearch()
+                    self.openSelectedSearchTab()
                 }
             }
             button.isEnabled = keyboardAvailable
-            template.headerGridButtons = [button]
+            // Search cannot be a tab root. A supported grid hosts its launcher
+            // and lets people reopen Search after returning from the keyboard.
+            let tab = CPGridTemplate(title: nil, gridButtons: [button])
+            tab.tabTitle = ""
+            tab.tabImage = image
+            return tab
+        }
+
+        nonisolated func tabBarTemplate(
+            _ tabBarTemplate: CPTabBarTemplate,
+            didSelect selectedTemplate: CPTemplate
+        ) {
+            let rootIdentity = ObjectIdentifier(tabBarTemplate)
+            let selectedIdentity = ObjectIdentifier(selectedTemplate)
+            Task { @MainActor [weak self] in
+                guard let self,
+                    self.tabTemplate.map(ObjectIdentifier.init) == rootIdentity,
+                    self.searchTab.map(ObjectIdentifier.init)
+                        == selectedIdentity,
+                    self.tabTemplate?.selectedTemplate.map(
+                        ObjectIdentifier.init) == selectedIdentity
+                else { return }
+                self.openSelectedSearchTab()
+            }
+        }
+
+        private func openSelectedSearchTab() {
+            guard let searchTab, tabTemplate?.selectedTemplate === searchTab
+            else { return }
+            if let search = searchController,
+                let presenter = presenter as? CarPlayInterfacePresenter,
+                !search.reconcileNavigation(contains: presenter.contains)
+            {
+                searchController = nil
+            }
+            openSearch()
         }
 
         func openSearch() {
@@ -621,8 +654,8 @@
                     ObjectIdentifier(configuration) == identity
                 else { return }
                 self.keyboardAvailable = available
-                if let template = self.libraryTemplate {
-                    self.updateSearchButton(template)
+                for button in self.searchTab?.gridButtons ?? [] {
+                    button.isEnabled = available
                 }
                 self.searchController?.updateLimits(
                     keyboardAvailable: available)
@@ -640,6 +673,13 @@
                         as? CarPlayInterfacePresenter,
                     !presenter.contains(identity)
                 else { return }
+                // Other tabs hide retained Search templates without removing
+                // them from their navigation stack.
+                if let searchTab = self.searchTab,
+                    self.tabTemplate?.selectedTemplate !== searchTab
+                {
+                    return
+                }
                 if let search = self.searchController,
                     ObjectIdentifier(search.template) == identity
                 {

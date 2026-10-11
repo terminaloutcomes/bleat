@@ -281,7 +281,7 @@ permits the Search template for Audio/video on iOS 27 and later. The earlier
 search-template exception above was observed on iOS 26; it does not establish
 an all-version navigation-only restriction.
 
-Implementation adds Library's native header-grid Search control only for enabled
+Implementation adds an icon-only Search tab only for enabled
 iOS 27+ audio scenes. It keeps Library and Downloads available when vehicle
 keyboard restrictions change. CarPlay owns its own debounced session, repository
 cache provenance, title/author destinations, typed failure/retry and exact-once
@@ -405,3 +405,44 @@ findings: all original and follow-up P2s are resolved, with no P0/P1 findings.
 
 The manual evidence gaps still prevent claiming that every #333 acceptance
 criterion is complete.
+
+### Icon-only Search tab follow-up
+
+Search moved from Library's header to a magnifying-glass-only fourth tab on
+supported iOS 27+ scenes, provided the runtime permits four tabs. The tab has an
+image and an empty title. Apple's guide (printed page 25) permits Grid,
+Information, List, and Point of Interest tab roots, so a grid launcher opens the
+native Search template on tab selection and lets people reopen it after Back.
+Keyboard restrictions disable the launcher and prevent keyboard presentation.
+Delayed selection callbacks validate the selected root tab; switching tabs keeps
+the retained Search navigation stack alive.
+
+The capability regression checks that older/disabled scenes retain the three
+browsing tabs without a Library header Search button. The iOS 27 branch checks
+the image-only fourth tab and native keyboard selection. Positive iOS 27 tab
+selection, Back/reopen, keyboard restrictions, and physical head-unit
+accessibility remain manual evidence gaps on the available iOS 26.5 runtime.
+
+The tab follow-up's second review found a P2 where Back followed by a tab switch
+could skip queued removal cleanup. Search now reconciles its native keyboard,
+author page, and result page against the visible stack when its tab is selected
+again. A removed keyboard invalidates its controller so it can reopen; removed
+author/result pages discharge their existing lifecycles. Regressions cover a
+removed keyboard and an uncooperative author load reconciled after removal.
+An intermediate final run failed before executing tests because the Simulator
+rejected runner launch as Busy during preflight. Boot completion was verified
+before the final retry; this was not a failed test assertion.
+
+The third tab review found a second P2 in the grid reopen callback: switching tabs
+before the callback's main-actor task ran could push Search on the other tab.
+Both tab selection and the grid launcher now use `openSelectedSearchTab`, which
+verifies the selected Search root and reconciles navigation before opening the
+keyboard. Both review findings are resolved.
+
+Final tab-follow-up validation: `xcodebuild test` passed all 47 selected CarPlay
+and adjacent playback-cancellation app tests on iOS 26.5. Every requested
+identifier was verified in the result bundle, with zero failures, skips, or
+runtime warnings. Targeted `swift-format lint --strict` and `git diff --check`
+passed. Four independent complete-change tab reviews ran; the latest reports
+no findings and no P0/P1s. Both tab-review P2s are resolved. The complete local/UI
+and live gates were not repeated; their previously recorded outcomes remain.
