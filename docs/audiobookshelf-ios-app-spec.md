@@ -907,6 +907,8 @@ Save with `PATCH /api/items/<item-id>/media` using the current old-model payload
 
 Send only changed scalar fields, but when authors, series, narrators, genres, or tags change, send the complete resulting array: the server treats those arrays as replacements. `tags` is top-level; the other editable fields are under `metadata`. Authors are name objects and series are `{name, sequence}` objects. Do not serialize display-only flattened fields such as `authorName`, `seriesName`, `narratorName`, or `descriptionPlain`.
 
+Before validating and constructing metadata patches, strip Unicode format characters from editable metadata text, trim surrounding whitespace, and omit empty optional values and array entries. Preserve synopsis line breaks and tabs. Reject a title that becomes empty and retain typed rejection of unsupported control characters. Authorization tags retain their separate identity semantics.
+
 The current success response is `{ "updated": Bool, "libraryItem": <old library item> }`.
 
 Before saving:

@@ -333,6 +333,9 @@
     "testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated()"
   ],
   "BleatCoreTests.MetadataEditingTests": [
+    "testPatchStripsFormatCharactersFromInheritedMetadata()",
+    "testPatchNormalizesEditableMetadataBeforeEncoding()",
+    "testPatchRejectsEmptySanitizedTitleAndControlCharacters()",
     "testBookDetailSummaryMapsAvailableDomainFields()",
     "testPatchEncodesOnlyChangedFieldsAndExplicitNulls()",
     "testPatchDetectsChangedServerRevision()",

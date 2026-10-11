@@ -217,21 +217,20 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
     }
 
     init(draft: BookMetadataDraft) throws(BookMetadataPatchError) {
-        let title = draft.title.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        let title = Self.normalizedText(draft.title)
         guard !title.isEmpty else {
             throw .emptyTitle
         }
         let authors = Self.normalizedList(draft.authors)
         let narrators = Self.normalizedList(draft.narrators)
         let genres = Self.normalizedList(draft.genres)
-        let tags = Self.normalizedList(draft.tags)
+        let tags = draft.tags.compactMap { value in
+            let tag = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return tag.isEmpty ? nil : tag
+        }
         let series: [BookMetadataSeriesValue] =
             draft.series.compactMap { value in
-                let name = value.name.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                )
+                let name = Self.normalizedText(value.name)
                 guard !name.isEmpty else {
                     return nil
                 }
@@ -285,23 +284,29 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
 
     private static func normalizedList(_ values: [String]) -> [String] {
         values.compactMap { value in
-            let normalized = value.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
+            let normalized = normalizedText(value)
             return normalized.isEmpty ? nil : normalized
         }
     }
 
     private static func optionalText(_ value: String) -> String? {
-        let normalized = value.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        let normalized = normalizedText(value)
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func normalizedText(_ value: String) -> String {
+        String(
+            String.UnicodeScalarView(
+                value.unicodeScalars.filter {
+                    $0.properties.generalCategory != .format
+                }
+            )
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func isValidText(_ value: String) -> Bool {
         value.unicodeScalars.allSatisfy {
-            !CharacterSet.controlCharacters.contains($0)
+            !LibraryMetadataText.isControl($0)
                 || $0 == "\n"
                 || $0 == "\r"
                 || $0 == "\t"

@@ -64,6 +64,86 @@ final class MetadataEditingTests {
     }
 
     @Test
+    func testPatchStripsFormatCharactersFromInheritedMetadata() throws {
+        let detail = fixtureDetail(
+            title: "Ori\u{00AD}ginal\u{200D} title\u{FEFF}",
+            description: "First\u{202E} line\r\n\tSecond\u{200B} line"
+        )
+        var draft = BookMetadataDraft(detail: detail)
+        draft.publisher = "New Publisher"
+        let patch = try BookMetadataPatch(baseline: detail, draft: draft)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(patch))
+                as? [String: Any]
+        )
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        #expect(Set(metadata.keys) == ["title", "description", "publisher"])
+        #expect(metadata["title"] as? String == "Original title")
+        #expect(
+            metadata["description"] as? String == "First line\r\n\tSecond line")
+        #expect(metadata["publisher"] as? String == "New Publisher")
+        #expect(object["tags"] == nil)
+    }
+
+    @Test
+    func testPatchNormalizesEditableMetadataBeforeEncoding() throws {
+        let detail = fixtureDetail()
+        var draft = BookMetadataDraft(detail: detail)
+        draft.subtitle = " \u{FEFF} "
+        draft.authors = ["\u{200D}", " New\u{00AD} Author "]
+        draft.narrators = ["New\u{200B} Narrator"]
+        draft.genres = ["New\u{202E} Genre"]
+        draft.series = [
+            BookMetadataSeriesDraft(
+                name: "Se\u{200D}ries", sequence: "1\u{FEFF}")
+        ]
+        draft.publishedYear = "20\u{FEFF}27"
+        draft.publishedDate = "2027\u{200D}-01-01"
+        draft.publisher = "New\u{200B} Publisher"
+        draft.isbn = "12\u{00AD}34"
+        draft.asin = "AB\u{FEFF}CD"
+        draft.language = "e\u{200D}n"
+        let patch = try BookMetadataPatch(baseline: detail, draft: draft)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(patch))
+                as? [String: Any]
+        )
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        #expect(metadata["subtitle"] is NSNull)
+        #expect(
+            metadata["authors"] as? [[String: String]] == [
+                ["name": "New Author"]
+            ])
+        #expect(metadata["narrators"] as? [String] == ["New Narrator"])
+        #expect(metadata["genres"] as? [String] == ["New Genre"])
+        #expect(
+            metadata["series"] as? [[String: String]] == [
+                ["name": "Series", "sequence": "1"]
+            ])
+        #expect(metadata["publishedYear"] as? String == "2027")
+        #expect(metadata["publishedDate"] as? String == "2027-01-01")
+        #expect(metadata["publisher"] as? String == "New Publisher")
+        #expect(metadata["isbn"] as? String == "1234")
+        #expect(metadata["asin"] as? String == "ABCD")
+        #expect(metadata["language"] as? String == "en")
+    }
+
+    @Test
+    func testPatchRejectsEmptySanitizedTitleAndControlCharacters() throws {
+        let detail = fixtureDetail()
+        var draft = BookMetadataDraft(detail: detail)
+        draft.title = " \u{00AD}\u{200D}\u{FEFF} "
+        #expect(throws: BookMetadataPatchError.emptyTitle) {
+            try BookMetadataPatch(baseline: detail, draft: draft)
+        }
+        draft.title = detail.title
+        draft.publisher = "Publisher\u{0000}"
+        #expect(throws: BookMetadataPatchError.invalidText) {
+            try BookMetadataPatch(baseline: detail, draft: draft)
+        }
+    }
+
+    @Test
     func testPatchDetectsChangedServerRevision() throws {
         let detail = fixtureDetail()
         var draft = BookMetadataDraft(detail: detail)
@@ -312,12 +392,15 @@ final class MetadataEditingTests {
         }
     }
 
-    private func fixtureDetail() -> LibraryBookDetail {
+    private func fixtureDetail(
+        title: String = "Original title",
+        description: String = "Description"
+    ) -> LibraryBookDetail {
         LibraryBookDetail(
             id: LibraryItemID(rawValue: "item-1"),
             libraryID: LibraryID(rawValue: "library-1"),
             bookID: BookID(rawValue: "book-1"),
-            title: "Original title",
+            title: title,
             subtitle: "Original subtitle",
             authors: [
                 LibraryBookContributor(
@@ -332,7 +415,7 @@ final class MetadataEditingTests {
             publishedYear: "2026",
             publishedDate: nil,
             publisher: "Publisher",
-            descriptionPlain: "Description",
+            descriptionPlain: description,
             isbn: nil,
             asin: nil,
             language: "English",
