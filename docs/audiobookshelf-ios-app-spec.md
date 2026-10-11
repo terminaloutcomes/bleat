@@ -907,7 +907,16 @@ Save with `PATCH /api/items/<item-id>/media` using the current old-model payload
 
 Send only changed scalar fields, but when authors, series, narrators, genres, or tags change, send the complete resulting array: the server treats those arrays as replacements. `tags` is top-level; the other editable fields are under `metadata`. Authors are name objects and series are `{name, sequence}` objects. Do not serialize display-only flattened fields such as `authorName`, `seriesName`, `narratorName`, or `descriptionPlain`.
 
-Before validating and constructing metadata patches, strip Unicode format characters from editable metadata text, trim surrounding whitespace, and omit empty optional values and array entries. Preserve synopsis line breaks and tabs. Reject a title that becomes empty and retain typed rejection of unsupported control characters. Authorization tags retain their separate identity semantics.
+Before validating and constructing metadata patches, strip Unicode format characters from editable metadata text, trim surrounding whitespace, and omit empty optional values and array entries other than series memberships. Reject series memberships whose names become empty. Preserve synopsis line breaks and tabs. Reject a title that becomes empty and retain typed rejection of unsupported control characters. Authorization tags retain their separate identity semantics.
+
+The book editor displays series memberships as ordered inline items. Each item
+opens a draft-only sheet with separate Series and Sequence fields; the trailing
+add button opens a blank sheet. Add/Save trims surrounding whitespace from both
+fields, rejects a blank series name, and preserves printable sequence strings
+(including leading zeroes, punctuation, and internal whitespace). Remove affects
+only the selected membership, even when names repeat. Item Cancel discards the
+item edit; closing the book editor discards the whole draft. Only the book's
+Save submits the resulting membership array to the server.
 
 The current success response is `{ "updated": Bool, "libraryItem": <old library item> }`.
 

@@ -122,6 +122,15 @@ final class MetadataEditingLiveTests: XCTestCase {
         let original = originalResponse.value
         var draft = BookMetadataDraft(detail: original)
         draft.publisher = marker
+        let sequences = [
+            "01", "001.5", "2a", "1-2", "1 (bonus)", "Part II", "",
+        ]
+        draft.series = sequences.enumerated().map { index, sequence in
+            BookMetadataSeriesDraft(
+                name: " \n\(marker) | series, \(index)\n ",
+                sequence: " \n" + sequence + "\n "
+            )
+        }
 
         try await coordinator.updateBookMetadata(
             accountID: accountID,
@@ -139,15 +148,42 @@ final class MetadataEditingLiveTests: XCTestCase {
         )
         let updated = updatedResponse.value
         XCTAssertEqual(updated.publisher, marker)
+        XCTAssertEqual(
+            updated.series.map(\.sequence),
+            sequences.map { $0.isEmpty ? nil : $0 })
+        XCTAssertEqual(
+            updated.series.map(\.name),
+            sequences.indices.map { "\(marker) | series, \($0)" })
+        XCTAssertTrue(
+            try BookMetadataPatch(
+                baseline: updated, draft: BookMetadataDraft(detail: updated)
+            ).isEmpty)
 
-        var restoreDraft = BookMetadataDraft(detail: updated)
+        var editDraft = BookMetadataDraft(detail: updated)
+        editDraft.series[1].sequence = "  02a | bonus, Part II  "
+        editDraft.series.remove(at: 3)
+        try await coordinator.updateBookMetadata(
+            accountID: accountID,
+            server: account.server,
+            itemID: item.id,
+            patch: try BookMetadataPatch(baseline: updated, draft: editDraft)
+        )
+        let edited = try await api.bookDetail(for: item.id, in: library.id)
+            .value
+        XCTAssertEqual(edited.series.map(\.name), editDraft.series.map(\.name))
+        XCTAssertEqual(
+            edited.series.map(\.sequence),
+            ["01", "02a | bonus, Part II", "2a", "1 (bonus)", "Part II", nil])
+
+        var restoreDraft = BookMetadataDraft(detail: edited)
         restoreDraft.publisher = original.publisher ?? ""
+        restoreDraft.series = BookMetadataDraft(detail: original).series
         try await coordinator.updateBookMetadata(
             accountID: accountID,
             server: account.server,
             itemID: item.id,
             patch: try BookMetadataPatch(
-                baseline: updated,
+                baseline: edited,
                 draft: restoreDraft
             )
         )

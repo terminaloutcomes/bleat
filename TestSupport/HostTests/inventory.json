@@ -336,6 +336,9 @@
     "testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated()"
   ],
   "BleatCoreTests.MetadataEditingTests": [
+    "testSeriesPatchPreservesFreeFormSequence(sequence:)",
+    "testSeriesBlankNameAndInvalidControlsAreRejected()",
+    "testUnrelatedEditAndNoOpPreserveSeries()",
     "testPatchStripsFormatCharactersFromInheritedMetadata()",
     "testPatchNormalizesEditableMetadataBeforeEncoding()",
     "testPatchRejectsEmptySanitizedTitleAndControlCharacters()",

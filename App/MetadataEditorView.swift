@@ -18,7 +18,7 @@ struct MetadataEditorView: View {
     @State private var draft: BookMetadataDraft
     @State private var authorsText: String
     @State private var narratorsText: String
-    @State private var seriesText: String
+    @State private var seriesSelection: SeriesEditorSelection?
     @State private var genresText: String
     @State private var tagsText: String
     @State private var selectedCoverItem: PhotosPickerItem?
@@ -42,9 +42,6 @@ struct MetadataEditorView: View {
         )
         _narratorsText = State(
             initialValue: initialDraft.narrators.joined(separator: ", ")
-        )
-        _seriesText = State(
-            initialValue: Self.seriesText(initialDraft.series)
         )
         _genresText = State(
             initialValue: initialDraft.genres.joined(separator: ", ")
@@ -125,6 +122,24 @@ struct MetadataEditorView: View {
                         .accessibilityIdentifier("metadata.save")
                     }
                 }
+            }
+            .sheet(item: $seriesSelection) { selection in
+                SeriesMembershipEditor(
+                    selection: selection,
+                    value: selection.value,
+                    onSave: { value in
+                        if let index = selection.index {
+                            draft.series[index] = value
+                        } else {
+                            draft.series.append(value)
+                        }
+                    },
+                    onRemove: {
+                        if let index = selection.index {
+                            draft.series.remove(at: index)
+                        }
+                    }
+                )
             }
             .alert(
                 "Server version changed",
@@ -317,7 +332,7 @@ struct MetadataEditorView: View {
             TextField("Subtitle", text: $draft.subtitle)
             TextField("Authors", text: $authorsText)
             TextField("Narrators", text: $narratorsText)
-            TextField("Series", text: $seriesText, axis: .vertical)
+            seriesList
             TextField("Genres", text: $genresText)
             TextField("Tags", text: $tagsText)
         }
@@ -340,6 +355,42 @@ struct MetadataEditorView: View {
             Toggle("Explicit", isOn: $draft.isExplicit)
             Toggle("Abridged", isOn: $draft.isAbridged)
         }
+    }
+
+    private var seriesList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Series")
+                Spacer()
+                Button {
+                    seriesSelection = .add
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Add Series")
+                .accessibilityIdentifier("metadata.series.add")
+            }
+            ForEach(draft.series.indices, id: \.self) { index in
+                Button {
+                    seriesSelection = .edit(index, draft.series[index])
+                } label: {
+                    HStack {
+                        Text(draft.series[index].name)
+                        Spacer()
+                        if !draft.series[index].sequence.isEmpty {
+                            Text(draft.series[index].sequence)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("metadata.series.item.\(index)")
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
     }
 
     private var staleAlertPresented: Binding<Bool> {
@@ -461,7 +512,6 @@ struct MetadataEditorView: View {
         draft = BookMetadataDraft(detail: latest)
         authorsText = draft.authors.joined(separator: ", ")
         narratorsText = draft.narrators.joined(separator: ", ")
-        seriesText = Self.seriesText(draft.series)
         genresText = draft.genres.joined(separator: ", ")
         tagsText = draft.tags.joined(separator: ", ")
         model.resetBookEditSaveState()
@@ -470,32 +520,6 @@ struct MetadataEditorView: View {
     private func updateDraftArrays() {
         draft.authors = Self.list(from: authorsText)
         draft.narrators = Self.list(from: narratorsText)
-        draft.series = seriesText.split(
-            whereSeparator: \.isNewline
-        ).compactMap { line in
-            let components = line.split(
-                separator: "|",
-                maxSplits: 1,
-                omittingEmptySubsequences: false
-            )
-            guard
-                let name = components.first?
-                    .trimmingCharacters(in: .whitespacesAndNewlines),
-                !name.isEmpty
-            else {
-                return nil
-            }
-            let sequence =
-                components.count == 2
-                ? components[1].trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                )
-                : ""
-            return BookMetadataSeriesDraft(
-                name: name,
-                sequence: sequence
-            )
-        }
         draft.genres = Self.list(from: genresText)
         draft.tags = Self.list(from: tagsText)
     }
@@ -509,14 +533,99 @@ struct MetadataEditorView: View {
         }
     }
 
-    private static func seriesText(
-        _ series: [BookMetadataSeriesDraft]
-    ) -> String {
-        series.map { value in
-            if value.sequence.isEmpty {
-                return value.name
+}
+
+private enum SeriesEditorSelection: Identifiable {
+    case add
+    case edit(Int, BookMetadataSeriesDraft)
+
+    var index: Int? {
+        switch self {
+        case .add: nil
+        case .edit(let index, _): index
+        }
+    }
+
+    var value: BookMetadataSeriesDraft {
+        switch self {
+        case .add: BookMetadataSeriesDraft(name: "", sequence: "")
+        case .edit(_, let value): value
+        }
+    }
+
+    var id: Int { index ?? -1 }
+}
+
+private struct SeriesMembershipEditor: View {
+    let selection: SeriesEditorSelection
+    let onSave: (BookMetadataSeriesDraft) -> Void
+    let onRemove: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var value: BookMetadataSeriesDraft
+    @State private var failure: BookMetadataPatchError?
+
+    init(
+        selection: SeriesEditorSelection,
+        value: BookMetadataSeriesDraft,
+        onSave: @escaping (BookMetadataSeriesDraft) -> Void,
+        onRemove: @escaping () -> Void
+    ) {
+        self.selection = selection
+        self.onSave = onSave
+        self.onRemove = onRemove
+        _value = State(initialValue: value)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Series", text: $value.name)
+                    .accessibilityIdentifier("metadata.series.name")
+                TextField("Sequence", text: $value.sequence)
+                    .accessibilityIdentifier("metadata.series.sequence")
+                if let failure {
+                    Text(message(for: failure))
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("metadata.series.error")
+                }
+                if selection.index != nil {
+                    Button("Remove", role: .destructive) {
+                        onRemove()
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("metadata.series.remove")
+                }
             }
-            return "\(value.name)|\(value.sequence)"
-        }.joined(separator: "\n")
+            .navigationTitle(
+                selection.index == nil ? "Add Series" : "Edit Series"
+            )
+            .iOSInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("metadata.series.cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(selection.index == nil ? "Add" : "Save") {
+                        do throws(BookMetadataPatchError) {
+                            onSave(try value.normalized())
+                            dismiss()
+                        } catch {
+                            failure = error
+                        }
+                    }
+                    .accessibilityIdentifier("metadata.series.commit")
+                }
+            }
+        }
+    }
+
+    private func message(for error: BookMetadataPatchError) -> String {
+        switch error {
+        case .emptySeriesName: "Enter a series name."
+        case .invalidText: "Remove unsupported control characters."
+        case .emptyTitle: "Enter a title."
+        }
     }
 }
