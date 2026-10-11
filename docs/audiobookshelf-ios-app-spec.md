@@ -843,8 +843,22 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
 Expanded detail preserves ordinary multiline synopsis whitespace in
 `media.metadata.descriptionPlain`, including CR/LF, LF, CR, and tabs, through
 API decoding and account-scoped cache persistence. Audiobookshelf strips HTML
-tags without removing that whitespace. Synopsis validation rejects other
-control characters; single-line metadata retains its stricter validation.
+tags without removing that whitespace. Network display metadata replaces common
+Windows-1252 punctuation decoded as Latin-1, removes other Unicode control (Cc)
+characters, and preserves Unicode format (Cf) characters such as soft hyphens
+and emoji joiners. Single-line fields replace tabs and line breaks with spaces;
+empty optional names are omitted. Opaque identifiers and tags are never repaired:
+tags are exact authorization keys and must continue matching the authenticated
+user's allow/deny selections, including after offline cache reload.
+Expanded network chapters with negative/non-finite timing, reversed or empty
+ranges, duplicate IDs, or starts at/past a known audio end are omitted; ends
+are clamped to a known duration. Cache validation still rejects unsanitized
+control characters and invalid identity, timing, and counts. Zero duration or
+track count represents unprobed media and may be displayed and cached; chapter
+timing is retained when duration is unknown. Playback still requires a valid
+session/media plan. Unusable titles, negative duration/counts, inconsistent audio
+file counts, and invalid timestamps preserve typed field failures through the UI
+and field-specific `book_metadata_normalization_*_invalid` diagnostic codes.
 
 ### 8.2 Metadata editor
 
@@ -892,6 +906,8 @@ Save with `PATCH /api/items/<item-id>/media` using the current old-model payload
 ```
 
 Send only changed scalar fields, but when authors, series, narrators, genres, or tags change, send the complete resulting array: the server treats those arrays as replacements. `tags` is top-level; the other editable fields are under `metadata`. Authors are name objects and series are `{name, sequence}` objects. Do not serialize display-only flattened fields such as `authorName`, `seriesName`, `narratorName`, or `descriptionPlain`.
+
+Before validating and constructing metadata patches, strip Unicode format characters from editable metadata text, trim surrounding whitespace, and omit empty optional values and array entries. Preserve synopsis line breaks and tabs. Reject a title that becomes empty and retain typed rejection of unsupported control characters. Authorization tags retain their separate identity semantics.
 
 The current success response is `{ "updated": Bool, "libraryItem": <old library item> }`.
 

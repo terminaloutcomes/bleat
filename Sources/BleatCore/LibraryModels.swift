@@ -716,6 +716,56 @@ extension LibraryBookDetail {
     }
 }
 
+// Server display text is repaired at the API boundary; cached text must already
+// satisfy these rules. Unicode format characters (Cf) are legitimate text.
+enum LibraryMetadataText {
+    static func isControl(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.properties.generalCategory == .control
+    }
+
+    static func sanitize(_ value: String, multiline: Bool = false) -> String {
+        var result = ""
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            // Common Windows-1252 punctuation decoded as Latin-1 by metadata tools.
+            case 0x91: result.append("‘")
+            case 0x92: result.append("’")
+            case 0x93: result.append("“")
+            case 0x94: result.append("”")
+            case 0x96: result.append("–")
+            case 0x97: result.append("—")
+            case 9, 10, 13:
+                if multiline {
+                    result.unicodeScalars.append(scalar)
+                } else {
+                    result.append(" ")
+                }
+            default:
+                if !isControl(scalar) { result.unicodeScalars.append(scalar) }
+            }
+        }
+        return multiline
+            ? result : result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func optional(_ value: String?, multiline: Bool = false) -> String? {
+        guard let value else { return nil }
+        let sanitized = sanitize(value, multiline: multiline)
+        return sanitized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil : sanitized
+    }
+
+    static func names(_ values: [String]) -> [String] {
+        values.map { sanitize($0) }.filter { !$0.isEmpty }
+    }
+
+    static func isValid(_ value: String, multiline: Bool = false) -> Bool {
+        value.unicodeScalars.allSatisfy {
+            !isControl($0) || (multiline && [9, 10, 13].contains($0.value))
+        }
+    }
+}
+
 extension LibraryBookDetail {
     func isValidForStorage(
         in libraryID: LibraryID,
@@ -737,7 +787,9 @@ extension LibraryBookDetail {
                     && Self.isValidOptionalString($0.sequence)
             }
             && genres.allSatisfy(Self.isValidDisplayString)
-            && tags.allSatisfy(Self.isValidDisplayString)
+            // Tags are opaque authorization keys, not display names. Preserve
+            // exact server identity, including whitespace and control scalars.
+            && tags.allSatisfy { !$0.isEmpty }
             && Self.isValidOptionalString(publishedYear)
             && Self.isValidOptionalString(publishedDate)
             && Self.isValidOptionalString(publisher)
@@ -746,8 +798,8 @@ extension LibraryBookDetail {
             && Self.isValidOptionalString(asin)
             && Self.isValidOptionalString(language)
             && duration.isFinite
-            && duration > 0
-            && trackCount > 0
+            && duration >= 0
+            && trackCount >= 0
             && audioFileCount >= trackCount
             && addedAtMilliseconds >= 0
             && updatedAtMilliseconds >= 0
@@ -769,7 +821,7 @@ extension LibraryBookDetail {
             chapterIDs.insert(chapter.id).inserted
                 && chapter.start.isFinite
                 && chapter.start >= 0
-                && chapter.start <= duration
+                && (duration == 0 || chapter.start <= duration)
                 && chapter.end.isFinite
                 && chapter.end >= chapter.start
                 && isValidOptionalString(chapter.title)
@@ -802,24 +854,21 @@ extension LibraryBookDetail {
 
     private static func isValidDisplayString(_ value: String) -> Bool {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && value.rangeOfCharacter(from: .controlCharacters) == nil
+            && LibraryMetadataText.isValid(value)
     }
 
     private static func isValidOptionalString(_ value: String?) -> Bool {
         guard let value else {
             return true
         }
-        return value.rangeOfCharacter(from: .controlCharacters) == nil
+        return LibraryMetadataText.isValid(value)
     }
 
     private static func isValidDescription(_ value: String?) -> Bool {
         guard let value else { return true }
         // Audiobookshelf's HTML stripping preserves ordinary prose whitespace.
         // Source: https://github.com/advplyr/audiobookshelf/blob/v2.37.1/server/utils/htmlSanitizer.js.
-        let invalidCharacters = CharacterSet.controlCharacters.subtracting(
-            CharacterSet(charactersIn: "\t\n\r")
-        )
-        return value.rangeOfCharacter(from: invalidCharacters) == nil
+        return LibraryMetadataText.isValid(value, multiline: true)
     }
 }
 
@@ -845,7 +894,7 @@ extension LibraryBookSummary {
 
     private static func isValidDisplayString(_ value: String) -> Bool {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && value.rangeOfCharacter(from: .controlCharacters) == nil
+            && LibraryMetadataText.isValid(value)
     }
 
     private static func isValidOptionalDisplayString(
@@ -854,7 +903,7 @@ extension LibraryBookSummary {
         guard let value else {
             return true
         }
-        return value.rangeOfCharacter(from: .controlCharacters) == nil
+        return LibraryMetadataText.isValid(value)
     }
 }
 

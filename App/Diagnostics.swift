@@ -281,6 +281,14 @@ extension AppFailure {
         case (_, .permissionDenied): .permissionDenied
         case (_, .itemNotFound): .itemNotFound
         case (_, .invalidLibraryCategories): .invalidLibraryCategories
+        case (_, .invalidBookMetadata(let field)):
+            switch field {
+            case .title: .bookMetadataTitleInvalid
+            case .duration: .bookMetadataDurationInvalid
+            case .trackCount: .bookMetadataTrackCountInvalid
+            case .audioFileCount: .bookMetadataAudioFileCountInvalid
+            case .timestamps: .bookMetadataTimestampsInvalid
+            }
         case (_, .invalidServerResponse): .invalidServerResponse
         case (_, .localStorageUnavailable): .localStorageUnavailable
         case (_, .unavailableOffline): .unavailableOffline
