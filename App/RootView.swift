@@ -280,6 +280,14 @@ struct RootView: View {
                     }
             }
         }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UserDefaults.didChangeNotification
+            )
+            .receive(on: DispatchQueue.main)
+        ) { _ in
+            model.reloadRemoteTelemetryConsent()
+        }
         .onChange(of: scenePhase) { previousPhase, phase in
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
@@ -1518,7 +1526,7 @@ private struct DiagnosticsView: View {
                 )
             }
 
-            RemoteTelemetryConsentSection(model: model)
+            RemoteTelemetryDiagnosticsSection(model: model)
         }
         .navigationTitle("Diagnostics")
         .task {
@@ -5925,7 +5933,7 @@ private struct StatisticsJSONDocument: FileDocument {
     }
 }
 
-private struct RemoteTelemetryConsentSection: View {
+private struct RemoteTelemetryDiagnosticsSection: View {
     @Bindable var model: AppModel
 
     var body: some View {
@@ -5935,25 +5943,31 @@ private struct RemoteTelemetryConsentSection: View {
                 value: model.remoteTelemetryTokenAvailability.diagnosticsLabel
             )
             .accessibilityIdentifier("diagnostics.telemetry.token")
-            Toggle(
+            LabeledContent(
                 "Share diagnostic telemetry",
-                isOn: Binding(
-                    get: {
-                        model.remoteTelemetryEnabled
-                    },
-                    set: { enabled in
-                        model.setRemoteTelemetryEnabled(enabled)
-                    }
-                )
+                value: model.remoteTelemetryEnabled ? "On" : "Off"
             )
-            .accessibilityIdentifier("diagnostics.telemetry.enabled")
+            .accessibilityIdentifier("diagnostics.telemetry.consent")
+            #if os(iOS)
+                if let settingsURL = URL(
+                    string: UIApplication.openSettingsURLString
+                ) {
+                    Link("Open System Settings", destination: settingsURL)
+                        .accessibilityIdentifier(
+                            "diagnostics.telemetry.settings")
+                }
+            #endif
         } header: {
             Text("Privacy")
         } footer: {
-            Text(
-                "Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, timing, and a random installation identifier used to correlate related events. Audiobook content, credentials, accounts, servers, searches, transcripts, and hardware or advertising identifiers are excluded. You can turn this off at any time without affecting local Diagnostics."
-            )
-            .accessibilityIdentifier("diagnostics.telemetry.explanation")
+            #if os(iOS)
+                Text(
+                    "Change diagnostic sharing in system Settings under Apps > Bleat. Sharing is optional and does not affect local Diagnostics."
+                )
+                .accessibilityIdentifier("diagnostics.telemetry.explanation")
+            #else
+                Text("Remote diagnostic telemetry is unavailable on macOS.")
+            #endif
         }
     }
 }
@@ -5964,6 +5978,7 @@ private struct SettingsView: View {
     @State private var showAddAccount = false
     @State private var editingAccount: ServerAccount?
     @State private var showDisableCloudSyncConfirmation = false
+    @State private var showClearCloudDataConfirmation = false
     @State private var showResetLocalDataConfirmation = false
 
     @ColourSchemePreference private var colourScheme
@@ -6336,6 +6351,20 @@ private struct SettingsView: View {
                 )
             }
             .alert(
+                "Clear My CloudKit Data?",
+                isPresented: $showClearCloudDataConfirmation
+            ) {
+                Button("Clear My CloudKit Data", role: .destructive) {
+                    Task { await model.clearPrivateCloudData() }
+                }
+                .accessibilityIdentifier("settings.icloud.clear.confirm")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "Deletes all Bleat data in your private iCloud database and turns off iCloud sync. Data on this device is kept. Other devices with sync enabled can upload data again."
+                )
+            }
+            .alert(
                 "Reset All Local Data?",
                 isPresented: $showResetLocalDataConfirmation
             ) {
@@ -6361,7 +6390,10 @@ private struct SettingsView: View {
             Button("Reset All Local Data", role: .destructive) {
                 showResetLocalDataConfirmation = true
             }
-            .disabled(model.isResettingLocalData)
+            .disabled(
+                model.isResettingLocalData
+                    || model.privateCloudDataClearState == .clearing
+            )
             .accessibilityIdentifier("settings.resetLocalData")
 
             if model.isResettingLocalData {
@@ -6418,11 +6450,34 @@ private struct SettingsView: View {
                 )
             )
             .disabled(
-                model.privateCloudState == .syncing
+                model.privateCloudDataClearState == .clearing
+                    || model.privateCloudState == .syncing
                     || model.privateCloudState == .cancelling
                     || model.privateCloudState.isStopping
             )
             .accessibilityIdentifier("settings.icloud.enabled")
+
+            Button("Clear My CloudKit Data", role: .destructive) {
+                showClearCloudDataConfirmation = true
+            }
+            .disabled(
+                model.privateCloudDataClearState == .clearing
+                    || model.isResettingLocalData
+            )
+            .accessibilityIdentifier("settings.icloud.clear")
+
+            switch model.privateCloudDataClearState {
+            case .idle:
+                EmptyView()
+            case .clearing:
+                ProgressView("Clearing CloudKit data…")
+            case .cleared:
+                Text("CloudKit data cleared. iCloud sync is off.")
+                    .accessibilityIdentifier("settings.icloud.clear.completed")
+            case .failed:
+                // The shared iCloud failure below retains the typed cause.
+                EmptyView()
+            }
 
             if model.canCancelPrivateCloudSynchronization {
                 Button(

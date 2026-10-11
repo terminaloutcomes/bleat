@@ -2524,6 +2524,7 @@ actor PrivateCloudSyncRun {
     private var callbacks:
         [UUID: (elapsed: Duration, since: ContinuousClock.Instant?)] = [:]
     private var watchdogs: [UUID: Task<Void, Never>] = [:]
+    private var cancellationTask: Task<Void, Never>?
     private let deadline: Duration
 
     init(deadline: Duration = .seconds(60)) {
@@ -2561,7 +2562,7 @@ actor PrivateCloudSyncRun {
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 guard let self else { return }
                 if await self.checkDeadline(for: id) {
-                    await cancelOperations()
+                    await self.requestCancellation(cancelOperations)
                     return
                 }
             }
@@ -2581,6 +2582,22 @@ actor PrivateCloudSyncRun {
     func waitForCallbacks() async {
         if callbacks.isEmpty { return }
         await withCheckedContinuation { callbackWaiters.append($0) }
+    }
+
+    func requestCancellation(
+        _ cancelOperations: @escaping @Sendable () async -> Void
+    ) {
+        guard cancellationTask == nil else { return }
+        // CloudKit marks delegate execution with task-local state. A child
+        // Task inherits it and cancelOperations traps in that context. Do not
+        // await cancellation from the delegate, which must return first.
+        cancellationTask = Task.detached {
+            await cancelOperations()
+        }
+    }
+
+    func waitForCancellation() async {
+        await cancellationTask?.value
     }
 
     func checkDeadline(for id: UUID) -> Bool {
@@ -2753,6 +2770,13 @@ public final class PrivateCloudSyncCoordinator:
             engine = nil
             return
         }
+        engine = makeEngine(database: database, serialization: serialization)
+    }
+
+    private func makeEngine(
+        database: CKDatabase,
+        serialization: CKSyncEngine.State.Serialization?
+    ) -> CKSyncEngine {
         var configuration = CKSyncEngine.Configuration(
             database: database,
             stateSerialization: serialization,
@@ -2760,7 +2784,7 @@ public final class PrivateCloudSyncCoordinator:
         )
         configuration.automaticallySync = false
         configuration.subscriptionID = "bleat-private-sync-v1"
-        engine = CKSyncEngine(configuration)
+        return CKSyncEngine(configuration)
     }
 
     static func configurationFailure(
@@ -2812,6 +2836,7 @@ public final class PrivateCloudSyncCoordinator:
                     ))
             }
             await run.waitForCallbacks()
+            await run.waitForCancellation()
             await lifecycle.finish(run)
             await run.complete(result)
         }
@@ -3060,29 +3085,31 @@ public final class PrivateCloudSyncCoordinator:
             return
         }
 
-        try await perform(.disable) {
+        try await perform(deleteCloudData ? .deleteCloudData : .disable) {
+            // Persist opt-out before cancellation or deletion can suspend or
+            // fail, so foreground sync cannot repopulate the cleared zone.
+            defaults.set(false, forKey: enabledKey)
             if deleteCloudData {
                 let engine = try configuredEngine()
                 await engine.cancelOperations()
+                await lifecycle.waitForDrain()
+                let database = engine.database
                 do {
-                    try await perform(.deleteCloudData) {
-                        engine.state.add(
-                            pendingDatabaseChanges: [.deleteZone(zoneID)]
-                        )
-                        try await engine.sendChanges()
-                        try await store.removeAllRecords()
-                        defaults.removeObject(forKey: stateKey)
-                    }
-                } catch let failure as PrivateCloudSyncFailure {
-                    throw failure.cause
+                    // Delete the entire app-owned zone directly. Sending the
+                    // sync engine's queue could also upload pending records.
+                    _ = try await database.deleteRecordZone(withID: zoneID)
+                } catch let error as CKError where error.code == .zoneNotFound {
+                    // An already absent zone has the requested empty state.
                 }
+                try await store.removeAllRecords()
+                defaults.removeObject(forKey: stateKey)
+                self.engine = makeEngine(database: database, serialization: nil)
             } else {
                 // Local opt-out must remain available when a source or
                 // entitlement bug prevented the CloudKit engine from being
                 // created. No database access is needed to retain cloud data.
                 await engine?.cancelOperations()
             }
-            defaults.set(false, forKey: enabledKey)
         }
     }
 
@@ -3173,7 +3200,7 @@ public final class PrivateCloudSyncCoordinator:
                 )
             )
             let run = await lifecycle.current()
-            let callbackID = await run?.beginCallback {
+            let cancelAfterTimeout: @Sendable () async -> Void = {
                 await self.recordFailure(
                     PrivateCloudSyncFailure(
                         operation: .applyFetchedChanges,
@@ -3185,6 +3212,9 @@ public final class PrivateCloudSyncCoordinator:
                 )
                 await syncEngine.cancelOperations()
             }
+            let callbackID = await run?.beginCallback(
+                cancelOperations: cancelAfterTimeout
+            )
             do {
                 let pendingChanges = try await store.apply(
                     modifications: changes.modifications,
@@ -3214,16 +3244,26 @@ public final class PrivateCloudSyncCoordinator:
                     error: error
                 )
                 await run?.failCallback(failure)
-                if let callbackID { await run?.endCallback(callbackID) }
-                if failure.cause != .callbackTimedOut {
+                if failure.cause == .callbackTimedOut {
+                    await run?.requestCancellation(cancelAfterTimeout)
+                } else {
                     await recordFailure(
                         failure,
                         correlationID: correlationID,
                         startedAt: startedAt,
                         recordCount: recordCount
                     )
+                    if let run {
+                        await run.requestCancellation {
+                            await syncEngine.cancelOperations()
+                        }
+                    } else {
+                        Task.detached {
+                            await syncEngine.cancelOperations()
+                        }
+                    }
                 }
-                await syncEngine.cancelOperations()
+                if let callbackID { await run?.endCallback(callbackID) }
             }
         case .sentRecordZoneChanges(let changes):
             let correlationID = UUID()

@@ -388,6 +388,9 @@
     "testCloseFailuresRemainTyped()"
   ],
   "BleatCoreTests.PrivateCloudSyncTests": [
+    "testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()",
+    "testCallbackCancellationCompletesBeforeLifecycleAllowsRetry()",
+    "testCallbackWatchdogCancellationEscapesDelegateTaskLocals()",
     "testEveryPrivateCloudErrorPreservesDiagnosticFailureCode()",
     "testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope()",
     "testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain()",

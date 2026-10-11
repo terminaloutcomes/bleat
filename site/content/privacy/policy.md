@@ -47,7 +47,8 @@ Terminal Outcomes.
 
 ## Optional remote diagnostic telemetry on iOS
 
-**Share diagnostic telemetry** is off by default. If you turn it on, Bleat may
+**Share diagnostic telemetry** is off by default and can be changed in system
+Settings under **Apps > Bleat**. If you turn it on, Bleat may
 send limited, anonymised technical information to Terminal Outcomes so we can
 secure and improve the app.
 

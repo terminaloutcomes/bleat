@@ -293,7 +293,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.global-admission.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.setMaximumConcurrentDownloads(1)
         let details = (0..<3).map { index in
             fixtureBookDetail(
@@ -865,7 +865,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.waiting-download.\(UUID().uuidString)"
         )
 
-        await model.start(account: nil)
+        await model.start(accounts: [])
 
         let record = try XCTUnwrap(model.records.first)
         XCTAssertEqual(
@@ -954,7 +954,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.cached-window-retry.\(UUID().uuidString)"
         )
 
-        await model.start(account: nil)
+        await model.start(accounts: [])
 
         let record = try XCTUnwrap(model.records.first)
         XCTAssertEqual(record.manifest.automaticCacheState, .cached)
@@ -1076,7 +1076,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.cached-window-relaunch.\(UUID().uuidString)"
         )
 
-        await model.start(account: account)
+        await model.start(accounts: [account])
 
         let descriptors =
             await model.scheduledTransferDescriptorsForTesting()
@@ -1154,7 +1154,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.completed-track-late-failure.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let session = URLSession(configuration: .ephemeral)
         let task = session.downloadTask(with: request)
         task.taskDescription = try DownloadChunkTaskDescription(
@@ -1244,7 +1244,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.completed-during-authorization.\(UUID().uuidString)"
         )
-        let startup = Task { await model.start(account: account) }
+        let startup = Task { await model.start(accounts: [account]) }
         await authorizationGate.waitUntilEntered()
 
         let staged = root.appendingPathComponent("completed-track")
@@ -3607,7 +3607,7 @@ final class AppModelTests: XCTestCase {
             service: service,
             transcription: coordinator
         )
-        await downloads.start(account: account)
+        await downloads.start(accounts: [account])
         coordinator.start(
             chapters: [chapter],
             detail: detail,
@@ -4839,7 +4839,7 @@ final class AppModelTests: XCTestCase {
             .cacheFailed
         )
         let publication = await measureIssue151Stage {
-            await model.start(account: account)
+            await model.start(accounts: [account])
         }
 
         let published = try XCTUnwrap(
@@ -5107,6 +5107,214 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.phase, .signedOut)
     }
 
+    func testStartupRegistersAllDownloadAccountsBeforeFirstRecoverySuspends()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BleatStartupAccounts-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = try fixtureAccount(accountID: "account-1")
+        let second = try fixtureAccount(accountID: "account-2")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1", title: "Startup", libraryID: fixtureLibrary().id))
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root, account: first, detail: detail, downloadID: "first",
+            committedByteCount: 5)
+        _ = try await prepareInterruptedDownload(
+            root: root, account: second, detail: detail, downloadID: "second",
+            committedByteCount: 5)
+        let request = URLRequest(
+            url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio")))
+        let service = TestAppService(
+            accounts: .success([first, second]), activeAccount: .success(first),
+            downloadPlan: .success(plan),
+            authorizedDownloadRequest: .success(request))
+        let gate = AsyncGate()
+        await service.setDownloadPlanGate(gate)
+        let model = AppModel(
+            service: service, downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "startup-all-accounts"))
+        let startup = Task { await model.start() }
+        await gate.waitUntilEntered()
+        let secondRecord = try XCTUnwrap(
+            model.downloads.records.first { $0.manifest.accountID == second.id }
+        )
+        // A callback or control action for the second account must already
+        // have its context while the first account's recovery is suspended.
+        await model.downloads.continueDownload(secondRecord)
+        let observedFailure = model.downloads.failure
+        await gate.release()
+        await startup.value
+        XCTAssertNil(observedFailure)
+        let requests = await service.authorizedDownloadRequestIdentities()
+        XCTAssertEqual(
+            Set(requests.map(\.accountID)), Set([first.id, second.id]))
+        XCTAssertNil(model.downloads.failure)
+        await model.downloads.removeAll()
+    }
+
+    func
+        testContinueDownloadMissingLocalAccountHasTypedFailureAndPreservesBytes()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatMissingDownloadAccount-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1", title: "Local context",
+                libraryID: fixtureLibrary().id))
+        let (plan, _) = try await prepareInterruptedDownload(
+            root: root, account: account, detail: detail,
+            downloadID: "missing-context", committedByteCount: 5)
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root, diagnostics: diagnostics,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "missing-context-continue"))
+        await model.start(accounts: [])
+        let record = try XCTUnwrap(model.records.first)
+        await model.continueDownload(record)
+        XCTAssertEqual(
+            model.presentedFailure, .localContextUnavailable(.accountMissing))
+        var diagnosticEvents: [DiagnosticEvent] = []
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        repeat {
+            diagnosticEvents = await diagnostics.events()
+            if diagnosticEvents.contains(where: {
+                $0.failureCode == .downloadAccountContextMissing
+            }) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        } while ContinuousClock.now < deadline
+        XCTAssertTrue(
+            diagnosticEvents.contains {
+                $0.operation == .resumeDownload
+                    && $0.failureCode == .downloadAccountContextMissing
+                    && $0.stage == .contextValidation
+            })
+        let storage = DownloadStorage(
+            layout: try DownloadStorageLayout(rootURL: root))
+        let identity = try DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID, accountID: account.id,
+            itemID: detail.id, track: plan.tracks[1])
+        let bytes = try await storage.partialByteLength(identity)
+        XCTAssertEqual(bytes, 5)
+        let descriptors = await model.scheduledTransferDescriptorsForTesting()
+        XCTAssertTrue(descriptors.isEmpty)
+        await model.removeAll()
+    }
+
+    func testRestoredDownloadCallbacksMissingAccountKeepTypedStageAndBytes()
+        async throws
+    {
+        for unauthorized in [false, true] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatMissingCallbackContext-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: root) }
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "item-1", title: "Callback context",
+                    libraryID: fixtureLibrary().id))
+            let (plan, _) = try await prepareInterruptedDownload(
+                root: root, account: account, detail: detail,
+                downloadID: "missing-callback-context", committedByteCount: 5)
+            let telemetry = RecordingRemoteTelemetryDownloadLogger()
+            let model = DownloadModel(
+                service: TestAppService(activeAccount: .success(nil)),
+                storageRootURL: root, remoteTelemetryDownloadLogger: telemetry,
+                backgroundSessionIdentifier: backgroundSessionIdentifier(
+                    "missing-context-callback"))
+            await model.start(accounts: [])
+            let identity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "missing-callback-context"),
+                accountID: account.id, itemID: detail.id, track: plan.tracks[1])
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [
+                MissingContextDownloadURLProtocol.self
+            ]
+            // Foundation invokes the real delegate callbacks on its own
+            // executor, exercising the application boundary off MainActor.
+            let session = URLSession(
+                configuration: configuration, delegate: model,
+                delegateQueue: nil)
+            let request = URLRequest(
+                url: try XCTUnwrap(
+                    URL(
+                        string:
+                            "https://example.invalid/\(unauthorized ? "unauthorized" : "chunk")"
+                    )))
+            let task = session.downloadTask(with: request)
+            task.taskDescription = try DownloadChunkTaskDescription(
+                identity: identity,
+                range: DownloadByteRange(start: 5, endInclusive: 6),
+                validator: nil
+            ).encode()
+            task.resume()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while model.failure == nil && ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertEqual(
+                model.presentedFailure,
+                .localContextUnavailable(.accountMissing))
+            let events = telemetry.events
+            XCTAssertTrue(
+                events.contains {
+                    $0.stage
+                        == (unauthorized
+                            ? .authenticationRefresh : .taskScheduled)
+                        && $0.state == .failed
+                        && $0.failureCause == .accountContextMissing
+                        && $0.httpStatusCode == (unauthorized ? 401 : nil)
+                })
+            XCTAssertFalse(
+                events.contains {
+                    $0.stage == .manifestCommit && $0.state == .failed
+                })
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            let bytes = try await storage.partialByteLength(identity)
+            XCTAssertEqual(bytes, unauthorized ? 5 : 7)
+            session.invalidateAndCancel()
+            await model.removeAll()
+        }
+    }
+
+    func testRepairDownloadAccountMismatchHasTypedFailure() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatDownloadAccountMismatch-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let other = try fixtureAccount(accountID: "other-account")
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1", title: "Repair", libraryID: fixtureLibrary().id))
+        _ = try await prepareInterruptedDownload(
+            root: root, account: account, detail: detail,
+            downloadID: "mismatched-context", committedByteCount: 5)
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: root,
+            backgroundSessionIdentifier: backgroundSessionIdentifier(
+                "mismatched-context"))
+        await model.start(accounts: [])
+        let record = try XCTUnwrap(model.records.first)
+        await model.repair(record, account: other)
+        XCTAssertEqual(
+            model.presentedFailure, .localContextUnavailable(.accountMismatch))
+        await model.removeAll()
+    }
+
     func testStartupRemovesDownloadsForUnknownAccounts() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -5226,7 +5434,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("protected-removal")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
 
         await model.removeAll(excluding: protectedID)
 
@@ -5479,7 +5687,7 @@ final class AppModelTests: XCTestCase {
                     backgroundSessionIdentifier: backgroundSessionIdentifier(
                         "startup-cleanup-\(launch)")
                 )
-                await model.start(account: nil)
+                await model.start(accounts: [])
                 XCTAssertNil(
                     model.record(
                         accountID: account.id, itemID: expired.detail.id))
@@ -5532,7 +5740,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier: backgroundSessionIdentifier(
                 "scheduled-cleanup")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
         XCTAssertEqual(
             model.records.first?.manifest.bookFinishedAt,
             record.manifest.bookFinishedAt)
@@ -5566,7 +5774,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier: backgroundSessionIdentifier(
                 "natural-cleanup")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
         await model.handleAutomaticPlaybackActivity(
             AutomaticDownloadActivity(
                 kind: .bookFinished, detail: cache.detail, account: account,
@@ -5607,7 +5815,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier: backgroundSessionIdentifier(
                 "reread-cleanup")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
         let pin = try XCTUnwrap(
             model.pinAutomaticCacheTracks(for: cache, trackIndexes: [0]))
         await model.recordLocalBookCompletion(
@@ -5665,7 +5873,7 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier: backgroundSessionIdentifier(
                     "serialized-completion")
             )
-            await model.start(account: nil)
+            await model.start(accounts: [])
             let progress = Task {
                 await model.handleAutomaticPlaybackActivity(
                     AutomaticDownloadActivity(
@@ -5717,7 +5925,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier: backgroundSessionIdentifier(
                 "pinned-completion")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
         let pin = try XCTUnwrap(
             model.pinAutomaticCacheTracks(for: cache, trackIndexes: [0]))
         await model.recordLocalBookCompletion(
@@ -5802,7 +6010,7 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier("automatic-cleanup")
         )
 
-        await model.start(account: nil)
+        await model.start(accounts: [])
 
         XCTAssertEqual(
             model.records.map(\.manifest.itemID),
@@ -5898,7 +6106,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("legacy-automatic-cleanup")
         )
-        await model.start(account: nil)
+        await model.start(accounts: [])
 
         XCTAssertEqual(model.records.count, 1)
         XCTAssertEqual(
@@ -6017,7 +6225,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.completed-during-termination.\(UUID().uuidString)"
         )
 
-        await relaunched.start(account: account)
+        await relaunched.start(accounts: [account])
 
         let descriptors =
             await relaunched.scheduledTransferDescriptorsForTesting()
@@ -6080,7 +6288,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.offline-relaunch.\(UUID().uuidString)"
         )
 
-        await model.start(account: account)
+        await model.start(accounts: [account])
 
         let stalledDescriptors =
             await model
@@ -6155,7 +6363,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.active-transfer.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.updateNetworkPathState(
             AppNetworkPathState(
                 availability: .unavailable,
@@ -6325,7 +6533,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.primary-fallback.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let identities = try plan.tracks.map { track in
             try DownloadTaskIdentity(
                 downloadID: DownloadID(rawValue: "primary-fallback"),
@@ -6449,7 +6657,7 @@ final class AppModelTests: XCTestCase {
                 await retryGate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.updateNetworkPathState(
             AppNetworkPathState(
                 availability: .satisfied,
@@ -6557,7 +6765,7 @@ final class AppModelTests: XCTestCase {
                 await retryDelayGate.recordAndWait(duration)
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.updateNetworkPathState(
             AppNetworkPathState(
                 availability: .satisfied,
@@ -6609,7 +6817,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.retry-after-relaunch.\(UUID().uuidString)"
         )
-        await relaunched.start(account: account)
+        await relaunched.start(accounts: [account])
         let relaunchedDescriptors =
             await relaunched.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(relaunchedDescriptors.isEmpty)
@@ -6687,7 +6895,7 @@ final class AppModelTests: XCTestCase {
                 await retryDelayGate.recordAndWait(duration)
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.updateNetworkPathState(
             AppNetworkPathState(
                 availability: .satisfied,
@@ -6787,7 +6995,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier: backgroundSessionIdentifier(
                 "repair-recovery")
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
         await service.setDownloadPlan(.success(plan))
         let repair = Task { await model.repair(record, account: account) }
@@ -6869,7 +7077,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.retry-reset.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         XCTAssertEqual(
             model.transferRetryCountForTesting(identity),
             DownloadModel.maximumTransferRetries
@@ -6935,7 +7143,7 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier("paused-network-recovery")
         )
 
-        await model.start(account: account)
+        await model.start(accounts: [account])
 
         let pausedDescriptors =
             await model
@@ -6993,7 +7201,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let scheduledDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
         let descriptor = try XCTUnwrap(scheduledDescriptors.first)
@@ -7057,7 +7265,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.ordered-download-diagnostics.\(UUID().uuidString)"
         )
 
-        await model.start(account: nil)
+        await model.start(accounts: [])
         await gate.waitUntilEntered()
         await gate.release()
 
@@ -7134,7 +7342,7 @@ final class AppModelTests: XCTestCase {
                 throw DownloadStorageError.persistenceFailed
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
 
         await model.pause(record)
@@ -7165,7 +7373,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.pause-storage-relaunch.\(UUID().uuidString)"
         )
-        await relaunchedModel.start(account: account)
+        await relaunchedModel.start(accounts: [account])
         XCTAssertEqual(
             relaunchedModel.records.first?.manifest.state,
             .failed
@@ -7219,7 +7427,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
         let completedIdentity = try DownloadTaskIdentity(
             downloadID: record.manifest.downloadID,
@@ -7296,7 +7504,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
         let pauseTask = Task { @MainActor in
             await model.pause(record)
@@ -7353,7 +7561,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
 
         let pauseTask = Task { @MainActor in
@@ -7415,7 +7623,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
 
         let pauseTask = Task { @MainActor in
@@ -7476,7 +7684,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.cancel-rejects-pause.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let staleRecord = try XCTUnwrap(model.records.first)
 
         await model.cancel(staleRecord)
@@ -7531,7 +7739,7 @@ final class AppModelTests: XCTestCase {
                 await gate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
 
         let pauseTask = Task { @MainActor in
@@ -7589,7 +7797,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.cancel-supersedes-continue.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         await model.pause(try XCTUnwrap(model.records.first))
         let pausedRecord = try XCTUnwrap(model.records.first)
 
@@ -7652,7 +7860,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.late-paused-callback.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let initialDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
         let oldDescriptor = try XCTUnwrap(initialDescriptors.first)
@@ -7772,7 +7980,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.late-cancelled-callback.\(UUID().uuidString)"
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let initialDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
         let oldDescriptor = try XCTUnwrap(initialDescriptors.first)
@@ -7878,7 +8086,7 @@ final class AppModelTests: XCTestCase {
                 await replacementGate.enterAndWait()
             }
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         model.updateNetworkPathState(
             AppNetworkPathState(
                 availability: .satisfied,
@@ -7998,7 +8206,7 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier("permanent-recovery-failure")
         )
 
-        await model.start(account: account)
+        await model.start(accounts: [account])
         await model.recoverAfterNetworkChange(for: [account])
 
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
@@ -8044,7 +8252,7 @@ final class AppModelTests: XCTestCase {
             storageRootURL: root,
             backgroundSessionIdentifier: sessionIdentifier
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         XCTAssertEqual(
             model.pendingRecoveryDownloadIDsForTesting,
             [DownloadID(rawValue: "stale-transfer")]
@@ -8128,7 +8336,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("recovery-deduplication")
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
 
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [account])
@@ -8200,8 +8408,8 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("account-scoped-recovery")
         )
-        await model.start(account: firstAccount)
-        await model.start(account: secondAccount)
+        await model.start(accounts: [firstAccount])
+        await model.start(accounts: [secondAccount])
 
         await service.setDownloadPlan(.success(plan))
         await model.recoverAfterNetworkChange(for: [firstAccount])
@@ -8301,6 +8509,9 @@ final class AppModelTests: XCTestCase {
         let failures: [DownloadModelFailure] = [
             .storageUnavailable,
             .permissionDenied,
+            .localContextUnavailable(.accountMissing),
+            .localContextUnavailable(.recordMissing),
+            .localContextUnavailable(.accountMismatch),
             .preparationFailed,
             .repairPlanChanged,
             .insufficientStorage(
@@ -8351,7 +8562,7 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.failure-presentation.\(UUID().uuidString)"
         )
 
-        await model.start(account: account)
+        await model.start(accounts: [account])
 
         XCTAssertEqual(model.records.first?.manifest.state, .downloading)
         XCTAssertNil(
@@ -9087,7 +9298,7 @@ final class AppModelTests: XCTestCase {
                 backgroundSessionIdentifier: backgroundSessionIdentifier(
                     "all-lookahead")
             )
-            await model.start(account: nil)
+            await model.start(accounts: [])
             model.setAutomaticLookahead(.all)
             let activity = AutomaticDownloadActivity(
                 kind: .progress,
@@ -13707,6 +13918,56 @@ final class AppModelTests: XCTestCase {
             [.keepThisDevice]
         )
         XCTAssertEqual(model.privateCloudState, .idle)
+    }
+
+    func
+        testClearCloudKitDataWorksWhenSyncIsAlreadyDisabledAndKeepsLocalAccount()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setPrivateCloudSyncEnabled(false)
+
+        await model.clearPrivateCloudData()
+
+        let requests = await service.privateCloudSyncSettingRequests()
+        XCTAssertEqual(requests.last?.enabled, false)
+        XCTAssertEqual(requests.last?.deleteCloudData, true)
+        XCTAssertEqual(model.privateCloudDataClearState, .cleared)
+        XCTAssertEqual(model.privateCloudState, .disabled)
+        XCTAssertFalse(model.privateCloudSyncEnabled)
+        XCTAssertEqual(model.account?.id, account.id)
+        XCTAssertTrue(model.accounts.contains { $0.id == account.id })
+        let localResets = await service.resetLocalDataRequestCount()
+        XCTAssertEqual(localResets, 0)
+        await model.setPrivateCloudSyncEnabled(true)
+        XCTAssertEqual(model.privateCloudDataClearState, .idle)
+    }
+
+    func testClearCloudKitDataPreservesTypedDeletionFailureAndLeavesSyncOff()
+        async
+    {
+        let failure = PrivateCloudSyncFailure(
+            operation: .deleteCloudData,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure)))
+        )
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncSetting: .failure(.privateCloud(failure))
+        )
+        let model = AppModel(service: service)
+
+        await model.clearPrivateCloudData()
+
+        let expected = AppFailure(
+            operation: .privateCloudSync,
+            serviceError: .privateCloud(failure)
+        )
+        XCTAssertEqual(model.privateCloudDataClearState, .failed(expected))
+        XCTAssertEqual(model.privateCloudState, .failed(expected))
+        XCTAssertFalse(model.privateCloudSyncEnabled)
     }
 
     func testDisablingCloudSyncClearsPendingServerConfigurationChange()
@@ -18698,7 +18959,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("verified-automatic-cache")
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
 
         let window = await model.automaticCachedPlaybackWindow(
@@ -18760,7 +19021,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("single-file-cache-timing")
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let record = try XCTUnwrap(model.records.first)
         XCTAssertNil(record.manifest.entries[0].startOffset)
         XCTAssertNil(record.manifest.entries[0].duration)
@@ -18809,7 +19070,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("multi-file-cache-timing")
         )
-        await model.start(account: account)
+        await model.start(accounts: [account])
         let stored = try XCTUnwrap(model.records.first)
         let multiFileDetail = fixtureBookDetail(
             item: fixtureBook(
@@ -19216,7 +19477,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 backgroundSessionIdentifier("superseded-cache-pin")
         )
-        await downloads.start(account: account)
+        await downloads.start(accounts: [account])
         let record = try XCTUnwrap(downloads.records.first)
         let resolvedFirstWindow =
             await downloads.automaticCachedPlaybackWindow(
@@ -26116,6 +26377,32 @@ private final class LateTransferDownloadURLProtocol: URLProtocol,
         client?.urlProtocolDidFinishLoading(self)
     }
 
+    override func stopLoading() {}
+}
+
+private final class MissingContextDownloadURLProtocol: URLProtocol,
+    @unchecked Sendable
+{
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest
+    { request }
+    override func startLoading() {
+        guard let url = request.url,
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: url.lastPathComponent == "unauthorized" ? 401 : 206,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Range": "bytes 5-6/8"])
+        else {
+            client?.urlProtocol(
+                self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(
+            self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(repeating: 0xCD, count: 2))
+        client?.urlProtocolDidFinishLoading(self)
+    }
     override func stopLoading() {}
 }
 

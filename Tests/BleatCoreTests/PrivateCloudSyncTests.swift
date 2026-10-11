@@ -8,6 +8,67 @@ import Testing
 @Suite(.serialized)
 final class PrivateCloudSyncTests {
     @Test
+    func testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()
+        async
+    {
+        let run = PrivateCloudSyncRun()
+        let probe = CloudKitCancellationProbe()
+        await CloudKitDelegateTestContext.$isInsideDelegate.withValue(true) {
+            await run.requestCancellation { await probe.cancel() }
+            await run.requestCancellation { await probe.cancel() }
+        }
+        await run.waitForCancellation()
+        let calls = await probe.calls
+        let inheritedDelegateContext = await probe.inheritedDelegateContext
+        #expect(calls == 1)
+        #expect(!inheritedDelegateContext)
+    }
+
+    @Test
+    func testCallbackCancellationCompletesBeforeLifecycleAllowsRetry()
+        async throws
+    {
+        let lifecycle = PrivateCloudSyncLifecycle()
+        let run = try await lifecycle.begin()
+        let probe = CloudKitCancellationProbe(holdCompletion: true)
+        await run.requestCancellation { await probe.cancel() }
+        await probe.waitForEntry()
+        let completion = Task {
+            await run.waitForCancellation()
+            await lifecycle.finish(run)
+            await run.complete(.success(()))
+        }
+        do {
+            _ = try await lifecycle.begin()
+            Issue.record("Cancellation must drain before a new run begins")
+        } catch {
+            #expect(error == .stopping)
+        }
+        await probe.release()
+        await completion.value
+        _ = try await lifecycle.begin()
+    }
+
+    @Test
+    func testCallbackWatchdogCancellationEscapesDelegateTaskLocals()
+        async
+    {
+        let run = PrivateCloudSyncRun(deadline: .zero)
+        let probe = CloudKitCancellationProbe()
+        let callbackID = await CloudKitDelegateTestContext.$isInsideDelegate
+            .withValue(true) {
+                await run.beginCallback { await probe.cancel() }
+            }
+        await probe.waitForEntry()
+        await run.endCallback(callbackID)
+        await run.waitForCancellation()
+        let inheritedDelegateContext = await probe.inheritedDelegateContext
+        #expect(!inheritedDelegateContext)
+        let failure = await run.failure()
+        #expect(failure?.cause == .callbackTimedOut)
+    }
+
+    @Test
     func testEveryPrivateCloudErrorPreservesDiagnosticFailureCode() {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
             (.disabled, .privateCloudDisabled),
@@ -2062,6 +2123,42 @@ final class PrivateCloudSyncTests {
                 defaults: PrivateCloudDefaultsReference(recordDefaults)
             )
         )
+    }
+}
+
+private enum CloudKitDelegateTestContext {
+    @TaskLocal static var isInsideDelegate = false
+}
+
+private actor CloudKitCancellationProbe {
+    private(set) var calls = 0
+    private(set) var inheritedDelegateContext = false
+    private let holdCompletion: Bool
+    private var entryWaiter: CheckedContinuation<Void, Never>?
+    private var completionWaiter: CheckedContinuation<Void, Never>?
+
+    init(holdCompletion: Bool = false) {
+        self.holdCompletion = holdCompletion
+    }
+
+    func cancel() async {
+        calls += 1
+        inheritedDelegateContext = CloudKitDelegateTestContext.isInsideDelegate
+        entryWaiter?.resume()
+        entryWaiter = nil
+        if holdCompletion {
+            await withCheckedContinuation { completionWaiter = $0 }
+        }
+    }
+
+    func waitForEntry() async {
+        if calls > 0 { return }
+        await withCheckedContinuation { entryWaiter = $0 }
+    }
+
+    func release() {
+        completionWaiter?.resume()
+        completionWaiter = nil
     }
 }
 

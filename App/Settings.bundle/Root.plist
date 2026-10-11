@@ -100,6 +100,24 @@
 				<integer>11</integer>
 			</array>
 		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>Shares bounded technical diagnostics such as app and operating-system versions, operation outcomes, timing, and a random installation identifier used to correlate related events. Audiobook content, credentials, accounts, servers, searches, transcripts, and hardware or advertising identifiers are excluded. Sharing is optional and does not affect local Diagnostics.</string>
+			<key>Title</key>
+			<string>Diagnostics</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<false/>
+			<key>Key</key>
+			<string>bleat.remoteTelemetry.enabled.v1</string>
+			<key>Title</key>
+			<string>Share diagnostic telemetry</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
 	</array>
 	<key>StringsTable</key>
 	<string>Root</string>

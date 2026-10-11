@@ -119,6 +119,95 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         XCTAssertNotNil(controller.storageGenerations[0])
     }
 
+    func
+        testSystemSettingsConsentAppliesOnForegroundAndPreservesWithdrawalGeneration()
+        throws
+    {
+        let suite = "RemoteTelemetryConsentTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = RecordingRemoteTelemetryConsentController()
+        let store = RemoteTelemetryConsentStore(defaults: defaults)
+        let model = AppModel(
+            service: UnavailableAppService(),
+            remoteTelemetryConsentStore: store,
+            remoteTelemetryConsentController: controller
+        )
+
+        // System Settings writes the preference without calling the app model.
+        defaults.set(true, forKey: RemoteTelemetryConsentStore.enabledKey)
+        model.setRemoteTelemetryForeground(true)
+        let firstGeneration = try XCTUnwrap(store.storageGeneration)
+        XCTAssertTrue(model.remoteTelemetryEnabled)
+        XCTAssertEqual(controller.values, [false, true])
+        XCTAssertEqual(controller.storageGenerations.last, firstGeneration)
+        model.reloadRemoteTelemetryConsent()
+        XCTAssertEqual(controller.values, [false, true])
+
+        defaults.set(false, forKey: RemoteTelemetryConsentStore.enabledKey)
+        model.setRemoteTelemetryForeground(true)
+        XCTAssertFalse(model.remoteTelemetryEnabled)
+        XCTAssertEqual(model.remoteTelemetryTokenAvailability, .disabled)
+        XCTAssertEqual(controller.values, [false, true, false])
+        XCTAssertEqual(controller.storageGenerations.last, firstGeneration)
+        XCTAssertNil(
+            defaults.object(forKey: RemoteTelemetryConsentStore.generationKey))
+
+        defaults.set(true, forKey: RemoteTelemetryConsentStore.enabledKey)
+        model.reloadRemoteTelemetryConsent()
+        XCTAssertNotEqual(store.storageGeneration, firstGeneration)
+    }
+
+    func testSystemSettingsWithdrawalBeforeRelaunchPurgesPreviousGeneration()
+        throws
+    {
+        let suite = "RemoteTelemetryConsentTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = RemoteTelemetryConsentStore(defaults: defaults)
+        let generation = try XCTUnwrap(store.setEnabled(true))
+        defaults.set(false, forKey: RemoteTelemetryConsentStore.enabledKey)
+        let controller = RecordingRemoteTelemetryConsentController()
+        let model = AppModel(
+            service: UnavailableAppService(),
+            remoteTelemetryConsentStore: store,
+            remoteTelemetryConsentController: controller
+        )
+        XCTAssertFalse(model.remoteTelemetryEnabled)
+        XCTAssertEqual(controller.values, [false])
+        XCTAssertEqual(controller.storageGenerations, [generation])
+        XCTAssertNil(
+            defaults.object(forKey: RemoteTelemetryConsentStore.generationKey))
+    }
+
+    #if os(iOS)
+        func testBundledSystemSettingsUsesExistingDefaultOffConsentPreference()
+            throws
+        {
+            let settingsURL = try XCTUnwrap(
+                Bundle.main.url(
+                    forResource: "Root", withExtension: "plist",
+                    subdirectory: "Settings.bundle")
+            )
+            let root = try XCTUnwrap(
+                PropertyListSerialization.propertyList(
+                    from: Data(contentsOf: settingsURL), options: [],
+                    format: nil
+                ) as? [String: Any]
+            )
+            let specifiers = try XCTUnwrap(
+                root["PreferenceSpecifiers"] as? [[String: Any]])
+            let toggle = try XCTUnwrap(
+                specifiers.first {
+                    $0["Type"] as? String == "PSToggleSwitchSpecifier"
+                })
+            XCTAssertEqual(
+                toggle["Key"] as? String, RemoteTelemetryConsentStore.enabledKey
+            )
+            XCTAssertEqual(toggle["DefaultValue"] as? Bool, false)
+        }
+    #endif
+
     func testWithdrawalInvalidatesPersistedGenerationBeforeReenable() throws {
         let suite = "RemoteTelemetryConsentTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

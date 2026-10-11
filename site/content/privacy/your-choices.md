@@ -11,16 +11,17 @@ is stored on this device and is not synchronized through iCloud.
 
 On iPhone or iPad:
 
-1. Open **Settings** in Bleat.
-2. Open **Diagnostics**.
-3. Under **Privacy**, turn **Share diagnostic telemetry** on or off.
+1. Open the iPhone or iPad **Settings** app.
+2. Open **Apps**, then **Bleat**.
+3. Under **Diagnostics**, turn **Share diagnostic telemetry** on or off.
 
 You can change this setting at any time, including while signed out or when
 Bleat cannot finish starting.
 
 ## What happens when you turn it off
 
-Bleat immediately records your withdrawal before it:
+System Settings saves your withdrawal immediately. Bleat applies it when it
+starts or returns to the foreground, before it:
 
 - stops creating and sending new diagnostic reports;
 - stops requesting short-lived upload access and cancels any upload in
