@@ -3,6 +3,8 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 
 pub enum BleatError {
+    #[error("{0}")]
+    ReleaseVersion(#[from] crate::release_version_check::ReleaseVersionError),
     #[error("Missing environment variable: {0}")]
     MissingEnvironmentVariable(String),
 

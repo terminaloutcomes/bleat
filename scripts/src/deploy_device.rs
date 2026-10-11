@@ -4,6 +4,7 @@ use std::process::Command;
 use crate::error::BleatError;
 
 pub fn run() -> Result<(), BleatError> {
+    crate::release_version_check::validate_repository(std::path::Path::new("."), None)?;
     let bleat_device_id = required_environment_variable("BLEAT_DEVICE_ID")?;
 
     let bleat_device_build_directory = PathBuf::from(required_environment_variable(

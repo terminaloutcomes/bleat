@@ -73,6 +73,8 @@ pub struct UploadResult {
 
 #[derive(Debug, Error)]
 pub enum UploadError {
+    #[error("{0}")]
+    ReleaseVersion(#[from] crate::release_version_check::ReleaseVersionError),
     #[error("development team must be a ten-character uppercase Apple team identifier")]
     InvalidDevelopmentTeam,
 
@@ -236,6 +238,7 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     };
     validate_build_number(&build)?;
     let version = resolve_marketing_version(&build, arguments.marketing_version.as_deref())?;
+    crate::release_version_check::validate_repository(&repository_root, Some(&version))?;
 
     let relative_evidence_directory =
         PathBuf::from(".build/app-store-connect").join(format!("{version}-{build}"));

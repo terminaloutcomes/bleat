@@ -413,8 +413,14 @@ valid calendar date only when a reproducible or otherwise explicit release
 version is required. A custom `BLEAT_BUILD_NUMBER` without the normal timestamp
 shape requires an explicit `BLEAT_MARKETING_VERSION`; both supplied values are
 propagated unchanged. Update `MARKETING_VERSION` in `project.yml`, add the
-matching dated changelog section, and regenerate the Xcode project when
-publishing a new GitHub release.
+matching dated changelog section, bump the project's fallback UTC build number,
+and regenerate the Xcode project before every new release version.
+`mise run release:check` validates the source and both generated Xcode
+configurations, including the fallback build date and nonempty latest changelog
+section. CI, every Xcode app build, archive, upload, and phone deployment enforce
+this check. A timestamp or explicit archive version cannot override stale
+project metadata. Phone deployments resolve a fresh UTC build number instead
+of reusing the project's fallback build number.
 
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.

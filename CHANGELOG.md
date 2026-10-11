@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026.10.11 - 2026-10-11
+
+### Fixed
+
+- Fixed a CloudKit callback assertion that could crash Bleat during startup or synchronization.
+- Load restored download accounts before resuming transfers.
+- Report missing local download context separately from server permission failures while preserving downloaded bytes.
+- Reject mismatched project, Xcode, archive, and changelog versions before building or uploading.
+
+### Changed
+
+- Moved diagnostic sharing to iOS Settings under Apps > Bleat so it can be enabled without launching the app.
+- Added Clear My CloudKit Data in Settings, preserving local data and turning off sync on this device.
+- Phone deployments now use a fresh UTC timestamp build number.
+
 ## 2026.10.09 - 2026-10-10
 
 ### Fixed

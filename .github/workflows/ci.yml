@@ -35,6 +35,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
         with:
           cache: false
+      - name: Validate release version consistency
+        run: mise run release:check
       - name: Identify compatible Swift caches
         id: cache-keys
         run: |

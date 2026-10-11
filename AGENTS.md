@@ -347,6 +347,13 @@ project fallback for ordinary builds. When changing either project setting,
 regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit generated
 version settings directly.
 
+Before releasing a new version, bump both `MARKETING_VERSION` and the fallback
+`CURRENT_PROJECT_VERSION` in `project.yml`, add the matching dated changelog
+section, regenerate Xcode, and run `mise run release:check`. The fallback build
+must be a UTC timestamp on the marketing-version date. Never rely on an archive
+override to hide stale project metadata. Phone deployments must resolve a fresh
+UTC build number rather than reuse the project fallback.
+
 Every application version bump must add a matching `CHANGELOG.md` section using
 the heading `## <version> - YYYY-MM-DD`. Keep the section limited to changes
 included in that release.

@@ -395,6 +395,8 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
 			buildPhases = (
+				ECEE1B9CF8ECE9070D7D4C9B /* Validate Release Version */,
+				CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */,
 				A478EF5EDBF8264EFEDEBD5B /* Sources */,
 				59425BEF486F1F479E902607 /* Resources */,
 				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
@@ -492,6 +494,46 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif ! build_commit=\"$(/usr/bin/git -C \"${SRCROOT}\" rev-parse --short=8 --verify HEAD 2>/dev/null)\"; then\n  echo \"error: Could not determine the Git commit for this build.\" >&2\n  exit 1\nfi\n\nif [ \"${#build_commit}\" -lt 8 ]; then\n  echo \"error: Git returned an invalid short commit for this build.\" >&2\n  exit 1\nfi\n\ncase \"${build_commit}\" in\n  *[!0-9a-fA-F]*)\n    echo \"error: Git returned an invalid short commit for this build.\" >&2\n    exit 1\n    ;;\nesac\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n/usr/libexec/PlistBuddy -c \"Set :BleatGitCommit ${build_commit}\" \"${info_plist}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate Paid Developer Build Settings";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/validate-paid-developer-build-settings.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		ECEE1B9CF8ECE9070D7D4C9B /* Validate Release Version */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate Release Version";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cargo run --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --package scripts --bin validate-release-version -- --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -775,7 +817,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 20261011.0639.04;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -784,7 +826,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.08;
+				MARKETING_VERSION = 2026.10.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
@@ -847,7 +889,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 20261011.0639.04;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -856,7 +898,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.08;
+				MARKETING_VERSION = 2026.10.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
