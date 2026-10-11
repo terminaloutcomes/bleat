@@ -38,14 +38,18 @@
         private var selectionCompletions:
             [UUID: CarPlaySearchSelectionCompletion] = [:]
         private var actions: [ObjectIdentifier: Action] = [:]
+        private var authorSelections: Set<UUID> = []
+        private var searchRows: [CPListItem]?
         private var query = ""
         private var items: [CPListItem] = []
+        private var publishedRows: [CPListItem] = []
         private var resultsTemplate: CPListTemplate?
         private var authorTemplate: CPListTemplate?
         private var searchResult: LibraryRepositoryResult<LibrarySearchResults>?
         private var keyboardAvailable = true
         private var active = true
         private var renderedCapacity: Int?
+        private var authorFailureRow: CPListItem?
         private var authorResult: LibraryRepositoryResult<LibraryItemsPage>?
 
         init(
@@ -88,15 +92,32 @@
                 ObjectIdentifier(authorTemplate) == identity
             {
                 self.authorTemplate = nil
+                authorResult = nil
+                authorFailureRow = nil
+                for id in authorSelections {
+                    selectionTasks.removeValue(forKey: id)?.cancel()
+                    selectionCompletions.removeValue(forKey: id)?.callback()
+                }
+                authorSelections = []
             }
         }
 
         func updateLimits(keyboardAvailable: Bool) {
             guard self.keyboardAvailable != keyboardAvailable else {
                 if renderedCapacity != maximumItems() {
-                    if let searchResult { render(searchResult) }
+                    if let searchResult {
+                        render(searchResult)
+                    } else {
+                        publish(publishedRows)
+                        renderedCapacity = maximumItems()
+                    }
                     if let authorResult, let authorTemplate {
                         renderAuthor(authorResult, into: authorTemplate)
+                    } else if let authorFailureRow, let authorTemplate {
+                        authorTemplate.updateSections(
+                            maximumItems() > 0
+                                ? [CPListSection(items: [authorFailureRow])]
+                                : [])
                     }
                 }
                 return
@@ -107,6 +128,7 @@
                 actions = [:]
                 searchResult = nil
                 authorResult = nil
+                authorFailureRow = nil
                 authorTemplate?.updateSections([])
                 authorTemplate?.showsSpinnerWhileEmpty = false
                 publish([
@@ -129,6 +151,7 @@
             selectionCompletions = [:]
             for task in selectionTasks.values { task.cancel() }
             selectionTasks = [:]
+            authorSelections = []
             for completion in selections { completion.callback() }
         }
 
@@ -155,9 +178,11 @@
         ) {
             cancel()
             actions = [:]
+            searchRows = nil
             authorTemplate?.updateSections([])
             authorTemplate?.showsSpinnerWhileEmpty = false
             authorResult = nil
+            authorFailureRow = nil
             searchResult = nil
             query = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard current, keyboardAvailable else {
@@ -233,7 +258,6 @@
         ) {
             let capacity = max(0, maximumItems())
             renderedCapacity = maximumItems()
-            actions = [:]
             let total = result.value.books.count + result.value.authors.count
             let capped =
                 result.value.books.count >= 50
@@ -251,27 +275,34 @@
                             : "Saved matches only; not an offline library index."
                     ))
             }
-            // Interleave title and author matches so either destination remains
-            // reachable when the keyboard list is short.
-            for index
-                in 0..<max(result.value.books.count, result.value.authors.count)
-            {
-                if rows.count < capacity, index < result.value.books.count {
-                    let book = result.value.books[index]
-                    let item = CPListItem(
-                        text: book.title, detailText: book.authorName)
-                    register(item, action: .book(book))
-                    rows.append(item)
+            // Keep native callback rows stable for this query when limits change.
+            if searchRows == nil {
+                var matches: [CPListItem] = []
+                for index
+                    in 0..<max(
+                        result.value.books.count, result.value.authors.count)
+                {
+                    if index < result.value.books.count {
+                        let book = result.value.books[index]
+                        let item = CPListItem(
+                            text: book.title, detailText: book.authorName)
+                        register(item, action: .book(book))
+                        matches.append(item)
+                    }
+                    if index < result.value.authors.count {
+                        let author = result.value.authors[index]
+                        let item = CPListItem(
+                            text: author.name,
+                            detailText: "Author — Browse books")
+                        register(item, action: .author(author))
+                        matches.append(item)
+                    }
                 }
-                if rows.count < capacity, index < result.value.authors.count {
-                    let author = result.value.authors[index]
-                    let item = CPListItem(
-                        text: author.name, detailText: "Author — Browse books")
-                    register(item, action: .author(author))
-                    rows.append(item)
-                }
-                if rows.count == capacity { break }
+                searchRows = matches
             }
+            rows.append(
+                contentsOf: (searchRows ?? []).prefix(
+                    max(0, capacity - rows.count)))
             if total == 0 {
                 rows.append(
                     message(
@@ -291,18 +322,31 @@
         }
 
         private func publish(_ rows: [CPListItem]) {
+            publishedRows = rows
             items = Array(rows.prefix(max(0, maximumItems())))
-            resultsTemplate?.updateSections([CPListSection(items: items)])
+            resultsTemplate?.updateSections(
+                items.isEmpty ? [] : [CPListSection(items: items)])
         }
 
-        private func register(_ item: CPListItem, action: Action) {
-            actions[ObjectIdentifier(item)] = action
+        private func register(
+            _ item: CPListItem, action: Action,
+            authorList: CPListTemplate? = nil
+        ) {
+            let authorIdentity = authorList.map(ObjectIdentifier.init)
+            if authorList == nil { actions[ObjectIdentifier(item)] = action }
             let revision = generation
             item.handler = { @Sendable [weak self] _, completion in
                 let completed = CarPlaySearchSelectionCompletion(
                     callback: completion)
                 Task { @MainActor [weak self] in
                     guard let self else {
+                        completed.callback()
+                        return
+                    }
+                    if let authorIdentity,
+                        self.authorTemplate.map(ObjectIdentifier.init)
+                            != authorIdentity
+                    {
                         completed.callback()
                         return
                     }
@@ -348,7 +392,8 @@
         private func showResults() {
             guard resultsTemplate == nil else { return }
             let list = CPListTemplate(
-                title: "Search results", sections: [CPListSection(items: items)]
+                title: "Search results",
+                sections: items.isEmpty ? [] : [CPListSection(items: items)]
             )
             resultsTemplate = list
             push(list)
@@ -363,11 +408,16 @@
                 return
             }
             let id = UUID()
+            switch action {
+            case .author, .retryAuthor: authorSelections.insert(id)
+            case .book, .retry: break
+            }
             selectionCompletions[id] = completion
             selectionTasks[id] = Task { @MainActor [weak self] in
                 guard let self else { return }
                 defer {
                     self.selectionTasks[id] = nil
+                    self.authorSelections.remove(id)
                     let completed = self.selectionCompletions.removeValue(
                         forKey: id)
                     completed?.callback()
@@ -377,7 +427,9 @@
         }
 
         private func perform(_ action: Action, revision: UInt64) async {
-            guard current, generation == revision else { return }
+            guard !Task.isCancelled, current, generation == revision else {
+                return
+            }
             switch action {
             case .book(let book):
                 guard book.libraryID == libraryID else { return }
@@ -393,6 +445,8 @@
                 guard authorTemplate == nil else { return }
                 let list = CPListTemplate(title: author.name, sections: [])
                 list.showsSpinnerWhileEmpty = true
+                authorResult = nil
+                authorFailureRow = nil
                 authorTemplate = list
                 push(list)
                 await loadAuthor(author, into: list, revision: revision)
@@ -420,11 +474,12 @@
             {
                 let item = CPListItem(
                     text: book.title, detailText: book.authorName)
-                register(item, action: .book(book))
+                register(item, action: .book(book), authorList: list)
                 rows.append(item)
             }
             list.showsSpinnerWhileEmpty = false
             list.emptyViewTitleVariants = ["No author books"]
+            rows = Array(rows.prefix(capacity))
             list.updateSections(
                 rows.isEmpty ? [] : [CPListSection(items: rows)])
         }
@@ -436,25 +491,27 @@
             do {
                 let result = try await model.carPlayAuthorPage(
                     account: account, libraryID: libraryID, authorID: author.id)
-                guard current, generation == revision, authorTemplate === list
+                guard !Task.isCancelled, current, generation == revision,
+                    authorTemplate === list
                 else { return }
                 authorResult = result
                 renderAuthor(result, into: list)
             } catch {
-                guard current, generation == revision, authorTemplate === list
+                guard !Task.isCancelled, current, generation == revision,
+                    authorTemplate === list
                 else { return }
                 let failure = AppFailure(
                     operation: .loadLibraryPage, serviceError: error)
                 let row = message(failure.title, failure.message)
                 if failure.allowsRetry {
                     row.isEnabled = true
-                    register(row, action: .retryAuthor(author))
+                    register(
+                        row, action: .retryAuthor(author), authorList: list)
                 }
+                authorFailureRow = row
                 list.showsSpinnerWhileEmpty = false
-                list.updateSections([
-                    CPListSection(
-                        items: Array([row].prefix(max(0, maximumItems()))))
-                ])
+                list.updateSections(
+                    maximumItems() > 0 ? [CPListSection(items: [row])] : [])
             }
         }
     }

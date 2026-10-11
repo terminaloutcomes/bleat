@@ -366,18 +366,42 @@ playback start lifecycle, checks after preparation suspensions, and rejection of
 obsolete Now Playing publication. Ordinary phone playback retains its existing
 behavior of continuing after caller cancellation. The latest review reports no P0/P1 findings.
 
-Four P2 findings remain unresolved under the invoked review-and-ship skill's
-severity policy:
+The four P2 findings from that review were resolved in the requested follow-up:
 
-- `App/CarPlaySearchController.swift:236`: capacity rerender replaces action
-  identities while native keyboard rows retain their previous identities, so
-  those visible rows can stop responding.
-- `App/CarPlaySearchController.swift:87`: removing an author template leaves
-  its pending load/selection completion waiting for a server response.
-- `App/CarPlaySearchController.swift:392`: a retained previous author's result
-  can populate another author's loading page after a capacity change.
-- `App/CarPlaySearchController.swift:408`: cached/limited author status rows
-  can exceed an effective zero-row or zero-section limit.
+- Native keyboard result rows retain their identities and actions when capacity
+  changes (`App/CarPlaySearchController.swift`, `render`).
+- Author-page removal cancels only owned author loads, discharges their
+  completions once, and rejects late responses and stale retry handlers
+  (`templateRemoved`, `register`, `perform`, `loadAuthor`).
+- Opening or closing an author page clears retained author results, so a capacity
+  update cannot populate a new loading page with the previous author's books
+  (`templateRemoved`, `perform`).
+- Author status and failure rows, and pushed search results, produce no sections
+  at effective zero capacity (`renderAuthor`, `updateLimits`, `publish`,
+  `showResults`, `loadAuthor`). The pushed-search empty-section issue was found
+  and resolved during the follow-up review.
 
-These findings and the manual evidence gaps prevent claiming that every #333
-acceptance criterion is complete.
+Six focused regressions cover these fixes, including uncooperative responses,
+retained native rows, stale retry handlers after reopening, cached and limited
+status rows, failure-row capacity changes, and zero-section pushed results. An additional
+review found that pending/failed search pages also needed limit reapplication;
+`updateLimits` now republishes retained status rows when capacity changes.
+The first follow-up test build failed because three fixture arguments were out
+of declaration order; no tests executed. The corrected five-test run passed with zero skips or runtime warnings; its
+exact identifiers were verified in the result bundle. A subsequent broader run
+failed before executing any selected test because the Simulator rejected the
+runner launch as Busy during preflight. This was an environment failure, and the
+owned disposable Simulator was booted and its boot completion verified before
+rerunning. The final app-hosted `xcodebuild test` selection passed all 46 CarPlay
+and adjacent playback-cancellation tests on iOS 26.5, including all six new
+regressions. The result bundle verified every requested identifier as passed,
+with zero failures, skips, or runtime warnings. Targeted `swift-format lint
+--strict` and `git diff --check` also passed. The complete local/UI and live
+gates were not repeated for this template-lifecycle follow-up; their previous
+evidence and unresolved UI outcomes remain above.
+
+Three independent complete-change follow-up reviews ran. The latest reports no
+findings: all original and follow-up P2s are resolved, with no P0/P1 findings.
+
+The manual evidence gaps still prevent claiming that every #333 acceptance
+criterion is complete.

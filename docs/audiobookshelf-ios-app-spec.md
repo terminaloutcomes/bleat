@@ -1206,9 +1206,10 @@ and server failures retain their existing typed causes. Supersession, removal of
 the native search template, account/library changes,
 keyboard restriction and disconnect cancel owned tasks, discharge pending
 completions once, and reject late results and stale selections. Author-page back
-navigation and changing-limit edge cases still have the review gaps recorded in
-`docs/release-evidence/carplay.md`. Callback entry points hop explicitly to the
-main actor.
+navigation cancels its owned load without waiting for the server. Native result
+rows retain their action identities across capacity changes; author pages clear
+previous results and enforce zero-row and zero-section limits. Callback entry
+points hop explicitly to the main actor.
 Vehicles can disable the keyboard; Search then disables while Library and
 Downloads remain available. Session restrictions and runtime content limits are
 rechecked while connected. iOS 27 CarPlay Simulator, physical keyboard
