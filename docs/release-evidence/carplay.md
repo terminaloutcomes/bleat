@@ -254,6 +254,8 @@ Account-switch regression follow-up on 2026-10-11:
   Result bundles verified exact test identities and zero skips/runtime warnings.
   Strict Swift lint and diff checks passed. Three read-only complete-change
   review passes reported no findings; reviewer test-quality notes were addressed.
+- `mise run iphone` built, installed and launched this fix on the physical
+  iPhone successfully. This confirms deployment, not CarPlay rendering.
 - These app-hosted checks establish model/template behavior, not actual native
   head-unit attachment or rendering. Re-run manual account switching, library
   changes and deepest-folder playback on the head unit before closing #331.
