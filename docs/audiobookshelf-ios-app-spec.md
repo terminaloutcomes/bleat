@@ -1118,6 +1118,9 @@ Library loads uncollapsed, ascending-title server pages automatically, independe
 of the phone's appended pages, sort, categories, and filters. The account and
 library remain shared; library selection stays on the phone. Phone browsing
 reloads cancel and supersede older catalog loads and close older folder paths.
+CarPlay catalog context includes account identity, selected library identity and
+the browse generation. Context changes rebuild the native tab/list hierarchy
+instead of sharing child templates between replacement tab bars.
 No Next/Previous controls, page title, grid banner, section headings, or
 index-scope explanations appear in Library.
 

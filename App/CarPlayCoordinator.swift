@@ -155,7 +155,12 @@
         private var browserFailure: CarPlayLibraryBrowser.Failure?
         private var libraryLoading = false
         private(set) var libraryTask: Task<Void, Never>?
-        private var libraryContext: UInt64?
+        private struct LibraryContext: Equatable {
+            let accountID: AccountID?
+            let libraryID: LibraryID?
+            let generation: UInt64
+        }
+        private var libraryContext: LibraryContext?
         private var limitObservationTask: Task<Void, Never>?
         private let contentLimits: @MainActor () -> (items: Int, sections: Int)
         #if DEBUG
@@ -243,8 +248,12 @@
             guard presenter != nil else {
                 return
             }
-            if libraryContext != model.libraryPageGeneration {
-                libraryContext = model.libraryPageGeneration
+            let context = LibraryContext(
+                accountID: model.account?.id,
+                libraryID: model.selectedLibrary?.id,
+                generation: model.libraryPageGeneration)
+            if libraryContext != context {
+                libraryContext = context
                 libraryTask?.cancel()
                 libraryPage = .idle
                 libraryFailure = nil
@@ -310,7 +319,7 @@
             guard let account = presentation.account else {
                 return
             }
-            if homeTemplate == nil {
+            if homeTemplate == nil || rootContext != .signedIn(account.id) {
                 homeTemplate = makeTabTemplate(
                     title: "Home",
                     systemImage: "house"

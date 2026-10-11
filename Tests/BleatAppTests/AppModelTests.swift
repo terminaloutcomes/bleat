@@ -21692,8 +21692,12 @@ final class AppModelTests: XCTestCase {
             await model.selectLibrary(secondLibrary)
             coordinator.refreshTemplates()
 
+            let replacementRoot = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate)
+            let replacementHome = try XCTUnwrap(
+                replacementRoot.templates[0] as? CPListTemplate)
             let replacementItem = try XCTUnwrap(
-                home.sections.first?.items.first as? CPListItem
+                replacementHome.sections.first?.items.first as? CPListItem
             )
             XCTAssertFalse(replacementItem === item)
             XCTAssertEqual(
@@ -21890,7 +21894,13 @@ final class AppModelTests: XCTestCase {
             await model.setLibraryBrowseMode(.author)
             coordinator.refreshTemplates()
             await coordinator.waitForLibraryLoad()
-            XCTAssertEqual(template.sections.flatMap(\.items).count, 10)
+            let refreshedRoot = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate)
+            let refreshedLibrary = try XCTUnwrap(
+                refreshedRoot.templates[1] as? CPListTemplate)
+            XCTAssertEqual(
+                refreshedLibrary.sections.flatMap(\.items).map(\.text),
+                books.map(\.title))
         }
 
         func testCarPlayCachedCatalogPreservesBooksWhenLaterCacheIsMissing()
@@ -22190,8 +22200,14 @@ final class AppModelTests: XCTestCase {
             coordinator.refreshTemplates()
             await coordinator.waitForLibraryLoad()
             XCTAssertEqual(model.selectedLibrary?.id, library.id)
-            XCTAssertFalse(template.showsSpinnerWhileEmpty)
-            XCTAssertFalse(template.sections.isEmpty)
+            let refreshedRoot = try XCTUnwrap(
+                presenter.root as? CPTabBarTemplate)
+            let refreshedLibrary = try XCTUnwrap(
+                refreshedRoot.templates[1] as? CPListTemplate)
+            XCTAssertFalse(refreshedLibrary.showsSpinnerWhileEmpty)
+            XCTAssertEqual(
+                refreshedLibrary.sections.flatMap(\.items).map(\.text),
+                ["A Book"])
         }
 
         func testCarPlayFolderCallbackCanEnterOffMainActor() async throws {
@@ -22440,6 +22456,7 @@ final class AppModelTests: XCTestCase {
             let presenter = TestCarPlayPresenter()
             let coordinator = CarPlayCoordinator(model: model)
             coordinator.connect(presenter)
+            await coordinator.waitForLibraryLoad()
             coordinator.refreshTemplates()
             let firstRoot = try XCTUnwrap(
                 presenter.root as? CPTabBarTemplate
@@ -22451,6 +22468,15 @@ final class AppModelTests: XCTestCase {
             let pageRequests = await service.pageRequests()
             XCTAssertEqual(pageRequests.last, secondLibrary.id)
 
+            await service.setFirstPage(
+                .success(
+                    LibraryItemsPage(
+                        items: [
+                            fixtureBook(
+                                id: "second-account-book",
+                                title: "Second account book",
+                                libraryID: firstLibrary.id)
+                        ], total: 1, page: 0, limit: 100)))
             await model.switchAccount(to: secondAccount)
             coordinator.refreshTemplates()
             XCTAssertEqual(model.account, secondAccount)
@@ -22460,6 +22486,20 @@ final class AppModelTests: XCTestCase {
                 presenter.root as? CPTabBarTemplate
             )
             XCTAssertFalse(firstRoot === secondRoot)
+            for (old, new) in zip(firstRoot.templates, secondRoot.templates) {
+                XCTAssertFalse(
+                    old === new,
+                    "Account changes must replace the native tab hierarchy")
+            }
+            await coordinator.waitForLibraryLoad()
+            coordinator.refreshTemplates()
+            let libraryTemplate = try XCTUnwrap(
+                (presenter.root as? CPTabBarTemplate)?.templates[1]
+                    as? CPListTemplate)
+            XCTAssertEqual(
+                libraryTemplate.sections.flatMap(\.items).map(\.text),
+                ["Second account book"])
+
             coordinator.disconnect()
         }
 

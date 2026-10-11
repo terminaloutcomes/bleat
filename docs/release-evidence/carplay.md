@@ -236,6 +236,28 @@ List/folder validation on 2026-10-10:
   Xcode could not find the requested physical-device destination. This version
   was not installed by that attempt.
 
+Account-switch regression follow-up on 2026-10-11:
+
+- A physical-head-unit report found a completely blank CarPlay Library after
+  switching accounts, despite the phone showing books. This remains a failed
+  manual check until a head-unit retest confirms recovery.
+- The strengthened account-switch test caught all three native child list
+  templates being reused across replacement tab bars. Catalog context now
+  includes account ID, selected library ID and browse generation. Every new
+  signed-in root creates fresh native child lists, including catalog-restart
+  retries; ordinary content refreshes retain the current hierarchy.
+- The regression verifies both fresh child-template identity and the new
+  account's catalog. Artwork, discovery-retry and phone-browse tests inspect the
+  active replacement hierarchy rather than detached old templates.
+- The complete app unit bundle passed 512 tests after the initial hierarchy
+  fix. After consolidating root construction, all 27 CarPlay tests passed.
+  Result bundles verified exact test identities and zero skips/runtime warnings.
+  Strict Swift lint and diff checks passed. Three read-only complete-change
+  review passes reported no findings; reviewer test-quality notes were addressed.
+- These app-hosted checks establish model/template behavior, not actual native
+  head-unit attachment or rendering. Re-run manual account switching, library
+  changes and deepest-folder playback on the head unit before closing #331.
+
 Remaining release evidence:
 
 - iOS 26 and iOS 27 CarPlay Simulator index and list presentation, including
