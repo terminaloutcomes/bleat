@@ -21452,6 +21452,496 @@ final class AppModelTests: XCTestCase {
     }
 
     #if canImport(CarPlay) && !os(macOS)
+        func testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let model = AppModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([library]),
+                    firstPage: .success(fixturePage(libraryID: library.id))))
+            await model.start()
+            let presenter = TestCarPlayPresenter()
+            let disabled = CarPlayCoordinator(
+                model: model, searchEnabled: { false })
+            disabled.connect(presenter)
+            await disabled.waitForLibraryLoad()
+            disabled.openSearch()
+            let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+            let list = try XCTUnwrap(root.templates[1] as? CPListTemplate)
+            XCTAssertTrue(list.headerGridButtons?.isEmpty != false)
+            XCTAssertFalse(list.sections.isEmpty)
+            XCTAssertTrue(presenter.pushed.isEmpty)
+            disabled.disconnect()
+            let enabled = CarPlayCoordinator(
+                model: model, searchEnabled: { true })
+            enabled.connect(presenter)
+            await enabled.waitForLibraryLoad()
+            enabled.openSearch()
+            if #available(iOS 27.0, *) {
+                XCTAssertTrue(presenter.pushed.last is CPSearchTemplate)
+            } else {
+                XCTAssertTrue(presenter.pushed.isEmpty)
+            }
+            enabled.disconnect()
+        }
+
+        func testCarPlaySearchIsScopedAndDoesNotChangePhoneSearch() async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let results = LibrarySearchResults(
+                books: fixturePage(libraryID: library.id).items)
+            let service = TestAppService(
+                activeAccount: .success(account),
+                search: .success(results.books))
+            let model = AppModel(service: service)
+            var played: [LibraryItemID] = []
+            let controller = CarPlaySearchController(
+                model: model, account: account, libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { played.append($0.id) })
+            let rows = await carPlaySearchRows(controller, query: " title ")
+            XCTAssertEqual(rows.first?.text, results.books.first?.title)
+            let requests = await service.searchRequests()
+            XCTAssertEqual(requests.count, 1)
+            XCTAssertEqual(requests.first?.accountID, account.id)
+            XCTAssertEqual(requests.first?.libraryID, library.id)
+            XCTAssertEqual(requests.first?.query, "title")
+            XCTAssertEqual(model.searchQuery, "")
+            XCTAssertEqual(model.searchResults, .idle)
+            let item = try XCTUnwrap(rows.first)
+            let selected = expectation(
+                description: "Search selection completed once")
+            selected.assertForOverFulfill = true
+            controller.searchTemplate(controller.template, selectedResult: item)
+            { selected.fulfill() }
+            await fulfillment(of: [selected], timeout: 2)
+            XCTAssertEqual(played, [results.books[0].id])
+            controller.invalidate()
+        }
+
+        func
+            testCarPlaySearchClearingCompletesDelayedRequestOnceAndRejectsLateResult()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                search: .success(fixturePage(libraryID: library.id).items),
+                searchGate: gate)
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { _ in })
+            let completed = expectation(
+                description: "Cancelled request completes once")
+            completed.assertForOverFulfill = true
+            controller.searchTemplate(
+                controller.template, updatedSearchText: "first"
+            ) { rows in
+                XCTAssertTrue(rows.isEmpty)
+                completed.fulfill()
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(2))
+            XCTAssertTrue(entered)
+            let cleared = await carPlaySearchRows(controller, query: " ")
+            XCTAssertTrue(cleared.isEmpty)
+            await fulfillment(of: [completed], timeout: 2)
+            await gate.release()
+            controller.invalidate()
+        }
+
+        func testCarPlaySearchLimitAndCacheLabelsAndStaleSelection()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let books = (0..<50).map { index in
+                fixtureBook(
+                    id: "search-\(index)", title: "Book \(index)",
+                    libraryID: library.id)
+            }
+            let service = TestAppService(
+                activeAccount: .success(account), search: .success(books))
+            await service.setCarPlaySearchSource(.cache)
+            let state = TestCarPlaySearchState()
+            var played = false
+            state.capacity = 3
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { state.current }, maximumItems: { state.capacity },
+                push: { _ in },
+                play: { _ in played = true })
+            let rows = await carPlaySearchRows(controller, query: "Book")
+            XCTAssertEqual(rows.count, 3)
+            XCTAssertEqual(rows[0].text, "Cached query results")
+            XCTAssertEqual(
+                rows[0].detailText, "Use a more specific title or author.")
+            state.capacity = 1
+            controller.updateLimits(keyboardAvailable: true)
+            state.current = false
+            let selected = expectation(description: "Stale selection completes")
+            selected.assertForOverFulfill = true
+            controller.searchTemplate(
+                controller.template, selectedResult: rows[1]
+            ) { selected.fulfill() }
+            await fulfillment(of: [selected], timeout: 2)
+            XCTAssertFalse(played)
+            controller.invalidate()
+        }
+
+        func
+            testCarPlaySearchMissingCacheAndKeyboardRestrictionCompleteExactlyOnce()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                search: .failure(.libraryRepository(.noCachedValue)))
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { _ in })
+            let rows = await carPlaySearchRows(controller, query: "Unavailable")
+            let expected = AppFailure(
+                operation: .search,
+                serviceError: .libraryRepository(.noCachedValue))
+            XCTAssertEqual(rows.first?.text, expected.title)
+            XCTAssertEqual(rows.first?.detailText, expected.message)
+            controller.updateLimits(keyboardAvailable: false)
+            let blocked = await carPlaySearchRows(controller, query: "Blocked")
+            XCTAssertTrue(blocked.isEmpty)
+            let requests = await service.searchRequests()
+            XCTAssertEqual(requests.count, 1)
+            controller.invalidate()
+        }
+
+        func testCarPlaySearchAuthorUsesIndependentFilteredPage() async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let author = LibrarySearchAuthorMatch(
+                id: AuthorID(rawValue: "search-author")!, name: "An Author")
+            let service = TestAppService(
+                activeAccount: .success(account),
+                firstPage: .success(fixturePage(libraryID: library.id)),
+                search: .success([]))
+            await service.setCarPlaySearchResults(
+                LibrarySearchResults(books: [], authors: [author]))
+            let model = AppModel(service: service)
+            var pushed: [CPTemplate] = []
+            let controller = CarPlaySearchController(
+                model: model, account: account, libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 },
+                push: { pushed.append($0) }, play: { _ in })
+            let rows = await carPlaySearchRows(controller, query: "Author")
+            let selected = expectation(
+                description: "Author selection completes once")
+            selected.assertForOverFulfill = true
+            controller.searchTemplate(
+                controller.template, selectedResult: try XCTUnwrap(rows.first)
+            ) { selected.fulfill() }
+            await fulfillment(of: [selected], timeout: 2)
+            let list = try XCTUnwrap(pushed.last as? CPListTemplate)
+            XCTAssertEqual(list.title, author.name)
+            XCTAssertFalse(list.sections.isEmpty)
+            let selections = await service.pageSelections()
+            XCTAssertEqual(
+                selections.last?.filter, LibraryItemFilter(authorID: author.id))
+            XCTAssertEqual(selections.last?.collapseSeries, false)
+            XCTAssertEqual(model.books, .idle)
+            controller.invalidate()
+        }
+
+        func testCarPlaySearchRetryAndNoMatchesRemainExplicit() async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                search: .failure(
+                    .libraryRepository(.remote(.unexpectedStatus(503)))))
+            let model = AppModel(service: service)
+            var pushed: [CPTemplate] = []
+            let controller = CarPlaySearchController(
+                model: model, account: account, libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 },
+                push: { pushed.append($0) }, play: { _ in })
+            let failed = await carPlaySearchRows(controller, query: "title")
+            let retry = try XCTUnwrap(failed.first)
+            XCTAssertTrue(retry.isEnabled)
+            await service.setSearch(.success([]))
+            let completed = expectation(
+                description: "Retry selection completed")
+            controller.searchTemplate(
+                controller.template, selectedResult: retry
+            ) { completed.fulfill() }
+            await fulfillment(of: [completed], timeout: 2)
+            let list = try XCTUnwrap(pushed.last as? CPListTemplate)
+            for _ in 0..<100 {
+                if list.sections.first?.items.first?.text
+                    == "No title or author matches"
+                {
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertEqual(
+                list.sections.first?.items.first?.text,
+                "No title or author matches")
+            let requests = await service.searchRequests()
+            XCTAssertEqual(requests.map(\.query), ["title", "title"])
+            controller.invalidate()
+        }
+
+        func testCarPlaySearchDisconnectCompletesBeforeUncooperativeResponse()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account), search: .success([]),
+                searchGate: gate)
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { _ in })
+            let completed = expectation(
+                description: "Disconnect completion exactly once")
+            completed.assertForOverFulfill = true
+            controller.searchTemplate(
+                controller.template, updatedSearchText: "title"
+            ) { rows in
+                XCTAssertTrue(rows.isEmpty)
+                completed.fulfill()
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(2))
+            XCTAssertTrue(entered)
+            controller.templateRemoved(ObjectIdentifier(controller.template))
+            await fulfillment(of: [completed], timeout: 2)
+            await gate.release()
+            let stale = await carPlaySearchRows(controller, query: "late")
+            XCTAssertTrue(stale.isEmpty)
+            let requests = await service.searchRequests()
+            XCTAssertEqual(requests.count, 1)
+        }
+
+        func testCarPlaySearchRapidQueriesSupersedeDebounceWithoutRequests()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let service = TestAppService(
+                activeAccount: .success(account), search: .success([]))
+            let controller = CarPlaySearchController(
+                model: AppModel(service: service), account: account,
+                libraryID: library.id,
+                isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                play: { _ in })
+            let completed = expectation(description: "Rapid search callbacks")
+            completed.expectedFulfillmentCount = 3
+            completed.assertForOverFulfill = true
+            for query in ["a", "ab", "ab"] {
+                controller.searchTemplate(
+                    controller.template, updatedSearchText: query
+                ) { rows in
+                    XCTAssertTrue(rows.isEmpty)
+                    completed.fulfill()
+                }
+            }
+            let cleared = await carPlaySearchRows(controller, query: "")
+            XCTAssertTrue(cleared.isEmpty)
+            await fulfillment(of: [completed], timeout: 2)
+            let requests = await service.searchRequests()
+            XCTAssertTrue(requests.isEmpty)
+            controller.invalidate()
+        }
+
+        func
+            testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback()
+            async throws
+        {
+            for duringStream in [false, true] {
+                let fixture = try playbackRecoveryFixture()
+                defer { fixture.cleanUp() }
+                let account = try fixtureAccount()
+                let gate = AsyncGate()
+                let summary = fixturePage(libraryID: fixture.detail.libraryID)
+                    .items[0]
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    search: .success([summary]),
+                    bookDetail: .success(fixture.detail),
+                    playback: [
+                        .success(
+                            playbackPreparation(
+                                detail: fixture.detail,
+                                audioURL: fixture.audioURL))
+                    ],
+                    bookDetailGate: duringStream ? nil : gate,
+                    playbackGate: duringStream ? gate : nil)
+                let model = AppModel(service: service)
+                await model.start()
+                var outcome: PlaybackStartOutcome?
+                let controller = CarPlaySearchController(
+                    model: model, account: account,
+                    libraryID: fixture.detail.libraryID,
+                    coordinator: LibrarySearchCoordinator(
+                        debounceDuration: .zero),
+                    isCurrent: { true }, maximumItems: { 5 }, push: { _ in },
+                    play: { book in
+                        outcome = await model.startPlayback(
+                            book: book, account: account,
+                            cancellationPolicy: .cancelPlayback)
+                    })
+                let rows = await carPlaySearchRows(controller, query: "book")
+                let completed = expectation(
+                    description: "Invalidated playback selection completes once"
+                )
+                completed.assertForOverFulfill = true
+                controller.searchTemplate(
+                    controller.template,
+                    selectedResult: try XCTUnwrap(rows.first)
+                ) { completed.fulfill() }
+                let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+                XCTAssertTrue(entered)
+                controller.invalidate()
+                await fulfillment(of: [completed], timeout: 2)
+                for _ in 0..<100 {
+                    if model.playbackStartTarget == nil { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertNil(model.playbackStartTarget)
+                await gate.release()
+                for _ in 0..<100 {
+                    if outcome != nil { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertEqual(outcome, .superseded)
+                XCTAssertFalse(model.playback.isPlaybackRequested)
+                let opened = await service.playbackOpenRequests()
+                XCTAssertEqual(opened.count, duringStream ? 1 : 0)
+                if duringStream {
+                    let closed = await service.playbackCloseSessionIDs()
+                    XCTAssertEqual(
+                        closed,
+                        [PlaybackSessionID(rawValue: "playback-start-session")])
+                }
+                await model.playback.stop()
+            }
+        }
+
+        func testCancelledPlaybackStartDoesNotCancelNewerPhonePlayback()
+            async throws
+        {
+            let fixture = try playbackRecoveryFixture()
+            defer { fixture.cleanUp() }
+            let account = try fixtureAccount()
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(fixture.detail),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: fixture.detail, audioURL: fixture.audioURL))
+                ],
+                bookDetailGate: gate)
+            let model = AppModel(service: service)
+            await model.start()
+            let first = Task {
+                await model.startPlayback(
+                    book: fixturePage(libraryID: fixture.detail.libraryID)
+                        .items[0], account: account,
+                    cancellationPolicy: .cancelPlayback)
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+            XCTAssertTrue(entered)
+            let replacement = await model.startPlayback(
+                detail: fixture.detail, account: account)
+            first.cancel()
+            await gate.release()
+            let cancelled = await first.value
+            XCTAssertEqual(cancelled, .superseded)
+            XCTAssertEqual(replacement, .started(source: .streamed))
+            XCTAssertTrue(model.playback.isPlaybackRequested)
+            await model.playback.stop()
+        }
+
+        func testCancelledPlaybackDiagnosticResumeDoesNotPauseNewerPlayback()
+            async throws
+        {
+            let fixture = try playbackRecoveryFixture()
+            defer { fixture.cleanUp() }
+            let account = try fixtureAccount()
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(fixture.detail),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: fixture.detail, audioURL: fixture.audioURL))
+                ])
+            let recorder = PlaybackStartDiagnosticGateRecorder(gate: gate)
+            let model = AppModel(service: service, diagnostics: recorder)
+            await model.start()
+            let first = Task {
+                await model.startPlayback(
+                    book: fixturePage(libraryID: fixture.detail.libraryID)
+                        .items[0],
+                    account: account, cancellationPolicy: .cancelPlayback)
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+            XCTAssertTrue(entered)
+            first.cancel()
+            let replacement = await model.startPlayback(
+                detail: fixture.detail, account: account)
+            await gate.release()
+            let obsolete = await first.value
+            XCTAssertEqual(obsolete, .superseded)
+            XCTAssertEqual(replacement, .started(source: .streamed))
+            XCTAssertTrue(model.playback.isPlaybackRequested)
+            let opened = await service.playbackOpenRequests()
+            XCTAssertEqual(opened.count, 1)
+            await model.playback.stop()
+        }
+
+        private func carPlaySearchRows(
+            _ controller: CarPlaySearchController, query: String
+        ) async -> [CPListItem] {
+            var rows: [CPListItem] = []
+            let completed = expectation(
+                description: "Search completion exactly once")
+            completed.assertForOverFulfill = true
+            let invocation = TestCarPlaySearchInvocation(
+                controller: controller, template: controller.template,
+                query: query,
+                callback: { value in
+                    MainActor.assumeIsolated { rows = value }
+                    completed.fulfill()
+                })
+            await Task.detached { invocation.invoke() }.value
+            await fulfillment(of: [completed], timeout: 3)
+            return rows
+        }
+
         func testCarPlaySceneUsesAppDelegateAdaptorBridgeUnderSwiftUIRuntime()
             throws
         {
@@ -23813,6 +24303,27 @@ private struct PlaybackRecoveryFixture {
     // CarPlay imports stored Objective-C blocks without executor guarantees.
     // These test boxes cross the actor boundary only to invoke the exact callback;
     // they never inspect or mutate the UIKit/CarPlay objects off the UI actor.
+    private final class TestCarPlaySearchInvocation: @unchecked Sendable {
+        let controller: CarPlaySearchController
+        let template: CPSearchTemplate
+        let query: String
+        let callback: ([CPListItem]) -> Void
+        init(
+            controller: CarPlaySearchController, template: CPSearchTemplate,
+            query: String,
+            callback: @escaping ([CPListItem]) -> Void
+        ) {
+            self.controller = controller
+            self.template = template
+            self.query = query
+            self.callback = callback
+        }
+        func invoke() {
+            controller.searchTemplate(
+                template, updatedSearchText: query, completionHandler: callback)
+        }
+    }
+
     private final class TestCarPlaySelectionInvocation: @unchecked Sendable {
         let item: CPListItem
         let handler: (any CPSelectableListItem, @escaping () -> Void) -> Void
@@ -23842,6 +24353,12 @@ private struct PlaybackRecoveryFixture {
             self.items = items
             self.sections = sections
         }
+    }
+
+    @MainActor
+    private final class TestCarPlaySearchState {
+        var current = true
+        var capacity = 5
     }
 
     @MainActor
@@ -25074,6 +25591,39 @@ private actor TestAppService: AppServicing {
         return try value(from: homeShelvesResult)
     }
 
+    private var carPlaySearchSource: LibraryRepositorySource = .remote
+    func setCarPlaySearchSource(_ source: LibraryRepositorySource) {
+        carPlaySearchSource = source
+    }
+    func setCarPlaySearchResults(_ results: LibrarySearchResults) {
+        searchResult = .success(results)
+    }
+
+    func carPlaySearch(
+        for account: ServerAccount, libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibrarySearchResults>
+    {
+        do {
+            let results = try await search(
+                for: account, libraryID: libraryID, query: request.query)
+            return LibraryRepositoryResult(
+                value: results, source: carPlaySearchSource,
+                refreshedAt: Date(),
+                correlationID: nil)
+        } catch {
+            switch error {
+            case .libraryRepository(let cause): throw cause
+            case .searchCoordinator(.repository(let cause)): throw cause
+            case .searchCoordinator(.cancelled),
+                .searchCoordinator(.superseded):
+                throw .cancelled
+            default: throw .remote(.malformedResponse)
+            }
+        }
+    }
+
     func search(
         for account: ServerAccount,
         libraryID: LibraryID,
@@ -26233,5 +26783,18 @@ private struct TestChapterTranscriber: ChapterTranscribing {
             segments: segments,
             input: input
         )
+    }
+}
+
+private actor PlaybackStartDiagnosticGateRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+    private var didGate = false
+    init(gate: AsyncGate) { self.gate = gate }
+    func record(_ event: DiagnosticEvent) async {
+        guard !didGate, event.operation == .openPlayback,
+            event.name == .operationStarted
+        else { return }
+        didGate = true
+        await gate.enterAndWait()
     }
 }
