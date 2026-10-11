@@ -446,3 +446,26 @@ runtime warnings. Targeted `swift-format lint --strict` and `git diff --check`
 passed. Four independent complete-change tab reviews ran; the latest reports
 no findings and no P0/P1s. Both tab-review P2s are resolved. The complete local/UI
 and live gates were not repeated; their previously recorded outcomes remain.
+
+### Internal TestFlight delivery
+
+The requested internal deployment uploaded `2026.10.11 (20261011.2129.21)`
+from clean commit `059f803`. Source marketing version, timestamp fallback,
+changelog, and regenerated Xcode configurations were aligned first;
+`mise run release:check -- --repository-root <deployment-checkout>` passed
+using the repository release checker. One independent release-metadata review
+reported no findings.
+
+`mise run testflight:internal` passed six CloudKit validator tests, three
+release-version tests, export-options validation, production CloudKit schema
+validation, signed Release archive inspection, and distribution IPA inspection.
+The internal-only export completed with Apple's explicit upload confirmation.
+App Store Connect subsequently reported `valid`, `IN_BETA_TESTING`, and membership
+in the existing internal `Testers` group. `testflight-release` saved `en-AU`
+testing notes and verified that same membership. External state is
+`NOT_APPLICABLE`; no external group or beta review was requested.
+
+Local signed artifacts, checksum, redacted upload logs, and delivery report are
+retained under `.build/testflight-internal/2026.10.11-20261011.2129.21/`.
+This is verified internal delivery and does not complete the outstanding native
+iOS 27 or physical head-unit acceptance evidence above.
