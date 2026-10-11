@@ -239,8 +239,8 @@ List/folder validation on 2026-10-10:
 Account-switch regression follow-up on 2026-10-11:
 
 - A physical-head-unit report found a completely blank CarPlay Library after
-  switching accounts, despite the phone showing books. This remains a failed
-  manual check until a head-unit retest confirms recovery.
+  switching accounts, despite the phone showing books. The user subsequently
+  confirmed all manual testing passed after installing the fix.
 - The strengthened account-switch test caught all three native child list
   templates being reused across replacement tab bars. Catalog context now
   includes account ID, selected library ID and browse generation. Every new
@@ -257,19 +257,19 @@ Account-switch regression follow-up on 2026-10-11:
 - `mise run iphone` built, installed and launched this fix on the physical
   iPhone successfully. This confirms deployment, not CarPlay rendering.
 - These app-hosted checks establish model/template behavior, not actual native
-  head-unit attachment or rendering. Re-run manual account switching, library
-  changes and deepest-folder playback on the head unit before closing #331.
+  head-unit attachment or rendering. The user supplied the separate manual
+  confirmation recorded below.
 
-Remaining release evidence:
+Manual acceptance on 2026-10-11:
 
-- iOS 26 and iOS 27 CarPlay Simulator index and list presentation, including
-  scrolling lists and folders, reduced runtime limits, disconnect/reconnect, and
-  online/cached/missing-cache transitions.
-- Touch and rotary selection, larger/bold text, Voice Control, and light/dark
-  presentation on the new Library lists and folders.
-- A physical head-unit run recording app build, iOS version, head-unit model,
-  alphabetic-folder presentation, and reachability beyond the former
-  clipped prefix.
+- After installing the account-switch fix, the user confirmed: "yeah all my
+  manual testing looks good now" and requested that issue #331 be marked done
+  and PR #335 set for auto-merge. This records user-reported completion of the
+  manual plan in #331, including the account-switch retest.
+- No head-unit model, exact app build/iOS version, photos, or separate iOS 27
+  CarPlay Simulator run were supplied. Those details are not inferred from the
+  manual confirmation or app-hosted tests. The user approved closure with the
+  available automated and manual evidence.
 
-[Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) remains open
-until this evidence is available; existing CarPlay approval is unaffected.
+[Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) is complete
+per the user's manual acceptance. Existing CarPlay approval is unaffected.
