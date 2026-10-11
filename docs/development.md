@@ -410,9 +410,9 @@ generated once and reused for the complete archive, inspection, export, and
 evidence chain. The archive marketing version defaults to the date component of
 that build number in `YYYY.MM.DD` format. Set `BLEAT_MARKETING_VERSION` to a
 valid calendar date only when a reproducible or otherwise explicit release
-version is required. A custom `BLEAT_BUILD_NUMBER` without the normal timestamp
-shape requires an explicit `BLEAT_MARKETING_VERSION`; both supplied values are
-propagated unchanged. Update `MARKETING_VERSION` in `project.yml`, add the
+version is required. An explicit `BLEAT_BUILD_NUMBER` must retain the UTC
+timestamp shape and match the marketing-version date. Both supplied values are
+propagated unchanged after validation. Update `MARKETING_VERSION` in `project.yml`, add the
 matching dated changelog section, bump the project's fallback UTC build number,
 and regenerate the Xcode project before every new release version.
 `mise run release:check` validates the source and both generated Xcode

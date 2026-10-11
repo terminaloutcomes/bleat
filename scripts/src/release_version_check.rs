@@ -31,8 +31,59 @@ pub enum ReleaseVersionError {
         "CURRENT_PROJECT_VERSION must be a UTC timestamp matching MARKETING_VERSION in project.yml and generated Xcode settings"
     )]
     BuildMismatch,
+    #[error("the effective build number must be a UTC timestamp on the marketing-version date")]
+    EffectiveBuildMismatch,
+    #[error("could not decode Bleat.app/Info.plist")]
+    BuiltMetadataInvalid,
+    #[error("Bleat.app/Info.plist is missing {0}")]
+    BuiltMetadataMissing(&'static str),
+    #[error("Bleat.app/Info.plist {0} differs from the requested build")]
+    BuiltMetadataMismatch(&'static str),
     #[error("CHANGELOG.md must start with exactly one dated section for {0}, with release notes")]
     ChangelogMismatch(String),
+}
+
+pub fn validate_effective_build(version: &str, build: &str) -> Result<(), ReleaseVersionError> {
+    let build_version = match resolve_marketing_version(build, None) {
+        Ok(version) => version,
+        Err(VersionError::MissingMarketingVersionForCustomBuild) => {
+            return Err(ReleaseVersionError::EffectiveBuildMismatch);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if build_version != version {
+        return Err(ReleaseVersionError::EffectiveBuildMismatch);
+    }
+    Ok(())
+}
+
+pub fn validate_built_app(
+    path: &Path,
+    version: &str,
+    build: &str,
+) -> Result<(), ReleaseVersionError> {
+    let data = fs::read(path).map_err(|source| ReleaseVersionError::Read {
+        file: "Bleat.app/Info.plist",
+        source,
+    })?;
+    let value = plist::Value::from_reader(std::io::Cursor::new(data))
+        .map_err(|_| ReleaseVersionError::BuiltMetadataInvalid)?;
+    let values = value
+        .as_dictionary()
+        .ok_or(ReleaseVersionError::BuiltMetadataInvalid)?;
+    for (key, expected) in [
+        ("CFBundleShortVersionString", version),
+        ("CFBundleVersion", build),
+    ] {
+        let actual = values
+            .get(key)
+            .and_then(plist::Value::as_string)
+            .ok_or(ReleaseVersionError::BuiltMetadataMissing(key))?;
+        if actual != expected {
+            return Err(ReleaseVersionError::BuiltMetadataMismatch(key));
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_repository(

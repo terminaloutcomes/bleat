@@ -57,6 +57,54 @@ fn rejects_stale_missing_or_wrong_generated_configurations() {
 }
 
 #[test]
+fn rejects_wrong_or_missing_built_app_versions_before_installing() {
+    use scripts::release_version_check::validate_built_app;
+    let root = tempfile::tempdir().expect("app fixture");
+    let file = root.path().join("Info.plist");
+    let mut metadata = std::collections::BTreeMap::from([
+        ("CFBundleShortVersionString", "2026.10.11"),
+        ("CFBundleVersion", "20261011.0102.03"),
+    ]);
+    plist::to_file_binary(&file, &metadata).expect("binary plist");
+    assert!(validate_built_app(&file, "2026.10.11", "20261011.0102.03").is_ok());
+    metadata.insert("CFBundleShortVersionString", "2026.10.08");
+    plist::to_file_xml(&file, &metadata).expect("stale app version");
+    assert!(matches!(
+        validate_built_app(&file, "2026.10.11", "20261011.0102.03"),
+        Err(ReleaseVersionError::BuiltMetadataMismatch(
+            "CFBundleShortVersionString"
+        ))
+    ));
+    metadata.insert("CFBundleShortVersionString", "2026.10.11");
+    metadata.insert("CFBundleVersion", "2");
+    plist::to_file_xml(&file, &metadata).expect("stale build number");
+    assert!(matches!(
+        validate_built_app(&file, "2026.10.11", "20261011.0102.03"),
+        Err(ReleaseVersionError::BuiltMetadataMismatch(
+            "CFBundleVersion"
+        ))
+    ));
+    metadata.remove("CFBundleVersion");
+    plist::to_file_xml(&file, &metadata).expect("missing build number");
+    assert!(matches!(
+        validate_built_app(&file, "2026.10.11", "20261011.0102.03"),
+        Err(ReleaseVersionError::BuiltMetadataMissing("CFBundleVersion"))
+    ));
+}
+
+#[test]
+fn rejects_counter_build_overrides_and_wrong_build_dates() {
+    use scripts::release_version_check::validate_effective_build;
+    assert!(validate_effective_build("2026.10.11", "20261011.1234.56").is_ok());
+    for build in ["2", "20261008.1234.56"] {
+        assert!(matches!(
+            validate_effective_build("2026.10.11", build),
+            Err(ReleaseVersionError::EffectiveBuildMismatch)
+        ));
+    }
+}
+
+#[test]
 fn rejects_stale_fallback_build_numbers() {
     let project = PROJECT.replace("20261011.0102.03", "20261008.0102.03");
     assert!(matches!(
