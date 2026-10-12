@@ -1249,6 +1249,7 @@ actor LiveAppService: AppServicing {
     >
 
     private let modelContainer: ModelContainer
+    private let diagnostics: any DiagnosticRecording
     private let transport: URLSessionHTTPTransport
     private let directTransport: URLSessionHTTPTransport
     private let endpointRouter: ServerEndpointRouter
@@ -1424,6 +1425,7 @@ actor LiveAppService: AppServicing {
             @escaping @MainActor @Sendable ()
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
+        self.diagnostics = diagnostics
         let schema = Schema(
             versionedSchema: BleatPersistenceSchemaCurrent.self
         )
@@ -2105,11 +2107,17 @@ actor LiveAppService: AppServicing {
             throw AccountIdentityMigrationFailure.localPlaybackSessions
         }
         do {
-            try await MainActor.run {
+            let outcome = try await MainActor.run {
                 try PlaybackPositionStore.shared.migrateAccountIdentity(
                     from: migration.legacyID,
                     to: migration.canonicalID
                 )
+            }
+            if outcome == .discardedInvalidLastPlayingRecord {
+                await diagnostics.record(
+                    .failed(
+                        .migratePlaybackPositions, category: .playback,
+                        failureCode: .invalidLastPlayingRecord))
             }
         } catch {
             throw AccountIdentityMigrationFailure.playbackPositions

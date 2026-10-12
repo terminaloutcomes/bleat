@@ -207,6 +207,88 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: "bleat.lastPlaying.v1"), malformed)
     }
 
+    func testMigrationDropsCorruptSelectionAndPreservesAccountScopedPositions()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let legacyID = AccountID(rawValue: "legacy")
+        let canonicalID = AccountID(rawValue: "canonical")
+        let otherID = AccountID(rawValue: "other")
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let invalidIdentity = try JSONEncoder().encode(
+            LastPlayingRecord(accountID: AccountID(rawValue: ""), book: book))
+        for corrupted in [Data("{\"version\":1}".utf8), invalidIdentity] {
+            try store.save(42, accountID: legacyID, itemID: book.id)
+            try store.save(19, accountID: canonicalID, itemID: book.id)
+            try store.save(9, accountID: otherID, itemID: book.id)
+            defaults.set(corrupted, forKey: "bleat.lastPlaying.v1")
+
+            XCTAssertEqual(
+                try store.migrateAccountIdentity(
+                    from: legacyID, to: canonicalID),
+                .discardedInvalidLastPlayingRecord)
+            let relaunched = PlaybackPositionStore(defaults: defaults)
+            XCTAssertNil(try relaunched.lastPlaying())
+            XCTAssertNil(defaults.data(forKey: "bleat.lastPlaying.v1"))
+            XCTAssertNil(
+                relaunched.position(accountID: legacyID, itemID: book.id))
+            XCTAssertEqual(
+                relaunched.position(accountID: canonicalID, itemID: book.id), 42
+            )
+            XCTAssertEqual(
+                relaunched.position(accountID: otherID, itemID: book.id), 9)
+            XCTAssertEqual(
+                try relaunched.migrateAccountIdentity(
+                    from: legacyID, to: canonicalID),
+                .migrated)
+        }
+    }
+
+    func testMigrationRekeysValidSelectionAndPreservesUnsupportedVersion()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let legacyID = AccountID(rawValue: "legacy")
+        let canonicalID = AccountID(rawValue: "canonical")
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let failure = AppFailure(.openPlayback, .authenticationRequired)
+        let record = LastPlayingRecord(
+            accountID: legacyID, book: book, failure: failure)
+        try store.select(record)
+        XCTAssertEqual(
+            try store.migrateAccountIdentity(from: legacyID, to: canonicalID),
+            .migrated)
+        XCTAssertEqual(
+            try store.lastPlaying(),
+            LastPlayingRecord(
+                accountID: canonicalID, book: book,
+                updatedAt: record.updatedAt, failure: failure))
+
+        var unsupported = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(record))
+                as? [String: Any])
+        unsupported["version"] = 2
+        let bytes = try JSONSerialization.data(withJSONObject: unsupported)
+        defaults.set(bytes, forKey: "bleat.lastPlaying.v1")
+        try store.save(42, accountID: legacyID, itemID: book.id)
+        XCTAssertThrowsError(
+            try store.migrateAccountIdentity(from: legacyID, to: canonicalID)
+        ) {
+            XCTAssertEqual(
+                $0 as? PlaybackPositionStoreError,
+                .unsupportedLastPlayingVersion)
+        }
+        // Exact bytes ensure an unsupported storage version is not rewritten.
+        XCTAssertEqual(defaults.data(forKey: "bleat.lastPlaying.v1"), bytes)
+        XCTAssertEqual(store.position(accountID: legacyID, itemID: book.id), 42)
+    }
+
     func testLastPlayingOwnershipRemovalDoesNotClearOtherBookOrPosition() throws
     {
         let suite = UUID().uuidString

@@ -438,8 +438,15 @@ verified in result bundles.
 Two P2 limitations are accepted for now: native remote callbacks acknowledge
 queued processing before its eventual outcome; selection persistence waits for
 bookmark loading after audio starts, so interrupted preparation can retain the
-previous book. An additional P2 remains: invalid last-playing metadata can block
-account-identity migration before valid account-scoped positions are migrated.
+previous book. The migration P2 is resolved: malformed last-playing metadata is
+discarded during local account-identity migration while valid account-scoped
+positions migrate. Unsupported versions remain preserved and explicitly fail.
+`AppModelTests.testMigrationDropsCorruptSelectionAndPreservesAccountScopedPositions`
+and `testMigrationRekeysValidSelectionAndPreservesUnsupportedVersion` cover this
+boundary; the discard emits `invalid_last_playing_record` at
+`migrate_playback_positions`. Focused simulator validation passed all eight
+selected app tests with no skips or runtime warnings; exact outcomes were
+verified in the result bundle.
 After rebasing the native callback adapter from main, an additional P2 remains:
 bootstrap can discard a mismatched/no-active-account selection without retiring
 its native Play admission flag, so the callback acknowledges a command that

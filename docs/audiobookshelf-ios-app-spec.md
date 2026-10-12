@@ -1115,6 +1115,9 @@ book summary and selection timestamp, independently of the canonical
 `PlaybackPositionStore` position. Successful playback selection replaces it;
 catalog loading and superseded starts do not. Invalid records retain their exact
 stored bytes for diagnosis rather than being rewritten after failed decoding.
+During local account-identity migration, malformed selection metadata is discarded
+so valid playback positions can migrate; a typed migration-stage diagnostic
+records the discard. Unsupported record versions remain untouched.
 Pause, interruption and route
 loss retain it. Explicit Stop clears the selection while retaining position;
 account switching and account/book removal invalidate matching references.

@@ -42,6 +42,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case clearNowPlaying = "clear_now_playing"
     case processStart = "process_start"
     case restoreSelection = "restore_selection"
+    case migratePlaybackPositions = "migrate_playback_positions"
     case remoteCommand = "remote_command"
     case activateAudioSession = "activate_audio_session"
     case appStart = "app_start"

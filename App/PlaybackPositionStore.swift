@@ -8,6 +8,11 @@ enum PlaybackPositionStoreError: Error, Equatable {
     case persistenceFailed
 }
 
+enum PlaybackPositionMigrationOutcome: Equatable, Sendable {
+    case migrated
+    case discardedInvalidLastPlayingRecord
+}
+
 enum DownloadedPositionDecision: Equatable {
     case local(Double)
     case server(Double)
@@ -161,15 +166,28 @@ final class PlaybackPositionStore {
         defaults.set(data, forKey: storageKey)
     }
 
+    @discardableResult
     func migrateAccountIdentity(
         from legacyID: AccountID,
         to canonicalID: AccountID
-    ) throws(PlaybackPositionStoreError) {
-        if let record = try lastPlaying(), record.accountID == legacyID {
-            try select(
-                LastPlayingRecord(
-                    accountID: canonicalID, book: record.book,
-                    updatedAt: record.updatedAt, failure: record.failure))
+    ) throws(PlaybackPositionStoreError) -> PlaybackPositionMigrationOutcome {
+        var outcome = PlaybackPositionMigrationOutcome.migrated
+        do {
+            if let record = try lastPlaying(), record.accountID == legacyID {
+                try select(
+                    LastPlayingRecord(
+                        accountID: canonicalID, book: record.book,
+                        updatedAt: record.updatedAt, failure: record.failure))
+            }
+        } catch {
+            switch error {
+            case .invalidLastPlayingRecord:
+                clearLastPlaying()
+                outcome = .discardedInvalidLastPlayingRecord
+            case .unsupportedLastPlayingVersion, .invalidPosition,
+                .persistenceFailed:
+                throw error
+            }
         }
         let legacyPrefix = accountPrefix(legacyID)
         let canonicalPrefix = accountPrefix(canonicalID)
@@ -187,6 +205,7 @@ final class PlaybackPositionStore {
             throw .persistenceFailed
         }
         defaults.set(data, forKey: storageKey)
+        return outcome
     }
 
     private func storedPositions() -> [String: Double] {
