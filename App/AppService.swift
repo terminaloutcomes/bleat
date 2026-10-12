@@ -190,7 +190,7 @@ private struct PortableStatisticsDocument: Codable {
     let archive: StatisticsArchive
 }
 
-enum LocalDataResetFailure: Error, Equatable, Sendable {
+enum LocalDataResetFailure: Error, Equatable, Sendable, Codable {
     case downloads
     case credentials(TokenVaultError)
     case persistentStore

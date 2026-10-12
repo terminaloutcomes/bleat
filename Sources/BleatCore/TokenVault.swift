@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-public enum TokenVaultError: Error, Equatable, Sendable {
+public enum TokenVaultError: Error, Equatable, Sendable, Codable {
     case invalidService
     case invalidAccountID
     case invalidStoredCredentials

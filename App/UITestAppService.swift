@@ -194,6 +194,22 @@
                         accountID: AccountID(rawValue: "ui-account"),
                         itemID: LibraryItemID(rawValue: "ui-book")
                     )
+                    if arguments.contains("--ui-testing-resume-failure") {
+                        let failure = AppFailure(
+                            .openPlayback,
+                            arguments.contains(
+                                "--ui-testing-resume-authentication")
+                                ? .authenticationRequired : .serverUnavailable)
+                        try PlaybackPositionStore.shared.select(
+                            LastPlayingRecord(
+                                accountID: AccountID(rawValue: "ui-account"),
+                                book: Self.book(
+                                    id: "ui-book", title: "The Test Audiobook",
+                                    libraryID: LibraryID(
+                                        rawValue: "ui-library"),
+                                    ids: try Self.fixtureIDs()),
+                                failure: failure))
+                    }
                     if arguments.contains(
                         "--ui-testing-transcription-position"
                     ) {

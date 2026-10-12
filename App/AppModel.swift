@@ -581,7 +581,7 @@ enum LibraryPaginationState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
-enum AppFailureOperation: String, Equatable, Sendable {
+enum AppFailureOperation: String, Equatable, Sendable, Codable {
     case appStart, login, reauthenticate, switchAccount, removeAccount,
         resetAppData
     case loadLibraries, loadLibraryPage, loadLibraryCategories, loadHome,
@@ -607,7 +607,7 @@ enum AppFailureOperation: String, Equatable, Sendable {
     }
 }
 
-enum AppFailureCause: Equatable, Sendable {
+enum AppFailureCause: Equatable, Sendable, Codable {
     case persistenceUnavailable, storedDataMigrationFailed, invalidInput,
         serverRequiresHTTPS,
         serverNotReady
@@ -641,7 +641,11 @@ enum AppFailureCause: Equatable, Sendable {
 
 typealias BookDetailFailure = AppFailureCause
 
-struct AppFailure: Equatable, Sendable {
+enum PlaybackFailureResolution: Equatable {
+    case retry, signIn, dismiss
+}
+
+struct AppFailure: Equatable, Sendable, Codable {
     let operation: AppFailureOperation
     let cause: AppFailureCause
 
@@ -852,6 +856,18 @@ struct AppFailure: Equatable, Sendable {
             .authenticationPresentationUnavailable,
             .authenticationBrowserFailed:
             "exclamationmark.circle"
+        }
+    }
+
+    var playbackRecoveryAction: PlaybackFailureResolution {
+        switch cause {
+        case .authenticationRequired, .invalidCredentials: .signIn
+        case .serverUnavailable, .timeout, .rateLimited, .unavailableOffline,
+            .localStorageUnavailable, .mediaUnavailable,
+            .audioSessionActivationFailed,
+            .invalidServerResponse, .requestRejected:
+            .retry
+        default: .dismiss
         }
     }
 
@@ -2071,6 +2087,11 @@ final class AppModel {
     private var bootstrapTask: Task<Void, Never>?
     private var selectionResumeTask: Task<Void, Never>?
     private var selectionResumeGeneration: UInt64 = 0
+    var selectionResumeFailure: AppFailure?
+
+    func dismissSelectionResumeFailure() {
+        selectionResumeFailure = nil
+    }
 
     func start() async {
         if let bootstrapTask {
@@ -5229,6 +5250,9 @@ final class AppModel {
                 return
             }
             playback.restoreSelection(record)
+            if let failure = record.failure {
+                retainSelectionResumeFailure(record: record, failure: failure)
+            }
         } catch {
             let code: DiagnosticFailureCode =
                 switch error {
@@ -5247,7 +5271,31 @@ final class AppModel {
         }
     }
 
+    private func retainSelectionResumeFailure(
+        record: LastPlayingRecord, failure: AppFailure
+    ) {
+        let failedRecord = LastPlayingRecord(
+            accountID: record.accountID, book: record.book,
+            updatedAt: record.updatedAt, failure: failure)
+        playback.resumeSelection = failedRecord
+        playback.retainFailedBookForRetry(
+            accountID: record.accountID, libraryID: record.book.libraryID)
+        selectionResumeFailure = failure
+        playback.fail(failure)
+        do {
+            try playbackPositionStore.select(failedRecord)
+        } catch {
+            Task {
+                await diagnostics.record(
+                    .failed(
+                        .restoreSelection, category: .playback,
+                        failureCode: .localStorageUnavailable))
+            }
+        }
+    }
+
     private func cancelPendingSelectionResume() {
+        selectionResumeFailure = nil
         selectionResumeGeneration &+= 1
         if selectionResumeTask != nil {
             playbackStartGeneration &+= 1
@@ -5271,6 +5319,7 @@ final class AppModel {
                 return .unavailable
             }
         } catch { return .invalid }
+        selectionResumeFailure = nil
         let generation = selectionResumeGeneration
         selectionResumeTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -5286,10 +5335,14 @@ final class AppModel {
                 let record = try? playbackPositionStore.lastPlaying(),
                 let account, record.accountID == account.id
             else { return }
+            let position = playbackPositionStore.position(
+                accountID: record.accountID, itemID: record.book.id)
             let outcome = await startPlayback(
                 PlaybackStartRequest(
                     book: .summary(record.book), account: account,
-                    position: .resume),
+                    position: position.map(PlaybackStartPosition.absoluteTime)
+                        ?? .resume),
+                isRetry: record.failure != nil,
                 isSelectionResume: true)
             guard !Task.isCancelled, generation == selectionResumeGeneration
             else { return }
@@ -5300,8 +5353,10 @@ final class AppModel {
                         accountID: record.accountID, itemID: record.book.id)
                     playback.resumeSelection = nil
                 } else {
-                    playback.resumeSelection = record
+                    retainSelectionResumeFailure(
+                        record: record, failure: failure)
                 }
+                selectionResumeFailure = failure
                 playback.fail(failure)
                 await diagnostics.record(
                     .failed(
@@ -5391,6 +5446,19 @@ final class AppModel {
             return .failed(
                 AppFailure(.openPlayback, .accountUnavailable)
             )
+        }
+        if playback.resumeSelection != nil {
+            guard requestSelectionResume() == .accepted,
+                let task = selectionResumeTask
+            else {
+                return .superseded
+            }
+            await task.value
+            if case .failed(let failure) = playback.state {
+                return .failed(failure)
+            }
+            return playback.isPlaybackRequested
+                ? .started(source: .activePlayer) : .superseded
         }
         if let detail = playback.preparedBookDetail,
             let accountID = playback.accountID,

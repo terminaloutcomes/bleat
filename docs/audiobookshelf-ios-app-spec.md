@@ -1122,7 +1122,16 @@ Cold launch restores a paused selection without opening a stream or activating
 audio. Explicit Play waits for account/download bootstrap and uses
 `AppModel.startPlayback(... position: .resume)` with existing permission,
 verified-download, authentication and supersession checks. Duplicate bootstrap
-commands coalesce. Siri media-intent integration remains tracked in #334.
+commands coalesce. Cold resume uses an existing canonical local timestamp as an
+explicit position; only absence of a local checkpoint delegates to server resume.
+A failed cold resume retains its selected book and typed operation/cause in the
+versioned local record. Relaunch restores the failed player without starting
+audio. The active app presents a native recovery alert: Retry for transient
+failures, Sign In for authentication failures, and an explanation for unavailable
+items or denied access. Dismissing the alert retains the failed player; successful
+retry or Stop clears the recovery state. Background failures wait for the app
+to become active before presenting the alert. Siri media-intent integration
+remains tracked in #334.
 
 Process start, scene transitions, remote Play receipt/result, selection restore,
 Now Playing publication/clear and audio activation emit privacy-safe diagnostics.

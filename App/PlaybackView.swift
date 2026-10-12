@@ -417,6 +417,7 @@ struct MiniPlayerView: View {
 struct NowPlaying: View {
     @Bindable var playback: PlaybackModel
     let openBook: (() -> Void)?
+    let signIn: (() -> Void)?
     let retryPlayback: @MainActor () async -> PlaybackStartOutcome
     @Environment(\.dismiss) private var dismiss
     @State private var bookmarkDraft: BookmarkDraft?
@@ -427,11 +428,13 @@ struct NowPlaying: View {
     init(
         playback: PlaybackModel,
         retryPlayback: @escaping @MainActor () async -> PlaybackStartOutcome,
+        signIn: (() -> Void)? = nil,
         openBook: (() -> Void)? = nil
     ) {
         self.playback = playback
         self.retryPlayback = retryPlayback
         self.openBook = openBook
+        self.signIn = signIn
     }
 
     private var failureToPresent: AppFailure? {
@@ -496,15 +499,26 @@ struct NowPlaying: View {
                                 .multilineTextAlignment(.center)
                                 .accessibilityIdentifier("player.error")
                             HStack {
-                                Button("Retry") {
-                                    isRetrying = true
-                                    Task {
-                                        _ = await retryPlayback()
-                                        isRetrying = false
+                                if failure.playbackRecoveryAction == .signIn,
+                                    let signIn
+                                {
+                                    Button("Sign In", action: signIn)
+                                        .buttonStyle(.borderedProminent)
+                                        .accessibilityIdentifier(
+                                            "player.signIn")
+                                } else if failure.playbackRecoveryAction
+                                    == .retry
+                                {
+                                    Button("Retry") {
+                                        isRetrying = true
+                                        Task {
+                                            _ = await retryPlayback()
+                                            isRetrying = false
+                                        }
                                     }
+                                    .buttonStyle(.borderedProminent)
+                                    .accessibilityIdentifier("player.retry")
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .accessibilityIdentifier("player.retry")
                                 Button("Cancel") {
                                     Task {
                                         await playback.stop()

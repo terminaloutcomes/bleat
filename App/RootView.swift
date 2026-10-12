@@ -1647,6 +1647,9 @@ private struct SignedInView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
     @State private var playbackFailure: AppFailure?
+    @State private var resumeSignInAccount: ServerAccount?
+    @State private var signInAfterPlayerDismissal = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var bookActionPresentation =
         BookActionContextPresentation()
     @State private var alertQueue = SignedInAlertQueue()
@@ -1666,14 +1669,26 @@ private struct SignedInView: View {
         .onChange(of: model.playback.hasActiveBook) { _, hasActiveBook in
             if !hasActiveBook { navigation.showsPlayer = false }
         }
-        .sheet(isPresented: $navigation.showsPlayer) {
+        .sheet(
+            isPresented: $navigation.showsPlayer,
+            onDismiss: {
+                if signInAfterPlayerDismissal {
+                    signInAfterPlayerDismissal = false
+                    resumeSignInAccount = model.account
+                }
+            }
+        ) {
             if let accountID = model.playback.accountID,
                 let libraryID = model.playback.libraryID,
                 let itemID = model.playback.itemID
             {
                 NowPlaying(
                     playback: model.playback,
-                    retryPlayback: { await model.retryFailedPlayback() }
+                    retryPlayback: { await model.retryFailedPlayback() },
+                    signIn: {
+                        signInAfterPlayerDismissal = true
+                        navigation.showsPlayer = false
+                    }
                 ) {
                     openPlayingBook(
                         accountID: accountID,
@@ -1684,10 +1699,22 @@ private struct SignedInView: View {
             } else {
                 NowPlaying(
                     playback: model.playback,
-                    retryPlayback: { await model.retryFailedPlayback() }
+                    retryPlayback: { await model.retryFailedPlayback() },
+                    signIn: {
+                        signInAfterPlayerDismissal = true
+                        navigation.showsPlayer = false
+                    }
                 )
             }
 
+        }
+        .sheet(item: $resumeSignInAccount) { account in
+            AccountEditorView(model: model, account: account) {
+                resumeSignInAccount = nil
+                Task { _ = await model.retryFailedPlayback() }
+            } onCancel: {
+                resumeSignInAccount = nil
+            }
         }
         .sheet(item: bookActionPresentation.requestBinding) { request in
             BookActionPreparationView(
@@ -1734,6 +1761,36 @@ private struct SignedInView: View {
                         dismissAlert(entry)
                     }
                 )
+            case .playback(let failure)
+            where model.selectionResumeFailure != nil:
+                switch failure.playbackRecoveryAction {
+                case .retry, .signIn:
+                    Alert(
+                        title: Text(failure.title),
+                        message: Text(failure.message),
+                        primaryButton: .default(
+                            Text(
+                                failure.playbackRecoveryAction == .signIn
+                                    ? "Sign In" : "Retry")
+                        ) {
+                            dismissAlert(entry)
+                            if failure.playbackRecoveryAction == .signIn {
+                                resumeSignInAccount = model.account
+                            } else {
+                                Task { _ = await model.retryFailedPlayback() }
+                            }
+                        },
+                        secondaryButton: .cancel(Text("Cancel")) {
+                            dismissAlert(entry)
+                        })
+                case .dismiss:
+                    Alert(
+                        title: Text(failure.title),
+                        message: Text(failure.message),
+                        dismissButton: .default(Text("OK")) {
+                            dismissAlert(entry)
+                        })
+                }
             default:
                 Alert(
                     title: Text(entry.alert.title),
@@ -1776,7 +1833,9 @@ private struct SignedInView: View {
         if let pending = model.downloads.pendingCellularDownload {
             candidates.append(.cellular(pending))
         }
-        if let playbackFailure {
+        if scenePhase == .active, let failure = model.selectionResumeFailure {
+            candidates.append(.playback(failure))
+        } else if let playbackFailure {
             candidates.append(.playback(playbackFailure))
         }
         if let failure = bookActionPresentation.failure {
@@ -1818,6 +1877,7 @@ private struct SignedInView: View {
             }
         case .playback:
             playbackFailure = nil
+            model.dismissSelectionResumeFailure()
         case .bookAction:
             bookActionPresentation.dismissFailure()
         case .progress:

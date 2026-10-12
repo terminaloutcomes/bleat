@@ -480,6 +480,42 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testColdResumeFailureOffersRetryAndKeepsSelectedBookAfterDismissal() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-resume-failure"])
+        let alert = app.alerts["Server unavailable"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["Retry"].exists)
+        alert.buttons["Cancel"].tap()
+        let mini = app.buttons["player.mini.open"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 3))
+        mini.tap()
+        XCTAssertTrue(
+            app.staticTexts["player.error"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["player.retry"].exists)
+        app.buttons["player.retry"].tap()
+        XCTAssertTrue(app.buttons["player.toggle"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["player.toggle"].label, "Pause")
+    }
+
+    @MainActor
+    func testColdResumeAuthenticationOffersAccountEditor() {
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: [
+                "--ui-testing-resume-failure",
+                "--ui-testing-resume-authentication",
+            ])
+        let alert = app.alerts["Sign in again"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["Sign In"].exists)
+        alert.buttons["Sign In"].tap()
+        XCTAssertTrue(
+            app.textFields["accountEditor.server"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testPlayableHomeCoverSeparatesPlaybackFromNavigation() {
         let app = launch(scenario: "--ui-testing-playback")
         XCTAssertTrue(

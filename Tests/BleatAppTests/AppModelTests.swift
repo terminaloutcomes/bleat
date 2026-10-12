@@ -65,6 +65,133 @@ final class AppModelTests: XCTestCase {
             store.position(accountID: account.id, itemID: book.id), 42)
     }
 
+    func testLastPlayingStreamingResumeUsesLocalCheckpoint() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        try store.select(
+            LastPlayingRecord(
+                accountID: account.id, book: fixture.detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: fixture.detail.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(fixture.detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL))
+            ])
+        let model = AppModel(service: service, playbackPositionStore: store)
+        await model.start()
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        let started = await waitUntil(timeout: .seconds(5)) {
+            model.playback.isPlaybackRequested
+        }
+        XCTAssertTrue(started)
+        model.playback.pause()
+        XCTAssertEqual(model.playback.currentTime, 0.5, accuracy: 0.15)
+        XCTAssertEqual(
+            try XCTUnwrap(
+                store.position(accountID: account.id, itemID: fixture.detail.id)
+            ), 0.5, accuracy: 0.15)
+        await model.playback.stop()
+    }
+
+    func testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        try store.select(
+            LastPlayingRecord(
+                accountID: account.id, book: fixture.detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: fixture.detail.id)
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .failure(
+                    .bookDetail(.remote(.unexpectedStatus(503))))),
+            playbackPositionStore: store)
+        await model.start()
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        let failed = await waitUntil(timeout: .seconds(3)) {
+            model.selectionResumeFailure != nil
+        }
+        XCTAssertTrue(failed)
+        let failure = try XCTUnwrap(model.selectionResumeFailure)
+        XCTAssertEqual(failure.cause, .serverUnavailable)
+        XCTAssertEqual(failure.playbackRecoveryAction, .retry)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        model.dismissSelectionResumeFailure()
+        XCTAssertNil(model.selectionResumeFailure)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        XCTAssertEqual(try store.lastPlaying()?.failure, failure)
+        let relaunched = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(fixture.detail),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: fixture.detail, audioURL: fixture.audioURL))
+                ]),
+            playbackPositionStore: PlaybackPositionStore(
+                defaults: fixture.defaults))
+        await relaunched.start()
+        XCTAssertEqual(relaunched.selectionResumeFailure, failure)
+        XCTAssertEqual(relaunched.playback.state, .failed(failure))
+        XCTAssertTrue(relaunched.playback.showsMiniPlayer)
+        XCTAssertFalse(relaunched.playback.isPlaybackRequested)
+        let outcome = await relaunched.retryFailedPlayback()
+        guard case .started = outcome else {
+            return XCTFail("Expected a successful retry")
+        }
+        relaunched.playback.pause()
+        XCTAssertEqual(relaunched.playback.currentTime, 0.5, accuracy: 0.15)
+        XCTAssertNil(try store.lastPlaying()?.failure)
+        await relaunched.playback.stop()
+        XCTAssertNil(try store.lastPlaying())
+    }
+
+    func testLastPlayingRecoveryActionsPreserveTypedFailureAndLegacyRecord()
+        throws
+    {
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .authenticationRequired)
+                .playbackRecoveryAction, .signIn)
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .permissionDenied).playbackRecoveryAction,
+            .dismiss)
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .itemNotFound).playbackRecoveryAction,
+            .dismiss)
+        let account = try fixtureAccount()
+        let record = LastPlayingRecord(
+            accountID: account.id,
+            book: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let encoded = try JSONEncoder().encode(record)
+        var legacy = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "failure")
+        let decoded = try JSONDecoder().decode(
+            LastPlayingRecord.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertEqual(decoded, record)
+        let metadataFailure = AppFailure(
+            .loadBook, .invalidBookMetadata(.duration))
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                AppFailure.self,
+                from: JSONEncoder().encode(metadataFailure)), metadataFailure)
+        let failure = AppFailure(.openPlayback, .authenticationRequired)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                AppFailure.self, from: JSONEncoder().encode(failure)), failure)
+    }
+
     func testLastPlayingInvalidRecordRemainsDiagnosable() throws {
         let suite = UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

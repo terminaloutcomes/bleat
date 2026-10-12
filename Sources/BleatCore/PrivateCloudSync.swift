@@ -30,7 +30,7 @@ public enum PrivateCloudSyncOperation: String, Codable, Equatable, Sendable {
     case acceptCloudConfiguration = "accept_cloud_configuration"
 }
 
-public enum CloudKitFailureCode: Hashable, Sendable {
+public enum CloudKitFailureCode: Hashable, Sendable, Codable {
     case internalError
     case partialFailure
     case networkUnavailable
@@ -175,7 +175,7 @@ public enum CloudKitFailureCode: Hashable, Sendable {
     }
 }
 
-public struct CloudKitFailure: Equatable, Sendable {
+public struct CloudKitFailure: Equatable, Sendable, Codable {
     public let code: CloudKitFailureCode
     public let partialFailureCodes: [CloudKitFailureCode]
     public let retryAfterSeconds: Double?
@@ -230,7 +230,7 @@ enum PrivateCloudSendRecovery: Equatable, Sendable {
     case fail
 }
 
-public struct PrivateCloudSystemError: Equatable, Sendable {
+public struct PrivateCloudSystemError: Equatable, Sendable, Codable {
     public let domain: String
     public let code: Int
 
@@ -241,7 +241,7 @@ public struct PrivateCloudSystemError: Equatable, Sendable {
     }
 }
 
-public enum PrivateCloudSyncError: Error, Equatable, Sendable {
+public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
     case disabled
     case cancelled
     case callbackTimedOut
@@ -274,7 +274,7 @@ final class PrivateCloudDefaultsReference: @unchecked Sendable {
     }
 }
 
-public struct PrivateCloudSyncFailure: Error, Equatable, Sendable {
+public struct PrivateCloudSyncFailure: Error, Equatable, Sendable, Codable {
     public let operation: PrivateCloudSyncOperation
     public let cause: PrivateCloudSyncError
     public let selectionCommitted: Bool

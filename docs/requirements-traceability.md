@@ -420,9 +420,27 @@ iOS version, route, process launch/system command evidence and timing. Separate
 no OS launch, launch without handler delivery, command rejection and preparation
 or activation failure; never infer delivery from pressing Play alone.
 
-Four P2 findings remain from independent review: streamed resume currently uses
-the server checkpoint instead of a newer local checkpoint; a failed unprepared
-selection lacks visible retry controls; native remote callbacks acknowledge
-queued work before its actual outcome; and selection persistence waits for
-bookmark loading after audio starts. These limitations and remaining device
-evidence keep #341 open; they are not complete acceptance evidence.
+The local-checkpoint and failed-resume recovery findings were addressed after
+explicit product direction. `AppModelTests.testLastPlayingStreamingResumeUsesLocalCheckpoint`
+and `testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint` cover streamed
+local-position precedence, typed failure persistence, relaunch, visible recovery,
+dismissal, retry and Stop. `testLastPlayingRecoveryActionsPreserveTypedFailureAndLegacyRecord`
+covers action selection and records without failure metadata.
+`BleatUITests.testColdResumeFailureOffersRetryAndKeepsSelectedBookAfterDismissal`
+and `testColdResumeAuthenticationOffersAccountEditor` cover native recovery UI.
+Follow-up validation passed all 512 app tests and both new recovery UI journeys,
+with no skips or runtime warnings; signed host validation passed 519 tests and
+the Release build. Complete UI-suite results above remain unresolved as stated.
+The existing failed-player retry UI regression and both disposable-server
+online/offline app journeys also passed; exact identifiers and outcomes were
+verified in result bundles.
+
+Two P2 limitations are accepted for now: native remote callbacks acknowledge
+queued processing before its eventual outcome; selection persistence waits for
+bookmark loading after audio starts, so interrupted preparation can retain the
+previous book. An additional P2 remains: invalid last-playing metadata can block
+account-identity migration before valid account-scoped positions are migrated.
+After rebasing the native callback adapter from main, an additional P2 remains:
+bootstrap can discard a mismatched/no-active-account selection without retiring
+its native Play admission flag, so the callback acknowledges a command that
+the downstream resume handler rejects. Remaining device evidence keeps #341 open.

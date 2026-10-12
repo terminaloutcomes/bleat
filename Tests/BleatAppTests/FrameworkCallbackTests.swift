@@ -9,6 +9,32 @@ import dnssd
 
 @MainActor
 final class FrameworkCallbackTests: XCTestCase {
+    func testRemotePlayAdmitsBootstrapSelectionAndClearInvalidatesIt() async {
+        let coordinator = NowPlayingCoordinator(registersRemoteCommands: false)
+        var commands: [PlaybackRemoteCommand] = []
+        coordinator.setCommandHandler {
+            commands.append($0)
+            return .accepted
+        }
+        let play = coordinator.makeRemoteCommandCallback { (_: Void) in
+            PlaybackRemoteCommand.play
+        }
+        let pause = coordinator.makeRemoteCommandCallback { (_: Void) in
+            PlaybackRemoteCommand.pause
+        }
+        XCTAssertEqual(play(()), .noSuchContent)
+        coordinator.setResumableSelectionAvailable(true)
+        XCTAssertEqual(play(()), .success)
+        XCTAssertEqual(pause(()), .noSuchContent)
+        coordinator.clear()
+        XCTAssertEqual(play(()), .noSuchContent)
+        let drained = expectation(
+            description: "Queued bootstrap command drained")
+        Task { @MainActor in drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 2)
+        XCTAssertTrue(commands.isEmpty)
+    }
+
     func testRemoteCommandAcknowledgesWithoutInlineMainActorDelivery() async {
         let coordinator = NowPlayingCoordinator(registersRemoteCommands: false)
         let delivered = expectation(

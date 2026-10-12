@@ -51,14 +51,18 @@ struct LastPlayingRecord: Codable, Equatable {
     let accountID: AccountID
     let book: LibraryBookSummary
     let updatedAt: Date
+    let failure: AppFailure?
 
     init(
-        accountID: AccountID, book: LibraryBookSummary, updatedAt: Date = Date()
+        accountID: AccountID, book: LibraryBookSummary,
+        updatedAt: Date = Date(),
+        failure: AppFailure? = nil
     ) {
         version = 1
         self.accountID = accountID
         self.book = book
         self.updatedAt = updatedAt
+        self.failure = failure
     }
 }
 
@@ -165,7 +169,7 @@ final class PlaybackPositionStore {
             try select(
                 LastPlayingRecord(
                     accountID: canonicalID, book: record.book,
-                    updatedAt: record.updatedAt))
+                    updatedAt: record.updatedAt, failure: record.failure))
         }
         let legacyPrefix = accountPrefix(legacyID)
         let canonicalPrefix = accountPrefix(canonicalID)
