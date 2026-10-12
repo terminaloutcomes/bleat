@@ -365,7 +365,8 @@ struct MetadataEditorView: View {
                 Button {
                     seriesSelection = .add
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "plus.circle")
+                        .foregroundStyle(.tint)
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel("Add Series")
@@ -580,21 +581,25 @@ private struct SeriesMembershipEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Series", text: $value.name)
-                    .accessibilityIdentifier("metadata.series.name")
-                TextField("Sequence", text: $value.sequence)
-                    .accessibilityIdentifier("metadata.series.sequence")
-                if let failure {
-                    Text(message(for: failure))
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("metadata.series.error")
+                Section {
+                    TextField("Series", text: $value.name)
+                        .accessibilityIdentifier("metadata.series.name")
+                    TextField("Sequence", text: $value.sequence)
+                        .accessibilityIdentifier("metadata.series.sequence")
+                    if let failure {
+                        Text(message(for: failure))
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("metadata.series.error")
+                    }
                 }
                 if selection.index != nil {
-                    Button("Remove", role: .destructive) {
-                        onRemove()
-                        dismiss()
+                    Section {
+                        Button("Remove", role: .destructive) {
+                            onRemove()
+                            dismiss()
+                        }
+                        .accessibilityIdentifier("metadata.series.remove")
                     }
-                    .accessibilityIdentifier("metadata.series.remove")
                 }
             }
             .navigationTitle(
