@@ -50,6 +50,16 @@
             self.interfaceController = interfaceController
         }
 
+        func observeTemplates(_ delegate: any CPInterfaceControllerDelegate) {
+            interfaceController.delegate = delegate
+        }
+
+        func contains(_ identity: ObjectIdentifier) -> Bool {
+            interfaceController.templates.contains {
+                ObjectIdentifier($0) == identity
+            }
+        }
+
         func setRoot(_ template: CPTemplate) {
             interfaceController.setRootTemplate(
                 template,
@@ -83,7 +93,9 @@
     }
 
     @MainActor
-    final class CarPlayCoordinator: NSObject {
+    final class CarPlayCoordinator: NSObject, CPSessionConfigurationDelegate,
+        CPInterfaceControllerDelegate, CPTabBarTemplateDelegate
+    {
         private struct AccountPresentation: Equatable, Sendable {
             let id: AccountID
             let server: NormalizedServerURL
@@ -125,6 +137,11 @@
             case unavailable
         }
 
+        private var searchTab: CPGridTemplate?
+        private var searchController: CarPlaySearchController?
+        private var sessionConfiguration: CPSessionConfiguration?
+        private var keyboardAvailable = true
+        private let searchEnabled: @MainActor () -> Bool
         private let model: AppModel
         private let coverLoader: BookCoverImageLoader
         private var presenter: (any CarPlayPresenting)?
@@ -171,6 +188,12 @@
         init(
             model: AppModel,
             coverLoader: BookCoverImageLoader = .shared,
+            searchEnabled: @escaping @MainActor () -> Bool = {
+                guard #available(iOS 27.0, *) else { return false }
+                return Bundle.main.object(
+                    forInfoDictionaryKey: "BleatCarPlayMode") as? String
+                    == "enabled"
+            },
             contentLimits:
                 @escaping @MainActor () -> (items: Int, sections: Int) = {
                     (
@@ -182,6 +205,7 @@
             self.model = model
             self.coverLoader = coverLoader
             self.contentLimits = contentLimits
+            self.searchEnabled = searchEnabled
             super.init()
             artworkCache.countLimit = 256
         }
@@ -189,6 +213,11 @@
         func connect(_ presenter: any CarPlayPresenting) {
             disconnect()
             self.presenter = presenter
+            (presenter as? CarPlayInterfacePresenter)?.observeTemplates(self)
+            let configuration = CPSessionConfiguration(delegate: self)
+            sessionConfiguration = configuration
+            keyboardAvailable = !configuration.limitedUserInterfaces.contains(
+                .keyboard)
             presentationGeneration &+= 1
             configureNowPlayingTemplate()
             refreshTemplates()
@@ -218,6 +247,10 @@
         }
 
         func disconnect() {
+            searchController?.invalidate()
+            searchController = nil
+            sessionConfiguration?.delegate = nil
+            sessionConfiguration = nil
             presentationGeneration &+= 1
             libraryTask?.cancel()
             limitObservationTask?.cancel()
@@ -241,6 +274,7 @@
             libraryTemplate = nil
             downloadsTemplate = nil
             tabTemplate = nil
+            searchTab = nil
             renderedPresentation = nil
         }
 
@@ -253,6 +287,8 @@
                 libraryID: model.selectedLibrary?.id,
                 generation: model.libraryPageGeneration)
             if libraryContext != context {
+                searchController?.invalidate()
+                searchController = nil
                 libraryContext = context
                 libraryTask?.cancel()
                 libraryPage = .idle
@@ -273,6 +309,7 @@
                     }
                 }
             }
+            searchController?.updateLimits(keyboardAvailable: keyboardAvailable)
             let presentation = makeTemplatePresentation()
             guard renderedPresentation != presentation else {
                 return
@@ -357,13 +394,13 @@
             guard rootContext != context || tabTemplate == nil else {
                 return
             }
-            let tabs = CPTabBarTemplate(
-                templates: [
-                    homeTemplate,
-                    libraryTemplate,
-                    downloadsTemplate,
-                ]
-            )
+            searchTab = makeSearchTab()
+            var templates: [CPTemplate] = [
+                homeTemplate, libraryTemplate, downloadsTemplate,
+            ]
+            if let searchTab { templates.append(searchTab) }
+            let tabs = CPTabBarTemplate(templates: templates)
+            tabs.delegate = self
             tabTemplate = tabs
             rootContext = context
             presenter?.setRoot(tabs)
@@ -513,6 +550,144 @@
                 updateBrowserTemplate(
                     template, books: books, depth: 0, presentation: presentation
                 )
+            }
+        }
+
+        private func makeSearchTab() -> CPGridTemplate? {
+            guard #available(iOS 27.0, *), searchEnabled(),
+                model.selectedLibrary != nil,
+                CPTabBarTemplate.maximumTabCount >= 4,
+                let image = UIImage(systemName: "magnifyingglass")
+            else { return nil }
+            let connection = presentationGeneration
+            let context = libraryContext
+            let button = CPGridButton(titleVariants: ["Search"], image: image) {
+                @Sendable [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.presentationGeneration == connection,
+                        self.libraryContext == context
+                    else { return }
+                    self.openSelectedSearchTab()
+                }
+            }
+            button.isEnabled = keyboardAvailable
+            // Search cannot be a tab root. A supported grid hosts its launcher
+            // and lets people reopen Search after returning from the keyboard.
+            let tab = CPGridTemplate(title: nil, gridButtons: [button])
+            tab.tabTitle = ""
+            tab.tabImage = image
+            return tab
+        }
+
+        nonisolated func tabBarTemplate(
+            _ tabBarTemplate: CPTabBarTemplate,
+            didSelect selectedTemplate: CPTemplate
+        ) {
+            let rootIdentity = ObjectIdentifier(tabBarTemplate)
+            let selectedIdentity = ObjectIdentifier(selectedTemplate)
+            Task { @MainActor [weak self] in
+                guard let self,
+                    self.tabTemplate.map(ObjectIdentifier.init) == rootIdentity,
+                    self.searchTab.map(ObjectIdentifier.init)
+                        == selectedIdentity,
+                    self.tabTemplate?.selectedTemplate.map(
+                        ObjectIdentifier.init) == selectedIdentity
+                else { return }
+                self.openSelectedSearchTab()
+            }
+        }
+
+        private func openSelectedSearchTab() {
+            guard let searchTab, tabTemplate?.selectedTemplate === searchTab
+            else { return }
+            if let search = searchController,
+                let presenter = presenter as? CarPlayInterfacePresenter,
+                !search.reconcileNavigation(contains: presenter.contains)
+            {
+                searchController = nil
+            }
+            openSearch()
+        }
+
+        func openSearch() {
+            guard #available(iOS 27.0, *), searchEnabled(), keyboardAvailable,
+                presenter != nil, searchController == nil,
+                let account = model.account,
+                let library = model.selectedLibrary
+            else { return }
+            searchController?.invalidate()
+            let connection = presentationGeneration
+            let context = libraryContext
+            let controller = CarPlaySearchController(
+                model: model, account: account, libraryID: library.id,
+                isCurrent: { [weak self] in
+                    guard let self else { return false }
+                    return self.presenter != nil
+                        && self.presentationGeneration == connection
+                        && self.libraryContext == context
+                        && self.model.account?.id == account.id
+                        && self.model.selectedLibrary?.id == library.id
+                },
+                maximumItems: { [weak self] in
+                    guard let self, self.contentLimits().sections > 0 else {
+                        return 0
+                    }
+                    // Keep keyboard results compact within the vehicle's list limits.
+                    return min(5, self.contentLimits().items)
+                },
+                push: { [weak self] in self?.presenter?.push($0) },
+                play: { [weak self] book in await self?.play(book) })
+            searchController = controller
+            presenter?.push(controller.template)
+        }
+
+        nonisolated func sessionConfiguration(
+            _ sessionConfiguration: CPSessionConfiguration,
+            limitedUserInterfacesChanged limitedUserInterfaces:
+                CPLimitableUserInterface
+        ) {
+            let identity = ObjectIdentifier(sessionConfiguration)
+            let available = !limitedUserInterfaces.contains(.keyboard)
+            Task { @MainActor [weak self] in
+                guard let self, self.presenter != nil,
+                    let configuration = self.sessionConfiguration,
+                    ObjectIdentifier(configuration) == identity
+                else { return }
+                self.keyboardAvailable = available
+                for button in self.searchTab?.gridButtons ?? [] {
+                    button.isEnabled = available
+                }
+                self.searchController?.updateLimits(
+                    keyboardAvailable: available)
+                self.refreshTemplates()
+            }
+        }
+
+        nonisolated func templateDidDisappear(
+            _ aTemplate: CPTemplate, animated: Bool
+        ) {
+            let identity = ObjectIdentifier(aTemplate)
+            Task { @MainActor [weak self] in
+                guard let self,
+                    let presenter = self.presenter
+                        as? CarPlayInterfacePresenter,
+                    !presenter.contains(identity)
+                else { return }
+                // Other tabs hide retained Search templates without removing
+                // them from their navigation stack.
+                if let searchTab = self.searchTab,
+                    self.tabTemplate?.selectedTemplate !== searchTab
+                {
+                    return
+                }
+                if let search = self.searchController,
+                    ObjectIdentifier(search.template) == identity
+                {
+                    search.invalidate()
+                    self.searchController = nil
+                } else {
+                    self.searchController?.templateRemoved(identity)
+                }
             }
         }
 
@@ -987,10 +1162,18 @@
                 )
                 return
             }
+            let connection = presentationGeneration
+            let libraryID = model.selectedLibrary?.id
             let outcome = await model.startPlayback(
                 book: book,
-                account: account
+                account: account,
+                cancellationPolicy: .cancelPlayback
             )
+            guard !Task.isCancelled, presenter != nil,
+                presentationGeneration == connection,
+                model.account?.id == account.id,
+                model.selectedLibrary?.id == libraryID
+            else { return }
             switch outcome {
             case .started:
                 presentNowPlayingIfReady(

@@ -56,7 +56,7 @@ contents, or other signing material.
 ## CarPlay Simulator
 
 - [x] Home shelves and verified downloads render in the expected order.
-- [x] Library selection and bounded pagination work; the navigation-only
+- [x] Library selection and bounded pagination work; the iOS 26 audio-unsupported
   `CPSearchTemplate` is not used by the audio-entitled scene.
 - [x] Online and verified offline playback reach Now Playing.
 - [x] Artwork remains correct across account, library, and playback changes.
@@ -92,7 +92,7 @@ and result for each journey.
 - An intermediate build exposed
   [`CPSearchTemplate`](https://developer.apple.com/documentation/carplay/cpsearchtemplate),
   but direct interaction terminated the app with an
-  `NSInvalidArgumentException` because that navigation-only template is not
+  `NSInvalidArgumentException` because that template is not supported for iOS 26 audio scenes and is not
   allowed for an audio-entitled scene. The unsupported control and
   search-template code were removed; the final build uses only supported
   Library templates.
@@ -273,3 +273,218 @@ Manual acceptance on 2026-10-11:
 
 [Issue #331](https://github.com/terminaloutcomes/bleat/issues/331) is complete
 per the user's manual acceptance. Existing CarPlay approval is unaffected.
+
+## Native audio search — issue #333
+
+Apple's CarPlay Developer Guide dated 2026-06-08 (printed pages 14 and 24)
+permits the Search template for Audio/video on iOS 27 and later. The earlier
+search-template exception above was observed on iOS 26; it does not establish
+an all-version navigation-only restriction.
+
+Implementation adds an icon-only Search tab only for enabled
+iOS 27+ audio scenes. It keeps Library and Downloads available when vehicle
+keyboard restrictions change. CarPlay owns its own debounced session, repository
+cache provenance, title/author destinations, typed failure/retry and exact-once
+completion lifecycle. Search data and author lists are bounded and explicitly
+partial when necessary; saved queries never imply a complete offline index.
+
+Automated validation on 2026-10-11:
+
+- `swift test --filter LibrarySearchCoordinatorTests`: all 8 intended tests passed.
+- `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh`: 526 signed-host tests
+  passed with no skips, 3 Rust release tests passed, and the Release package
+  build and paid-capability build-mode matrix passed. The existing cleanup
+  known-issue fixture reported its expected issue; read-only persistence
+  fixtures emitted expected Core Data errors. An external dependency manifest
+  reports its watchOS-version deprecation.
+- App-hosted focused cancellation checks: all 4 intended tests passed with no
+  skips or runtime warnings, covering ordinary phone caller cancellation,
+  delayed CarPlay detail/stream preparation, newer phone playback, and a
+  diagnostic suspension resumed after cancellation.
+- `./scripts/test-app-live.sh`: the final online login/playback/download and
+  offline cached-download/local-progress journeys each passed (1 test each),
+  with exact identifiers, no skips and no runtime warnings verified in the
+  result bundles. This validates the shared app flows against disposable
+  Audiobookshelf, not native CarPlay rendering. Xcode printed its debugger
+  version lookup warning; the test runtime-warning arrays were empty.
+- `BLEAT_SKIP_HOST=1 ./scripts/test-core.sh` on a fresh iOS 26.5 Simulator:
+  Release simulator build passed and all 525 app tests passed, including the
+  40 CarPlay/cancellation identifiers, with no skips or runtime warnings.
+  The broader UI gate failed its rotation/playback label assertion, and was
+  interrupted for focused base-revision classification. It is not a passed
+  complete local gate. Its finalized bundle contains 6 passes, the rotation
+  assertion failure, 6 supported opt-in skips, and one cancelled unrelated
+  author/series test. Runtime-warning arrays are empty. The invocation exited
+  75 after interruption and diagnostic cleanup. The isolated unchanged base
+  revision `dd490f1` passed the focused rotation test (1 pass, no skips/runtime warnings). The final-source focused run failed
+  the unchanged orientation helper's geometry timeout before reaching the
+  original playback assertion (1 failure, no skips/runtime warnings). The
+  failed broad run recorded `playback_recovery_exhausted` before its assertion;
+  its unchanged UI fixture uses a missing media file. Review found no introduced
+  mechanism, but these execution results do not establish that the original
+  failure is pre-existing. Both UI failures remain unresolved. No further
+  reruns are used to erase them. Completed focused
+  outcomes were preserved before stopping its stalled diagnostic collector.
+- `mise run swift-lint` and `git diff --check` passed.
+
+Earlier attempts are retained as superseded evidence: initial integration builds
+needed protocol-witness, typed-throw, and fixture corrections. A preliminary app
+run passed 522 tests but printed an unexplained Xcode compiler message with exit
+code zero; mutable-capture warnings were corrected. The subsequent full app run
+passed 524 tests and failed the existing ordinary caller-cancellation test;
+the cancellation policy is now scoped to CarPlay. Xcode's diagnostic collector
+stalled after that run and was stopped after preserving the completed test
+outcomes. That reused Simulator also logged an unknown persisted model version;
+the final gate uses a fresh disposable Simulator and that migration warning
+did not recur in its app diagnostics. One focused diagnostic test
+then failed to enter its gate and timed out because its summary request lacked
+its detail fixture; the corrected fixture passed the complete four-test rerun.
+None of these unsuccessful attempts is counted as coverage.
+
+The installed SDK is iOS 27, but the available Simulator runtime is iOS 26.5.
+No iOS 27 CarPlay Simulator or physical-head-unit search evidence is claimed.
+
+Outstanding manual acceptance for #333:
+
+- iOS 26 audio scene has no Search control and never pushes `CPSearchTemplate`;
+  iOS 27 enabled scene presents native Search without an entitlement exception.
+- Title playback and author navigation select the active account/library,
+  including phone searches in progress, account/library switching, and reconnect.
+- Rapid/duplicate input, clearing, retry, query caps, cached/missing offline
+  queries, native back navigation, and delayed responses remain accurate.
+- Disabling the keyboard during a session leaves Library folders and verified
+  Downloads usable; restricted lists retain accurate limited-result labels.
+- Native labels, touch and rotary input, larger/bold text, and Voice Control.
+- Record exact build, OS, head-unit model, restriction transitions, and outcomes
+  separately from app-hosted and ordinary Simulator tests.
+
+Issue #333 remains open until these evidence requirements are satisfied.
+
+Independent review ran four complete-change cycles. The blocking stale-playback
+finding was repaired with an explicit CarPlay cancellation policy in the shared
+playback start lifecycle, checks after preparation suspensions, and rejection of
+obsolete Now Playing publication. Ordinary phone playback retains its existing
+behavior of continuing after caller cancellation. The latest review reports no P0/P1 findings.
+
+The four P2 findings from that review were resolved in the requested follow-up:
+
+- Native keyboard result rows retain their identities and actions when capacity
+  changes (`App/CarPlaySearchController.swift`, `render`).
+- Author-page removal cancels only owned author loads, discharges their
+  completions once, and rejects late responses and stale retry handlers
+  (`templateRemoved`, `register`, `perform`, `loadAuthor`).
+- Opening or closing an author page clears retained author results, so a capacity
+  update cannot populate a new loading page with the previous author's books
+  (`templateRemoved`, `perform`).
+- Author status and failure rows, and pushed search results, produce no sections
+  at effective zero capacity (`renderAuthor`, `updateLimits`, `publish`,
+  `showResults`, `loadAuthor`). The pushed-search empty-section issue was found
+  and resolved during the follow-up review.
+
+Six focused regressions cover these fixes, including uncooperative responses,
+retained native rows, stale retry handlers after reopening, cached and limited
+status rows, failure-row capacity changes, and zero-section pushed results. An additional
+review found that pending/failed search pages also needed limit reapplication;
+`updateLimits` now republishes retained status rows when capacity changes.
+The first follow-up test build failed because three fixture arguments were out
+of declaration order; no tests executed. The corrected five-test run passed with zero skips or runtime warnings; its
+exact identifiers were verified in the result bundle. A subsequent broader run
+failed before executing any selected test because the Simulator rejected the
+runner launch as Busy during preflight. This was an environment failure, and the
+owned disposable Simulator was booted and its boot completion verified before
+rerunning. The final app-hosted `xcodebuild test` selection passed all 46 CarPlay
+and adjacent playback-cancellation tests on iOS 26.5, including all six new
+regressions. The result bundle verified every requested identifier as passed,
+with zero failures, skips, or runtime warnings. Targeted `swift-format lint
+--strict` and `git diff --check` also passed. The complete local/UI and live
+gates were not repeated for this template-lifecycle follow-up; their previous
+evidence and unresolved UI outcomes remain above.
+
+Three independent complete-change follow-up reviews ran. The latest reports no
+findings: all original and follow-up P2s are resolved, with no P0/P1 findings.
+
+The manual evidence gaps still prevent claiming that every #333 acceptance
+criterion is complete.
+
+### Icon-only Search tab follow-up
+
+Search moved from Library's header to a magnifying-glass-only fourth tab on
+supported iOS 27+ scenes, provided the runtime permits four tabs. The tab has an
+image and an empty title. Apple's guide (printed page 25) permits Grid,
+Information, List, and Point of Interest tab roots, so a grid launcher opens the
+native Search template on tab selection and lets people reopen it after Back.
+Keyboard restrictions disable the launcher and prevent keyboard presentation.
+Delayed selection callbacks validate the selected root tab; switching tabs keeps
+the retained Search navigation stack alive.
+
+The capability regression checks that older/disabled scenes retain the three
+browsing tabs without a Library header Search button. The iOS 27 branch checks
+the image-only fourth tab and native keyboard selection. Positive iOS 27 tab
+selection, Back/reopen, keyboard restrictions, and physical head-unit
+accessibility remain manual evidence gaps on the available iOS 26.5 runtime.
+
+The tab follow-up's second review found a P2 where Back followed by a tab switch
+could skip queued removal cleanup. Search now reconciles its native keyboard,
+author page, and result page against the visible stack when its tab is selected
+again. A removed keyboard invalidates its controller so it can reopen; removed
+author/result pages discharge their existing lifecycles. Regressions cover a
+removed keyboard and an uncooperative author load reconciled after removal.
+An intermediate final run failed before executing tests because the Simulator
+rejected runner launch as Busy during preflight. Boot completion was verified
+before the final retry; this was not a failed test assertion.
+
+The third tab review found a second P2 in the grid reopen callback: switching tabs
+before the callback's main-actor task ran could push Search on the other tab.
+Both tab selection and the grid launcher now use `openSelectedSearchTab`, which
+verifies the selected Search root and reconciles navigation before opening the
+keyboard. Both review findings are resolved.
+
+Final tab-follow-up validation: `xcodebuild test` passed all 47 selected CarPlay
+and adjacent playback-cancellation app tests on iOS 26.5. Every requested
+identifier was verified in the result bundle, with zero failures, skips, or
+runtime warnings. Targeted `swift-format lint --strict` and `git diff --check`
+passed. Four independent complete-change tab reviews ran; the latest reports
+no findings and no P0/P1s. Both tab-review P2s are resolved. The complete local/UI
+and live gates were not repeated; their previously recorded outcomes remain.
+
+### Internal TestFlight delivery
+
+The requested internal deployment uploaded `2026.10.11 (20261011.2129.21)`
+from clean commit `059f803`. Source marketing version, timestamp fallback,
+changelog, and regenerated Xcode configurations were aligned first;
+`mise run release:check -- --repository-root <deployment-checkout>` passed
+using the repository release checker. One independent release-metadata review
+reported no findings.
+
+`mise run testflight:internal` passed six CloudKit validator tests, three
+release-version tests, export-options validation, production CloudKit schema
+validation, signed Release archive inspection, and distribution IPA inspection.
+The internal-only export completed with Apple's explicit upload confirmation.
+App Store Connect subsequently reported `valid`, `IN_BETA_TESTING`, and membership
+in the existing internal `Testers` group. `testflight-release` saved `en-AU`
+testing notes and verified that same membership. External state is
+`NOT_APPLICABLE`; no external group or beta review was requested.
+
+Local signed artifacts, checksum, redacted upload logs, and delivery report are
+retained under `.build/testflight-internal/2026.10.11-20261011.2129.21/`.
+This is verified internal delivery and does not complete the outstanding native
+iOS 27 or physical head-unit acceptance evidence above.
+
+### Rebase and phone metadata correction
+
+Rebased on main `c281391`; all 47 selected CarPlay and adjacent playback tests
+passed on iOS 26.5, with exact identifiers verified and zero skips or runtime
+warnings. The first attempt executed no tests because required telemetry build
+settings were absent; the successful run supplied the configured settings.
+Independent complete-change rebase and metadata reviews reported no findings.
+
+The UTC date advanced while the source still declared `2026.10.11`, causing
+`mise run iphone` to reject its fresh build number. Updated source version,
+fallback timestamp, changelog and regenerated Xcode settings to `2026.10.12`;
+`mise run release:check` passed. `mise run iphone` then built, installed and
+launched successfully. Device metadata confirmed `2026.10.12 (20261012.0814.16)`.
+The earlier phone install had retained `2026.10.08 (2)` metadata.
+
+The user will perform manual testing and requested review-ready status. The
+unresolved UI failures and native iOS 27/head-unit acceptance gaps above remain
+open. The previously delivered internal TestFlight build remains unchanged.

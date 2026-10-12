@@ -19,6 +19,7 @@
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */; };
 		19DD8E68B3BB33385701AD69 /* CarPlayLibraryBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A115CD615D58C79223E6B61 /* CarPlayLibraryBrowser.swift */; };
+		22CF14A86D091B301097BCFF /* CarPlaySearchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 195056D8D8775144BA48BC86 /* CarPlaySearchController.swift */; };
 		25B46086FBA00C731871DA87 /* PlaybackObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE86258004B5502381014564 /* PlaybackObservation.swift */; };
 		297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F16612F5D186DFAED140F6 /* BookCoverView.swift */; };
 		2BA45C8D5605E590C16A7471 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */; };
@@ -110,7 +111,8 @@
 		10759FAD9A628F0F553DB7B1 /* AudioChapterSliceExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChapterSliceExporterTests.swift; sourceTree = "<group>"; };
 		12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBrowseModels.swift; sourceTree = "<group>"; };
 		132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
-		16D444D9EEAC777098B8E8DF /* bleat-339-release-pr */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bleat-339-release-pr"; path = .; sourceTree = SOURCE_ROOT; };
+		1462DAC482C2C678C555CDCE /* bleat-i333-p2 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bleat-i333-p2"; path = .; sourceTree = SOURCE_ROOT; };
+		195056D8D8775144BA48BC86 /* CarPlaySearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySearchController.swift; sourceTree = "<group>"; };
 		1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDiagnosticLogCleanup.swift; sourceTree = "<group>"; };
 		20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionView.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 				F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */,
 				C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */,
 				5A115CD615D58C79223E6B61 /* CarPlayLibraryBrowser.swift */,
+				195056D8D8775144BA48BC86 /* CarPlaySearchController.swift */,
 				442E1B9B0CEB4D9FC6C8D00E /* ChapterTranscriptionJobSupport.swift */,
 				6462208874E3752B46A8D7AC /* ChapterTranscriptionModel.swift */,
 				E890D74C6F56A62319D7C32C /* ChapterTranscriptionSourceValidator.swift */,
@@ -351,7 +354,7 @@
 		F43C2BD821572C0860FA1783 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				16D444D9EEAC777098B8E8DF /* bleat-339-release-pr */,
+				1462DAC482C2C678C555CDCE /* bleat-i333-p2 */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -601,6 +604,7 @@
 				E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */,
 				AA52BE76FF8BA97DA914DC49 /* CarPlayCoordinator.swift in Sources */,
 				19DD8E68B3BB33385701AD69 /* CarPlayLibraryBrowser.swift in Sources */,
+				22CF14A86D091B301097BCFF /* CarPlaySearchController.swift in Sources */,
 				B94D1706742AC05BE9F9F1E6 /* ChapterTranscriptionJobSupport.swift in Sources */,
 				52920A99096E21066DCAAC51 /* ChapterTranscriptionModel.swift in Sources */,
 				1194E9B9599CE01CE2C84728 /* ChapterTranscriptionSourceValidator.swift in Sources */,
@@ -825,7 +829,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261011.0639.04;
+				CURRENT_PROJECT_VERSION = 20261012.0812.10;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -834,7 +838,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.11;
+				MARKETING_VERSION = 2026.10.12;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
@@ -897,7 +901,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261011.0639.04;
+				CURRENT_PROJECT_VERSION = 20261012.0812.10;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -906,7 +910,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.11;
+				MARKETING_VERSION = 2026.10.12;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;

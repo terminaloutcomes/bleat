@@ -192,6 +192,11 @@ enum BrowsingPlaybackActionOutcome: Equatable, Sendable {
     case start(PlaybackStartOutcome)
 }
 
+enum PlaybackStartCancellationPolicy: Equatable, Sendable {
+    case continuePlayback
+    case cancelPlayback
+}
+
 struct PlaybackStartTarget: Equatable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
@@ -4094,6 +4099,46 @@ final class AppModel {
         }
     }
 
+    func carPlaySearch(
+        account: ServerAccount, libraryID: LibraryID,
+        request: LibrarySearchRequest
+    ) async throws(LibraryRepositoryError)
+        -> LibraryRepositoryResult<LibrarySearchResults>
+    {
+        await diagnostics.record(.started(.search, category: .api))
+        do {
+            let result = try await service.carPlaySearch(
+                for: account, libraryID: libraryID, request: request)
+            await diagnostics.record(
+                .completed(
+                    .search, category: .api,
+                    count: result.value.books.count + result.value.authors.count
+                ))
+            return result
+        } catch {
+            let failure = AppFailure(
+                operation: .search, serviceError: .libraryRepository(error))
+            await diagnostics.record(
+                .failed(
+                    .search, category: .api,
+                    failureCode: failure.diagnosticFailureCode,
+                    stage: .pageRequest))
+            throw error
+        }
+    }
+
+    func carPlayAuthorPage(
+        account: ServerAccount, libraryID: LibraryID, authorID: AuthorID
+    ) async throws(AppServiceError) -> LibraryRepositoryResult<LibraryItemsPage>
+    {
+        let request = try makeLibraryItemsPageRequest(
+            page: 0, limit: 100, sort: .title,
+            filter: LibraryItemFilter(authorID: authorID), collapseSeries: false
+        )
+        return try await service.carPlayPage(
+            for: account, libraryID: libraryID, request: request)
+    }
+
     func search(query: String) async {
         await search(query: query, preservingLoadedContent: false)
     }
@@ -5141,14 +5186,16 @@ final class AppModel {
     func startPlayback(
         book: LibraryBookSummary,
         account: ServerAccount,
-        position: PlaybackStartPosition = .resume
+        position: PlaybackStartPosition = .resume,
+        cancellationPolicy: PlaybackStartCancellationPolicy = .continuePlayback
     ) async -> PlaybackStartOutcome {
         await startPlayback(
             PlaybackStartRequest(
                 book: .summary(book),
                 account: account,
                 position: position
-            )
+            ),
+            cancellationPolicy: cancellationPolicy
         )
     }
 
@@ -5249,9 +5296,12 @@ final class AppModel {
 
     private func startPlayback(
         _ request: PlaybackStartRequest,
-        isRetry: Bool = false
+        isRetry: Bool = false,
+        cancellationPolicy: PlaybackStartCancellationPolicy = .continuePlayback
     ) async -> PlaybackStartOutcome {
-        guard accountActionStatus != .switching,
+        let cancelsWithCaller = cancellationPolicy == .cancelPlayback
+        guard !(cancelsWithCaller && Task.isCancelled),
+            accountActionStatus != .switching,
             accountActionStatus != .removing,
             bookDeletionState != .deleting
         else {
@@ -5264,7 +5314,10 @@ final class AppModel {
         let generation = await invalidatePlaybackStarts(
             replacementTarget: target
         )
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation,
+            !(cancelsWithCaller && Task.isCancelled)
+        else {
+            await cancelPlaybackStart(generation: generation)
             return .superseded
         }
         playbackStartPhase = .resolving
@@ -5281,13 +5334,26 @@ final class AppModel {
             )
         }
         playbackStartTask = task
-        let outcome = await task.value
+        let outcome = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            guard cancelsWithCaller else { return }
+            task.cancel()
+            Task { @MainActor [weak self] in
+                await self?.cancelPlaybackStart(generation: generation)
+            }
+        }
         if playbackStartGeneration == generation {
             playbackStartTask = nil
             playbackStartPhase = nil
             playbackStartTarget = nil
         }
         return outcome
+    }
+
+    private func cancelPlaybackStart(generation: UInt64) async {
+        guard playbackStartGeneration == generation else { return }
+        await invalidatePlaybackStarts()
     }
 
     func coverPlaybackState(
@@ -5331,7 +5397,7 @@ final class AppModel {
                 generation: generation
             )
         }
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation, !Task.isCancelled else {
             return .superseded
         }
 
@@ -5348,7 +5414,7 @@ final class AppModel {
                 releaseBookMediaOperation(for: mediaOperationKey)
             }
         }
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation, !Task.isCancelled else {
             return .superseded
         }
         await downloads.recordLocalBookCompletion(
@@ -5356,7 +5422,7 @@ final class AppModel {
             itemID: itemID,
             finishedAt: nil
         )
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation, !Task.isCancelled else {
             return .superseded
         }
         if playback.canReusePreparedPlayback,
@@ -5386,7 +5452,8 @@ final class AppModel {
                 playbackStartPhase = .positioningActivePlayer
                 await playback.seek(to: time)
             }
-            guard playbackStartGeneration == generation else {
+            guard playbackStartGeneration == generation, !Task.isCancelled
+            else {
                 return .superseded
             }
             playbackStartPhase = .resolving
@@ -5430,7 +5497,8 @@ final class AppModel {
                 let urls = try await downloads.localTrackURLs(
                     for: downloaded
                 )
-                guard playbackStartGeneration == generation else {
+                guard playbackStartGeneration == generation, !Task.isCancelled
+                else {
                     return .superseded
                 }
                 playbackStartPhase = .preparingPlayback
@@ -5456,7 +5524,8 @@ final class AppModel {
                 playback.fail(failure)
                 return outcome
             }
-            guard playbackStartGeneration == generation else {
+            guard playbackStartGeneration == generation, !Task.isCancelled
+            else {
                 return .superseded
             }
             playbackStartPhase = .resolving
@@ -5499,7 +5568,8 @@ final class AppModel {
                 for: downloaded,
                 containing: preferredTime
             ) {
-                guard playbackStartGeneration == generation else {
+                guard playbackStartGeneration == generation, !Task.isCancelled
+                else {
                     downloads.releaseAutomaticCachePin(window.pin)
                     return .superseded
                 }
@@ -5515,7 +5585,8 @@ final class AppModel {
                     initialTime: resolved.explicitTime,
                     automaticCachedWindow: window
                 )
-                guard playbackStartGeneration == generation else {
+                guard playbackStartGeneration == generation, !Task.isCancelled
+                else {
                     return .superseded
                 }
                 playbackStartPhase = .resolving
@@ -5542,7 +5613,8 @@ final class AppModel {
                     itemID: itemID
                 )
             } catch let error {
-                guard playbackStartGeneration == generation else {
+                guard playbackStartGeneration == generation, !Task.isCancelled
+                else {
                     return .superseded
                 }
                 let failure = AppFailure(
@@ -5555,7 +5627,7 @@ final class AppModel {
                 )
             }
         }
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation, !Task.isCancelled else {
             return .superseded
         }
         guard detail.id == itemID, detail.libraryID == libraryID else {
@@ -5595,7 +5667,7 @@ final class AppModel {
             account: savedAccount,
             initialTime: resolved.explicitTime
         )
-        guard playbackStartGeneration == generation else {
+        guard playbackStartGeneration == generation, !Task.isCancelled else {
             return .superseded
         }
         playbackStartPhase = .resolving
