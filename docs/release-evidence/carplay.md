@@ -323,7 +323,7 @@ Automated validation on 2026-10-11:
   its unchanged UI fixture uses a missing media file. Review found no introduced
   mechanism, but these execution results do not establish that the original
   failure is pre-existing. Both UI failures remain unresolved. No further
-  reruns are used to erase them; the PR remains draft. Completed focused
+  reruns are used to erase them. Completed focused
   outcomes were preserved before stopping its stalled diagnostic collector.
 - `mise run swift-lint` and `git diff --check` passed.
 
@@ -469,3 +469,22 @@ Local signed artifacts, checksum, redacted upload logs, and delivery report are
 retained under `.build/testflight-internal/2026.10.11-20261011.2129.21/`.
 This is verified internal delivery and does not complete the outstanding native
 iOS 27 or physical head-unit acceptance evidence above.
+
+### Rebase and phone metadata correction
+
+Rebased on main `c281391`; all 47 selected CarPlay and adjacent playback tests
+passed on iOS 26.5, with exact identifiers verified and zero skips or runtime
+warnings. The first attempt executed no tests because required telemetry build
+settings were absent; the successful run supplied the configured settings.
+Independent complete-change rebase and metadata reviews reported no findings.
+
+The UTC date advanced while the source still declared `2026.10.11`, causing
+`mise run iphone` to reject its fresh build number. Updated source version,
+fallback timestamp, changelog and regenerated Xcode settings to `2026.10.12`;
+`mise run release:check` passed. `mise run iphone` then built, installed and
+launched successfully. Device metadata confirmed `2026.10.12 (20261012.0814.16)`.
+The earlier phone install had retained `2026.10.08 (2)` metadata.
+
+The user will perform manual testing and requested review-ready status. The
+unresolved UI failures and native iOS 27/head-unit acceptance gaps above remain
+open. The previously delivered internal TestFlight build remains unchanged.

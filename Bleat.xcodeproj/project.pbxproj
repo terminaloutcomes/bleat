@@ -829,7 +829,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261011.2128.49;
+				CURRENT_PROJECT_VERSION = 20261012.0812.10;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -838,7 +838,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.11;
+				MARKETING_VERSION = 2026.10.12;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
@@ -901,7 +901,7 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261011.2128.49;
+				CURRENT_PROJECT_VERSION = 20261012.0812.10;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "App/Info-macOS.plist";
 				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
@@ -910,7 +910,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.11;
+				MARKETING_VERSION = 2026.10.12;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;

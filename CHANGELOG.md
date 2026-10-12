@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026.10.11 - 2026-10-11
+## 2026.10.12 - 2026-10-12
 
 ### Added
 
@@ -12,6 +12,10 @@
 - Cancel author-page loads promptly after Back and prevent stale author results.
 - Respect zero-row and zero-section limits for search and author pages.
 - Reconcile Search navigation after tab switches and reject stale launcher callbacks.
+
+## 2026.10.11 - 2026-10-11
+
+### Fixed
 
 - Fixed a CloudKit callback assertion that could crash Bleat during startup or synchronization.
 - Load restored download accounts before resuming transfers.
