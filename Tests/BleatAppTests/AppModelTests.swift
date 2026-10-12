@@ -9632,7 +9632,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.records.isEmpty)
         let requestsBeforeConfirmation = await service.downloadPlanRequests()
         XCTAssertEqual(requestsBeforeConfirmation.count, 2)
-        model.cancelCellularDownload()
+        model.cancelCellularDownload(
+            id: model.pendingCellularDownload?.id ?? UUID())
         await Task.yield()
         XCTAssertEqual(model.pendingCellularDownload?.detail.id, second.id)
 
@@ -9641,13 +9642,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(resetSucceeded)
         await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
-        model.cancelCellularDownload()
+        model.cancelCellularDownload(
+            id: model.pendingCellularDownload?.id ?? UUID())
         await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
 
         await model.download(detail: first, account: account)
         let confirmation = Task {
-            await model.confirmCellularDownload()
+            await model.confirmCellularDownload(
+                id: model.pendingCellularDownload?.id ?? UUID())
         }
         await Task.yield()
         await model.download(detail: first, account: account)
@@ -22283,6 +22286,345 @@ final class AppModelTests: XCTestCase {
     }
 
     #if canImport(CarPlay) && !os(macOS)
+        private func cellularActions(_ template: CPTemplate) throws
+            -> [CPAlertAction]
+        {
+            if let alert = template as? CPAlertTemplate { return alert.actions }
+            return try XCTUnwrap(template as? CPActionSheetTemplate).actions
+        }
+
+        private func cellularMessage(_ template: CPTemplate) -> String {
+            if let alert = template as? CPAlertTemplate {
+                return alert.titleVariants.first ?? ""
+            }
+            return (template as? CPActionSheetTemplate)?.message ?? ""
+        }
+
+        private func withCarPlayCellularQueue(
+            authorizationGate: AsyncGate? = nil,
+            _ body: (
+                AppModel, TestAppService, CarPlayCoordinator,
+                TestCarPlayPresenter
+            ) async throws -> Void
+        ) async throws {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatCarPlayCellular-\(UUID().uuidString)",
+                    isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let plan = DownloadPlan(
+                itemID: LibraryItemID(rawValue: "cellular-first"),
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0, inode: "large",
+                        expectedByteLength: DownloadModel
+                            .largeDownloadThresholdBytes,
+                        mimeType: "audio/mpeg", safeExtension: .mp3,
+                        destinationEntry: "00000.mp3")
+                ])
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]),
+                firstPage: .success(fixturePage(libraryID: library.id)),
+                downloadPlanProvider: { itemID in
+                    .success(DownloadPlan(itemID: itemID, tracks: plan.tracks))
+                },
+                authorizedDownloadRequest: .success(
+                    URLRequest(
+                        url: try XCTUnwrap(
+                            URL(string: "https://books.example/audio.mp3")))),
+                authorizedDownloadRequestGate: authorizationGate)
+            let model = AppModel(
+                service: service, downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    "bleat.tests.carplay-cellular.\(UUID().uuidString)")
+            await model.start()
+            let previousPolicy = model.downloads.networkPolicy
+            defer { model.downloads.setNetworkPolicy(previousPolicy) }
+            model.downloads.setNetworkPolicy(.allowCellular)
+            model.downloads.updateNetworkPathState(
+                AppNetworkPathState(
+                    availability: .satisfied, isConstrained: false,
+                    isExpensive: true))
+            for id in ["cellular-first", "cellular-second"] {
+                await model.downloads.download(
+                    detail: fixtureBookDetail(
+                        item: fixtureBook(
+                            id: id, title: id, libraryID: library.id)),
+                    account: account)
+            }
+            let presenter = TestCarPlayPresenter()
+            let coordinator = CarPlayCoordinator(model: model)
+            do { try await body(model, service, coordinator, presenter) } catch
+            {
+                coordinator.disconnect()
+                _ = await model.downloads.removeAllForLocalDataReset()
+                throw error
+            }
+            coordinator.disconnect()
+            _ = await model.downloads.removeAllForLocalDataReset()
+        }
+
+        func testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, _, coordinator, presenter in
+                coordinator.connect(presenter)
+                let first = try XCTUnwrap(
+                    presenter.presented)
+                let request = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                XCTAssertTrue(
+                    cellularMessage(first).contains(request.detail.title))
+                XCTAssertEqual(
+                    (try cellularActions(first)).map(\.title),
+                    ["Download", "Cancel"])
+                let phone = SignedInAlertQueue()
+                phone.reconcile([.cellular(request)])
+                let oldPhoneEntry = try XCTUnwrap(phone.active)
+                let invocation = TestCarPlayAlertInvocation(
+                    (try cellularActions(first))[1])
+                await Task.detached { invocation.invoke() }.value
+                let advanced = await waitUntil(timeout: .seconds(2)) {
+                    model.downloads.pendingCellularDownload?.detail.id.rawValue
+                        == "cellular-second"
+                }
+                XCTAssertTrue(advanced)
+                let second = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                phone.reconcile([.cellular(second)])
+                phone.finish(oldPhoneEntry)
+                XCTAssertEqual(phone.active?.alert, .cellular(second))
+                (try cellularActions(first))[0].handler(
+                    (try cellularActions(first))[0])
+                (try cellularActions(first))[1].handler(
+                    (try cellularActions(first))[1])
+                await Task.yield()
+                await model.downloads.confirmCellularDownload(id: request.id)
+                model.downloads.cancelCellularDownload(id: request.id)
+                XCTAssertEqual(
+                    model.downloads.pendingCellularDownload?.id, second.id)
+                XCTAssertTrue(model.downloads.records.isEmpty)
+                coordinator.refreshTemplates()
+                let next = try XCTUnwrap(
+                    presenter.presented)
+                XCTAssertFalse(next === first)
+                model.downloads.cancelCellularDownload(id: second.id)
+                let dismissed = await waitUntil(timeout: .seconds(2)) {
+                    presenter.presented == nil
+                }
+                XCTAssertTrue(dismissed)
+            }
+        }
+
+        func testCarPlayCellularAcceptStartsOnceAndPhoneResolutionDismisses()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, service, coordinator, presenter in
+                coordinator.connect(presenter)
+                let first = try XCTUnwrap(
+                    presenter.presented)
+                let request = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                let phone = SignedInAlertQueue()
+                phone.reconcile([.cellular(request)])
+                (try cellularActions(first))[0].handler(
+                    (try cellularActions(first))[0])
+                (try cellularActions(first))[0].handler(
+                    (try cellularActions(first))[0])
+                (try cellularActions(first))[1].handler(
+                    (try cellularActions(first))[1])
+                let started = await waitUntil(timeout: .seconds(2)) {
+                    model.downloads.records.count == 1
+                        && model.downloads.pendingCellularDownload != nil
+                }
+                XCTAssertTrue(started)
+                let second = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                XCTAssertNotEqual(second.id, request.id)
+                phone.reconcile([.cellular(second)])
+                XCTAssertEqual(phone.active?.alert, .cellular(second))
+                let requests =
+                    await service.authorizedDownloadRequestIdentities()
+                XCTAssertEqual(requests.count, 1)
+                await model.downloads.confirmCellularDownload(id: second.id)
+                let dismissed = await waitUntil(timeout: .seconds(2)) {
+                    presenter.presented == nil
+                }
+                XCTAssertTrue(dismissed)
+                XCTAssertEqual(model.downloads.records.count, 2)
+                phone.reconcile([])
+                XCTAssertNil(phone.active)
+            }
+        }
+
+        func testCarPlayCellularBusyFailureAndUnrelatedModalAreReconciled()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, _, coordinator, presenter in
+                let unrelated = CPAlertTemplate(
+                    titleVariants: ["Unrelated"],
+                    actions: [
+                        CPAlertAction(title: "OK", style: .cancel) {
+                            @Sendable _ in
+                        }
+                    ])
+                presenter.present(unrelated)
+                coordinator.connect(presenter)
+                XCTAssertTrue(presenter.presented === unrelated)
+                XCTAssertEqual(presenter.presentationCount, 0)
+                presenter.dismiss()
+                presenter.failNextPresentation = true
+                coordinator.refreshTemplates()
+                XCTAssertNil(presenter.presented)
+                XCTAssertNotNil(model.downloads.pendingCellularDownload)
+                coordinator.refreshTemplates()
+                let owned = try XCTUnwrap(
+                    presenter.presented)
+                presenter.failNextDismissal = true
+                let request = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                model.downloads.cancelCellularDownload(id: request.id)
+                coordinator.refreshTemplates()
+                XCTAssertTrue(presenter.presented === owned)
+                coordinator.refreshTemplates()
+                XCTAssertFalse(presenter.presented === owned)
+                presenter.present(unrelated)
+                _ = await model.downloads.removeAllForLocalDataReset()
+                coordinator.refreshTemplates()
+                XCTAssertTrue(presenter.presented === unrelated)
+                coordinator.disconnect()
+                XCTAssertTrue(presenter.presented === unrelated)
+            }
+        }
+
+        func testCarPlayCellularReconnectAndDelayedPresentationKeepDecision()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, _, coordinator, presenter in
+                presenter.delaysPresentation = true
+                coordinator.connect(presenter)
+                let old = try XCTUnwrap(presenter.presented)
+                let completion = try XCTUnwrap(presenter.presentationCompletion)
+                let request = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                coordinator.disconnect()
+                XCTAssertEqual(
+                    model.downloads.pendingCellularDownload?.id, request.id)
+                presenter.delaysPresentation = false
+                coordinator.connect(presenter)
+                let replacement = try XCTUnwrap(
+                    presenter.presented)
+                completion(.succeeded)
+                (try cellularActions(old))[1].handler(
+                    (try cellularActions(old))[1])
+                await Task.yield()
+                XCTAssertTrue(presenter.presented === replacement)
+                XCTAssertEqual(
+                    model.downloads.pendingCellularDownload?.id, request.id)
+                model.downloads.updateNetworkPathState(
+                    AppNetworkPathState(
+                        availability: .satisfied, isConstrained: false,
+                        isExpensive: false))
+                let released = await waitUntil(timeout: .seconds(2)) {
+                    model.downloads.pendingCellularDownload == nil
+                        && model.downloads.records.count == 2
+                        && presenter.presented == nil
+                }
+                XCTAssertTrue(released)
+            }
+        }
+
+        func testCarPlayCellularAcceptsNewDecisionWhilePriorTransferPrepares()
+            async throws
+        {
+            let gate = AsyncGate()
+            try await withCarPlayCellularQueue(authorizationGate: gate) {
+                model, service, coordinator, presenter in
+                coordinator.connect(presenter)
+                let first = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                let confirmation = Task {
+                    await model.downloads.confirmCellularDownload(id: first.id)
+                }
+                await gate.waitUntilEntered()
+                let account = try XCTUnwrap(model.account)
+                let third = fixtureBookDetail(
+                    item: fixtureBook(
+                        id: "cellular-third", title: "Third",
+                        libraryID: fixtureLibrary().id))
+                await model.downloads.download(detail: third, account: account)
+                let next = try XCTUnwrap(
+                    model.downloads.pendingCellularDownload)
+                XCTAssertEqual(next.detail.id.rawValue, "cellular-second")
+                let nextConfirmation = Task {
+                    await model.downloads.confirmCellularDownload(id: next.id)
+                }
+                let bothEntered = await waitUntil(timeout: .seconds(2)) {
+                    await service.authorizedDownloadRequestIdentities().count
+                        == 2
+                }
+                XCTAssertTrue(bothEntered)
+                model.downloads.cancelCellularDownload(id: first.id)
+                model.downloads.cancelCellularDownload(id: next.id)
+                await gate.release()
+                await confirmation.value
+                await nextConfirmation.value
+                XCTAssertEqual(model.downloads.records.count, 2)
+                XCTAssertEqual(
+                    model.downloads.pendingCellularDownload?.detail.id,
+                    third.id)
+            }
+        }
+
+        func testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, _, coordinator, presenter in
+                coordinator.connect(presenter)
+                let alert = try XCTUnwrap(
+                    presenter.presented)
+                let account = try XCTUnwrap(model.account)
+                await model.downloads.removeAll(for: account.id)
+                let dismissed = await waitUntil(timeout: .seconds(2)) {
+                    presenter.presented == nil
+                }
+                XCTAssertTrue(dismissed)
+                (try cellularActions(alert))[0].handler(
+                    (try cellularActions(alert))[0])
+                (try cellularActions(alert))[1].handler(
+                    (try cellularActions(alert))[1])
+                await Task.yield()
+                XCTAssertNil(model.downloads.pendingCellularDownload)
+                XCTAssertTrue(model.downloads.records.isEmpty)
+            }
+        }
+
+        func testCarPlayCellularResetDuringPresentationDismissesOnCompletion()
+            async throws
+        {
+            try await withCarPlayCellularQueue {
+                model, _, coordinator, presenter in
+                presenter.delaysPresentation = true
+                coordinator.connect(presenter)
+                let completion = try XCTUnwrap(presenter.presentationCompletion)
+                _ = await model.downloads.removeAllForLocalDataReset()
+                coordinator.refreshTemplates()
+                XCTAssertNotNil(presenter.presented)
+                completion(.succeeded)
+                completion(.succeeded)
+                XCTAssertNil(presenter.presented)
+                XCTAssertNil(model.downloads.pendingCellularDownload)
+            }
+        }
+
         func testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing()
             async throws
         {
@@ -25483,6 +25825,12 @@ private struct PlaybackRecoveryFixture {
         }
     }
 
+    private final class TestCarPlayAlertInvocation: @unchecked Sendable {
+        let action: CPAlertAction
+        init(_ action: CPAlertAction) { self.action = action }
+        func invoke() { action.handler(action) }
+    }
+
     private final class TestCarPlaySelectionInvocation: @unchecked Sendable {
         let item: CPListItem
         let handler: (any CPSelectableListItem, @escaping () -> Void) -> Void
@@ -25540,6 +25888,57 @@ private struct PlaybackRecoveryFixture {
 
         func present(_ template: CPTemplate) {
             presented = template
+        }
+
+        var presentedTemplate: CPTemplate? { presented }
+        var failNextPresentation = false
+        var failNextDismissal = false
+        var delaysPresentation = false
+        var presentationCompletion:
+            (@MainActor @Sendable (CarPlayModalResult) -> Void)?
+        private(set) var presentationCount = 0
+        private(set) var dismissalCount = 0
+
+        func presentConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        ) {
+            presentationCount += 1
+            guard presented == nil else {
+                completion(.busy)
+                return
+            }
+            if failNextPresentation {
+                failNextPresentation = false
+                completion(.failed)
+                return
+            }
+            presented = template
+            if delaysPresentation {
+                presentationCompletion = completion
+            } else {
+                completion(.succeeded)
+            }
+        }
+
+        func dismissConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        ) {
+            guard presented === template else {
+                completion(.succeeded)
+                return
+            }
+            if failNextDismissal {
+                failNextDismissal = false
+                completion(.failed)
+                return
+            }
+            dismissalCount += 1
+            presented = nil
+            completion(.succeeded)
         }
 
         func dismiss() {

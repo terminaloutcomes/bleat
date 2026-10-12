@@ -282,6 +282,7 @@ enum DownloadNetworkDecision: Equatable, Sendable {
 }
 
 struct PendingCellularDownload: Equatable, Sendable {
+    let id = UUID()
     enum Kind: Equatable, Sendable {
         case create
         case promote(DownloadID)
@@ -814,6 +815,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private(set) var automaticLookahead: AutomaticDownloadLookaheadPreference
     private(set) var automaticCleanupPolicy: AutomaticDownloadCleanupPolicy
     private(set) var pendingCellularDownload: PendingCellularDownload?
+    private var resolvingCellularDownloadIDs: Set<UUID> = []
     private var queuedCellularDownloads: [PendingCellularDownload] = []
     private var cellularDownloadInFlightBooks: Set<AutomaticDownloadKey> = []
     private var downloadOperationsInFlight: Set<AutomaticDownloadKey> = []
@@ -2049,8 +2051,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func confirmCellularDownload() async {
-        guard let pending = pendingCellularDownload else {
+    func confirmCellularDownload(id: UUID) async {
+        guard let pending = pendingCellularDownload, pending.id == id else {
             return
         }
         await performCellularDownload(
@@ -2079,12 +2081,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         advanceQueueSynchronously: Bool
     ) async {
         guard pendingCellularDownload == pending,
+            !resolvingCellularDownloadIDs.contains(pending.id),
             !isResettingLocalDownloads,
             !blockedCellularDownloadAccounts.contains(pending.account.id),
             let storage
         else {
             return
         }
+        resolvingCellularDownloadIDs.insert(pending.id)
+        defer { resolvingCellularDownloadIDs.remove(pending.id) }
         let key = AutomaticDownloadKey(
             accountID: pending.account.id,
             itemID: pending.detail.id
@@ -2109,14 +2114,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return
         }
         pendingCellularDownload = nil
-        defer {
-            cellularDownloadInFlightBooks.remove(key)
-            if advanceQueueSynchronously {
-                presentNextCellularDownloadSynchronously()
-            } else {
-                presentNextCellularDownload()
-            }
+        if advanceQueueSynchronously {
+            presentNextCellularDownloadSynchronously()
+        } else {
+            presentNextCellularDownload()
         }
+        defer { cellularDownloadInFlightBooks.remove(key) }
         failure = nil
         do {
             switch pending.kind {
@@ -2198,7 +2201,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func cancelCellularDownload() {
+    func cancelCellularDownload(id: UUID) {
+        guard pendingCellularDownload?.id == id,
+            !resolvingCellularDownloadIDs.contains(id)
+        else { return }
         pendingCellularDownload = nil
         presentNextCellularDownload()
     }
@@ -2220,11 +2226,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         else {
             return
         }
-        guard pendingCellularDownload != nil else {
+        if pendingCellularDownload == nil, queuedCellularDownloads.isEmpty {
             pendingCellularDownload = pending
             return
         }
         queuedCellularDownloads.append(pending)
+        presentNextCellularDownload()
     }
 
     private func hasCellularWork(
@@ -3002,6 +3009,17 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             case .pauseFailed:
                 break
             }
+        }
+        queuedCellularDownloads.removeAll {
+            $0.account.id == record.manifest.accountID
+                && $0.detail.id == record.manifest.itemID
+        }
+        if let pending = pendingCellularDownload,
+            pending.account.id == record.manifest.accountID,
+            pending.detail.id == record.manifest.itemID
+        {
+            pendingCellularDownload = nil
+            presentNextCellularDownload()
         }
         invalidatePauseOperation(for: downloadID)
         invalidateResumeOperation(for: downloadID)

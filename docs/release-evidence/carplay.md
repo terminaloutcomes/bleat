@@ -488,3 +488,68 @@ The earlier phone install had retained `2026.10.08 (2)` metadata.
 The user will perform manual testing and requested review-ready status. The
 unresolved UI failures and native iOS 27/head-unit acceptance gaps above remain
 open. The previously delivered internal TestFlight build remains unchanged.
+
+## Issue 342: shared cellular confirmation
+
+The phone and CarPlay resolve one account/item request by its UUID. Native
+Download/Cancel actions cannot resolve a later queued request. The coordinator
+uses `CPAlertTemplate` when its action limit permits both choices and
+`CPActionSheetTemplate` when the alert limit is one. Only the owned confirmation
+is dismissed; modal contention and failed presentation/dismissal are retried.
+Queued confirmations advance when a decision is claimed, preserving FIFO even
+while an accepted transfer prepares.
+
+The final integrated branch is based on main `6ec9976`. Strict Swift lint and
+`git diff --check` passed. `BLEAT_SKIP_SIMULATOR=1 ./scripts/test-core.sh`
+passed 536 signed host tests, the host Release build, and paid-capability checks.
+The cleanup test intentionally records its expected known issue; the upstream
+OpenTelemetry package emits an existing watchOS deployment deprecation warning.
+`./scripts/test-app-live.sh` passed both named online and offline journeys with
+zero skips or runtime warnings.
+
+The first simulator attempt failed before
+tests because a Rust helper dependency was compiled with Xcode's simulator SDK;
+building repository helpers with the host SDK resolved it. A subsequent test
+assumed the disconnected framework retained two alert actions and indexed a
+truncated action list. XCTest crashed with a task-allocation error. Tests now
+exercise the actual native alert/action-sheet actions. The clean focused run
+passed ten tests with no runtime warnings. A later final-source attempt was
+rejected by SpringBoard as busy before test execution; it is not passing evidence.
+After restarting the owned simulator, the three final queue regressions passed
+with zero skips or runtime warnings.
+
+`BLEAT_SKIP_HOST=1 BLEAT_SIMULATOR_DESTINATION=<owned-simulator-destination>
+./scripts/test-core.sh` passed the Simulator Release build and executed all 572
+app tests: 571 passed, including all seven new CarPlay confirmation regressions,
+and one failed. `testLastPlayingRejectsDiscardedSelectionInNativeCallbacks`
+expected `.unavailable` but observed `.accepted`. There were no runtime warnings.
+The unchanged main baseline passed all 565 app tests, and the isolated failing
+test passed once and then all 20 verified repetitions. This failure remains
+unclassified; it is not claimed as a confirmed pre-existing failure. The complete
+gate stopped before its UI suite. Review identified a possible scheduling race
+in unchanged selection-resume startup code, but no demonstrated connection to
+the cellular confirmation changes. The focused phone UI test
+`testSignedInAlertsPresentInSequence` passed with zero skips or runtime warnings.
+
+Five independent complete-change review cycles ran. The first P1 (a global claim
+blocking another decision) was fixed with per-request claims. The fourth review
+raised a P2 for an outdated remaining-queue expectation in the new overlap test;
+it was corrected as part of the P1 regression coverage and subsequently passed.
+The latest review, after integration with main, reported no findings and no P0/P1.
+
+Manual verification remains pending with the maintainer:
+
+1. On an expensive network path, select an uncached large item from CarPlay.
+   Confirm both screens show the correct item/size and Download/Cancel choices.
+2. Accept on CarPlay, then cancel another item there. Confirm exactly one transfer
+   for acceptance, none for cancellation, and matching phone prompt dismissal.
+3. Queue at least two items. Resolve one on the phone and the next on CarPlay.
+   Repeated taps or delayed actions must not resolve a later request.
+4. While a prompt is pending, disconnect/reconnect CarPlay and background/foreground
+   the phone. Confirm the same decision remains available.
+5. Switch to Wi-Fi, remove the owning account, or reset local work. Confirm stale
+   prompts disappear. With an unrelated CarPlay modal open, leave it intact and
+   verify confirmation becomes available after that modal closes.
+
+Record app/build, iOS version, Simulator/head-unit context, and outcomes here.
+No physical-device or head-unit validation is claimed.
