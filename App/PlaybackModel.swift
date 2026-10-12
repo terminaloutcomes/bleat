@@ -2015,6 +2015,7 @@ final class PlaybackModel {
     }
 
     func disableBootstrapResume() {
+        cancelSelectionResume?()
         nowPlayingCoordinator.setResumableSelectionAvailable(false)
     }
 

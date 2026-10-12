@@ -33,6 +33,10 @@
         func callAsFunction() { callback() }
     }
 
+    enum CarPlayModalResult: Sendable {
+        case succeeded, busy, failed
+    }
+
     @MainActor
     protocol CarPlayPresenting: AnyObject {
         func setRoot(_ template: CPTemplate)
@@ -40,6 +44,17 @@
         func pop()
         func present(_ template: CPTemplate)
         func dismiss()
+        var presentedTemplate: CPTemplate? { get }
+        func presentConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        )
+        func dismissConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        )
     }
 
     @MainActor
@@ -83,6 +98,44 @@
                 template,
                 animated: true
             ) { _, _ in }
+        }
+
+        var presentedTemplate: CPTemplate? {
+            interfaceController.presentedTemplate
+        }
+
+        func presentConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        ) {
+            guard presentedTemplate == nil else {
+                completion(.busy)
+                return
+            }
+            interfaceController.presentTemplate(template, animated: true) {
+                @Sendable succeeded, _ in
+                Task { @MainActor in
+                    completion(succeeded ? .succeeded : .failed)
+                }
+            }
+        }
+
+        func dismissConfirmation(
+            _ template: CPTemplate,
+            completion:
+                @escaping @MainActor @Sendable (CarPlayModalResult) -> Void
+        ) {
+            guard presentedTemplate === template else {
+                completion(.succeeded)
+                return
+            }
+            interfaceController.dismissTemplate(animated: true) {
+                @Sendable succeeded, _ in
+                Task { @MainActor in
+                    completion(succeeded ? .succeeded : .failed)
+                }
+            }
         }
 
         func dismiss() {
@@ -145,6 +198,15 @@
         private let model: AppModel
         private let coverLoader: BookCoverImageLoader
         private var presenter: (any CarPlayPresenting)?
+        private enum CellularModalPhase {
+            case presenting, presented, dismissing
+        }
+        private struct CellularModal {
+            let requestID: UUID
+            let template: CPTemplate
+            var phase: CellularModalPhase
+        }
+        private var cellularModal: CellularModal?
         private var rootContext: RootContext?
         private var homeTemplate: CPListTemplate?
         private var libraryTemplate: CPListTemplate?
@@ -247,6 +309,10 @@
         }
 
         func disconnect() {
+            if let modal = cellularModal {
+                presenter?.dismissConfirmation(modal.template) { _ in }
+            }
+            cellularModal = nil
             searchController?.invalidate()
             searchController = nil
             sessionConfiguration?.delegate = nil
@@ -282,6 +348,7 @@
             guard presenter != nil else {
                 return
             }
+            reconcileCellularConfirmation()
             let context = LibraryContext(
                 accountID: model.account?.id,
                 libraryID: model.selectedLibrary?.id,
@@ -1235,7 +1302,107 @@
             }
         }
 
+        private func reconcileCellularConfirmation() {
+            guard let presenter else { return }
+            let pending = model.downloads.pendingCellularDownload
+            if let modal = cellularModal {
+                switch modal.phase {
+                case .presenting, .dismissing:
+                    return
+                case .presented:
+                    if presenter.presentedTemplate !== modal.template {
+                        cellularModal = nil
+                    } else if pending?.id == modal.requestID {
+                        return
+                    } else {
+                        cellularModal?.phase = .dismissing
+                        let connection = presentationGeneration
+                        presenter.dismissConfirmation(modal.template) {
+                            [weak self] result in
+                            guard let self,
+                                self.presentationGeneration == connection,
+                                self.cellularModal?.template === modal.template,
+                                self.cellularModal?.phase == .dismissing
+                            else { return }
+                            switch result {
+                            case .succeeded:
+                                self.cellularModal = nil
+                                self.reconcileCellularConfirmation()
+                            case .busy, .failed:
+                                self.cellularModal?.phase = .presented
+                            }
+                        }
+                        return
+                    }
+                }
+            }
+            guard let pending, presenter.presentedTemplate == nil else {
+                return
+            }
+            let connection = presentationGeneration
+            let requestID = pending.id
+            let download = CPAlertAction(title: "Download", style: .default) {
+                @Sendable [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.presentationGeneration == connection,
+                        self.presenter != nil
+                    else { return }
+                    await self.model.downloads.confirmCellularDownload(
+                        id: requestID)
+                    self.reconcileCellularConfirmation()
+                }
+            }
+            let cancel = CPAlertAction(title: "Cancel", style: .cancel) {
+                @Sendable [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.presentationGeneration == connection,
+                        self.presenter != nil
+                    else { return }
+                    self.model.downloads.cancelCellularDownload(id: requestID)
+                    self.reconcileCellularConfirmation()
+                }
+            }
+            let size = ByteCountFormatter.string(
+                fromByteCount: pending.expectedBytes, countStyle: .file)
+            let template: CPTemplate
+            if CPAlertTemplate.maximumActionCount >= 2 {
+                template = CPAlertTemplate(
+                    titleVariants: [
+                        "\(pending.detail.title) (\(size)) — Use cellular data?",
+                        "Allow Cellular Download?",
+                    ],
+                    actions: [download, cancel])
+            } else {
+                // Alerts can be limited to one action. Keep both choices usable.
+                template = CPActionSheetTemplate(
+                    title: "Allow Cellular Download?",
+                    message: "\(pending.detail.title) (\(size))",
+                    actions: [download, cancel])
+            }
+            cellularModal = CellularModal(
+                requestID: requestID, template: template, phase: .presenting)
+            presenter.presentConfirmation(template) {
+                [weak self, weak presenter] result in
+                guard let self, self.presentationGeneration == connection else {
+                    presenter?.dismissConfirmation(template) { _ in }
+                    return
+                }
+                guard self.cellularModal?.template === template,
+                    self.cellularModal?.phase == .presenting
+                else { return }
+                switch result {
+                case .succeeded:
+                    self.cellularModal?.phase = .presented
+                    self.reconcileCellularConfirmation()
+                case .busy, .failed:
+                    self.cellularModal = nil
+                }
+            }
+        }
+
         private func showFailure(_ failure: AppFailure) {
+            guard presenter?.presentedTemplate == nil, cellularModal == nil
+            else { return }
             let ok = CPAlertAction(
                 title: "OK",
                 style: .cancel
@@ -1312,6 +1479,7 @@
                 _ = model.libraryPageGeneration
                 _ = model.librarySort
                 _ = model.showsLibraryCategories
+                _ = model.downloads.pendingCellularDownload
                 _ = model.downloads.records
                 _ = model.playback.itemID
                 _ = model.playback.accountID

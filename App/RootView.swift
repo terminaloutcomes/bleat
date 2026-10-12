@@ -1806,7 +1806,9 @@ private struct SignedInView: View {
         .onChange(of: model.account?.id) {
             bookActionPresentation.dismiss()
             playbackFailure = nil
-            alertQueue.reset(ignoring: alertCandidates)
+            alertQueue.reset(
+                ignoring: alertCandidates.filter { $0.source != .cellular })
+            alertQueue.reconcile(alertCandidates)
         }
         .onChange(of: alertCandidates) { _, candidates in
             alertQueue.reconcile(candidates)
@@ -1848,10 +1850,11 @@ private struct SignedInView: View {
     }
 
     private var alertBinding: Binding<SignedInAlertQueue.Entry?> {
-        Binding(
+        let renderedEntry = alertQueue.active
+        return Binding(
             get: { alertQueue.active },
             set: { entry in
-                if entry == nil, let active = alertQueue.active {
+                if entry == nil, let active = renderedEntry {
                     Task { @MainActor in
                         await Task.yield()
                         dismissAlert(active)
@@ -1869,11 +1872,14 @@ private struct SignedInView: View {
         switch entry.alert {
         case .series:
             model.dismissSeriesDownloadFailure()
-        case .cellular:
+        case .cellular(let pending):
             if confirmCellular {
-                Task { await model.downloads.confirmCellularDownload() }
+                Task {
+                    await model.downloads.confirmCellularDownload(
+                        id: pending.id)
+                }
             } else {
-                model.downloads.cancelCellularDownload()
+                model.downloads.cancelCellularDownload(id: pending.id)
             }
         case .playback:
             playbackFailure = nil

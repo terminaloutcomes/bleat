@@ -1126,8 +1126,9 @@ audio. Explicit Play waits for account/download bootstrap and uses
 `AppModel.startPlayback(... position: .resume)` with existing permission,
 verified-download, authentication and supersession checks. Duplicate bootstrap
 commands coalesce. Discarding or losing the saved selection during bootstrap
-retires native Play/Toggle admission and invalidates commands queued for that
-selection. Cold resume uses an existing canonical local timestamp as an
+retires native Play/Toggle admission, cancels the pending resume task, and
+invalidates commands queued for that selection. Cold resume uses an existing
+canonical local timestamp as an
 explicit position; only absence of a local checkpoint delegates to server resume.
 A failed cold resume retains its selected book and typed operation/cause in the
 versioned local record. Relaunch restores the failed player without starting
@@ -1256,7 +1257,15 @@ restrictions, and input/accessibility evidence remain tracked in
 
 CarPlay uses the phone's active account and shared library selection. Account
 switching, authentication, bookmark editing, sleep timers, Stop, and download
-management stay on the phone. When signed out, retained verified downloads
+management stay on the phone, except cellular download confirmation. A pending
+large-download decision appears as a native Download/Cancel alert on CarPlay
+(using an action sheet when the framework limits alerts to one button)
+and in the existing phone alert queue. Both surfaces resolve the same account/item
+request by its stable identity; late actions cannot resolve another queued request.
+CarPlay dismisses only its owned confirmation and retries modal contention or
+presentation failure while connected. Detaching a surface preserves the decision;
+non-expensive-path release, local reset, and removal reconcile both prompts.
+When signed out, retained verified downloads
 remain playable and the interface instructs the user to sign in on the phone
 for server content. Remote selection must load typed detail and permissions,
 prefer verified local media, prepare exactly one local or streaming operation,
