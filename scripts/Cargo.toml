@@ -32,6 +32,7 @@ tempfile = "3.27.0"
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "rt"] }
 url = { version = "2.5.8", features = ["serde"] }
+yaml-rust = "0.4.5"
 zip = "8.6.0"
 
 [lib]

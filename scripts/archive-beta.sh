@@ -13,6 +13,9 @@ bleat_expected_version="$(
 )"
 readonly bleat_expected_version
 
+cargo run --quiet --locked --manifest-path "${bleat_repository_root}/Cargo.toml" --package scripts --bin validate-release-version -- \
+    --repository-root "${bleat_repository_root}" --version "${bleat_expected_version}" --build "${bleat_expected_build}"
+
 typeset -a bleat_cloudkit_schema_arguments
 if [[ "${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" == "YES" \
     || "${BLEAT_CLOUDKIT_MODE:-enabled}" == "disabled" ]]; then

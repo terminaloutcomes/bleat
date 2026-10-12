@@ -148,6 +148,21 @@ relevant. Before handoff, audit changed and adjacent production paths for
 process-terminating constructs or executor assumptions and convert every
 recoverable case into a typed failure.
 
+Treat framework callback and cancellation error paths as high-risk production
+boundaries. Check the framework's executor, reentrancy, and task-local contract
+before cancelling, draining, invalidating, or restarting work from a callback.
+Do not synchronously wait for the main actor from a framework callback. Explicitly
+make arbitrary-executor closures `@Sendable` and hop to the owning actor; a hop
+with `Task` still inherits task-local context, so it does not by itself make
+reentrant framework teardown safe. When teardown must escape callback context,
+use an owned, coalesced task and await its completion before retry or replacement.
+Reject callbacks and queued commands from retired operations. Add regression
+tests for off-actor delivery, failure-triggered cancellation, repeated/late
+completion, and stop/restart races wherever those states apply. Exercise the
+actual callback adapter, not only its downstream handler. Assertions and traps
+cannot be made recoverable with a global catch; prevent the invalid operation.
+Report framework/device evidence gaps explicitly.
+
 Treat incomplete or older persisted data as an explicit reconciliation case,
 not as permission to silently fall through to a network-dependent path. Recover
 missing fields only from authoritative local data when the result is
@@ -346,6 +361,13 @@ truth. Distributable builds use the UTC timestamp build number resolved by
 project fallback for ordinary builds. When changing either project setting,
 regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit generated
 version settings directly.
+
+Before releasing a new version, bump both `MARKETING_VERSION` and the fallback
+`CURRENT_PROJECT_VERSION` in `project.yml`, add the matching dated changelog
+section, regenerate Xcode, and run `mise run release:check`. The fallback build
+must be a UTC timestamp on the marketing-version date. Never rely on an archive
+override to hide stale project metadata. Phone deployments must resolve a fresh
+UTC build number rather than reuse the project fallback.
 
 Every application version bump must add a matching `CHANGELOG.md` section using
 the heading `## <version> - YYYY-MM-DD`. Keep the section limited to changes

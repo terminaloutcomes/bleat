@@ -420,6 +420,13 @@ enum PrivateCloudState: Equatable, Sendable {
     }
 }
 
+enum PrivateCloudDataClearState: Equatable, Sendable {
+    case idle
+    case clearing
+    case cleared
+    case failed(AppFailure)
+}
+
 enum CloudAccountRestoreState: Equatable, Sendable {
     case idle
     case synchronizing
@@ -1647,6 +1654,8 @@ final class AppModel {
     private var statisticsQuery: StatisticsQuery?
     private var statisticsLoadGeneration: UInt64 = 0
     private(set) var privateCloudState: PrivateCloudState = .idle
+    private(set) var privateCloudDataClearState: PrivateCloudDataClearState =
+        .idle
     private(set) var cloudAccountRestoreState: CloudAccountRestoreState = .idle
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
@@ -1884,22 +1893,11 @@ final class AppModel {
         } else {
             phase = .launching
         }
-        if remoteTelemetryEnabled {
-            let storageGeneration =
-                consentStore
-                .ensureEnabledStorageGeneration()
-            remoteTelemetryConsentController
-                .applyRemoteTelemetryConsent(
-                    true,
-                    storageGeneration: storageGeneration
-                )
-        } else {
-            remoteTelemetryConsentController
-                .applyRemoteTelemetryConsent(
-                    false,
-                    storageGeneration: nil
-                )
-        }
+        remoteTelemetryConsentController
+            .applyRemoteTelemetryConsent(
+                remoteTelemetryEnabled,
+                storageGeneration: consentStore.reconcileStorageGeneration()
+            )
     }
 
     func setRemoteTelemetryEnabled(_ enabled: Bool) {
@@ -1921,7 +1919,14 @@ final class AppModel {
             )
     }
 
+    func reloadRemoteTelemetryConsent() {
+        setRemoteTelemetryEnabled(remoteTelemetryConsentStore.isEnabled)
+    }
+
     func setRemoteTelemetryForeground(_ foreground: Bool) {
+        if foreground {
+            reloadRemoteTelemetryConsent()
+        }
         remoteTelemetryConsentController
             .setRemoteTelemetryForeground(foreground)
         Task {
@@ -2104,10 +2109,7 @@ final class AppModel {
                 accounts.append(restoredAccount)
             }
             launchStage = .restoringDownloads
-            await downloads.start(account: nil)
-            for storedAccount in accounts {
-                await downloads.start(account: storedAccount)
-            }
+            await downloads.start(accounts: accounts)
             await downloads.removeOrphanedDownloads(
                 retaining: Set(accounts.map(\.id))
             )
@@ -2230,7 +2232,7 @@ final class AppModel {
                     to: .signedIn
                 )
             )
-            await downloads.start(account: authenticatedAccount)
+            await downloads.start(accounts: [authenticatedAccount])
             schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             await loadStatistics()
@@ -2278,7 +2280,7 @@ final class AppModel {
             accounts.sort(by: Self.sortAccounts)
             phase = .signedIn
             loginStatus = .idle
-            await downloads.start(account: authenticatedAccount)
+            await downloads.start(accounts: [authenticatedAccount])
             await loadLibraries()
             await loadStatistics()
             Task {
@@ -2406,7 +2408,7 @@ final class AppModel {
                 await stopLiveUpdatesAndWait()
                 self.account = updated
                 resetBrowsingResourcesForAccountChange()
-                await downloads.start(account: updated)
+                await downloads.start(accounts: [updated])
                 await loadLibraries()
                 startLiveUpdates(for: updated)
             }
@@ -2479,7 +2481,7 @@ final class AppModel {
             await diagnostics.record(
                 .completed(.reauthenticate, category: .auth)
             )
-            await downloads.start(account: authenticatedAccount)
+            await downloads.start(accounts: [authenticatedAccount])
             schedulePendingLocalSessionSync(for: authenticatedAccount)
             await loadLibraries()
             startLiveUpdates(for: authenticatedAccount)
@@ -2520,7 +2522,7 @@ final class AppModel {
             try await service.activateAccount(selectedAccount)
             account = selectedAccount
             resetBrowsingResourcesForAccountChange()
-            await downloads.start(account: selectedAccount)
+            await downloads.start(accounts: [selectedAccount])
             schedulePendingLocalSessionSync(for: selectedAccount)
             await loadLibraries()
             startLiveUpdates(for: selectedAccount)
@@ -6384,7 +6386,7 @@ final class AppModel {
             phase = .signedIn
             cloudAccountRestoreState = .idle
             loginStatus = .idle
-            await downloads.start(account: authenticated)
+            await downloads.start(accounts: [authenticated])
             await loadLibraries()
             await loadStatistics()
             Task {
@@ -6524,6 +6526,10 @@ final class AppModel {
         _ enabled: Bool,
         deleteCloudData: Bool = false
     ) async {
+        guard privateCloudDataClearState != .clearing else { return }
+        if enabled {
+            privateCloudDataClearState = .idle
+        }
         guard privateCloudSyncAvailable else {
             privateCloudSyncEnabled = false
             pendingCloudServerConfigurationChanges.removeAll()
@@ -6550,6 +6556,29 @@ final class AppModel {
                     serviceError: error
                 )
             )
+        }
+    }
+
+    func clearPrivateCloudData() async {
+        guard privateCloudDataClearState != .clearing, !isResettingLocalData
+        else { return }
+        privateCloudDataClearState = .clearing
+        privateCloudSyncEnabled = false
+        await cancelPrivateCloudSynchronization()
+        do {
+            try await service.setPrivateCloudSyncEnabled(
+                false, deleteCloudData: true
+            )
+            pendingCloudServerConfigurationChanges.removeAll()
+            pendingCloudConfigurationConflict = nil
+            privateCloudState = .disabled
+            privateCloudDataClearState = .cleared
+        } catch {
+            let failure = AppFailure(
+                operation: .privateCloudSync, serviceError: error
+            )
+            privateCloudState = .failed(failure)
+            privateCloudDataClearState = .failed(failure)
         }
     }
 
@@ -6717,7 +6746,7 @@ final class AppModel {
                 if let replacement = self.account {
                     try await service.activateAccount(replacement)
                     phase = .signedIn
-                    await downloads.start(account: replacement)
+                    await downloads.start(accounts: [replacement])
                     await loadLibraries()
                     startLiveUpdates(for: replacement)
                 } else {

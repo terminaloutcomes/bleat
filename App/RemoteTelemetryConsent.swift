@@ -23,15 +23,20 @@ final class RemoteTelemetryConsentStore {
     }
 
     var storageGeneration: UUID? {
-        guard isEnabled,
-            let value = defaults.string(forKey: Self.generationKey)
-        else { return nil }
-        return UUID(uuidString: value)
+        isEnabled ? persistedStorageGeneration : nil
+    }
+
+    private var persistedStorageGeneration: UUID? {
+        defaults.string(forKey: Self.generationKey).flatMap {
+            UUID(uuidString: $0)
+        }
     }
 
     @discardableResult
     func setEnabled(_ enabled: Bool) -> UUID? {
-        let priorGeneration = storageGeneration
+        // Settings can persist withdrawal before Bleat observes it. Retain
+        // the previous generation long enough for the runtime to purge it.
+        let priorGeneration = persistedStorageGeneration
         defaults.set(enabled, forKey: Self.enabledKey)
         if enabled {
             let generation = priorGeneration ?? UUID()
@@ -45,10 +50,13 @@ final class RemoteTelemetryConsentStore {
         return priorGeneration
     }
 
-    func ensureEnabledStorageGeneration() -> UUID? {
-        guard isEnabled else { return nil }
-        if let storageGeneration { return storageGeneration }
-        return setEnabled(true)
+    func reconcileStorageGeneration() -> UUID? {
+        if isEnabled {
+            return storageGeneration ?? setEnabled(true)
+        }
+        let priorGeneration = persistedStorageGeneration
+        defaults.removeObject(forKey: Self.generationKey)
+        return priorGeneration
     }
 
     #if BLEAT_RELEASE_SECRET_SCAN

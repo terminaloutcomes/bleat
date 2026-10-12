@@ -233,6 +233,10 @@ run = ["./scripts/build-macos.sh"]
 description = "Create and validate the Release archive"
 run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
+[tasks."release:check"]
+description = "Require matching project, generated Xcode, and changelog versions"
+run = "cargo run --quiet --locked --package scripts --bin validate-release-version --"
+
 [tasks."appstore:upload"]
 description = "Archive, inspect, and upload an App Store-eligible build to App Store Connect"
 depends = ["security:validate"]

@@ -310,7 +310,10 @@
     "testSocketURLPreservesRootAndServerPrefix()",
     "testCodecDecodesLibraryItemAndProgressEvents()",
     "testCodecHandlesProtocolPacketsAndRejectsMalformedPayloads()",
-    "testAuthenticationPacketKeepsTokenOutOfSocketURL()"
+    "testAuthenticationPacketKeepsTokenOutOfSocketURL()",
+    "testRetiredStreamTerminationCannotStopReplacement()",
+    "testStopWhileRestoringEndpointDoesNotRetrieveCredentials()",
+    "testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()"
   ],
   "BleatCoreTests.LocalPlaybackSessionTests": [
     "testBatchUsesExactAuthenticatedContractAndListeningTime()",
@@ -362,7 +365,8 @@
     "testConcurrentAttemptIsRejectedWithoutDisturbingActiveFlow()",
     "testExchangeFailuresNeverPersistAndAlwaysCleanUp()",
     "testAuthorizationAndPersistenceFailuresRemainTyped()",
-    "testInvalidAccountDoesNotTouchAttemptOrCookies()"
+    "testInvalidAccountDoesNotTouchAttemptOrCookies()",
+    "testNativeBrowserCallbackAdapterRunsOffMainActor()"
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
@@ -388,6 +392,9 @@
     "testCloseFailuresRemainTyped()"
   ],
   "BleatCoreTests.PrivateCloudSyncTests": [
+    "testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()",
+    "testCallbackCancellationCompletesBeforeLifecycleAllowsRetry()",
+    "testCallbackWatchdogCancellationEscapesDelegateTaskLocals()",
     "testEveryPrivateCloudErrorPreservesDiagnosticFailureCode()",
     "testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope()",
     "testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain()",

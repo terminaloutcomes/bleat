@@ -2084,107 +2084,93 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testDiagnosticTelemetryConsentIsExplicitAndPersistsOffline() {
-        var app = launch(
+    func testDiagnosticTelemetryConsentLivesInSystemSettings() {
+        let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: ["--ui-testing-reset-telemetry-consent"]
         )
         tabButton("Settings", in: app).tap()
-
-        XCTAssertFalse(
-            app.switches["diagnostics.telemetry.enabled"].exists
-        )
         Self.scrollUntilHittable(
-            app: app,
-            identifier: "settings.diagnostics",
-            direction: .up
+            app: app, identifier: "settings.diagnostics", direction: .up
         )
         app.buttons["settings.diagnostics"].tap()
         Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.telemetry.enabled",
+            app: app, identifier: "diagnostics.telemetry.settings",
             direction: .up
         )
-        var telemetry = app.switches["diagnostics.telemetry.enabled"]
-        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
-        XCTAssertEqual(telemetry.value as? String, "0")
+        XCTAssertFalse(app.switches["diagnostics.telemetry.enabled"].exists)
+        app.buttons["diagnostics.telemetry.settings"].tap()
+
+        let settings = XCUIApplication(
+            bundleIdentifier: "com.apple.Preferences")
+        settings.activate()
+        let toggle = settings.switches["Share diagnostic telemetry"]
+        if !toggle.waitForExistence(timeout: 3) {
+            Self.scrollUntilHittable(
+                app: settings, identifier: "com.apple.settings.apps",
+                direction: .up
+            )
+            settings.buttons["Apps"].tap()
+            XCTAssertTrue(
+                settings.buttons["Bleat"].waitForExistence(timeout: 5))
+            settings.buttons["Bleat"].tap()
+        }
         XCTAssertTrue(
-            app.staticTexts["diagnostics.telemetry.explanation"].exists
-        )
-
-        app.swipeUp()
-        telemetry = app.switches["diagnostics.telemetry.enabled"]
-        telemetry.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
-        ).tap()
-        let enabled = expectation(
-            for: NSPredicate(format: "value == %@", "1"),
-            evaluatedWith: telemetry
-        )
-        wait(for: [enabled], timeout: 3)
-
-        app.terminate()
-        app = launch(scenario: "--ui-testing-signed-out")
-        XCTAssertFalse(
-            app.switches["diagnostics.telemetry.enabled"].exists
-        )
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "login.diagnostics",
-            direction: .up
-        )
-        app.buttons["login.diagnostics"].tap()
-        Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.telemetry.enabled",
-            direction: .up
-        )
-        telemetry = app.switches["diagnostics.telemetry.enabled"]
-        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
-        XCTAssertEqual(telemetry.value as? String, "1")
-
-        app.swipeUp()
-        telemetry = app.switches["diagnostics.telemetry.enabled"]
-        telemetry.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
-        ).tap()
-        let disabled = expectation(
-            for: NSPredicate(format: "value == %@", "0"),
-            evaluatedWith: telemetry
-        )
-        wait(for: [disabled], timeout: 3)
+            toggle.waitForExistence(timeout: 10), settings.debugDescription)
+        // XCTest launches Bleat in an isolated preference domain. Verify the
+        // actual system control here; app tests cover foreground and launch
+        // reconciliation in the app's own domain.
+        if toggle.value as? String == "1" {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+                .tap()
+        }
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+            .tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+            .tap()
+        XCTAssertEqual(toggle.value as? String, "0")
+        app.activate()
+        XCTAssertTrue(app.staticTexts["diagnostics.telemetry.consent"].exists)
     }
 
     @MainActor
-    func testDiagnosticTelemetryConsentCanBeWithdrawnWhenStartupUnavailable() {
-        let app = launch(
-            scenario: "--ui-testing-unavailable-startup",
-            additionalArguments: [
-                "--ui-testing-enable-telemetry-consent"
-            ]
-        )
-
+    func testSystemSettingsLinkAvailableWhenStartupUnavailable() {
+        let app = launch(scenario: "--ui-testing-unavailable-startup")
         let diagnostics = app.buttons["app.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
         diagnostics.tap()
-
         Self.scrollUntilHittable(
-            app: app,
-            identifier: "diagnostics.telemetry.enabled",
+            app: app, identifier: "diagnostics.telemetry.settings",
             direction: .up
         )
-        let telemetry = app.switches["diagnostics.telemetry.enabled"]
-        XCTAssertTrue(telemetry.waitForExistence(timeout: 3))
-        XCTAssertEqual(telemetry.value as? String, "1")
+        XCTAssertFalse(app.switches["diagnostics.telemetry.enabled"].exists)
+        XCTAssertTrue(app.buttons["diagnostics.telemetry.settings"].isHittable)
+    }
 
-        telemetry.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
-        ).tap()
-        let disabled = expectation(
-            for: NSPredicate(format: "value == %@", "0"),
-            evaluatedWith: telemetry
+    @MainActor
+    func testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        tabButton("Settings", in: app).tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.clear", direction: .up
         )
-        wait(for: [disabled], timeout: 3)
+        app.buttons["settings.icloud.clear"].tap()
+        let confirm = app.alerts["Clear My CloudKit Data?"].buttons[
+            "settings.icloud.clear.confirm"
+        ].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+        XCTAssertTrue(
+            app.staticTexts["settings.icloud.clear.completed"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertEqual(
+            app.switches["settings.icloud.enabled"].value as? String, "0")
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["The Test Audiobook"].waitForExistence(timeout: 5))
     }
 
     @MainActor

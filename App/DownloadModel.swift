@@ -6,6 +6,7 @@ import Synchronization
 enum DownloadModelFailure: Error, Equatable, Sendable {
     case storageUnavailable
     case permissionDenied
+    case localContextUnavailable(DownloadLocalContextFailure)
     case preparationFailed
     case repairPlanChanged
     case insufficientStorage(requiredBytes: Int64, availableBytes: Int64)
@@ -19,6 +20,8 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
             "Bleat could not access downloaded media storage."
         case .permissionDenied:
             "This account is not allowed to download that audiobook."
+        case .localContextUnavailable(let cause):
+            cause.message
         case .preparationFailed:
             "Bleat could not prepare this audiobook for download."
         case .repairPlanChanged:
@@ -39,6 +42,39 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
             fromByteCount: max(value, 0),
             countStyle: .file
         )
+    }
+}
+
+enum DownloadLocalContextFailure: Equatable, Sendable {
+    case accountMissing
+    case recordMissing
+    case accountMismatch
+
+    var message: String {
+        switch self {
+        case .accountMissing:
+            "Bleat could not find the local account for this download. Open the account in Settings and try again."
+        case .recordMissing:
+            "Bleat could not find the local download record. Return to Downloads and try again."
+        case .accountMismatch:
+            "This download belongs to a different local account."
+        }
+    }
+
+    var diagnosticCode: DiagnosticFailureCode {
+        switch self {
+        case .accountMissing: .downloadAccountContextMissing
+        case .recordMissing: .downloadRecordContextMissing
+        case .accountMismatch: .downloadAccountContextMismatch
+        }
+    }
+
+    var telemetryCause: RemoteDownloadFailureCause {
+        switch self {
+        case .accountMissing: .accountContextMissing
+        case .recordMissing: .recordContextMissing
+        case .accountMismatch: .accountContextMismatch
+        }
     }
 }
 
@@ -815,7 +851,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return records.first(where: {
                 $0.manifest.downloadID == downloadID
             })?.manifest.state == .failed ? failure : nil
-        case .storageUnavailable, .permissionDenied, .preparationFailed,
+        case .storageUnavailable, .permissionDenied, .localContextUnavailable,
+            .preparationFailed,
             .repairPlanChanged, .insufficientStorage:
             return failure
         }
@@ -827,6 +864,30 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     ) {
         self.failure = failure
         failureDownloadID = downloadID
+    }
+
+    private func recordLocalContextFailure(
+        _ cause: DownloadLocalContextFailure,
+        downloadID: DownloadID,
+        operation: DiagnosticOperation,
+        identity: DownloadTaskIdentity? = nil,
+        stage: RemoteDownloadTransferStage? = nil,
+        httpStatusCode: Int? = nil
+    ) {
+        recordFailure(.localContextUnavailable(cause), for: downloadID)
+        recordDiagnostic(
+            .failed(
+                operation, category: .download,
+                failureCode: cause.diagnosticCode, stage: .contextValidation)
+        )
+        if let identity, let stage {
+            recordDownloadTelemetry(
+                identity, stage: stage, state: .failed,
+                failureCause: cause.telemetryCause,
+                httpStatusCode: httpStatusCode
+            )
+            finishTransferSpan(identity, outcome: .failed(.localStorage))
+        }
     }
 
     private func presentTransferOperationFailure(_ error: any Error) {
@@ -976,13 +1037,15 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         super.init()
     }
 
-    func start(account: ServerAccount?) async {
+    func start(accounts accountUpdates: [ServerAccount]) async {
+        // Register every account before creating the background session or
+        // suspending: restored callbacks can arrive as soon as it is created.
+        for account in accountUpdates {
+            accounts[account.id] = account
+        }
         recordDiagnostic(
             .started(.restoreDownloads, category: .download)
         )
-        if let account {
-            accounts[account.id] = account
-        }
         _ = session
         await refresh()
         restoreDeferredRetryState()
@@ -1924,7 +1987,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         _ task: URLSessionTask,
         descriptor: DownloadChunkTaskDescription
     ) -> Bool {
-        guard task.state == .suspended,
+        guard accounts[descriptor.identity.accountID] != nil,
+            task.state == .suspended,
             let record = record(downloadID: descriptor.identity.downloadID),
             record.manifest.state != .paused,
             !pausedDownloadIDs.contains(descriptor.identity.downloadID),
@@ -3228,7 +3292,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     func continueDownload(_ record: DownloadedBookRecord) async {
         guard let account = accounts[record.manifest.accountID] else {
-            failure = .permissionDenied
+            recordLocalContextFailure(
+                .accountMissing, downloadID: record.manifest.downloadID,
+                operation: .resumeDownload
+            )
             return
         }
         let downloadID = record.manifest.downloadID
@@ -3302,13 +3369,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             .started(.repairDownload, category: .download)
         )
         guard record.manifest.accountID == account.id else {
-            failure = .permissionDenied
-            recordDiagnostic(
-                .failed(
-                    .repairDownload,
-                    category: .download,
-                    failureCode: .mediaUnavailable
-                )
+            recordLocalContextFailure(
+                .accountMismatch, downloadID: record.manifest.downloadID,
+                operation: .repairDownload
             )
             return
         }
@@ -4273,12 +4336,23 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     return
                 }
                 guard nextAction == .continueChunk else { return }
-                guard let account = accounts[identity.accountID],
-                    let currentRecord = record(
-                        downloadID: identity.downloadID
+                guard let account = accounts[identity.accountID] else {
+                    recordLocalContextFailure(
+                        .accountMissing, downloadID: identity.downloadID,
+                        operation: .completeDownload,
+                        identity: identity, stage: .taskScheduled
                     )
+                    return
+                }
+                guard
+                    let currentRecord = record(downloadID: identity.downloadID)
                 else {
-                    throw DownloadModelFailure.permissionDenied
+                    recordLocalContextFailure(
+                        .recordMissing, downloadID: identity.downloadID,
+                        operation: .completeDownload,
+                        identity: identity, stage: .taskScheduled
+                    )
+                    return
                 }
                 do {
                     try await scheduleChunk(
@@ -4420,7 +4494,12 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 ) == .retry
             else { return }
             guard let account = accounts[identity.accountID] else {
-                failure = .permissionDenied
+                recordLocalContextFailure(
+                    .accountMissing, downloadID: identity.downloadID,
+                    operation: .resumeDownload,
+                    identity: identity, stage: .authenticationRefresh,
+                    httpStatusCode: 401
+                )
                 return
             }
             do {

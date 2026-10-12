@@ -299,6 +299,9 @@ public enum RemoteDownloadFailureCause: String, CaseIterable, Sendable {
     case partialFileTooLarge = "partial_file_too_large"
     case byteLengthMismatch = "byte_length_mismatch"
     case persistenceFailed = "persistence_failed"
+    case accountContextMissing = "account_context_missing"
+    case recordContextMissing = "record_context_missing"
+    case accountContextMismatch = "account_context_mismatch"
     case authenticationRefreshFailed = "authentication_refresh_failed"
     case retryExhausted = "retry_exhausted"
     case unknown

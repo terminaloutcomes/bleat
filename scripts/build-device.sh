@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+bleat_device_build_number="$(cargo run --quiet --locked --package scripts --bin resolve-build-number --)"
+bleat_device_version="$(cargo run --quiet --locked --package scripts --bin resolve-marketing-version -- "${bleat_device_build_number}")"
+cargo run --quiet --locked --package scripts --bin validate-release-version -- --version "${bleat_device_version}" --build "${bleat_device_build_number}"
+
 BUILD_VERBOSE="${BUILD_VERBOSE:-false}"
 BUILD_VERBOSE_FLAG="-quiet"
 if [[ "${BUILD_VERBOSE}" == "true" ]]; then
@@ -41,6 +45,8 @@ xcodebuild \
   -scheme Bleat \
   ${BUILD_VERBOSE_FLAG} \
   -configuration Release \
+  CURRENT_PROJECT_VERSION="${bleat_device_build_number}" \
+  MARKETING_VERSION="${bleat_device_version}" \
   -destination "platform=iOS,id=${BLEAT_DEVICE_ID}" \
   -derivedDataPath "${BLEAT_DEVICE_BUILD_DIRECTORY}" \
   -allowProvisioningUpdates \

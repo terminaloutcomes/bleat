@@ -4,6 +4,15 @@ use std::process::Command;
 use crate::error::BleatError;
 
 pub fn run() -> Result<(), BleatError> {
+    let version =
+        crate::release_version_check::validate_repository(std::path::Path::new("."), None)?;
+    let build_override = std::env::var("BLEAT_BUILD_NUMBER").ok();
+    let build = crate::release_versions::resolve_build_number(
+        build_override.as_deref(),
+        chrono::Utc::now(),
+    )
+    .map_err(crate::release_version_check::ReleaseVersionError::from)?;
+    crate::release_version_check::validate_effective_build(&version, &build)?;
     let bleat_device_id = required_environment_variable("BLEAT_DEVICE_ID")?;
 
     let bleat_device_build_directory = PathBuf::from(required_environment_variable(
@@ -19,7 +28,13 @@ pub fn run() -> Result<(), BleatError> {
 
     run_command(
         "device build",
-        &mut Command::new("./scripts/build-device.sh"),
+        Command::new("./scripts/build-device.sh").env("BLEAT_BUILD_NUMBER", &build),
+    )?;
+
+    crate::release_version_check::validate_built_app(
+        &bleat_app.join("Info.plist"),
+        &version,
+        &build,
     )?;
 
     run_command(

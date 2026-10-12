@@ -3849,10 +3849,22 @@ actor LiveAppService: AppServicing {
         guard let privateCloudSync else {
             throw .privateCloud(
                 PrivateCloudSyncFailure(
-                    operation: enabled ? .enable : .disable,
+                    operation: deleteCloudData
+                        ? .deleteCloudData
+                        : enabled ? .enable : .disable,
                     cause: .disabled
                 )
             )
+        }
+        if deleteCloudData {
+            do {
+                // Even a credential or account-store failure must leave sync
+                // disabled after the user requested a cloud wipe.
+                try await privateCloudSync.setEnabled(
+                    false, deleteCloudData: false)
+            } catch {
+                throw .privateCloud(error)
+            }
         }
         let accountIDs: [AccountID]
         do {
@@ -3871,10 +3883,12 @@ actor LiveAppService: AppServicing {
                     deleteCloudData: deleteCloudData
                 )
             } catch {
-                try? await credentialStore.setSynchronizesNativeLogin(
-                    !enabled,
-                    accountIDs: accountIDs
-                )
+                if !deleteCloudData {
+                    try? await credentialStore.setSynchronizesNativeLogin(
+                        !enabled,
+                        accountIDs: accountIDs
+                    )
+                }
                 throw error
             }
         } catch let error as PrivateCloudSyncFailure {
@@ -3882,7 +3896,9 @@ actor LiveAppService: AppServicing {
         } catch {
             throw .privateCloud(
                 PrivateCloudSyncFailure(
-                    operation: enabled ? .enable : .disable,
+                    operation: deleteCloudData
+                        ? .deleteCloudData
+                        : enabled ? .enable : .disable,
                     cause: .persistenceFailed
                 )
             )

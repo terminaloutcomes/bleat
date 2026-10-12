@@ -1234,6 +1234,16 @@ files the durable checkpoint. Transfer each track in 16 MiB HTTP range chunks,
 persist every validated completed chunk, and calculate continuation from the
 actual partial-file length after relaunch.
 
+All restored accounts must be registered with the download model before the
+background session is created or restoration can suspend and deliver callbacks.
+Restore downloads once with the complete account set, rather than resuming
+between individual account registrations. A suspended task without its account
+context is not admitted. Missing local account context, missing download record
+context, and account mismatch are distinct typed failures with specific
+privacy-safe diagnostic causes; they must not be presented as server permission
+rejections. Context rejection retains already committed media bytes and records
+the originating operation and validation stage.
+
 Build the download plan from `GET /api/items/<id>?expanded=1&include=progress`. For every included `media.audioFiles[]` entry, use its `ino`, `metadata.filename`, `metadata.size`, and MIME information. Download each file with:
 
 `GET /api/items/<item-id>/file/<ino>/download`
@@ -1699,10 +1709,22 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
+Settings provides **Clear My CloudKit Data**, including when synchronization is
+already disabled. After confirmation, Bleat turns off synchronization on this
+device, cancels and drains its current sync, and directly deletes its entire
+private record zone, including unrecognized records. It clears local sync
+metadata and recreates the sync engine without its old serialized state while
+preserving local accounts, downloads, preferences, and listening history.
+An already absent zone counts as cleared. A deletion failure retains its typed
+`delete_cloud_data` cause and does not report success. Other devices with sync
+enabled can recreate the cloud data; deletion does not disable those devices.
+
 Foreground fetched-record callbacks have a 60-second no-progress deadline;
 background suspension does not consume that deadline. A timeout reports a
 typed, retryable `apply_fetched_changes` failure and requests CKSyncEngine
-cancellation. The visible state remains stopping until the callback drains,
+cancellation outside the CloudKit delegate task-local context. The run owns
+the asynchronous cancellation task and waits for it before releasing its
+lifecycle. The visible state remains stopping until the callback drains,
 and no retry may overlap its local mutations. Any fetched callback failure
 must fail the overall synchronization result even if the fetch itself returns
 successfully. Pending local changes and CKSyncEngine state remain available for
@@ -1883,6 +1905,23 @@ Do not update a DTO merely because the published API reference says something di
 
 ## 16. Error handling and diagnostics
 
+Framework callbacks must enter through an explicitly nonisolated, sendable
+boundary and dispatch UI work to the main actor without synchronously waiting
+for it. MediaPlayer commands acknowledge admission from a locked playback
+snapshot; execution remains asynchronous and queued commands from cleared
+playback are discarded. KVO callbacks validate the owning player or item after
+the actor hop. DNS-SD resolution uses a serial callback queue and deallocates
+its reference on that same queue after the current callback returns, retaining
+the callback context through teardown. Live-update termination belongs to its
+stream generation and cannot cancel a replacement stream. Cancellation after
+endpoint or credential restoration must not create a new socket or report a
+credential/transport failure for intentionally stopped work.
+
+Assertions and framework traps cannot be recovered with Swift error catching.
+Prevent invalid framework calls and test error-triggered teardown, arbitrary
+callback executors, repeated completion, and stop/restart races at the actual
+callback boundary. See `docs/release-evidence/callback-cancellation-audit.md`.
+
 Preserve the failed operation together with a typed, user-safe failure cause.
 Do not collapse distinct failures into a generic unavailable state. The UI may
 group causes only when the resulting message, retry policy, and diagnostics
@@ -1939,8 +1978,11 @@ visible.
 Remote diagnostic telemetry is a separate, optional channel. Its purpose is to
 diagnose bounded technical application operations without collecting user,
 server, account, or audiobook content. It defaults off and may be enabled only
-through the device-local **Share diagnostic telemetry** control on the
-Diagnostics screen. The consent preference is not synchronized through iCloud.
+through the device-local **Share diagnostic telemetry** control in iOS system
+Settings under Apps > Bleat. This control is available without launching Bleat.
+The app reads consent during initialization and reconciles preference changes
+when it returns to the foreground. Diagnostics shows consent status and links
+to system Settings. The consent preference is not synchronized through iCloud.
 Remote export is out of scope on native macOS: that build must not create App
 Attest keys, request telemetry tokens, retain export batches, or send OTLP.
 On iOS, disabling it persists withdrawal before synchronously notifying the
