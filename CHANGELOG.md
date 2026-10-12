@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026.10.13 - 2026-10-13
+
+### Added
+
+- Confirm or cancel large cellular downloads directly from CarPlay. Answering on either the car display or your iPhone clears the prompt on both.
+
+### Improved
+
+- Browse your whole library in CarPlay with a scrolling book list or alphabetical folders for larger libraries, instead of a cut-off selection of books.
+- If loading more CarPlay books fails, the books already loaded and your downloads remain available. Temporary failures offer a retry without starting the whole load again.
+- Edit a book's series one at a time, with separate fields for the series name and book order. Add or remove a series without rewriting the whole list; changes reach your server only when you save the book.
+- Series order keeps the text you enter, including leading zeroes and punctuation, so labels such as “01” or “2.5” are preserved.
+
+### Fixed
+
+- CarPlay updates its tabs and closes old library folders when you change accounts or libraries on your phone.
+- Invisible formatting characters in book information no longer prevent edits from saving. Descriptions keep their line breaks and tabs.
+- Books with messy imported titles, descriptions, or chapter information are more likely to open successfully: Bleat cleans up readable text and skips unusable chapters.
+- Books can show their details even when the server has not yet worked out their duration or audio-file count.
+- Bleat remembers your last book after reopening, ready for you to press Play without finding it in the library again. Playback stays paused until you choose to resume.
+- Resuming a remembered book uses your latest saved position on this device when available. If playback fails, the book stays selected with an explanation and a Retry or Sign In action when appropriate.
+- Stopping playback or changing accounts while Bleat is starting up cancels the pending resume, so an old book cannot start playing afterward.
+- Damaged information about your last book no longer prevents Bleat from keeping saved playback positions when updating account records.
+
 ## 2026.10.12 - 2026-10-12
 
 ### Added
