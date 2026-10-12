@@ -39,7 +39,7 @@ public enum AudiobookshelfAPIError: Error, Equatable, Sendable {
     case invalidListeningSessions
 }
 
-public enum BookMetadataFailure: String, Error, Equatable, Sendable,
+public enum BookMetadataFailure: String, Error, Equatable, Sendable, Codable,
     CaseIterable
 {
     case title, duration, trackCount, audioFileCount, timestamps

@@ -512,6 +512,7 @@ final class PlaybackModel {
     var libraryID: LibraryID? {
         activeDownloadDetail?.libraryID ?? localPlaybackSession?.libraryID
             ?? retainedRetryIdentity?.libraryID
+            ?? resumeSelection?.book.libraryID
     }
 
     var hasActiveBook: Bool {
@@ -787,6 +788,8 @@ final class PlaybackModel {
         initialTime: Double? = nil
     ) async {
         guard !Task.isCancelled else { return }
+        generation &+= 1
+        let operationGeneration = generation
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
             operation: .playbackPreparation,
             source: .streamed
@@ -796,7 +799,9 @@ final class PlaybackModel {
         await diagnostics.record(
             .started(.openPlayback, category: .playback)
         )
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, generation == operationGeneration else {
+            return
+        }
         let availability = BookActionAvailability(
             user: account.user,
             detail: detail
@@ -815,8 +820,6 @@ final class PlaybackModel {
             return
         }
 
-        generation &+= 1
-        let operationGeneration = generation
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -852,6 +855,7 @@ final class PlaybackModel {
         localPlaybackSession = nil
         setSleepTimer(minutes: nil)
         pausedAt = nil
+        resumeSelection = nil
         state = .preparing
         await diagnostics.record(
             .transition(
@@ -937,7 +941,7 @@ final class PlaybackModel {
             guard generation == operationGeneration, !Task.isCancelled else {
                 return
             }
-            play()
+            play(preservingPendingPlaybackStart: false)
             await loadBookmarks()
         } catch let error as AppServiceError {
             guard generation == operationGeneration, !Task.isCancelled else {
@@ -996,6 +1000,8 @@ final class PlaybackModel {
             automaticCachePinReleaser?(unownedAutomaticCachePin)
         }
         guard !Task.isCancelled else { return }
+        generation &+= 1
+        let operationGeneration = generation
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
             operation: .playbackPreparation,
             source: .downloaded
@@ -1009,7 +1015,9 @@ final class PlaybackModel {
                 count: trackURLs.count
             )
         )
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, generation == operationGeneration else {
+            return
+        }
         guard !trackURLs.isEmpty || automaticCachedWindow != nil else {
             state = .failed(.mediaUnavailable)
             telemetryOutcome = .failed(.media)
@@ -1022,8 +1030,6 @@ final class PlaybackModel {
             )
             return
         }
-        generation &+= 1
-        let operationGeneration = generation
         playbackRequested = false
         cancelPlaybackWatchdog()
         playbackRecoveryTask?.cancel()
@@ -1181,7 +1187,7 @@ final class PlaybackModel {
                 return
             }
             if positionConflict == nil {
-                play()
+                play(preservingPendingPlaybackStart: false)
             } else {
                 state = .paused
             }
@@ -1504,7 +1510,48 @@ final class PlaybackModel {
         bookmarks.sort { $0.time < $1.time }
     }
 
+    var resumeSelection: LastPlayingRecord?
+    var resumeSelectionHandler: (@MainActor () -> PlaybackRemoteCommandOutcome)?
+    var cancelSelectionResume: (@MainActor () -> Void)?
+
+    func restoreSelection(_ record: LastPlayingRecord) {
+        guard preparation == nil, state == .idle else { return }
+        resumeSelection = record
+        localAccountID = record.accountID
+        itemID = record.book.id
+        title = record.book.title
+        author = record.book.authorName ?? ""
+        narrator = record.book.narratorName ?? ""
+        duration = record.book.duration
+        currentTime = min(
+            positionStore.position(
+                accountID: record.accountID,
+                itemID: record.book.id) ?? 0, duration)
+        state = .paused
+        updateNowPlaying()
+    }
+
     func play() {
+        if preparation == nil, resumeSelection != nil {
+            _ = resumeSelectionHandler?()
+            return
+        }
+        guard !isAccountSwitchShutdownInProgress, player != nil,
+            preparation != nil, state != .preparing, state != .ended
+        else { return }
+        do {
+            try configureAudioSession()
+        } catch {
+            let failure = AppFailure(
+                .openPlayback, .audioSessionActivationFailed)
+            record(
+                .failed(
+                    .activateAudioSession, category: .playback,
+                    failureCode: .audioSessionActivationFailed))
+            fail(failure)
+            return
+        }
+        record(.completed(.activateAudioSession, category: .playback))
         play(preservingPendingPlaybackStart: false)
     }
 
@@ -1598,6 +1645,7 @@ final class PlaybackModel {
     }
 
     func pause() {
+        cancelSelectionResume?()
         guard !isAccountSwitchShutdownInProgress else {
             return
         }
@@ -1924,10 +1972,56 @@ final class PlaybackModel {
     }
 
     func stop() async {
+        cancelSelectionResume?()
+        positionStore.clearLastPlaying()
+        resumeSelection = nil
         await stop(allowsSupersession: true)
     }
 
+    func cancelRequestedStart() {
+        generation &+= 1
+        playbackRequested = false
+        player?.pause()
+        cancelPlaybackWatchdog()
+        pendingPlaybackStartSpan?.end(.cancelled)
+        pendingPlaybackStartSpan = nil
+        if hasActiveBook { state = .paused }
+        updateNowPlaying()
+    }
+
+    func cancelPreparation() async {
+        await stop(allowsSupersession: true)
+    }
+
+    func enableBootstrapResume() {
+        do {
+            nowPlayingCoordinator.setResumableSelectionAvailable(
+                try positionStore.lastPlaying() != nil)
+        } catch {
+            record(
+                .failed(
+                    .restoreSelection, category: .playback,
+                    failureCode:
+                        error == .unsupportedLastPlayingVersion
+                        ? .unsupportedLastPlayingVersion
+                        : .invalidLastPlayingRecord))
+        }
+    }
+
+    func discardResumeSelection() {
+        resumeSelection = nil
+        clearRetainedFailedBook()
+        nowPlayingCoordinator.clear()
+    }
+
+    func disableBootstrapResume() {
+        nowPlayingCoordinator.setResumableSelectionAvailable(false)
+    }
+
     func stopForAccountSwitch() async {
+        cancelSelectionResume?()
+        positionStore.clearLastPlaying()
+        resumeSelection = nil
         guard !isAccountSwitchShutdownInProgress else {
             return
         }
@@ -4005,7 +4099,8 @@ final class PlaybackModel {
                 rate: rate,
                 isPlaying: isPlaying,
                 isPlaybackRequested: isPlaybackRequested,
-                isPlaybackAvailable: isPlaybackControlAvailable,
+                isPlaybackAvailable: isPlaybackControlAvailable
+                    || resumeSelection != nil,
                 canPerformPreviousCommand: canPerformHeadphoneCommand(
                     previousCommandAction
                 ),
@@ -4034,8 +4129,35 @@ final class PlaybackModel {
     func handleRemoteCommand(
         _ command: PlaybackRemoteCommand
     ) -> PlaybackRemoteCommandOutcome {
+        let operation: DiagnosticOperation =
+            command == .play || command == .toggle
+            ? .remotePlayCommand : .remoteCommand
+        record(.started(operation, category: .playback))
+        let outcome = performRemoteCommand(command)
+        switch outcome {
+        case .accepted: record(.completed(operation, category: .playback))
+        case .unavailable:
+            record(
+                .failed(
+                    operation, category: .playback,
+                    failureCode: .remoteCommandUnavailable))
+        case .invalid:
+            record(
+                .failed(
+                    operation, category: .playback,
+                    failureCode: .remoteCommandInvalid))
+        }
+        return outcome
+    }
+
+    private func performRemoteCommand(
+        _ command: PlaybackRemoteCommand
+    ) -> PlaybackRemoteCommandOutcome {
         guard !isAccountSwitchShutdownInProgress else {
             return .unavailable
+        }
+        if preparation == nil, command == .play || command == .toggle {
+            return resumeSelectionHandler?() ?? .unavailable
         }
         switch command {
         case .play:
@@ -4043,6 +4165,7 @@ final class PlaybackModel {
                 return .unavailable
             }
             play()
+            if case .failed = state { return .invalid }
         case .pause:
             guard isPlaybackControlAvailable, isPlaybackRequested else {
                 return .unavailable

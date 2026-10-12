@@ -581,7 +581,7 @@ enum LibraryPaginationState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
-enum AppFailureOperation: String, Equatable, Sendable {
+enum AppFailureOperation: String, Equatable, Sendable, Codable {
     case appStart, login, reauthenticate, switchAccount, removeAccount,
         resetAppData
     case loadLibraries, loadLibraryPage, loadLibraryCategories, loadHome,
@@ -607,7 +607,7 @@ enum AppFailureOperation: String, Equatable, Sendable {
     }
 }
 
-enum AppFailureCause: Equatable, Sendable {
+enum AppFailureCause: Equatable, Sendable, Codable {
     case persistenceUnavailable, storedDataMigrationFailed, invalidInput,
         serverRequiresHTTPS,
         serverNotReady
@@ -616,6 +616,7 @@ enum AppFailureCause: Equatable, Sendable {
     case invalidLibraryCategories
     case invalidBookMetadata(BookMetadataFailure)
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
+    case audioSessionActivationFailed
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
     case authenticationCancelled, authenticationSessionInProgress
@@ -640,7 +641,11 @@ enum AppFailureCause: Equatable, Sendable {
 
 typealias BookDetailFailure = AppFailureCause
 
-struct AppFailure: Equatable, Sendable {
+enum PlaybackFailureResolution: Equatable {
+    case retry, signIn, dismiss
+}
+
+struct AppFailure: Equatable, Sendable, Codable {
     let operation: AppFailureOperation
     let cause: AppFailureCause
 
@@ -685,6 +690,7 @@ struct AppFailure: Equatable, Sendable {
         case .invalidCredentials: "Sign-in rejected"
         case .invalidInput: "Check the entered information"
         case .localLoginUnavailable: "Local login unavailable"
+        case .audioSessionActivationFailed: "Audio session unavailable"
         case .mediaUnavailable: "Playback unavailable"
         case .uncertainMutation: "Change needs attention"
         case .requestRejected: "Request rejected"
@@ -798,6 +804,8 @@ struct AppFailure: Equatable, Sendable {
             "The OpenID callback did not match the sign-in request."
         case .authenticationCredentialInvalid:
             "Audiobookshelf returned incomplete or mismatched account credentials."
+        case .audioSessionActivationFailed:
+            "iOS could not activate audio playback. Try Play again."
         case .mediaUnavailable:
             switch operation {
             case .localPlayback, .recoverPlayback:
@@ -839,7 +847,7 @@ struct AppFailure: Equatable, Sendable {
         case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
             "wifi.exclamationmark"
         case .requestCancelled: "xmark.circle"
-        case .mediaUnavailable: "play.slash"
+        case .mediaUnavailable, .audioSessionActivationFailed: "play.slash"
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
         case .serverNotReady, .serverUnsupported, .localLoginUnavailable,
@@ -848,6 +856,18 @@ struct AppFailure: Equatable, Sendable {
             .authenticationPresentationUnavailable,
             .authenticationBrowserFailed:
             "exclamationmark.circle"
+        }
+    }
+
+    var playbackRecoveryAction: PlaybackFailureResolution {
+        switch cause {
+        case .authenticationRequired, .invalidCredentials: .signIn
+        case .serverUnavailable, .timeout, .rateLimited, .unavailableOffline,
+            .localStorageUnavailable, .mediaUnavailable,
+            .audioSessionActivationFailed,
+            .invalidServerResponse, .requestRejected:
+            .retry
+        default: .dismiss
         }
     }
 
@@ -1267,7 +1287,7 @@ extension AppFailureCause {
         case .persistenceUnavailable, .storedDataMigrationFailed,
             .localStorageUnavailable, .localDataReset, .statistics:
             .localStorage
-        case .mediaUnavailable:
+        case .mediaUnavailable, .audioSessionActivationFailed:
             .media
         case .serverUnsupported, .localLoginUnavailable:
             .unsupported
@@ -1830,6 +1850,7 @@ final class AppModel {
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore = .shared,
+        nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         bookProgressOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
             {
@@ -1848,6 +1869,7 @@ final class AppModel {
             @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
+        self.playbackPositionStore = playbackPositionStore
         self.statisticsNow = statisticsNow
         self.statisticsSleepUntil = statisticsSleepUntil
         self.nearbyServerDiscovery = nearbyServerDiscovery
@@ -1873,6 +1895,7 @@ final class AppModel {
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
+            nowPlayingCoordinator: nowPlayingCoordinator,
             remoteTelemetryTracer: remoteTelemetryTracer,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
             downloadRemovalStorageCheckpoint:
@@ -1897,6 +1920,13 @@ final class AppModel {
             }
         } else {
             phase = .launching
+        }
+        self.playback.resumeSelectionHandler = { [weak self] in
+            self?.requestSelectionResume() ?? .unavailable
+        }
+        self.playback.enableBootstrapResume()
+        self.playback.cancelSelectionResume = { [weak self] in
+            self?.cancelPendingSelectionResume()
         }
         remoteTelemetryConsentController
             .applyRemoteTelemetryConsent(
@@ -2009,6 +2039,7 @@ final class AppModel {
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
+        nowPlayingCoordinator: NowPlayingCoordinator?,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging,
         downloadRemovalStorageCheckpoint:
@@ -2017,6 +2048,8 @@ final class AppModel {
         let playback = PlaybackModel(
             service: service,
             positionStore: playbackPositionStore,
+            nowPlayingCoordinator: nowPlayingCoordinator
+                ?? NowPlayingCoordinator(),
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
@@ -2055,7 +2088,29 @@ final class AppModel {
         return (playback, downloads)
     }
 
+    private let playbackPositionStore: PlaybackPositionStore
+    private var bootstrapTask: Task<Void, Never>?
+    private var selectionResumeTask: Task<Void, Never>?
+    private var selectionResumeGeneration: UInt64 = 0
+    var selectionResumeFailure: AppFailure?
+
+    func dismissSelectionResumeFailure() {
+        selectionResumeFailure = nil
+    }
+
     func start() async {
+        if let bootstrapTask {
+            await bootstrapTask.value
+            return
+        }
+        guard !hasStarted else { return }
+        let task = Task { await self.performStart() }
+        bootstrapTask = task
+        await task.value
+        bootstrapTask = nil
+    }
+
+    private func performStart() async {
         guard !hasStarted else {
             return
         }
@@ -2121,6 +2176,8 @@ final class AppModel {
             startNetworkPathUpdates()
             schedulePendingLocalSessionSync(for: accounts)
             guard let restoredAccount else {
+                playbackPositionStore.clearLastPlaying()
+                playback.disableBootstrapResume()
                 phase = .signedOut
                 await diagnostics.record(
                     .transition(
@@ -2137,6 +2194,7 @@ final class AppModel {
                 return
             }
             account = restoredAccount
+            restoreLastPlayingSelection()
             phase = .signedIn
             await diagnostics.record(
                 .transition(
@@ -2516,6 +2574,7 @@ final class AppModel {
             return
         }
         accountActionStatus = .switching
+        cancelPendingSelectionResume()
         await invalidatePlaybackStarts()
         await cancelPrivateCloudSynchronization()
         await stopLiveUpdatesAndWait()
@@ -4596,6 +4655,8 @@ final class AppModel {
                 detail: detail,
                 mode: mode
             )
+            playbackPositionStore.clearLastPlaying(
+                accountID: account.id, itemID: detail.id)
             let localDownloadCleanupFailed: Bool
             if let localRecord {
                 if case .removed = await downloads.remove(localRecord) {
@@ -5183,6 +5244,143 @@ final class AppModel {
         }
     }
 
+    private func restoreLastPlayingSelection() {
+        do {
+            guard let record = try playbackPositionStore.lastPlaying() else {
+                playback.disableBootstrapResume()
+                return
+            }
+            guard record.accountID == account?.id,
+                accounts.contains(where: { $0.id == record.accountID })
+            else {
+                playbackPositionStore.clearLastPlaying()
+                playback.disableBootstrapResume()
+                return
+            }
+            playback.restoreSelection(record)
+            if let failure = record.failure {
+                retainSelectionResumeFailure(record: record, failure: failure)
+            }
+        } catch {
+            playback.disableBootstrapResume()
+            let code: DiagnosticFailureCode =
+                switch error {
+                case .unsupportedLastPlayingVersion:
+                    .unsupportedLastPlayingVersion
+                case .invalidLastPlayingRecord: .invalidLastPlayingRecord
+                case .invalidPosition, .persistenceFailed:
+                    .localStorageUnavailable
+                }
+            Task {
+                await diagnostics.record(
+                    .failed(
+                        .restoreSelection, category: .playback,
+                        failureCode: code))
+            }
+        }
+    }
+
+    private func retainSelectionResumeFailure(
+        record: LastPlayingRecord, failure: AppFailure
+    ) {
+        let failedRecord = LastPlayingRecord(
+            accountID: record.accountID, book: record.book,
+            updatedAt: record.updatedAt, failure: failure)
+        playback.resumeSelection = failedRecord
+        playback.retainFailedBookForRetry(
+            accountID: record.accountID, libraryID: record.book.libraryID)
+        selectionResumeFailure = failure
+        playback.fail(failure)
+        do {
+            try playbackPositionStore.select(failedRecord)
+        } catch {
+            Task {
+                await diagnostics.record(
+                    .failed(
+                        .restoreSelection, category: .playback,
+                        failureCode: .localStorageUnavailable))
+            }
+        }
+    }
+
+    private func cancelPendingSelectionResume() {
+        selectionResumeFailure = nil
+        selectionResumeGeneration &+= 1
+        if selectionResumeTask != nil {
+            playbackStartGeneration &+= 1
+            playbackStartTask?.cancel()
+            playbackStartTask = nil
+            playbackStartPhase = nil
+            playbackStartTarget = nil
+            playback.cancelRequestedStart()
+        }
+        selectionResumeTask?.cancel()
+        selectionResumeTask = nil
+    }
+
+    func requestSelectionResume() -> PlaybackRemoteCommandOutcome {
+        if selectionResumeTask != nil { return .accepted }
+        guard playbackStartTask == nil, accountActionStatus != .switching,
+            accountActionStatus != .removing, bookDeletionState != .deleting
+        else { return .unavailable }
+        do {
+            guard try playbackPositionStore.lastPlaying() != nil else {
+                return .unavailable
+            }
+        } catch { return .invalid }
+        selectionResumeFailure = nil
+        let generation = selectionResumeGeneration
+        selectionResumeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await start()
+            guard !Task.isCancelled, generation == selectionResumeGeneration
+            else { return }
+            defer {
+                if generation == selectionResumeGeneration {
+                    selectionResumeTask = nil
+                }
+            }
+            guard phase == .signedIn,
+                let record = try? playbackPositionStore.lastPlaying(),
+                let account, record.accountID == account.id
+            else { return }
+            let position = playbackPositionStore.position(
+                accountID: record.accountID, itemID: record.book.id)
+            let outcome = await startPlayback(
+                PlaybackStartRequest(
+                    book: .summary(record.book), account: account,
+                    position: position.map(PlaybackStartPosition.absoluteTime)
+                        ?? .resume),
+                isRetry: record.failure != nil,
+                isSelectionResume: true)
+            guard !Task.isCancelled, generation == selectionResumeGeneration
+            else { return }
+            switch outcome {
+            case .failed(let failure):
+                if failure.cause == .itemNotFound {
+                    playbackPositionStore.clearLastPlaying(
+                        accountID: record.accountID, itemID: record.book.id)
+                    playback.discardResumeSelection()
+                } else {
+                    retainSelectionResumeFailure(
+                        record: record, failure: failure)
+                }
+                selectionResumeFailure = failure
+                playback.fail(failure)
+                await diagnostics.record(
+                    .failed(
+                        .restoreSelection, category: .playback,
+                        failureCode: failure.diagnosticFailureCode))
+            case .started:
+                await diagnostics.record(
+                    .completed(.restoreSelection, category: .playback))
+            case .superseded:
+                break
+            }
+        }
+        return .accepted
+    }
+
     func startPlayback(
         book: LibraryBookSummary,
         account: ServerAccount,
@@ -5258,6 +5456,19 @@ final class AppModel {
                 AppFailure(.openPlayback, .accountUnavailable)
             )
         }
+        if playback.resumeSelection != nil {
+            guard requestSelectionResume() == .accepted,
+                let task = selectionResumeTask
+            else {
+                return .superseded
+            }
+            await task.value
+            if case .failed(let failure) = playback.state {
+                return .failed(failure)
+            }
+            return playback.isPlaybackRequested
+                ? .started(source: .activePlayer) : .superseded
+        }
         if let detail = playback.preparedBookDetail,
             let accountID = playback.accountID,
             let account = accounts.first(where: { $0.id == accountID })
@@ -5297,7 +5508,8 @@ final class AppModel {
     private func startPlayback(
         _ request: PlaybackStartRequest,
         isRetry: Bool = false,
-        cancellationPolicy: PlaybackStartCancellationPolicy = .continuePlayback
+        cancellationPolicy: PlaybackStartCancellationPolicy = .continuePlayback,
+        isSelectionResume: Bool = false
     ) async -> PlaybackStartOutcome {
         let cancelsWithCaller = cancellationPolicy == .cancelPlayback
         guard !(cancelsWithCaller && Task.isCancelled),
@@ -5307,6 +5519,7 @@ final class AppModel {
         else {
             return .superseded
         }
+        if !isSelectionResume { cancelPendingSelectionResume() }
         let target = PlaybackStartTarget(
             accountID: request.account.id,
             itemID: request.book.itemID
@@ -5768,6 +5981,21 @@ final class AppModel {
             playback.isPrepared(accountID: accountID, itemID: itemID)
         else {
             return .failed(.mediaUnavailable)
+        }
+        if let detail = playback.preparedBookDetail {
+            do {
+                try playbackPositionStore.select(
+                    LastPlayingRecord(
+                        accountID: accountID, book: detail.summary))
+                playback.resumeSelection = nil
+            } catch {
+                Task {
+                    await diagnostics.record(
+                        .failed(
+                            .restoreSelection, category: .playback,
+                            failureCode: .localStorageUnavailable))
+                }
+            }
         }
         return .started(source: source)
     }
@@ -6762,6 +6990,7 @@ final class AppModel {
             return false
         }
         accountActionStatus = .removing
+        cancelPendingSelectionResume()
         if failedPlaybackRetryRequest?.account.id == account.id {
             failedPlaybackRetryRequest = nil
         }
@@ -6806,6 +7035,7 @@ final class AppModel {
             await downloads.removeAll(for: account.id)
             playback.removeLocalData(for: account.id)
             await BookCoverImageLoader.shared.removeAll(for: account.id)
+            playbackPositionStore.clearLastPlaying(accountID: account.id)
             accounts.removeAll { $0.id == account.id }
             pendingLocalSessionSyncAccounts[account.id] = nil
             if removingBrowsingAccount {
@@ -7640,7 +7870,7 @@ final class AppModel {
             case .positioningActivePlayer:
                 playback.pause()
             case .preparingPlayback:
-                await playback.stop()
+                await playback.cancelPreparation()
             case .resolving, nil:
                 break
             }

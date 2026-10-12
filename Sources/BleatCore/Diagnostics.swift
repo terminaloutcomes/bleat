@@ -34,6 +34,17 @@ public enum DiagnosticLevel: String, Codable, Sendable {
 }
 
 public enum DiagnosticOperation: String, Codable, Sendable {
+    case remotePlayCommand = "remote_play_command"
+    case sceneActive = "scene_active"
+    case sceneInactive = "scene_inactive"
+    case sceneBackground = "scene_background"
+    case publishNowPlaying = "publish_now_playing"
+    case clearNowPlaying = "clear_now_playing"
+    case processStart = "process_start"
+    case restoreSelection = "restore_selection"
+    case migratePlaybackPositions = "migrate_playback_positions"
+    case remoteCommand = "remote_command"
+    case activateAudioSession = "activate_audio_session"
     case appStart = "app_start"
     case restoreAccounts = "restore_accounts"
     case login
@@ -109,6 +120,11 @@ public enum DiagnosticState: String, Codable, Sendable {
 }
 
 public enum DiagnosticFailureCode: String, Codable, Sendable {
+    case remoteCommandUnavailable = "remote_command_unavailable"
+    case remoteCommandInvalid = "remote_command_invalid"
+    case invalidLastPlayingRecord = "invalid_last_playing_record"
+    case unsupportedLastPlayingVersion = "unsupported_last_playing_version"
+    case audioSessionActivationFailed = "audio_session_activation_failed"
     case persistenceUnavailable = "persistence_unavailable"
     case storedDataMigrationFailed = "stored_data_migration_failed"
     case invalidServerAddress = "invalid_server_address"

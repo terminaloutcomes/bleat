@@ -155,6 +155,12 @@ final class AppBootstrap {
         override init() {
             super.init()
             Self.current = self
+            Task {
+                await SystemDiagnosticRecorder.shared.record(
+                    .started(
+                        .processStart, category: .app, correlationID: UUID()))
+                await model.start()
+            }
         }
 
         func application(

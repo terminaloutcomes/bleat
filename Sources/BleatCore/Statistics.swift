@@ -442,7 +442,7 @@ public struct StatisticsExploration: Codable, Equatable, Sendable {
     )
 }
 
-public enum StatisticsRepositoryError: Error, Equatable, Sendable {
+public enum StatisticsRepositoryError: Error, Equatable, Sendable, Codable {
     case invalidSample
     case invalidSlice
     case invalidCompletion

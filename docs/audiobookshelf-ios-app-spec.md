@@ -1110,6 +1110,40 @@ Populate `MPNowPlayingInfoCenter` manually with whole-book values:
 - actual playback rate;
 - default playback rate.
 
+The versioned last-playing selection stores account, library and item identity,
+book summary and selection timestamp, independently of the canonical
+`PlaybackPositionStore` position. Successful playback selection replaces it;
+catalog loading and superseded starts do not. Invalid records retain their exact
+stored bytes for diagnosis rather than being rewritten after failed decoding.
+During local account-identity migration, malformed selection metadata is discarded
+so valid playback positions can migrate; a typed migration-stage diagnostic
+records the discard. Unsupported record versions remain untouched.
+Pause, interruption and route
+loss retain it. Explicit Stop clears the selection while retaining position;
+account switching and account/book removal invalidate matching references.
+Cold launch restores a paused selection without opening a stream or activating
+audio. Explicit Play waits for account/download bootstrap and uses
+`AppModel.startPlayback(... position: .resume)` with existing permission,
+verified-download, authentication and supersession checks. Duplicate bootstrap
+commands coalesce. Discarding or losing the saved selection during bootstrap
+retires native Play/Toggle admission and invalidates commands queued for that
+selection. Cold resume uses an existing canonical local timestamp as an
+explicit position; only absence of a local checkpoint delegates to server resume.
+A failed cold resume retains its selected book and typed operation/cause in the
+versioned local record. Relaunch restores the failed player without starting
+audio. The active app presents a native recovery alert: Retry for transient
+failures, Sign In for authentication failures, and an explanation for unavailable
+items or denied access. Dismissing the alert retains the failed player; successful
+retry or Stop clears the recovery state. Background failures wait for the app
+to become active before presenting the alert. Siri media-intent integration
+remains tracked in #334.
+
+Process start, scene transitions, remote Play receipt/result, selection restore,
+Now Playing publication/clear and audio activation emit privacy-safe diagnostics.
+These establish app-side stages only. AirPods relaunch after user force-quit and
+cross-app media routing remain physical-device evidence gates under #341; a
+retained snapshot or successful Simulator test cannot prove OS delivery.
+
 Update Now Playing after play/pause, seek, speed change, chapter/track change, book change, and material artwork/metadata change. It does not need per-second elapsed updates.
 
 Register `MPRemoteCommandCenter` handlers for:

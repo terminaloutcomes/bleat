@@ -297,6 +297,7 @@ extension AppFailure {
         case (_, .rateLimited): .requestRateLimited
         case (_, .requestCancelled): .requestCancelled
         case (_, .requestRejected): .requestRejected
+        case (_, .audioSessionActivationFailed): .audioSessionActivationFailed
         case (_, .mediaUnavailable): .mediaUnavailable
         case (_, .uncertainMutation): .uncertainMutation
         case (_, .authenticationCancelled): .authenticationCancelled

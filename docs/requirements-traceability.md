@@ -388,3 +388,77 @@ confirmation popover omitted Cancel; the explicit two-button alert resolves that
 failure. Strict Swift lint and `git diff --check` passed. Xcode debugger-version
 metadata and stale-build-product warnings remain tooling limitations. The full
 local gate, disposable-server journeys, and physical-device checks were not run.
+
+### Last-playing restoration (#341)
+
+The app persists successful audiobook selection separately from canonical
+account/item progress. Cold launch restores paused selection; explicit Play
+uses the shared playback coordinator after bootstrap. Stop and ownership
+removal invalidate selection. Implementation: `App/PlaybackPositionStore.swift`,
+`App/AppModel.swift`, `App/PlaybackModel.swift`, `App/NowPlayingCoordinator.swift`.
+Regression evidence: `AppModelTests.testLastPlayingRestoresPausedSelectionAndCanonicalPosition`,
+`testLastPlayingRejectsDifferentActiveAccount`,
+`testLastPlayingPlayDuringBootstrapCoalescesAndReportsFailure`,
+`testLastPlayingStopCancelsPlayDuringBootstrap`,
+`testLastPlayingExplicitPlayUsesVerifiedDownloadOffline`.
+Status: focused persistence/cold-resume tests, signed host validation and disposable-server
+online/offline app journeys pass. The complete Simulator gate passed all 509 app
+tests; UI results were 98 passed, four failed and six expected skips. The
+mini-player contrast failure also occurs on the unchanged base. Two cover-test
+failures exposed selection retained between synthetic fixtures; fixture reset
+passed all six affected UI sequence tests after fixture reset. Partial-transcript export
+failed at the system Save to Files sheet in the full run, but passed in focused
+base and changed-build runs; its suite-only failure remains unclassified.
+Physical AirPods/CarPlay routing,
+force-quit versus suspension/OS termination, reconnection and interruption
+acceptance remain open in #341. Siri media integration remains in #334.
+
+Device evidence must correlate `process_start`, scene lifecycle,
+`remote_play_command`, `restore_selection`, `publish_now_playing` and
+`activate_audio_session` events with the observed hardware press. Record build,
+iOS version, route, process launch/system command evidence and timing. Separate
+no OS launch, launch without handler delivery, command rejection and preparation
+or activation failure; never infer delivery from pressing Play alone.
+
+The local-checkpoint and failed-resume recovery findings were addressed after
+explicit product direction. `AppModelTests.testLastPlayingStreamingResumeUsesLocalCheckpoint`
+and `testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint` cover streamed
+local-position precedence, typed failure persistence, relaunch, visible recovery,
+dismissal, retry and Stop. `testLastPlayingRecoveryActionsPreserveTypedFailureAndLegacyRecord`
+covers action selection and records without failure metadata.
+`BleatUITests.testColdResumeFailureOffersRetryAndKeepsSelectedBookAfterDismissal`
+and `testColdResumeAuthenticationOffersAccountEditor` cover native recovery UI.
+Follow-up validation passed all 512 app tests and both new recovery UI journeys,
+with no skips or runtime warnings; signed host validation passed 519 tests and
+the Release build. Complete UI-suite results above remain unresolved as stated.
+The existing failed-player retry UI regression and both disposable-server
+online/offline app journeys also passed; exact identifiers and outcomes were
+verified in result bundles.
+
+Two P2 limitations are accepted for now: native remote callbacks acknowledge
+queued processing before its eventual outcome; selection persistence waits for
+bookmark loading after audio starts, so interrupted preparation can retain the
+previous book. The migration P2 is resolved: malformed last-playing metadata is
+discarded during local account-identity migration while valid account-scoped
+positions migrate. Unsupported versions remain preserved and explicitly fail.
+`AppModelTests.testMigrationDropsCorruptSelectionAndPreservesAccountScopedPositions`
+and `testMigrationRekeysValidSelectionAndPreservesUnsupportedVersion` cover this
+boundary; the discard emits `invalid_last_playing_record` at
+`migrate_playback_positions`. Focused simulator validation passed all eight
+selected app tests with no skips or runtime warnings; exact outcomes were
+verified in the result bundle.
+The stale native Play admission P2 is resolved: bootstrap retires resumable
+command admission when the selection is absent, invalid, mismatched, or has no
+active account. Retiring bootstrap admission invalidates already queued commands
+without disturbing valid prepared-playback command availability.
+`AppModelTests.testLastPlayingRejectsDiscardedSelectionInNativeCallbacks` covers
+mismatched and signed-out bootstrap through actual callbacks off the main actor;
+`FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
+covers retirement followed by replacement playback. Deleted-book cold resume
+also clears its paused native snapshot and retained retry identity;
+`AppModelTests.testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity`
+covers fresh and previously failed selections while retaining canonical positions.
+Final admission validation passed all 15 selected app tests, with no skips or
+runtime warnings; exact callback, bootstrap, migration, and deleted-book outcomes
+were inspected. Independent complete-change review reported no findings.
+Remaining device evidence keeps #341 open.

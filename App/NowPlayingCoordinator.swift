@@ -156,6 +156,7 @@ extension MPNowPlayingInfoCenter: NowPlayingInfoPublishing {}
 private struct RemoteCommandAdmission: Sendable {
     var snapshot: NowPlayingSnapshot?
     var hasHandler = false
+    var hasResumableSelection = false
     var generation: UInt64 = 0
 
     func outcome(for command: PlaybackRemoteCommand)
@@ -172,7 +173,14 @@ private struct RemoteCommandAdmission: Sendable {
             }
         default: break
         }
-        guard hasHandler, let snapshot, snapshot.isPlaybackAvailable else {
+        guard hasHandler else { return .unavailable }
+        if snapshot == nil, hasResumableSelection {
+            switch command {
+            case .play, .toggle: return .accepted
+            default: return .unavailable
+            }
+        }
+        guard let snapshot, snapshot.isPlaybackAvailable else {
             return .unavailable
         }
         switch command {
@@ -240,6 +248,18 @@ final class NowPlayingCoordinator {
     }
 
     func publish(_ snapshot: NowPlayingSnapshot) {
+        if latestSnapshot?.itemID != snapshot.itemID
+            || latestSnapshot?.accountID != snapshot.accountID
+            || latestSnapshot?.isPlaybackRequested
+                != snapshot.isPlaybackRequested
+            || latestSnapshot?.isPlaybackAvailable
+                != snapshot.isPlaybackAvailable
+        {
+            Task {
+                await SystemDiagnosticRecorder.shared.record(
+                    .completed(.publishNowPlaying, category: .playback))
+            }
+        }
         let nextArtworkIdentity = snapshot.coverURL.map {
             NowPlayingArtworkIdentity(
                 accountID: snapshot.accountID,
@@ -290,10 +310,30 @@ final class NowPlayingCoordinator {
         }
     }
 
+    func setResumableSelectionAvailable(_ available: Bool) {
+        remoteCommandAdmission.withLock {
+            if !available, $0.hasResumableSelection, $0.snapshot == nil {
+                $0.generation &+= 1
+            }
+            $0.hasResumableSelection = available
+        }
+        if let latestSnapshot {
+            updateCommandAvailability(latestSnapshot)
+        } else {
+            commandCenter.playCommand.isEnabled = available
+            commandCenter.togglePlayPauseCommand.isEnabled = available
+        }
+    }
+
     func clear() {
         remoteCommandAdmission.withLock {
             $0.snapshot = nil
+            $0.hasResumableSelection = false
             $0.generation &+= 1
+        }
+        Task {
+            await SystemDiagnosticRecorder.shared.record(
+                .completed(.clearNowPlaying, category: .playback))
         }
         artworkGeneration &+= 1
         artworkTask?.cancel()

@@ -34,6 +34,576 @@ extension DownloadStorageLayout {
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testLastPlayingRestoresPausedSelectionAndCanonicalPosition()
+        async throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let record = LastPlayingRecord(accountID: account.id, book: book)
+        try store.select(record)
+        try store.save(42, accountID: account.id, itemID: book.id)
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(
+            service: service,
+            playbackPositionStore: PlaybackPositionStore(defaults: defaults))
+        await model.start()
+        XCTAssertEqual(model.playback.resumeSelection, record)
+        XCTAssertEqual(model.playback.currentTime, 42)
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        let requests = await service.playbackOpenRequests()
+        XCTAssertTrue(requests.isEmpty)
+        model.playback.pause()
+        XCTAssertEqual(try store.lastPlaying(), record)
+        await model.playback.stop()
+        XCTAssertNil(try store.lastPlaying())
+        XCTAssertEqual(
+            store.position(accountID: account.id, itemID: book.id), 42)
+    }
+
+    func testLastPlayingStreamingResumeUsesLocalCheckpoint() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        try store.select(
+            LastPlayingRecord(
+                accountID: account.id, book: fixture.detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: fixture.detail.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .success(fixture.detail),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL))
+            ])
+        let model = AppModel(service: service, playbackPositionStore: store)
+        await model.start()
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        let started = await waitUntil(timeout: .seconds(5)) {
+            model.playback.isPlaybackRequested
+        }
+        XCTAssertTrue(started)
+        model.playback.pause()
+        XCTAssertEqual(model.playback.currentTime, 0.5, accuracy: 0.15)
+        XCTAssertEqual(
+            try XCTUnwrap(
+                store.position(accountID: account.id, itemID: fixture.detail.id)
+            ), 0.5, accuracy: 0.15)
+        await model.playback.stop()
+    }
+
+    func testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        try store.select(
+            LastPlayingRecord(
+                accountID: account.id, book: fixture.detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: fixture.detail.id)
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .failure(
+                    .bookDetail(.remote(.unexpectedStatus(503))))),
+            playbackPositionStore: store)
+        await model.start()
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        let failed = await waitUntil(timeout: .seconds(3)) {
+            model.selectionResumeFailure != nil
+        }
+        XCTAssertTrue(failed)
+        let failure = try XCTUnwrap(model.selectionResumeFailure)
+        XCTAssertEqual(failure.cause, .serverUnavailable)
+        XCTAssertEqual(failure.playbackRecoveryAction, .retry)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        model.dismissSelectionResumeFailure()
+        XCTAssertNil(model.selectionResumeFailure)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        XCTAssertEqual(try store.lastPlaying()?.failure, failure)
+        let relaunched = AppModel(
+            service: TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(fixture.detail),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: fixture.detail, audioURL: fixture.audioURL))
+                ]),
+            playbackPositionStore: PlaybackPositionStore(
+                defaults: fixture.defaults))
+        await relaunched.start()
+        XCTAssertEqual(relaunched.selectionResumeFailure, failure)
+        XCTAssertEqual(relaunched.playback.state, .failed(failure))
+        XCTAssertTrue(relaunched.playback.showsMiniPlayer)
+        XCTAssertFalse(relaunched.playback.isPlaybackRequested)
+        let outcome = await relaunched.retryFailedPlayback()
+        guard case .started = outcome else {
+            return XCTFail("Expected a successful retry")
+        }
+        relaunched.playback.pause()
+        XCTAssertEqual(relaunched.playback.currentTime, 0.5, accuracy: 0.15)
+        XCTAssertNil(try store.lastPlaying()?.failure)
+        await relaunched.playback.stop()
+        XCTAssertNil(try store.lastPlaying())
+    }
+
+    func testLastPlayingRecoveryActionsPreserveTypedFailureAndLegacyRecord()
+        throws
+    {
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .authenticationRequired)
+                .playbackRecoveryAction, .signIn)
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .permissionDenied).playbackRecoveryAction,
+            .dismiss)
+        XCTAssertEqual(
+            AppFailure(.openPlayback, .itemNotFound).playbackRecoveryAction,
+            .dismiss)
+        let account = try fixtureAccount()
+        let record = LastPlayingRecord(
+            accountID: account.id,
+            book: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let encoded = try JSONEncoder().encode(record)
+        var legacy = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "failure")
+        let decoded = try JSONDecoder().decode(
+            LastPlayingRecord.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertEqual(decoded, record)
+        let metadataFailure = AppFailure(
+            .loadBook, .invalidBookMetadata(.duration))
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                AppFailure.self,
+                from: JSONEncoder().encode(metadataFailure)), metadataFailure)
+        let failure = AppFailure(.openPlayback, .authenticationRequired)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                AppFailure.self, from: JSONEncoder().encode(failure)), failure)
+    }
+
+    func testLastPlayingInvalidRecordRemainsDiagnosable() throws {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let malformed = Data("{\"version\":1}".utf8)
+        defaults.set(malformed, forKey: "bleat.lastPlaying.v1")
+        XCTAssertThrowsError(try store.lastPlaying()) {
+            XCTAssertEqual(
+                $0 as? PlaybackPositionStoreError, .invalidLastPlayingRecord)
+        }
+        // Exact bytes are the storage contract: failed decoding must not rewrite evidence.
+        XCTAssertEqual(defaults.data(forKey: "bleat.lastPlaying.v1"), malformed)
+    }
+
+    func testMigrationDropsCorruptSelectionAndPreservesAccountScopedPositions()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let legacyID = AccountID(rawValue: "legacy")
+        let canonicalID = AccountID(rawValue: "canonical")
+        let otherID = AccountID(rawValue: "other")
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let invalidIdentity = try JSONEncoder().encode(
+            LastPlayingRecord(accountID: AccountID(rawValue: ""), book: book))
+        for corrupted in [Data("{\"version\":1}".utf8), invalidIdentity] {
+            try store.save(42, accountID: legacyID, itemID: book.id)
+            try store.save(19, accountID: canonicalID, itemID: book.id)
+            try store.save(9, accountID: otherID, itemID: book.id)
+            defaults.set(corrupted, forKey: "bleat.lastPlaying.v1")
+
+            XCTAssertEqual(
+                try store.migrateAccountIdentity(
+                    from: legacyID, to: canonicalID),
+                .discardedInvalidLastPlayingRecord)
+            let relaunched = PlaybackPositionStore(defaults: defaults)
+            XCTAssertNil(try relaunched.lastPlaying())
+            XCTAssertNil(defaults.data(forKey: "bleat.lastPlaying.v1"))
+            XCTAssertNil(
+                relaunched.position(accountID: legacyID, itemID: book.id))
+            XCTAssertEqual(
+                relaunched.position(accountID: canonicalID, itemID: book.id), 42
+            )
+            XCTAssertEqual(
+                relaunched.position(accountID: otherID, itemID: book.id), 9)
+            XCTAssertEqual(
+                try relaunched.migrateAccountIdentity(
+                    from: legacyID, to: canonicalID),
+                .migrated)
+        }
+    }
+
+    func testMigrationRekeysValidSelectionAndPreservesUnsupportedVersion()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let legacyID = AccountID(rawValue: "legacy")
+        let canonicalID = AccountID(rawValue: "canonical")
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        let failure = AppFailure(.openPlayback, .authenticationRequired)
+        let record = LastPlayingRecord(
+            accountID: legacyID, book: book, failure: failure)
+        try store.select(record)
+        XCTAssertEqual(
+            try store.migrateAccountIdentity(from: legacyID, to: canonicalID),
+            .migrated)
+        XCTAssertEqual(
+            try store.lastPlaying(),
+            LastPlayingRecord(
+                accountID: canonicalID, book: book,
+                updatedAt: record.updatedAt, failure: failure))
+
+        var unsupported = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(record))
+                as? [String: Any])
+        unsupported["version"] = 2
+        let bytes = try JSONSerialization.data(withJSONObject: unsupported)
+        defaults.set(bytes, forKey: "bleat.lastPlaying.v1")
+        try store.save(42, accountID: legacyID, itemID: book.id)
+        XCTAssertThrowsError(
+            try store.migrateAccountIdentity(from: legacyID, to: canonicalID)
+        ) {
+            XCTAssertEqual(
+                $0 as? PlaybackPositionStoreError,
+                .unsupportedLastPlayingVersion)
+        }
+        // Exact bytes ensure an unsupported storage version is not rewritten.
+        XCTAssertEqual(defaults.data(forKey: "bleat.lastPlaying.v1"), bytes)
+        XCTAssertEqual(store.position(accountID: legacyID, itemID: book.id), 42)
+    }
+
+    func testLastPlayingOwnershipRemovalDoesNotClearOtherBookOrPosition() throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        try store.select(LastPlayingRecord(accountID: account.id, book: book))
+        try store.save(42, accountID: account.id, itemID: book.id)
+        store.clearLastPlaying(
+            accountID: AccountID(rawValue: "another-account"))
+        XCTAssertNotNil(try store.lastPlaying())
+        store.clearLastPlaying(
+            accountID: account.id, itemID: LibraryItemID(rawValue: "other-book")
+        )
+        XCTAssertNotNil(try store.lastPlaying())
+        store.clearLastPlaying(accountID: account.id, itemID: book.id)
+        XCTAssertNil(try store.lastPlaying())
+        XCTAssertEqual(
+            store.position(accountID: account.id, itemID: book.id), 42)
+    }
+
+    func testLastPlayingRejectsDiscardedSelectionInNativeCallbacks()
+        async throws
+    {
+        let account = try fixtureAccount()
+        for activeAccount in [account, nil] {
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let store = PlaybackPositionStore(defaults: defaults)
+            try store.select(
+                LastPlayingRecord(
+                    accountID: AccountID(rawValue: "other-account"),
+                    book: fixturePage(libraryID: fixtureLibrary().id).items[0]))
+            let coordinator = NowPlayingCoordinator(
+                registersRemoteCommands: false)
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(activeAccount)),
+                playbackPositionStore: store, nowPlayingCoordinator: coordinator
+            )
+            let play = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.play
+            }
+            let toggle = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.toggle
+            }
+            // Callbacks use the actual locked MediaPlayer admission boundary.
+            XCTAssertEqual(play(()), .success)
+            await model.start()
+            XCTAssertNil(model.playback.resumeSelection)
+            XCTAssertNil(try store.lastPlaying())
+            XCTAssertEqual(model.requestSelectionResume(), .unavailable)
+            let playStatus = await Task.detached { play(()) }.value
+            let toggleStatus = await Task.detached { toggle(()) }.value
+            XCTAssertEqual(playStatus, .noSuchContent)
+            XCTAssertEqual(toggleStatus, .noSuchContent)
+        }
+    }
+
+    func testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        for previousFailure in [
+            nil, AppFailure(.openPlayback, .authenticationRequired),
+        ] {
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let store = PlaybackPositionStore(defaults: defaults)
+            try store.select(
+                LastPlayingRecord(
+                    accountID: account.id, book: book, failure: previousFailure)
+            )
+            try store.save(42, accountID: account.id, itemID: book.id)
+            let coordinator = NowPlayingCoordinator(
+                registersRemoteCommands: false)
+            let model = AppModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    bookDetail: .failure(
+                        .bookDetail(.remote(.unexpectedStatus(404))))),
+                playbackPositionStore: store, nowPlayingCoordinator: coordinator
+            )
+            await model.start()
+            let play = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.play
+            }
+            let toggle = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.toggle
+            }
+            XCTAssertEqual(play(()), .success)
+            let discarded = await waitUntil(timeout: .seconds(3)) {
+                model.selectionResumeFailure?.cause == .itemNotFound
+            }
+            XCTAssertTrue(discarded)
+            XCTAssertNil(try store.lastPlaying())
+            XCTAssertNil(model.playback.resumeSelection)
+            XCTAssertFalse(model.playback.hasActiveBook)
+            XCTAssertEqual(
+                store.position(accountID: account.id, itemID: book.id), 42)
+            let playStatus = await Task.detached { play(()) }.value
+            let toggleStatus = await Task.detached { toggle(()) }.value
+            XCTAssertEqual(playStatus, .noSuchContent)
+            XCTAssertEqual(toggleStatus, .noSuchContent)
+        }
+    }
+
+    func testLastPlayingPlayDuringBootstrapCoalescesAndReportsFailure()
+        async throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        try store.select(LastPlayingRecord(accountID: account.id, book: book))
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            bookDetail: .failure(.bookDetail(.remote(.unexpectedStatus(503)))),
+            activeAccountGate: gate)
+        let model = AppModel(service: service, playbackPositionStore: store)
+        let bootstrap = Task { await model.start() }
+        await gate.waitUntilEntered()
+        XCTAssertEqual(model.playback.handleRemoteCommand(.play), .accepted)
+        XCTAssertEqual(model.playback.handleRemoteCommand(.play), .accepted)
+        await gate.release()
+        await bootstrap.value
+        let failed = await waitUntil(timeout: .seconds(3)) {
+            if case .failed = model.playback.state { return true }
+            return false
+        }
+        XCTAssertTrue(failed)
+        let requests = await service.bookDetailRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNotNil(try store.lastPlaying())
+        await model.playback.stop()
+    }
+
+    func testLastPlayingStopCancelsPlayDuringBootstrap() async throws {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        try store.select(
+            LastPlayingRecord(
+                accountID: account.id,
+                book: fixturePage(libraryID: fixtureLibrary().id).items[0]))
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account), activeAccountGate: gate)
+        let model = AppModel(service: service, playbackPositionStore: store)
+        let bootstrap = Task { await model.start() }
+        await gate.waitUntilEntered()
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        await model.playback.stop()
+        await gate.release()
+        await bootstrap.value
+        XCTAssertNil(model.playback.resumeSelection)
+        let requests = await service.bookDetailRequests()
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testLastPlayingStopAndPauseCancelResolvingRemotePlay() async throws {
+        for stop in [true, false] {
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let store = PlaybackPositionStore(defaults: defaults)
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+            try store.select(
+                LastPlayingRecord(accountID: account.id, book: detail.summary))
+            let gate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                bookDetail: .success(detail), bookDetailGate: gate)
+            let model = AppModel(service: service, playbackPositionStore: store)
+            await model.start()
+            XCTAssertEqual(model.requestSelectionResume(), .accepted)
+            await gate.waitUntilEntered()
+            if stop {
+                await model.playback.stop()
+            } else {
+                model.playback.pause()
+            }
+            await gate.release()
+            // Drain the original resolver and verify it never opens a playback session.
+            for _ in 0..<100 { await Task.yield() }
+            let requests = await service.playbackOpenRequests()
+            XCTAssertTrue(requests.isEmpty)
+            XCTAssertFalse(model.playback.isPlaybackRequested)
+            XCTAssertEqual(try store.lastPlaying() == nil, stop)
+            await model.playback.stop()
+        }
+    }
+
+    func testLastPlayingStopCancelsFirstPreparationSuspension() async throws {
+        for downloaded in [true, false] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer {
+                defaults.removePersistentDomain(forName: suite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            let store = PlaybackPositionStore(defaults: defaults)
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+            try FileManager.default.createDirectory(
+                at: root, withIntermediateDirectories: true)
+            if downloaded {
+                try await prepareCompleteDownload(
+                    root: root, account: account, detail: detail)
+            }
+            try store.select(
+                LastPlayingRecord(accountID: account.id, book: detail.summary))
+            let gate = AsyncGate()
+            let diagnostics = GatedPlaybackStartDiagnosticRecorder(gate: gate)
+            let service = TestAppService(
+                activeAccount: .success(account), bookDetail: .success(detail))
+            let model = AppModel(
+                service: service, downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("cancel-preparation"),
+                diagnostics: diagnostics, playbackPositionStore: store)
+            await model.start()
+            XCTAssertEqual(model.requestSelectionResume(), .accepted)
+            await gate.waitUntilEntered()
+            await model.playback.stop()
+            await gate.release()
+            for _ in 0..<100 { await Task.yield() }
+            XCTAssertFalse(model.playback.isPlaybackRequested)
+            XCTAssertEqual(model.playback.state, .idle)
+            XCTAssertNil(try store.lastPlaying())
+            let requests = await service.playbackOpenRequests()
+            XCTAssertTrue(requests.isEmpty)
+        }
+    }
+
+    func testLastPlayingResumeReactivatesAudioAndPreservesTypedFailure()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let activation = ThrowingTestAudioSessionActivation()
+        let playback = PlaybackModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            audioSessionActivation: {
+                try activation.activate()
+            })
+        await playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: AccountID(rawValue: "activation-test"), account: nil)
+        playback.pause()
+        let before = activation.callCount
+        activation.reject = true
+        XCTAssertEqual(playback.handleRemoteCommand(.play), .invalid)
+        XCTAssertEqual(activation.callCount, before + 1)
+        XCTAssertEqual(
+            playback.state,
+            .failed(AppFailure(.openPlayback, .audioSessionActivationFailed)))
+        XCTAssertFalse(playback.isPlaybackRequested)
+        await playback.stop()
+    }
+
+    func testLastPlayingExplicitPlayUsesVerifiedDownloadOffline() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true)
+        try await prepareCompleteDownload(
+            root: root, account: account, detail: detail, purpose: .manual)
+        try store.select(
+            LastPlayingRecord(accountID: account.id, book: detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: detail.id)
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(
+            service: service, downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "last-playing"), playbackPositionStore: store)
+        await model.start()
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        XCTAssertEqual(model.requestSelectionResume(), .accepted)
+        let prepared = await waitUntil(timeout: .seconds(5)) {
+            model.playback.isPrepared(accountID: account.id, itemID: detail.id)
+        }
+        XCTAssertTrue(prepared)
+        XCTAssertEqual(model.playback.currentTime, 0.5, accuracy: 0.1)
+        let requests = await service.playbackOpenRequests()
+        XCTAssertTrue(requests.isEmpty)
+        model.playback.pause()
+        XCTAssertEqual(try store.lastPlaying()?.book.id, detail.id)
+        await model.playback.stop()
+    }
+
     func testPlaybackTimeFormatterUsesOneBookmarkAndPlayerFormat() {
         XCTAssertEqual(PlaybackTimeFormatter.string(0), "0:00")
         XCTAssertEqual(PlaybackTimeFormatter.string(1_234.5), "20:34")
@@ -24793,6 +25363,17 @@ private actor TestBookCoverFetcher {
 }
 
 @MainActor
+private final class ThrowingTestAudioSessionActivation {
+    var reject = false
+    private(set) var callCount = 0
+
+    func activate() throws {
+        callCount += 1
+        if reject { throw NSError(domain: "test-audio-session", code: 1) }
+    }
+}
+
+@MainActor
 private final class TestAudioSessionActivation: @unchecked Sendable {
     private(set) var callCount = 0
 
@@ -26988,6 +27569,16 @@ private actor GatedSeekDiagnosticRecorder: DiagnosticRecording {
         else {
             return
         }
+        await gate.enterAndWait()
+    }
+}
+
+private actor GatedPlaybackStartDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+    init(gate: AsyncGate) { self.gate = gate }
+    func record(_ event: DiagnosticEvent) async {
+        guard event.operation == .openPlayback, event.name == .operationStarted
+        else { return }
         await gate.enterAndWait()
     }
 }

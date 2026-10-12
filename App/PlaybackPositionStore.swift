@@ -2,8 +2,15 @@ import BleatCore
 import Foundation
 
 enum PlaybackPositionStoreError: Error, Equatable {
+    case invalidLastPlayingRecord
+    case unsupportedLastPlayingVersion
     case invalidPosition
     case persistenceFailed
+}
+
+enum PlaybackPositionMigrationOutcome: Equatable, Sendable {
+    case migrated
+    case discardedInvalidLastPlayingRecord
 }
 
 enum DownloadedPositionDecision: Equatable {
@@ -44,6 +51,26 @@ enum DownloadedPositionReconciler {
     }
 }
 
+struct LastPlayingRecord: Codable, Equatable {
+    let version: Int
+    let accountID: AccountID
+    let book: LibraryBookSummary
+    let updatedAt: Date
+    let failure: AppFailure?
+
+    init(
+        accountID: AccountID, book: LibraryBookSummary,
+        updatedAt: Date = Date(),
+        failure: AppFailure? = nil
+    ) {
+        version = 1
+        self.accountID = accountID
+        self.book = book
+        self.updatedAt = updatedAt
+        self.failure = failure
+    }
+}
+
 @MainActor
 final class PlaybackPositionStore {
     static let shared = PlaybackPositionStore(defaults: .standard)
@@ -53,6 +80,46 @@ final class PlaybackPositionStore {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+    }
+
+    private let lastPlayingKey = "bleat.lastPlaying.v1"
+
+    func lastPlaying() throws(PlaybackPositionStoreError) -> LastPlayingRecord?
+    {
+        guard let data = defaults.data(forKey: lastPlayingKey) else {
+            return nil
+        }
+        guard
+            let record = try? JSONDecoder().decode(
+                LastPlayingRecord.self, from: data)
+        else { throw .invalidLastPlayingRecord }
+        guard record.version == 1 else { throw .unsupportedLastPlayingVersion }
+        guard !record.accountID.rawValue.isEmpty,
+            !record.book.id.rawValue.isEmpty,
+            !record.book.libraryID.rawValue.isEmpty,
+            record.book.duration.isFinite, record.book.duration >= 0
+        else { throw .invalidLastPlayingRecord }
+        return record
+    }
+
+    func select(_ record: LastPlayingRecord) throws(PlaybackPositionStoreError)
+    {
+        guard let data = try? JSONEncoder().encode(record) else {
+            throw .persistenceFailed
+        }
+        defaults.set(data, forKey: lastPlayingKey)
+    }
+
+    func clearLastPlaying(
+        accountID: AccountID? = nil, itemID: LibraryItemID? = nil
+    ) {
+        if accountID != nil || itemID != nil {
+            guard let record = try? lastPlaying(),
+                accountID == nil || record.accountID == accountID,
+                itemID == nil || record.book.id == itemID
+            else { return }
+        }
+        defaults.removeObject(forKey: lastPlayingKey)
     }
 
     func position(
@@ -84,6 +151,7 @@ final class PlaybackPositionStore {
         accountID: AccountID,
         itemID: LibraryItemID
     ) throws(PlaybackPositionStoreError) {
+        clearLastPlaying(accountID: accountID, itemID: itemID)
         var positions = storedPositions()
         positions.removeValue(
             forKey: key(accountID: accountID, itemID: itemID)
@@ -98,10 +166,29 @@ final class PlaybackPositionStore {
         defaults.set(data, forKey: storageKey)
     }
 
+    @discardableResult
     func migrateAccountIdentity(
         from legacyID: AccountID,
         to canonicalID: AccountID
-    ) throws(PlaybackPositionStoreError) {
+    ) throws(PlaybackPositionStoreError) -> PlaybackPositionMigrationOutcome {
+        var outcome = PlaybackPositionMigrationOutcome.migrated
+        do {
+            if let record = try lastPlaying(), record.accountID == legacyID {
+                try select(
+                    LastPlayingRecord(
+                        accountID: canonicalID, book: record.book,
+                        updatedAt: record.updatedAt, failure: record.failure))
+            }
+        } catch {
+            switch error {
+            case .invalidLastPlayingRecord:
+                clearLastPlaying()
+                outcome = .discardedInvalidLastPlayingRecord
+            case .unsupportedLastPlayingVersion, .invalidPosition,
+                .persistenceFailed:
+                throw error
+            }
+        }
         let legacyPrefix = accountPrefix(legacyID)
         let canonicalPrefix = accountPrefix(canonicalID)
         var positions = storedPositions()
@@ -118,6 +205,7 @@ final class PlaybackPositionStore {
             throw .persistenceFailed
         }
         defaults.set(data, forKey: storageKey)
+        return outcome
     }
 
     private func storedPositions() -> [String: Double] {
