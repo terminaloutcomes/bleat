@@ -188,6 +188,7 @@
                 .compactMap(UITestScenario.init(rawValue:))
                 .first
             if explicitScenario != nil {
+                PlaybackPositionStore.shared.clearLastPlaying()
                 do {
                     try PlaybackPositionStore.shared.remove(
                         accountID: AccountID(rawValue: "ui-account"),

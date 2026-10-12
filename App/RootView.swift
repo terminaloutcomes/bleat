@@ -289,6 +289,17 @@ struct RootView: View {
             model.reloadRemoteTelemetryConsent()
         }
         .onChange(of: scenePhase) { previousPhase, phase in
+            let operation: DiagnosticOperation =
+                switch phase {
+                case .active: .sceneActive
+                case .inactive: .sceneInactive
+                case .background: .sceneBackground
+                @unknown default: .sceneInactive
+                }
+            Task {
+                await SystemDiagnosticRecorder.shared.record(
+                    .completed(operation, category: .app))
+            }
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
             if phase == .active {

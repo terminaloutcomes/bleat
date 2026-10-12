@@ -388,3 +388,41 @@ confirmation popover omitted Cancel; the explicit two-button alert resolves that
 failure. Strict Swift lint and `git diff --check` passed. Xcode debugger-version
 metadata and stale-build-product warnings remain tooling limitations. The full
 local gate, disposable-server journeys, and physical-device checks were not run.
+
+### Last-playing restoration (#341)
+
+The app persists successful audiobook selection separately from canonical
+account/item progress. Cold launch restores paused selection; explicit Play
+uses the shared playback coordinator after bootstrap. Stop and ownership
+removal invalidate selection. Implementation: `App/PlaybackPositionStore.swift`,
+`App/AppModel.swift`, `App/PlaybackModel.swift`, `App/NowPlayingCoordinator.swift`.
+Regression evidence: `AppModelTests.testLastPlayingRestoresPausedSelectionAndCanonicalPosition`,
+`testLastPlayingRejectsDifferentActiveAccount`,
+`testLastPlayingPlayDuringBootstrapCoalescesAndReportsFailure`,
+`testLastPlayingStopCancelsPlayDuringBootstrap`,
+`testLastPlayingExplicitPlayUsesVerifiedDownloadOffline`.
+Status: focused persistence/cold-resume tests, signed host validation and disposable-server
+online/offline app journeys pass. The complete Simulator gate passed all 509 app
+tests; UI results were 98 passed, four failed and six expected skips. The
+mini-player contrast failure also occurs on the unchanged base. Two cover-test
+failures exposed selection retained between synthetic fixtures; fixture reset
+passed all six affected UI sequence tests after fixture reset. Partial-transcript export
+failed at the system Save to Files sheet in the full run, but passed in focused
+base and changed-build runs; its suite-only failure remains unclassified.
+Physical AirPods/CarPlay routing,
+force-quit versus suspension/OS termination, reconnection and interruption
+acceptance remain open in #341. Siri media integration remains in #334.
+
+Device evidence must correlate `process_start`, scene lifecycle,
+`remote_play_command`, `restore_selection`, `publish_now_playing` and
+`activate_audio_session` events with the observed hardware press. Record build,
+iOS version, route, process launch/system command evidence and timing. Separate
+no OS launch, launch without handler delivery, command rejection and preparation
+or activation failure; never infer delivery from pressing Play alone.
+
+Four P2 findings remain from independent review: streamed resume currently uses
+the server checkpoint instead of a newer local checkpoint; a failed unprepared
+selection lacks visible retry controls; native remote callbacks acknowledge
+queued work before its actual outcome; and selection persistence waits for
+bookmark loading after audio starts. These limitations and remaining device
+evidence keep #341 open; they are not complete acceptance evidence.
