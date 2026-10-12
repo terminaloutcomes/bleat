@@ -453,7 +453,10 @@ command admission when the selection is absent, invalid, mismatched, or has no
 active account. Retiring bootstrap admission invalidates already queued commands
 without disturbing valid prepared-playback command availability.
 `AppModelTests.testLastPlayingRejectsDiscardedSelectionInNativeCallbacks` covers
-mismatched and signed-out bootstrap through actual callbacks off the main actor;
+mismatched and signed-out bootstrap through actual callbacks off the main actor.
+Its startup-completion gate also verifies that discarding a selection cancels
+an already-claimed resume task before bootstrap returns, so repeated Play cannot
+report acceptance of the discarded selection.
 `FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
 covers retirement followed by replacement playback. Deleted-book cold resume
 also clears its paused native snapshot and retained retry identity;

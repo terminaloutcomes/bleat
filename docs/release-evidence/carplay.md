@@ -525,7 +525,8 @@ and one failed. `testLastPlayingRejectsDiscardedSelectionInNativeCallbacks`
 expected `.unavailable` but observed `.accepted`. There were no runtime warnings.
 The unchanged main baseline passed all 565 app tests, and the isolated failing
 test passed once and then all 20 verified repetitions. This failure remains
-unclassified; it is not claimed as a confirmed pre-existing failure. The complete
+unclassified at initial publication; it was not claimed as a confirmed pre-existing
+failure. The complete
 gate stopped before its UI suite. Review identified a possible scheduling race
 in unchanged selection-resume startup code, but no demonstrated connection to
 the cellular confirmation changes. The focused phone UI test
@@ -537,7 +538,12 @@ raised a P2 for an outdated remaining-queue expectation in the new overlap test;
 it was corrected as part of the P1 regression coverage and subsequently passed.
 The latest review, after integration with main, reported no findings and no P0/P1.
 
-Manual verification remains pending with the maintainer:
+The maintainer subsequently reported successful Download/Cancel on both screens
+using their CarPlay test device on iOS 27.0.1 with this current build, explicitly
+confirmed by the maintainer. Queued prompts appeared to work but were not
+confidently confirmed. Reconnect/foreground behavior remains unconfirmed.
+
+Manual verification checklist:
 
 1. On an expensive network path, select an uncached large item from CarPlay.
    Confirm both screens show the correct item/size and Download/Cancel choices.
@@ -552,4 +558,37 @@ Manual verification remains pending with the maintainer:
    verify confirmation becomes available after that modal closes.
 
 Record app/build, iOS version, Simulator/head-unit context, and outcomes here.
-No physical-device or head-unit validation is claimed.
+The physical outcome above is maintainer-reported, rather than an automated
+device or head-unit validation.
+
+### Bootstrap resume race follow-up
+
+The existing last-playing rejection test now gates the app-start completion
+diagnostic. This holds bootstrap open after its invalid selection has been
+discarded while the already-claimed resume task is still suspended. Before the
+fix, the gated test reproduced `.accepted` instead of `.unavailable` with both
+mismatched-account and signed-out startup. Retiring bootstrap resume admission
+now also cancels the pending selection-resume task and invalidates its generation.
+It does not cancel shared bootstrap work.
+
+The gated regression and four adjacent bootstrap/cancellation tests passed with
+zero skips or runtime warnings. Strict Swift lint passed after correcting one
+test-initializer line wrap. A sixth independent review of the complete merge
+change reported no findings. The Simulator Release build and all 572 app tests
+passed, including the gated resume regression and all seven CarPlay tests, with
+zero skips or runtime warnings. Both named live-application journeys passed
+again with zero skips or runtime warnings.
+
+The broad UI attempt ran for approximately twelve minutes before it was stopped
+to finish focused validation. Its finalized result contains 21 passed tests,
+six expected live/screenshot skips, one assertion failure and one canceled test
+(`testBookDetailPlacesChapterProgressBelowPlayback`); Xcode exited 75 after
+SIGINT and emitted interruption diagnostics. No runtime warnings were recorded.
+`testPlaybackRemainsUsableAtLargestDynamicType` could not hit `player.sleepTimer`
+below the screen. The layout, scrolling helper and fixture are unchanged, and
+review found no demonstrated causal connection to this PR. The failure remains
+unclassified and the full UI gate remains incomplete. Focused
+`testColdResumeFailureOffersRetryAndKeepsSelectedBookAfterDismissal`,
+`testColdResumeAuthenticationOffersAccountEditor`, and
+`testSignedInAlertsPresentInSequence` all passed with zero skips or runtime
+warnings; their exact result identifiers were verified.

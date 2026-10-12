@@ -327,8 +327,11 @@ final class AppModelTests: XCTestCase {
                     book: fixturePage(libraryID: fixtureLibrary().id).items[0]))
             let coordinator = NowPlayingCoordinator(
                 registersRemoteCommands: false)
+            let gate = AsyncGate()
             let model = AppModel(
                 service: TestAppService(activeAccount: .success(activeAccount)),
+                diagnostics: GatedAppStartCompletionDiagnosticRecorder(
+                    gate: gate),
                 playbackPositionStore: store, nowPlayingCoordinator: coordinator
             )
             let play = coordinator.makeRemoteCommandCallback { (_: Void) in
@@ -339,7 +342,11 @@ final class AppModelTests: XCTestCase {
             }
             // Callbacks use the actual locked MediaPlayer admission boundary.
             XCTAssertEqual(play(()), .success)
-            await model.start()
+            XCTAssertEqual(model.requestSelectionResume(), .accepted)
+            let bootstrap = Task { await model.start() }
+            await gate.waitUntilEntered()
+            // Startup has discarded the record while the original resume task
+            // is still awaiting bootstrap completion.
             XCTAssertNil(model.playback.resumeSelection)
             XCTAssertNil(try store.lastPlaying())
             XCTAssertEqual(model.requestSelectionResume(), .unavailable)
@@ -347,6 +354,9 @@ final class AppModelTests: XCTestCase {
             let toggleStatus = await Task.detached { toggle(()) }.value
             XCTAssertEqual(playStatus, .noSuchContent)
             XCTAssertEqual(toggleStatus, .noSuchContent)
+            await gate.release()
+            await bootstrap.value
+            XCTAssertEqual(model.requestSelectionResume(), .unavailable)
         }
     }
 
@@ -27968,6 +27978,16 @@ private actor GatedSeekDiagnosticRecorder: DiagnosticRecording {
         else {
             return
         }
+        await gate.enterAndWait()
+    }
+}
+
+private actor GatedAppStartCompletionDiagnosticRecorder: DiagnosticRecording {
+    private let gate: AsyncGate
+    init(gate: AsyncGate) { self.gate = gate }
+    func record(_ event: DiagnosticEvent) async {
+        guard event.operation == .appStart, event.name == .operationCompleted
+        else { return }
         await gate.enterAndWait()
     }
 }
