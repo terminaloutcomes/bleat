@@ -311,9 +311,18 @@ final class NowPlayingCoordinator {
     }
 
     func setResumableSelectionAvailable(_ available: Bool) {
-        remoteCommandAdmission.withLock { $0.hasResumableSelection = available }
-        commandCenter.playCommand.isEnabled = available
-        commandCenter.togglePlayPauseCommand.isEnabled = available
+        remoteCommandAdmission.withLock {
+            if !available, $0.hasResumableSelection, $0.snapshot == nil {
+                $0.generation &+= 1
+            }
+            $0.hasResumableSelection = available
+        }
+        if let latestSnapshot {
+            updateCommandAvailability(latestSnapshot)
+        } else {
+            commandCenter.playCommand.isEnabled = available
+            commandCenter.togglePlayPauseCommand.isEnabled = available
+        }
     }
 
     func clear() {

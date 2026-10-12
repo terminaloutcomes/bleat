@@ -1125,7 +1125,9 @@ Cold launch restores a paused selection without opening a stream or activating
 audio. Explicit Play waits for account/download bootstrap and uses
 `AppModel.startPlayback(... position: .resume)` with existing permission,
 verified-download, authentication and supersession checks. Duplicate bootstrap
-commands coalesce. Cold resume uses an existing canonical local timestamp as an
+commands coalesce. Discarding or losing the saved selection during bootstrap
+retires native Play/Toggle admission and invalidates commands queued for that
+selection. Cold resume uses an existing canonical local timestamp as an
 explicit position; only absence of a local checkpoint delegates to server resume.
 A failed cold resume retains its selected book and typed operation/cause in the
 versioned local record. Relaunch restores the failed player without starting

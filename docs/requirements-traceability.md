@@ -447,7 +447,18 @@ boundary; the discard emits `invalid_last_playing_record` at
 `migrate_playback_positions`. Focused simulator validation passed all eight
 selected app tests with no skips or runtime warnings; exact outcomes were
 verified in the result bundle.
-After rebasing the native callback adapter from main, an additional P2 remains:
-bootstrap can discard a mismatched/no-active-account selection without retiring
-its native Play admission flag, so the callback acknowledges a command that
-the downstream resume handler rejects. Remaining device evidence keeps #341 open.
+The stale native Play admission P2 is resolved: bootstrap retires resumable
+command admission when the selection is absent, invalid, mismatched, or has no
+active account. Retiring bootstrap admission invalidates already queued commands
+without disturbing valid prepared-playback command availability.
+`AppModelTests.testLastPlayingRejectsDiscardedSelectionInNativeCallbacks` covers
+mismatched and signed-out bootstrap through actual callbacks off the main actor;
+`FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
+covers retirement followed by replacement playback. Deleted-book cold resume
+also clears its paused native snapshot and retained retry identity;
+`AppModelTests.testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity`
+covers fresh and previously failed selections while retaining canonical positions.
+Final admission validation passed all 15 selected app tests, with no skips or
+runtime warnings; exact callback, bootstrap, migration, and deleted-book outcomes
+were inspected. Independent complete-change review reported no findings.
+Remaining device evidence keeps #341 open.

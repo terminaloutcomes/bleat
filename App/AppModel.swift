@@ -1850,6 +1850,7 @@ final class AppModel {
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore = .shared,
+        nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         bookProgressOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
             {
@@ -1894,6 +1895,7 @@ final class AppModel {
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
+            nowPlayingCoordinator: nowPlayingCoordinator,
             remoteTelemetryTracer: remoteTelemetryTracer,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
             downloadRemovalStorageCheckpoint:
@@ -2037,6 +2039,7 @@ final class AppModel {
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
+        nowPlayingCoordinator: NowPlayingCoordinator?,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging,
         downloadRemovalStorageCheckpoint:
@@ -2045,6 +2048,8 @@ final class AppModel {
         let playback = PlaybackModel(
             service: service,
             positionStore: playbackPositionStore,
+            nowPlayingCoordinator: nowPlayingCoordinator
+                ?? NowPlayingCoordinator(),
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
@@ -2172,6 +2177,7 @@ final class AppModel {
             schedulePendingLocalSessionSync(for: accounts)
             guard let restoredAccount else {
                 playbackPositionStore.clearLastPlaying()
+                playback.disableBootstrapResume()
                 phase = .signedOut
                 await diagnostics.record(
                     .transition(
@@ -5241,12 +5247,14 @@ final class AppModel {
     private func restoreLastPlayingSelection() {
         do {
             guard let record = try playbackPositionStore.lastPlaying() else {
+                playback.disableBootstrapResume()
                 return
             }
             guard record.accountID == account?.id,
                 accounts.contains(where: { $0.id == record.accountID })
             else {
                 playbackPositionStore.clearLastPlaying()
+                playback.disableBootstrapResume()
                 return
             }
             playback.restoreSelection(record)
@@ -5254,6 +5262,7 @@ final class AppModel {
                 retainSelectionResumeFailure(record: record, failure: failure)
             }
         } catch {
+            playback.disableBootstrapResume()
             let code: DiagnosticFailureCode =
                 switch error {
                 case .unsupportedLastPlayingVersion:
@@ -5351,7 +5360,7 @@ final class AppModel {
                 if failure.cause == .itemNotFound {
                     playbackPositionStore.clearLastPlaying(
                         accountID: record.accountID, itemID: record.book.id)
-                    playback.resumeSelection = nil
+                    playback.discardResumeSelection()
                 } else {
                     retainSelectionResumeFailure(
                         record: record, failure: failure)

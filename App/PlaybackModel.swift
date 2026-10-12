@@ -2008,6 +2008,16 @@ final class PlaybackModel {
         }
     }
 
+    func discardResumeSelection() {
+        resumeSelection = nil
+        clearRetainedFailedBook()
+        nowPlayingCoordinator.clear()
+    }
+
+    func disableBootstrapResume() {
+        nowPlayingCoordinator.setResumableSelectionAvailable(false)
+    }
+
     func stopForAccountSwitch() async {
         cancelSelectionResume?()
         positionStore.clearLastPlaying()

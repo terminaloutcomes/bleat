@@ -312,23 +312,92 @@ final class AppModelTests: XCTestCase {
             store.position(accountID: account.id, itemID: book.id), 42)
     }
 
-    func testLastPlayingRejectsDifferentActiveAccount() async throws {
-        let suite = UUID().uuidString
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = PlaybackPositionStore(defaults: defaults)
+    func testLastPlayingRejectsDiscardedSelectionInNativeCallbacks()
+        async throws
+    {
         let account = try fixtureAccount()
-        try store.select(
-            LastPlayingRecord(
-                accountID: AccountID(rawValue: "other-account"),
-                book: fixturePage(libraryID: fixtureLibrary().id).items[0]))
-        let model = AppModel(
-            service: TestAppService(activeAccount: .success(account)),
-            playbackPositionStore: store)
-        await model.start()
-        XCTAssertNil(model.playback.resumeSelection)
-        XCTAssertNil(try store.lastPlaying())
-        XCTAssertEqual(model.requestSelectionResume(), .unavailable)
+        for activeAccount in [account, nil] {
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let store = PlaybackPositionStore(defaults: defaults)
+            try store.select(
+                LastPlayingRecord(
+                    accountID: AccountID(rawValue: "other-account"),
+                    book: fixturePage(libraryID: fixtureLibrary().id).items[0]))
+            let coordinator = NowPlayingCoordinator(
+                registersRemoteCommands: false)
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(activeAccount)),
+                playbackPositionStore: store, nowPlayingCoordinator: coordinator
+            )
+            let play = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.play
+            }
+            let toggle = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.toggle
+            }
+            // Callbacks use the actual locked MediaPlayer admission boundary.
+            XCTAssertEqual(play(()), .success)
+            await model.start()
+            XCTAssertNil(model.playback.resumeSelection)
+            XCTAssertNil(try store.lastPlaying())
+            XCTAssertEqual(model.requestSelectionResume(), .unavailable)
+            let playStatus = await Task.detached { play(()) }.value
+            let toggleStatus = await Task.detached { toggle(()) }.value
+            XCTAssertEqual(playStatus, .noSuchContent)
+            XCTAssertEqual(toggleStatus, .noSuchContent)
+        }
+    }
+
+    func testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let book = fixturePage(libraryID: fixtureLibrary().id).items[0]
+        for previousFailure in [
+            nil, AppFailure(.openPlayback, .authenticationRequired),
+        ] {
+            let suite = UUID().uuidString
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let store = PlaybackPositionStore(defaults: defaults)
+            try store.select(
+                LastPlayingRecord(
+                    accountID: account.id, book: book, failure: previousFailure)
+            )
+            try store.save(42, accountID: account.id, itemID: book.id)
+            let coordinator = NowPlayingCoordinator(
+                registersRemoteCommands: false)
+            let model = AppModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    bookDetail: .failure(
+                        .bookDetail(.remote(.unexpectedStatus(404))))),
+                playbackPositionStore: store, nowPlayingCoordinator: coordinator
+            )
+            await model.start()
+            let play = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.play
+            }
+            let toggle = coordinator.makeRemoteCommandCallback { (_: Void) in
+                PlaybackRemoteCommand.toggle
+            }
+            XCTAssertEqual(play(()), .success)
+            let discarded = await waitUntil(timeout: .seconds(3)) {
+                model.selectionResumeFailure?.cause == .itemNotFound
+            }
+            XCTAssertTrue(discarded)
+            XCTAssertNil(try store.lastPlaying())
+            XCTAssertNil(model.playback.resumeSelection)
+            XCTAssertFalse(model.playback.hasActiveBook)
+            XCTAssertEqual(
+                store.position(accountID: account.id, itemID: book.id), 42)
+            let playStatus = await Task.detached { play(()) }.value
+            let toggleStatus = await Task.detached { toggle(()) }.value
+            XCTAssertEqual(playStatus, .noSuchContent)
+            XCTAssertEqual(toggleStatus, .noSuchContent)
+        }
     }
 
     func testLastPlayingPlayDuringBootstrapCoalescesAndReportsFailure()
