@@ -105,7 +105,7 @@ final class BonjourServiceBrowser {
             ),
             using: .tcp
         )
-        browser.stateUpdateHandler = { [weak self] state in
+        browser.stateUpdateHandler = { @Sendable [weak self] state in
             Task { @MainActor [weak self] in
                 guard let self, generation == expectedGeneration else { return }
                 switch state {
@@ -120,7 +120,8 @@ final class BonjourServiceBrowser {
                 }
             }
         }
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
+        browser.browseResultsChangedHandler = {
+            @Sendable [weak self] results, _ in
             Task { @MainActor [weak self] in
                 guard let self, generation == expectedGeneration else { return }
                 replaceResults(with: results)
@@ -241,13 +242,49 @@ final class BonjourServiceResolver {
     }
 }
 
+// DNS-SD references must be destroyed on their registered serial callback queue.
+// The queued completion also keeps the C callback context alive through teardown.
+final class BonjourDNSServiceLifetime: @unchecked Sendable {
+    private let reference: DNSServiceRef
+    private let queue: DispatchQueue
+    private let deallocate: @Sendable (DNSServiceRef) -> Void
+    private let lock = NSLock()
+    private var closing = false
+
+    init(
+        reference: DNSServiceRef, queue: DispatchQueue,
+        deallocate: @escaping @Sendable (DNSServiceRef) -> Void = {
+            DNSServiceRefDeallocate($0)
+        }
+    ) {
+        self.reference = reference
+        self.queue = queue
+        self.deallocate = deallocate
+    }
+
+    func close(completion: @escaping @Sendable () -> Void) {
+        lock.lock()
+        let shouldDeallocate = !closing
+        closing = true
+        // Enqueue under the lock so repeated close completions cannot overtake
+        // the first deallocation on the serial queue.
+        queue.async { [self] in
+            if shouldDeallocate { deallocate(reference) }
+            completion()
+        }
+        lock.unlock()
+    }
+}
+
 private final class BonjourDNSServiceResolution: @unchecked Sendable {
     private let service: BonjourDiscoveredService
     private let timeout: Duration
     private let lock = NSLock()
     private var continuation:
         CheckedContinuation<ResolvedBonjourService, Error>?
-    private var serviceRef: DNSServiceRef?
+    private var serviceRef: BonjourDNSServiceLifetime?
+    private let callbackQueue = DispatchQueue(
+        label: "com.terminaloutcomes.Bleat.bonjour-resolution")
     private var timeoutTask: Task<Void, Never>?
     private var completed = false
 
@@ -312,7 +349,7 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
 
         let queueResult = DNSServiceSetDispatchQueue(
             newServiceRef,
-            .global(qos: .userInitiated)
+            callbackQueue
         )
         guard queueResult == kDNSServiceErr_NoError else {
             DNSServiceRefDeallocate(newServiceRef)
@@ -323,13 +360,15 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
             return
         }
 
+        let lifetime = BonjourDNSServiceLifetime(
+            reference: newServiceRef, queue: callbackQueue)
         lock.lock()
         if completed {
             lock.unlock()
-            DNSServiceRefDeallocate(newServiceRef)
+            lifetime.close { [self] in withExtendedLifetime(self) {} }
             return
         }
-        serviceRef = newServiceRef
+        serviceRef = lifetime
         lock.unlock()
 
         let timeoutTask = Task { [weak self, timeout] in
@@ -428,9 +467,15 @@ private final class BonjourDNSServiceResolution: @unchecked Sendable {
 
         timeoutTask?.cancel()
         if let serviceRef {
-            DNSServiceRefDeallocate(serviceRef)
+            // Keep the unretained C callback context alive until the callback
+            // queue has drained and the reference has been deallocated.
+            serviceRef.close { [self] in
+                continuation?.resume(with: result)
+                withExtendedLifetime(self) {}
+            }
+        } else {
+            continuation?.resume(with: result)
         }
-        continuation?.resume(with: result)
     }
 }
 

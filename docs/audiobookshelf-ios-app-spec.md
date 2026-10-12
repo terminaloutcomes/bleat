@@ -1905,6 +1905,23 @@ Do not update a DTO merely because the published API reference says something di
 
 ## 16. Error handling and diagnostics
 
+Framework callbacks must enter through an explicitly nonisolated, sendable
+boundary and dispatch UI work to the main actor without synchronously waiting
+for it. MediaPlayer commands acknowledge admission from a locked playback
+snapshot; execution remains asynchronous and queued commands from cleared
+playback are discarded. KVO callbacks validate the owning player or item after
+the actor hop. DNS-SD resolution uses a serial callback queue and deallocates
+its reference on that same queue after the current callback returns, retaining
+the callback context through teardown. Live-update termination belongs to its
+stream generation and cannot cancel a replacement stream. Cancellation after
+endpoint or credential restoration must not create a new socket or report a
+credential/transport failure for intentionally stopped work.
+
+Assertions and framework traps cannot be recovered with Swift error catching.
+Prevent invalid framework calls and test error-triggered teardown, arbitrary
+callback executors, repeated completion, and stop/restart races at the actual
+callback boundary. See `docs/release-evidence/callback-cancellation-audit.md`.
+
 Preserve the failed operation together with a typed, user-safe failure cause.
 Do not collapse distinct failures into a generic unavailable state. The UI may
 group causes only when the resulting message, retry policy, and diagnostics

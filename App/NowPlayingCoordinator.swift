@@ -1,6 +1,7 @@
 import BleatCore
 import Foundation
 import MediaPlayer
+import Synchronization
 
 enum PlaybackRemoteCommand: Equatable, Sendable {
     case play
@@ -152,6 +153,39 @@ protocol NowPlayingInfoPublishing: AnyObject {
 
 extension MPNowPlayingInfoCenter: NowPlayingInfoPublishing {}
 
+private struct RemoteCommandAdmission: Sendable {
+    var snapshot: NowPlayingSnapshot?
+    var hasHandler = false
+    var generation: UInt64 = 0
+
+    func outcome(for command: PlaybackRemoteCommand)
+        -> PlaybackRemoteCommandOutcome
+    {
+        switch command {
+        case .seek(let position):
+            guard position.isFinite, position >= 0,
+                let snapshot, position <= snapshot.duration
+            else { return .invalid }
+        case .setRate(let rate):
+            guard rate.isFinite, (0.5...3).contains(rate) else {
+                return .invalid
+            }
+        default: break
+        }
+        guard hasHandler, let snapshot, snapshot.isPlaybackAvailable else {
+            return .unavailable
+        }
+        switch command {
+        case .play where snapshot.isPlaybackRequested: return .unavailable
+        case .pause where !snapshot.isPlaybackRequested: return .unavailable
+        case .previous where !snapshot.canPerformPreviousCommand:
+            return .unavailable
+        case .next where !snapshot.canPerformNextCommand: return .unavailable
+        default: return .accepted
+        }
+    }
+}
+
 @MainActor
 final class NowPlayingCoordinator {
     private let infoCenter: any NowPlayingInfoPublishing
@@ -160,6 +194,8 @@ final class NowPlayingCoordinator {
     private var commandTargets: [(MPRemoteCommand, Any)] = []
     private var commandHandler:
         (@MainActor (PlaybackRemoteCommand) -> PlaybackRemoteCommandOutcome)?
+    private nonisolated let remoteCommandAdmission = Mutex(
+        RemoteCommandAdmission())
     private var latestSnapshot: NowPlayingSnapshot?
     private var artworkIdentity: NowPlayingArtworkIdentity?
     private var artwork: MPMediaItemArtwork?
@@ -188,6 +224,10 @@ final class NowPlayingCoordinator {
             ) -> PlaybackRemoteCommandOutcome
     ) {
         commandHandler = handler
+        remoteCommandAdmission.withLock {
+            $0.hasHandler = true
+            $0.generation &+= 1
+        }
     }
 
     func setSkipIntervals(backward: Int, forward: Int) {
@@ -208,6 +248,7 @@ final class NowPlayingCoordinator {
             )
         }
         latestSnapshot = snapshot
+        remoteCommandAdmission.withLock { $0.snapshot = snapshot }
         updateCommandAvailability(snapshot)
         infoCenter.nowPlayingInfo = snapshot.information(artwork: artwork)
         infoCenter.playbackState = snapshot.systemPlaybackState
@@ -250,6 +291,10 @@ final class NowPlayingCoordinator {
     }
 
     func clear() {
+        remoteCommandAdmission.withLock {
+            $0.snapshot = nil
+            $0.generation &+= 1
+        }
         artworkGeneration &+= 1
         artworkTask?.cancel()
         artworkTask = nil
@@ -330,29 +375,35 @@ final class NowPlayingCoordinator {
             @escaping @Sendable (MPRemoteCommandEvent)
             -> PlaybackRemoteCommand?
     ) {
-        let target = command.addTarget { [weak self] event in
-            guard let self,
-                let remoteCommand = commandForEvent(event)
-            else {
+        let target = command.addTarget(
+            handler: makeRemoteCommandCallback(commandForEvent: commandForEvent)
+        )
+        commandTargets.append((command, target))
+    }
+
+    // MediaPlayer requires an immediate acknowledgement. Admit from a locked
+    // snapshot, then deliver asynchronously; never wait for the main actor.
+    func makeRemoteCommandCallback<Event>(
+        commandForEvent:
+            @escaping @Sendable (Event) -> PlaybackRemoteCommand?
+    ) -> @Sendable (Event) -> MPRemoteCommandHandlerStatus {
+        return { @Sendable [weak self] event in
+            guard let self, let command = commandForEvent(event) else {
                 return .commandFailed
             }
-            let outcome =
-                if Thread.isMainThread {
-                    MainActor.assumeIsolated {
-                        self.commandHandler?(remoteCommand)
-                            ?? .unavailable
-                    }
-                } else {
-                    DispatchQueue.main.sync {
-                        MainActor.assumeIsolated {
-                            self.commandHandler?(remoteCommand)
-                                ?? .unavailable
-                        }
-                    }
-                }
-            return outcome.mediaPlayerStatus
+            let state = self.remoteCommandAdmission.withLock { $0 }
+            let outcome = state.outcome(for: command)
+            guard outcome == .accepted else { return outcome.mediaPlayerStatus }
+            Task { @MainActor [weak self] in
+                guard let self,
+                    self.remoteCommandAdmission.withLock({
+                        $0.generation == state.generation
+                    })
+                else { return }
+                _ = self.commandHandler?(command)
+            }
+            return .success
         }
-        commandTargets.append((command, target))
     }
 
     private func updateCommandAvailability(

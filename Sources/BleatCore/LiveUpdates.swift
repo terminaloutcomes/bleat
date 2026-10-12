@@ -304,6 +304,7 @@ public actor AudiobookshelfLiveEventClient {
     private let codec = AudiobookshelfSocketCodec()
     private var task: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
+    private var streamID: UUID?
 
     public init(
         serverProvider: @escaping ServerProvider,
@@ -320,18 +321,26 @@ public actor AudiobookshelfLiveEventClient {
     }
 
     public func updates() -> AsyncStream<AudiobookshelfLiveUpdate> {
-        task?.cancel()
+        stop()
+        let streamID = UUID()
+        self.streamID = streamID
         return AsyncStream { continuation in
             task = Task {
-                await run(continuation: continuation)
+                await run(continuation: continuation, streamID: streamID)
             }
-            continuation.onTermination = { [weak self] _ in
-                Task { await self?.stop() }
+            continuation.onTermination = { @Sendable [weak self] _ in
+                Task { await self?.stop(streamID: streamID) }
             }
         }
     }
 
+    private func stop(streamID: UUID) {
+        guard self.streamID == streamID else { return }
+        stop()
+    }
+
     public func stop() {
+        streamID = nil
         task?.cancel()
         task = nil
         socket?.cancel(with: .goingAway, reason: nil)
@@ -344,14 +353,16 @@ public actor AudiobookshelfLiveEventClient {
     }
 
     private func run(
-        continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation
+        continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation,
+        streamID: UUID
     ) async {
         var retry = 0
         while !Task.isCancelled {
             continuation.yield(.connection(.connecting))
             let authenticated = await connectOnce(
                 retryCount: retry,
-                continuation: continuation
+                continuation: continuation,
+                streamID: streamID
             )
             guard !Task.isCancelled else {
                 break
@@ -371,9 +382,11 @@ public actor AudiobookshelfLiveEventClient {
 
     private func connectOnce(
         retryCount: Int,
-        continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation
+        continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation,
+        streamID: UUID
     ) async -> Bool {
         let endpoint = await serverProvider()
+        guard !Task.isCancelled, self.streamID == streamID else { return false }
         let server = endpoint.server
         let attemptID = UUID()
         let retryBucket = RemoteTelemetryRetryBucket(retryCount: retryCount)
@@ -404,6 +417,8 @@ public actor AudiobookshelfLiveEventClient {
                 ))
         }
 
+        defer { finishAttempt(.cancelled) }
+
         let request: URLRequest
         do {
             request = try codec.socketRequest(for: server)
@@ -422,6 +437,10 @@ public actor AudiobookshelfLiveEventClient {
         do {
             initialToken = try await tokenProvider()
         } catch {
+            guard !Task.isCancelled, self.streamID == streamID else {
+                finishAttempt(.cancelled)
+                return false
+            }
             finishAttempt(
                 .failed(
                     AudiobookshelfLiveConnectionFailure(
@@ -432,9 +451,17 @@ public actor AudiobookshelfLiveEventClient {
             return false
         }
 
+        guard !Task.isCancelled, self.streamID == streamID else {
+            finishAttempt(.cancelled)
+            return false
+        }
         let socket = URLSession.shared.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
+        defer {
+            socket.cancel(with: .goingAway, reason: nil)
+            if self.socket === socket { self.socket = nil }
+        }
         var token = initialToken
         var didRecoverAuthentication = false
         var authenticated = false
@@ -445,6 +472,12 @@ public actor AudiobookshelfLiveEventClient {
             while !Task.isCancelled {
                 failureStage = .socketReceive
                 let message = try await socket.receive()
+                guard !Task.isCancelled, self.streamID == streamID,
+                    self.socket === socket
+                else {
+                    finishAttempt(.cancelled)
+                    return authenticated
+                }
                 failureStage = .protocolDecoding
                 let text: String
                 switch message {
@@ -476,6 +509,9 @@ public actor AudiobookshelfLiveEventClient {
                     authenticated = true
                     finishAttempt(.authenticated)
                     await onAuthenticated(endpoint)
+                    guard !Task.isCancelled, self.streamID == streamID,
+                        self.socket === socket
+                    else { return authenticated }
                     continuation.yield(.connection(.authenticated))
                 case .authenticationRejected:
                     guard !didRecoverAuthentication else {
@@ -493,7 +529,19 @@ public actor AudiobookshelfLiveEventClient {
                     didRecoverAuthentication = true
                     do {
                         token = try await tokenRecovery(token)
+                        guard !Task.isCancelled, self.streamID == streamID,
+                            self.socket === socket
+                        else {
+                            finishAttempt(.cancelled)
+                            return authenticated
+                        }
                     } catch {
+                        guard !Task.isCancelled, self.streamID == streamID,
+                            self.socket === socket
+                        else {
+                            finishAttempt(.cancelled)
+                            return authenticated
+                        }
                         finishAttempt(
                             .failed(
                                 AudiobookshelfLiveConnectionFailure(
@@ -543,6 +591,12 @@ public actor AudiobookshelfLiveEventClient {
                     )))
             continuation.yield(.connection(.failed(failure)))
         } catch {
+            guard !Task.isCancelled, self.streamID == streamID,
+                self.socket === socket
+            else {
+                finishAttempt(.cancelled)
+                return authenticated
+            }
             finishAttempt(
                 .failed(
                     AudiobookshelfLiveConnectionFailure(
@@ -551,10 +605,6 @@ public actor AudiobookshelfLiveEventClient {
                     )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
             await onTransportFailure(endpoint)
-        }
-        socket.cancel(with: .goingAway, reason: nil)
-        if self.socket === socket {
-            self.socket = nil
         }
         return authenticated
     }

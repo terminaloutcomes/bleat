@@ -169,6 +169,15 @@ protocol OpenIDWebAuthenticationSessionFactory: Sendable {
 }
 
 enum SystemOpenIDCompletionMapper {
+    static func callback(
+        completion: @escaping @Sendable (URL?, OpenIDBrowserError?) -> Void
+    ) -> @Sendable (URL?, (any Error)?) -> Void {
+        { callbackURL, error in
+            complete(
+                callbackURL: callbackURL, error: error, completion: completion)
+        }
+    }
+
     static func complete(
         callbackURL: URL?,
         error: (any Error)?,
@@ -200,14 +209,10 @@ struct SystemOpenIDWebAuthenticationSessionFactory:
     ) -> any OpenIDWebAuthenticationSession {
         ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: callbackScheme
-        ) { callbackURL, error in
-            SystemOpenIDCompletionMapper.complete(
-                callbackURL: callbackURL,
-                error: error,
-                completion: completion
-            )
-        }
+            callbackURLScheme: callbackScheme,
+            completionHandler: SystemOpenIDCompletionMapper.callback(
+                completion: completion)
+        )
     }
 }
 
@@ -921,19 +926,18 @@ private enum AppAuthAuthorizationFlow {
             let session = OIDAuthorizationService.present(
                 request,
                 externalUserAgent: externalUserAgent
-            ) { response, _ in
+            ) { @Sendable response, _ in
+                let grant = response.flatMap {
+                    response -> OpenIDAuthorizationGrant? in
+                    guard let code = response.authorizationCode,
+                        let state = response.request.state
+                    else { return nil }
+                    return OpenIDAuthorizationGrant(code: code, state: state)
+                }
                 Task { @MainActor in
                     externalUserAgent.releaseSession()
-                    if let response,
-                        let code = response.authorizationCode,
-                        let state = response.request.state
-                    {
-                        continuation.resume(
-                            returning: OpenIDAuthorizationGrant(
-                                code: code,
-                                state: state
-                            )
-                        )
+                    if let grant {
+                        continuation.resume(returning: grant)
                         return
                     }
                     if let browserError = externalUserAgent.browserError {

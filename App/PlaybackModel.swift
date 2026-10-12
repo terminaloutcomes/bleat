@@ -2043,7 +2043,7 @@ final class PlaybackModel {
                     forName: AVAudioSession.interruptionNotification,
                     object: nil,
                     queue: .main
-                ) { [weak self] notification in
+                ) { @Sendable [weak self] notification in
                     let typeValue =
                         notification.userInfo?[
                             AVAudioSessionInterruptionTypeKey
@@ -2065,7 +2065,7 @@ final class PlaybackModel {
                     forName: UIApplication.didEnterBackgroundNotification,
                     object: nil,
                     queue: .main
-                ) { [weak self] _ in
+                ) { @Sendable [weak self] _ in
                     Task { @MainActor [weak self] in
                         self?.persistPosition()
                         if self?.preparation?.sessionID != nil {
@@ -2079,7 +2079,7 @@ final class PlaybackModel {
                     forName: AVAudioSession.routeChangeNotification,
                     object: nil,
                     queue: .main
-                ) { [weak self] notification in
+                ) { @Sendable [weak self] notification in
                     let reasonValue =
                         notification.userInfo?[
                             AVAudioSessionRouteChangeReasonKey
@@ -2094,7 +2094,7 @@ final class PlaybackModel {
                     forName: AVAudioSession.mediaServicesWereResetNotification,
                     object: nil,
                     queue: .main
-                ) { [weak self] _ in
+                ) { @Sendable [weak self] _ in
                     Task { @MainActor [weak self] in
                         await self?.handleMediaServicesReset()
                     }
@@ -2110,41 +2110,46 @@ final class PlaybackModel {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.refreshCurrentTime()
+        ) { @Sendable [weak self, weak player] _ in
+            Task { @MainActor [weak self, weak player] in
+                guard let self, let player, self.player === player else {
+                    return
+                }
+                self.refreshCurrentTime()
             }
         }
         timeControlStatusObserver = player.observe(
             \.timeControlStatus,
-            options: [.new]
-        ) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                self?.handleTimeControlStatusChange()
-            }
-        }
+            options: [.new],
+            changeHandler: PlaybackObservation.handler {
+                [weak self, weak player] observed in
+                guard let self, let player, self.player === player,
+                    observed === player
+                else { return }
+                self.handleTimeControlStatusChange()
+            })
         playerStatusObserver = player.observe(
             \.status,
-            options: [.new]
-        ) { [weak self] player, _ in
-            guard player.status == .failed else {
-                return
-            }
-            Task { @MainActor [weak self] in
-                self?.handleItemFailure(
-                    error: player.error,
-                    item: player.currentItem
-                )
-            }
-        }
+            options: [.new],
+            changeHandler: PlaybackObservation.handler {
+                [weak self, weak player] observed in
+                guard let self, let player, self.player === player,
+                    observed === player,
+                    player.status == .failed
+                else { return }
+                self.handleItemFailure(
+                    error: player.error, item: player.currentItem)
+            })
         currentItemObserver = player.observe(
             \.currentItem,
-            options: [.initial, .new]
-        ) { [weak self] player, _ in
-            Task { @MainActor [weak self] in
-                self?.observeCurrentItem(player.currentItem)
-            }
-        }
+            options: [.initial, .new],
+            changeHandler: PlaybackObservation.handler {
+                [weak self, weak player] observed in
+                guard let self, let player, self.player === player,
+                    observed === player
+                else { return }
+                self.observeCurrentItem(player.currentItem)
+            })
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: lastItem,
@@ -2422,21 +2427,22 @@ final class PlaybackModel {
         }
         currentItemStatusObserver = item.observe(
             \.status,
-            options: [.initial, .new]
-        ) { [weak self] item, _ in
-            Task { @MainActor [weak self] in
+            options: [.initial, .new],
+            changeHandler: PlaybackObservation.handler { [weak self] item in
                 self?.handleCurrentItemStatus(item)
-            }
-        }
+            })
         let center = NotificationCenter.default
         currentItemObservers.append(
             center.addObserver(
                 forName: AVPlayerItem.playbackStalledNotification,
                 object: item,
                 queue: .main
-            ) { [weak self] _ in
+            ) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.handlePlaybackStall()
+                    guard let self, self.player?.currentItem === item else {
+                        return
+                    }
+                    self.handlePlaybackStall()
                 }
             }
         )
@@ -2445,13 +2451,16 @@ final class PlaybackModel {
                 forName: AVPlayerItem.failedToPlayToEndTimeNotification,
                 object: item,
                 queue: .main
-            ) { [weak self] notification in
+            ) { @Sendable [weak self] notification in
                 let error =
                     notification.userInfo?[
                         AVPlayerItemFailedToPlayToEndTimeErrorKey
                     ] as? Error
                 Task { @MainActor [weak self] in
-                    self?.handleItemFailure(error: error, item: item)
+                    guard let self, self.player?.currentItem === item else {
+                        return
+                    }
+                    self.handleItemFailure(error: error, item: item)
                 }
             }
         )

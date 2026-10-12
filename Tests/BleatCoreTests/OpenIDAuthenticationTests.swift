@@ -8,6 +8,31 @@ import Testing
 final class OpenIDAuthenticationTests {
     @MainActor
     @Test
+    func testNativeBrowserCallbackAdapterRunsOffMainActor() async throws {
+        let url = try #require(
+            URL(string: "bleat://oauth2redirect?code=test&state=test"))
+        let inputs: [(URL?, (any Error)?, OpenIDBrowserError?)] = [
+            (url, nil, nil),
+            (nil, ASWebAuthenticationSessionError(.canceledLogin), .cancelled),
+            (nil, OpenIDTestError.invalidBrowserRequest, .failed),
+        ]
+        for (providerURL, error, expectedError) in inputs {
+            let result = await withCheckedContinuation { continuation in
+                // Construct the exact native adapter on the main actor, then
+                // invoke it from a detached task as the framework may do.
+                let callback = SystemOpenIDCompletionMapper.callback {
+                    url, error in
+                    continuation.resume(returning: (url, error))
+                }
+                Task.detached { callback(providerURL, error) }
+            }
+            #expect(result.0 == providerURL)
+            #expect(result.1 == expectedError)
+        }
+    }
+
+    @MainActor
+    @Test
     func testSystemBrowserFactoryMapsProviderCompletions() throws {
         let authorizationURL = try #require(
             URL(string: "https://identity.example/authorize"))

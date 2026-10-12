@@ -6,6 +6,9 @@
 
 - Fixed a CloudKit callback assertion that could crash Bleat during startup or synchronization.
 - Load restored download accounts before resuming transfers.
+- Keep system playback callbacks off blocking main-thread waits and reject retired playback commands and observers.
+- Clean up Bonjour resolution on its required serial callback queue.
+- Prevent old live-update streams from cancelling their replacements or starting connections after cancellation.
 - Report missing local download context separately from server permission failures while preserving downloaded bytes.
 - Reject mismatched project, Xcode, archive, and changelog versions before building or uploading.
 

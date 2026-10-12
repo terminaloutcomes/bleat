@@ -19,6 +19,7 @@
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
 		18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */; };
 		19DD8E68B3BB33385701AD69 /* CarPlayLibraryBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A115CD615D58C79223E6B61 /* CarPlayLibraryBrowser.swift */; };
+		25B46086FBA00C731871DA87 /* PlaybackObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE86258004B5502381014564 /* PlaybackObservation.swift */; };
 		297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F16612F5D186DFAED140F6 /* BookCoverView.swift */; };
 		2BA45C8D5605E590C16A7471 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */; };
 		305FC1C033F98F51115F4B9C /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */; };
@@ -55,6 +56,7 @@
 		83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */; };
 		897D5C0447C53A360807970F /* BleatTranscription in Frameworks */ = {isa = PBXBuildFile; productRef = 78818861E559F054DD15D520 /* BleatTranscription */; };
 		8AE66A03CF3CC0A20F94CC74 /* ChapterTranscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */; };
+		92A218CF37ED98706DA5495F /* FrameworkCallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCEEC16ACBA6586D5978DE7 /* FrameworkCallbackTests.swift */; };
 		9819CBF2E369C9BE6C02C47A /* TestAsyncGates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457E7CB1CF9B0CA0D3A914A9 /* TestAsyncGates.swift */; };
 		9895D563B5F16CA7F25E7F96 /* AppMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543E50567C1D837B42834F5F /* AppMetadataTests.swift */; };
 		9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */; };
@@ -108,6 +110,7 @@
 		10759FAD9A628F0F553DB7B1 /* AudioChapterSliceExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChapterSliceExporterTests.swift; sourceTree = "<group>"; };
 		12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBrowseModels.swift; sourceTree = "<group>"; };
 		132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
+		16D444D9EEAC777098B8E8DF /* bleat-339-release-pr */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bleat-339-release-pr"; path = .; sourceTree = SOURCE_ROOT; };
 		1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDiagnosticLogCleanup.swift; sourceTree = "<group>"; };
 		20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionView.swift; sourceTree = "<group>"; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -115,6 +118,7 @@
 		32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationCoordinator.swift; sourceTree = "<group>"; };
 		342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotionTests.swift; sourceTree = "<group>"; };
 		3C8F35D7E02D2A0B1ECE3FA6 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = wrapper.cfbundle; path = Settings.bundle; sourceTree = "<group>"; };
+		3DCEEC16ACBA6586D5978DE7 /* FrameworkCallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameworkCallbackTests.swift; sourceTree = "<group>"; };
 		3E3AC4B25EBCA1C59ECEDC56 /* SeriesCoverMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotion.swift; sourceTree = "<group>"; };
 		442E1B9B0CEB4D9FC6C8D00E /* ChapterTranscriptionJobSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionJobSupport.swift; sourceTree = "<group>"; };
 		457E7CB1CF9B0CA0D3A914A9 /* TestAsyncGates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestAsyncGates.swift; sourceTree = "<group>"; };
@@ -125,7 +129,6 @@
 		4AB28FFAF4F809D34C370DBA /* RemoteTelemetryConsent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsent.swift; sourceTree = "<group>"; };
 		4BE4916B6EE971887C380A9E /* Bleat.cloudkit-enabled.app-attest-disabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.entitlements"; sourceTree = "<group>"; };
 		4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSecretLeakageTests.swift; sourceTree = "<group>"; };
-		4F72F17F031C453D357EE586 /* bleat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = bleat; path = .; sourceTree = SOURCE_ROOT; };
 		513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttester.swift; sourceTree = "<group>"; };
 		51560C6F4791593B26D59DAC /* LibraryCategoryContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCategoryContent.swift; sourceTree = "<group>"; };
 		523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTroubleshooterView.swift; sourceTree = "<group>"; };
@@ -164,6 +167,7 @@
 		B5A82F11A48563C7E31708E0 /* BleatReleaseScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatReleaseScreenshotTests.swift; sourceTree = "<group>"; };
 		B5E0E6AD1DB77BCBA8D0944C /* BleatAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BleatAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BCA2A9B233BE9C12B1B7C714 /* BleatPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatPerformanceUITests.swift; sourceTree = "<group>"; };
+		BE86258004B5502381014564 /* PlaybackObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackObservation.swift; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsentTests.swift; sourceTree = "<group>"; };
 		C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsLiveDeliverySchedule.swift; sourceTree = "<group>"; };
@@ -214,6 +218,7 @@
 				2D99EAF91FC74A5D1651A5ED /* ChapterTranscriptionSourceTests.swift */,
 				0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */,
 				979BFEF37B752DD4ADB4E560 /* DocumentationLinkTests.swift */,
+				3DCEEC16ACBA6586D5978DE7 /* FrameworkCallbackTests.swift */,
 				62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */,
 				D9AB72375ED47B619ABB13FC /* LegacyDiagnosticLogCleanupTests.swift */,
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
@@ -316,6 +321,7 @@
 				46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */,
 				A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */,
 				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
+				BE86258004B5502381014564 /* PlaybackObservation.swift */,
 				9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */,
 				DAEBA5EE4E06AFB7DD896B81 /* PlaybackPreferencesStore.swift */,
 				C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */,
@@ -345,7 +351,7 @@
 		F43C2BD821572C0860FA1783 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				4F72F17F031C453D357EE586 /* bleat */,
+				16D444D9EEAC777098B8E8DF /* bleat-339-release-pr */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -550,6 +556,7 @@
 				ADD37195831AFA6B5B747A1D /* ChapterTranscriptionSourceTests.swift in Sources */,
 				421E1D94991D910E1C6FAA04 /* DeepLinkTests.swift in Sources */,
 				18CD6B00E5E135E8D073B2B5 /* DocumentationLinkTests.swift in Sources */,
+				92A218CF37ED98706DA5495F /* FrameworkCallbackTests.swift in Sources */,
 				9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */,
 				6B48DBD681D8425A66B571CE /* LegacyDiagnosticLogCleanupTests.swift in Sources */,
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
@@ -612,6 +619,7 @@
 				3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */,
 				0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */,
 				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
+				25B46086FBA00C731871DA87 /* PlaybackObservation.swift in Sources */,
 				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
 				012CE0393631C2BCE43D4E38 /* PlaybackPreferencesStore.swift in Sources */,
 				66A00D60DE2E574FC7981287 /* PlaybackView.swift in Sources */,

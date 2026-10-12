@@ -6,6 +6,119 @@ import Testing
 @Suite(.serialized)
 final class LiveUpdatesTests {
     @Test
+    func testRetiredStreamTerminationCannotStopReplacement() async throws {
+        let endpoint = AudiobookshelfLiveServerEndpoint(
+            server: try NormalizedServerURL("https://example.test"),
+            usage: .local)
+        let gate = LiveServerProviderGate(endpoint: endpoint)
+        let client = AudiobookshelfLiveEventClient(
+            serverProvider: { await gate.next() },
+            tokenProvider: {
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            },
+            tokenRecovery: { _ in
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            })
+        var entries = gate.entries.makeAsyncIterator()
+        let old = await client.updates()
+        let drainOld = Task { for await _ in old {} }
+        #expect(await entries.next() == 1)
+        let replacement = await client.updates()
+        #expect(await entries.next() == 2)
+        await gate.release(1)
+        await drainOld.value
+        await gate.release(2)
+        let receivedFailure = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await update in replacement {
+                    if case .connection(.failed(.credentialsUnavailable)) =
+                        update
+                    {
+                        return true
+                    }
+                }
+                return false
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(2))
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            return result
+        }
+        await client.stop()
+        #expect(receivedFailure)
+    }
+
+    @Test
+    func testStopWhileRestoringEndpointDoesNotRetrieveCredentials() async throws
+    {
+        let endpoint = AudiobookshelfLiveServerEndpoint(
+            server: try NormalizedServerURL("https://example.test"),
+            usage: .local)
+        let gate = LiveServerProviderGate(endpoint: endpoint)
+        let credentials = LiveCredentialProbe()
+        let client = AudiobookshelfLiveEventClient(
+            serverProvider: { await gate.next() },
+            tokenProvider: {
+                await credentials.called()
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            },
+            tokenRecovery: { _ in
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            })
+        var entries = gate.entries.makeAsyncIterator()
+        let updates = await client.updates()
+        let drain = Task { for await _ in updates {} }
+        #expect(await entries.next() == 1)
+        await client.stop()
+        await gate.release(1)
+        await drain.value
+        #expect(await credentials.count == 0)
+    }
+
+    @Test
+    func
+        testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()
+        async throws
+    {
+        let endpoint = AudiobookshelfLiveServerEndpoint(
+            server: try NormalizedServerURL("https://example.test"),
+            usage: .local)
+        let gate = LiveCredentialGate()
+        let client = AudiobookshelfLiveEventClient(
+            serverProvider: { endpoint },
+            tokenProvider: { try await gate.retrieve() },
+            tokenRecovery: { _ in
+                throw AudiobookshelfLiveUpdateFailure.credentialsUnavailable
+            })
+        let stream = await client.updates()
+        let drain = Task { () -> [AudiobookshelfLiveUpdate] in
+            var updates: [AudiobookshelfLiveUpdate] = []
+            for await update in stream { updates.append(update) }
+            return updates
+        }
+        var entries = gate.entries.makeAsyncIterator()
+        #expect(await entries.next() == true)
+        await client.stop()
+        await gate.fail()
+        let updates = await drain.value
+        #expect(
+            updates.contains {
+                if case .connectionAttempt(let attempt) = $0 {
+                    return attempt.phase == .cancelled
+                }
+                return false
+            })
+        #expect(
+            !updates.contains {
+                if case .connection(.failed) = $0 { return true }
+                return false
+            })
+    }
+
+    @Test
     func testConnectionAttemptReportsEndpointRoleAndTypedFailure()
         async throws
     {
@@ -168,5 +281,61 @@ final class LiveUpdatesTests {
         #expect(
             codec.authenticationPacket(accessToken: "secret-token")
                 == #"42["auth","secret-token"]"#)
+    }
+}
+
+private actor LiveServerProviderGate {
+    nonisolated let entries: AsyncStream<Int>
+    private let entryContinuation: AsyncStream<Int>.Continuation
+    private let endpoint: AudiobookshelfLiveServerEndpoint
+    private var count = 0
+    private var waiters:
+        [Int: CheckedContinuation<AudiobookshelfLiveServerEndpoint, Never>] =
+            [:]
+
+    init(endpoint: AudiobookshelfLiveServerEndpoint) {
+        let stream = AsyncStream<Int>.makeStream()
+        entries = stream.stream
+        entryContinuation = stream.continuation
+        self.endpoint = endpoint
+    }
+
+    func next() async -> AudiobookshelfLiveServerEndpoint {
+        count += 1
+        let id = count
+        return await withCheckedContinuation {
+            waiters[id] = $0
+            entryContinuation.yield(id)
+        }
+    }
+
+    func release(_ id: Int) {
+        waiters.removeValue(forKey: id)?.resume(returning: endpoint)
+    }
+}
+
+private actor LiveCredentialProbe {
+    var count = 0
+    func called() { count += 1 }
+}
+
+private actor LiveCredentialGate {
+    nonisolated let entries: AsyncStream<Bool>
+    private let entryContinuation: AsyncStream<Bool>.Continuation
+    private var waiter: CheckedContinuation<String, Error>?
+    init() {
+        let stream = AsyncStream<Bool>.makeStream()
+        entries = stream.stream
+        entryContinuation = stream.continuation
+    }
+    func retrieve() async throws -> String {
+        try await withCheckedThrowingContinuation {
+            waiter = $0
+            entryContinuation.yield(true)
+        }
+    }
+    func fail() {
+        waiter?.resume(throwing: CancellationError())
+        waiter = nil
     }
 }
