@@ -1330,6 +1330,89 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testSeriesMembershipDraftEditingAndCancellation() throws {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        app.buttons["Edit"].tap()
+        let add = app.buttons["metadata.series.add"]
+        for _ in 0..<4 where !add.isHittable { app.swipeUp() }
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        let first = app.buttons["metadata.series.item.0"]
+        let second = app.buttons["metadata.series.item.1"]
+        XCTAssertTrue(first.label.contains("Test Series"))
+        XCTAssertTrue(second.label.contains("Companion Series"))
+        second.tap()
+        let name = app.textFields["metadata.series.name"]
+        let sequence = app.textFields["metadata.series.sequence"]
+        XCTAssertEqual(name.value as? String, "Companion Series")
+        XCTAssertEqual(sequence.value as? String, "1")
+        sequence.tap()
+        sequence.typeText(" cancelled")
+        app.buttons["metadata.series.cancel"].tap()
+        second.tap()
+        XCTAssertEqual(sequence.value as? String, "1")
+        sequence.tap()
+        sequence.typeText(XCUIKeyboardKey.delete.rawValue + "2a")
+        app.buttons["metadata.series.commit"].tap()
+        XCTAssertTrue(second.label.contains("2a"))
+        first.tap()
+        XCTAssertEqual(sequence.value as? String, "1")
+        app.buttons["metadata.series.cancel"].tap()
+        second.tap()
+        XCTAssertEqual(sequence.value as? String, "2a")
+        app.buttons["metadata.series.remove"].tap()
+        XCTAssertTrue(second.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(first.label.contains("Test Series"))
+
+        add.tap()
+        XCTAssertEqual(name.value as? String, "Series")
+        XCTAssertEqual(sequence.value as? String, "Sequence")
+        app.buttons["metadata.series.commit"].tap()
+        XCTAssertTrue(app.staticTexts["metadata.series.error"].exists)
+        name.tap()
+        name.typeText("  Test Series  ")
+        sequence.tap()
+        sequence.typeText("  001.5 | Part II, bonus  ")
+        app.buttons["metadata.series.commit"].tap()
+        XCTAssertTrue(second.waitForExistence(timeout: 3))
+        second.tap()
+        XCTAssertEqual(name.value as? String, "Test Series")
+        XCTAssertEqual(sequence.value as? String, "001.5 | Part II, bonus")
+        app.buttons["metadata.series.cancel"].tap()
+        first.tap()
+        app.buttons["metadata.series.remove"].tap()
+        XCTAssertTrue(first.label.contains("001.5 | Part II, bonus"))
+        first.tap()
+        app.buttons["metadata.series.remove"].tap()
+        XCTAssertTrue(first.waitForNonExistence(timeout: 3))
+        add.tap()
+        app.buttons["metadata.series.cancel"].tap()
+        XCTAssertFalse(first.exists)
+        add.tap()
+        name.tap()
+        name.typeText("No Sequence")
+        app.buttons["metadata.series.commit"].tap()
+        first.tap()
+        XCTAssertEqual(name.value as? String, "No Sequence")
+        XCTAssertEqual(sequence.value as? String, "Sequence")
+        app.buttons["metadata.series.cancel"].tap()
+
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        actions.tap()
+        app.buttons["Edit"].tap()
+        for _ in 0..<4 where !add.isHittable { app.swipeUp() }
+        XCTAssertTrue(second.waitForExistence(timeout: 3))
+        XCTAssertTrue(first.label.contains("Test Series"))
+        XCTAssertTrue(second.label.contains("Companion Series"))
+    }
+
+    @MainActor
     func testBookEditorDisplaysCachedCover() throws {
         let app = launch(
             scenario: "--ui-testing-signed-in",

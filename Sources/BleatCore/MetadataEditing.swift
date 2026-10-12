@@ -8,6 +8,17 @@ public struct BookMetadataSeriesDraft: Equatable, Sendable {
         self.name = name
         self.sequence = sequence
     }
+
+    public func normalized() throws(BookMetadataPatchError) -> Self {
+        let name = normalizedMetadataText(name)
+        let sequence = normalizedMetadataText(sequence)
+        guard !name.isEmpty else { throw .emptySeriesName }
+        guard [name, sequence].allSatisfy(isValidMetadataText) else {
+            throw .invalidText
+        }
+        return Self(name: name, sequence: sequence)
+    }
+
 }
 
 public struct BookMetadataDraft: Equatable, Sendable {
@@ -55,6 +66,7 @@ public struct BookMetadataDraft: Equatable, Sendable {
 
 public enum BookMetadataPatchError: Error, Equatable, Sendable {
     case emptyTitle
+    case emptySeriesName
     case invalidText
 }
 
@@ -217,7 +229,7 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
     }
 
     init(draft: BookMetadataDraft) throws(BookMetadataPatchError) {
-        let title = Self.normalizedText(draft.title)
+        let title = normalizedMetadataText(draft.title)
         guard !title.isEmpty else {
             throw .emptyTitle
         }
@@ -229,14 +241,11 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
             return tag.isEmpty ? nil : tag
         }
         let series: [BookMetadataSeriesValue] =
-            draft.series.compactMap { value in
-                let name = Self.normalizedText(value.name)
-                guard !name.isEmpty else {
-                    return nil
-                }
+            try draft.series.map { value throws(BookMetadataPatchError) in
+                let normalized = try value.normalized()
                 return BookMetadataSeriesValue(
-                    name: name,
-                    sequence: Self.optionalText(value.sequence)
+                    name: normalized.name,
+                    sequence: Self.optionalText(normalized.sequence)
                 )
             }
         var allText = [title]
@@ -258,7 +267,7 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
             draft.asin,
             draft.language,
         ])
-        guard allText.allSatisfy(Self.isValidText) else {
+        guard allText.allSatisfy(isValidMetadataText) else {
             throw .invalidText
         }
 
@@ -284,33 +293,34 @@ private struct BookMetadataSnapshot: Equatable, Sendable {
 
     private static func normalizedList(_ values: [String]) -> [String] {
         values.compactMap { value in
-            let normalized = normalizedText(value)
+            let normalized = normalizedMetadataText(value)
             return normalized.isEmpty ? nil : normalized
         }
     }
 
     private static func optionalText(_ value: String) -> String? {
-        let normalized = normalizedText(value)
+        let normalized = normalizedMetadataText(value)
         return normalized.isEmpty ? nil : normalized
     }
 
-    private static func normalizedText(_ value: String) -> String {
-        String(
-            String.UnicodeScalarView(
-                value.unicodeScalars.filter {
-                    $0.properties.generalCategory != .format
-                }
-            )
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+}
 
-    private static func isValidText(_ value: String) -> Bool {
-        value.unicodeScalars.allSatisfy {
-            !LibraryMetadataText.isControl($0)
-                || $0 == "\n"
-                || $0 == "\r"
-                || $0 == "\t"
-        }
+private func normalizedMetadataText(_ value: String) -> String {
+    String(
+        String.UnicodeScalarView(
+            value.unicodeScalars.filter {
+                $0.properties.generalCategory != .format
+            }
+        )
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func isValidMetadataText(_ value: String) -> Bool {
+    value.unicodeScalars.allSatisfy {
+        !LibraryMetadataText.isControl($0)
+            || $0 == "\n"
+            || $0 == "\r"
+            || $0 == "\t"
     }
 }
 

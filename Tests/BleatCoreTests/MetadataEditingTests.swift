@@ -63,6 +63,86 @@ final class MetadataEditingTests {
         #expect(object["tags"] as? [String] == ["favorite"])
     }
 
+    @Test(arguments: [
+        "01", "001.5", "2a", "1-2", "1 (bonus)", "Part II", "1|2,  3", "",
+    ])
+    func testSeriesPatchPreservesFreeFormSequence(sequence: String) throws {
+        let detail = fixtureDetail()
+        var draft = BookMetadataDraft(detail: detail)
+        let value = BookMetadataSeriesDraft(
+            name: " \nSeries | one, two\n ",
+            sequence: " \n" + sequence + "\n "
+        )
+        let normalized = try value.normalized()
+        #expect(normalized.name == "Series | one, two")
+        #expect(normalized.sequence == sequence)
+        draft.series = [
+            value, .init(name: "Series | one, two", sequence: "02"),
+        ]
+        let object = try #require(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(
+                    BookMetadataPatch(baseline: detail, draft: draft)
+                )) as? [String: Any])
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        let series = try #require(metadata["series"] as? [[String: String]])
+        #expect(
+            series == [
+                sequence.isEmpty
+                    ? ["name": "Series | one, two"]
+                    : ["name": "Series | one, two", "sequence": sequence],
+                ["name": "Series | one, two", "sequence": "02"],
+            ])
+    }
+
+    @Test
+    func testSeriesBlankNameAndInvalidControlsAreRejected() throws {
+        for (value, expected) in [
+            (
+                BookMetadataSeriesDraft(name: " \n\t ", sequence: "01"),
+                BookMetadataPatchError.emptySeriesName
+            ),
+            (
+                BookMetadataSeriesDraft(name: "Series", sequence: "1\u{0000}2"),
+                .invalidText
+            ),
+            (
+                BookMetadataSeriesDraft(
+                    name: " \u{00AD}\u{200D}\u{FEFF} ", sequence: "01"),
+                .emptySeriesName
+            ),
+        ] {
+            #expect(throws: expected) { try value.normalized() }
+            var draft = BookMetadataDraft(detail: fixtureDetail())
+            draft.series = [value]
+            #expect(throws: expected) {
+                try BookMetadataPatch(baseline: fixtureDetail(), draft: draft)
+            }
+        }
+    }
+
+    @Test
+    func testUnrelatedEditAndNoOpPreserveSeries() throws {
+        let detail = fixtureDetail(series: [
+            LibraryBookSeries(
+                id: SeriesID(rawValue: "series-1")!, name: "Same | name",
+                sequence: "001.5"),
+            LibraryBookSeries(
+                id: SeriesID(rawValue: "series-2")!, name: "Same | name",
+                sequence: "Part II"),
+        ])
+        var draft = BookMetadataDraft(detail: detail)
+        #expect(try BookMetadataPatch(baseline: detail, draft: draft).isEmpty)
+        draft.publisher = "Changed"
+        let object = try #require(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(
+                    BookMetadataPatch(baseline: detail, draft: draft))
+            ) as? [String: Any])
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        #expect(Set(metadata.keys) == ["publisher"])
+    }
+
     @Test
     func testPatchStripsFormatCharactersFromInheritedMetadata() throws {
         let detail = fixtureDetail(
@@ -394,7 +474,8 @@ final class MetadataEditingTests {
 
     private func fixtureDetail(
         title: String = "Original title",
-        description: String = "Description"
+        description: String = "Description",
+        series: [LibraryBookSeries] = []
     ) -> LibraryBookDetail {
         LibraryBookDetail(
             id: LibraryItemID(rawValue: "item-1"),
@@ -409,7 +490,7 @@ final class MetadataEditingTests {
                 )
             ],
             narrators: ["Narrator"],
-            series: [],
+            series: series,
             genres: ["Fiction"],
             tags: [],
             publishedYear: "2026",
