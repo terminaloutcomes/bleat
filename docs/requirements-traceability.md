@@ -280,7 +280,7 @@ on 2026-09-21; both manual results are recorded in `docs/statistics-validation.m
 | AC-25 | Concurrent progress never silently overwrites two changed positions | `APP-OFFLINE-POSITION-001` | verified |
 | AC-26 | Metadata editing uses best-effort stale-draft handling without claiming atomic conflict prevention | `APP-METADATA-001` | verified |
 | AC-27 | Account removal leaves no credential or cross-account cache record | `APP-ACCOUNT-001`, `ACCOUNT-003` | verified |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is audited by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`; historical Simulator coverage is qualified below and current full automated evidence remains tracked by [#347](https://github.com/terminaloutcomes/bleat/issues/347). VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The completed maintainer Reduce Motion audit is recorded below; the mini-player follow-up is tracked by [#201](https://github.com/terminaloutcomes/bleat/issues/201), with automated evidence in `docs/release-evidence/mini-player-reduce-motion.md`. The remaining iPad keyboard audit is tracked by [#40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
+| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is audited by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`; historical Simulator coverage is qualified below, and the corrected iPhone/iPad audits plus full serial UI gate are recorded below. VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The completed maintainer Reduce Motion audit is recorded below; the mini-player follow-up is tracked by [#201](https://github.com/terminaloutcomes/bleat/issues/201), with automated evidence in `docs/release-evidence/mini-player-reduce-motion.md`. The remaining iPad keyboard audit is tracked by [#40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
 | AC-29 | Server deletion is permission-gated, distinguishes both deletion modes, and stops matching playback first | `APP-BOOK-DELETE-001` | verified |
 
 ## Largest Dynamic Type audit
@@ -354,8 +354,8 @@ launches now isolate download storage. The focused final recheck passed all
 four media/typed-failure tests, both transcript journeys, and the VoiceOver
 primary journey (seven passed, two failed, no skips or runtime warnings).
 Only the iPhone reset-confirmation overflow and mini-player contrast audit still
-failed in that recheck. The full broader suite has not passed and was not rerun
-after the final storage-isolation change.
+failed in that recheck. At that point, the full broader suite had not passed and had not been rerun
+after the storage-isolation change.
 The separate download-storage isolation regression also executed and passed,
 with no skips or runtime warnings. Two intermediate build attempts failed on
 diagnostic-stage exhaustiveness and a nonisolated test read of an actor property;
@@ -382,11 +382,37 @@ system share cell's center falling below the visible Save to Files action.
 The journey now taps the visible action label instead of the cell center. Its
 focused rerun passed, including the system file picker, with zero skips or
 runtime warnings. Every failure from the earlier broad run now has a focused
-passing regression on the rebased source; the full broader suite still requires
-a fresh passing run. Strict Swift formatting lint and `git diff --check` passed.
+passing regression on the rebased source; the broader gate was still pending
+at that point. Strict Swift formatting lint and `git diff --check` passed.
 
-Issue #347 remains open pending the complete broader UI gate. Simulator results
-do not establish physical-device accessibility behavior.
+### Complete gate on the PR branch (2026-10-13)
+
+The repository-supported `scripts/test-core.sh` completed successfully on
+`369d8fb`, using a fresh iPhone 17 Pro Simulator, iOS 26.5 (23F77), and Xcode
+27.0 (27A266a). The release-version checks, host Release build, capability
+configuration checks, and Simulator Release build passed.
+
+- Signed host coverage: 537 passed, zero skips, with the existing expected
+  cleanup issue. Both read-only SwiftData save diagnostics came from passing
+  rollback tests; the dependency watchOS deployment-target warning remains a
+  build warning.
+- Application tests: 578 passed, zero skips, zero runtime warnings.
+- Full serial UI suite: 106 passed, zero failures, six expected skips, zero
+  runtime warnings. The skips cover four live-server journeys, the external
+  host-URL confirmation journey, and release screenshots.
+
+The completed result bundles are
+`.build/test-core-results/app-tests.xcresult` and
+`.build/test-core-results/ui-tests.xcresult`. Inspection confirmed all three
+`BleatDynamicTypeUITests` journeys, mini-player contrast, both transcript
+regressions, and the VoiceOver primary journey passed in the full run. The
+separate corrected iPad audit and repeated playback checks remain recorded
+above. No production source changed between this gate and the evidence update.
+
+The automated investigation for issue #347 is complete; [PR #351](https://github.com/terminaloutcomes/bleat/pull/351)
+carries the fix and closes the issue on merge. Simulator results do not establish
+physical-device accessibility behavior; manual spoken-output and gesture work
+remains tracked separately by #39.
 
 ## Bold Text, Increase Contrast, and interaction-target audit
 
