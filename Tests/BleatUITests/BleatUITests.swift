@@ -2841,7 +2841,13 @@ final class BleatUITests: XCTestCase {
         app.buttons["player.mini.open"].swipeUp(velocity: .fast)
         let playerScreen = app.otherElements["player.screen"]
         XCTAssertTrue(playerScreen.waitForExistence(timeout: 3))
-        app.buttons["Close"].tap()
+        let close = app.buttons["player.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        XCTAssertEqual(close.label, "Close")
+        XCTAssertTrue(close.isHittable)
+        XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        close.tap()
         XCTAssertTrue(playerScreen.waitForNonExistence(timeout: 3))
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
     }
