@@ -1440,6 +1440,14 @@ A book becomes `complete` only after:
 - temporary files have been atomically moved to final locations.
 
 Partial books remain inspectable and retryable. Completed files are never silently replaced by a failed retry.
+Storage reconciliation quarantines an entry whose unfinished media lacks an
+inode or a valid transfer identity, retaining its bytes and the other tracks.
+The failed entry carries a persisted typed cause; restoration presents that
+cause and records its specific diagnostic code at the entry-reconciliation
+stage. Valid finalized legacy tracks remain usable without an inode. A malformed
+manifest is moved aside beside its retained media rather than deleting the book.
+Quarantined legacy automatic caches without window metadata currently require
+explicit removal before a fresh download; they are not silently discarded.
 
 ### 10.3 Storage policy
 

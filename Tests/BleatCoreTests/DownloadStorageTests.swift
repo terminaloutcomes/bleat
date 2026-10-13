@@ -993,7 +993,7 @@ final class DownloadStorageTests {
     }
 
     @Test
-    func testMalformedRecordIsDeletedWithoutHidingHealthyRecords()
+    func testMalformedRecordIsQuarantinedWithoutHidingHealthyRecords()
         async throws
     {
         let fixture = try Fixture()
@@ -1011,6 +1011,8 @@ final class DownloadStorageTests {
             at: invalidDirectory,
             withIntermediateDirectories: true
         )
+        let retainedMedia = invalidDirectory.appendingPathComponent("00000.mp3")
+        try Data([1, 2, 3, 4]).write(to: retainedMedia)
         try Data("not-json".utf8).write(
             to: invalidDirectory.appendingPathComponent("record.json")
         )
@@ -1018,8 +1020,88 @@ final class DownloadStorageTests {
         let records = try await fixture.storage.records()
 
         #expect(records.map(\.manifest.downloadID) == [fixture.downloadID])
+        #expect(try Data(contentsOf: retainedMedia) == Data([1, 2, 3, 4]))
+        let quarantined = try FileManager.default.contentsOfDirectory(
+            at: invalidDirectory, includingPropertiesForKeys: nil
+        )
+        .filter { $0.lastPathComponent.hasPrefix("record.invalid-") }
+        #expect(quarantined.count == 1)
         #expect(
-            !(FileManager.default.fileExists(atPath: invalidDirectory.path)))
+            try Data(contentsOf: #require(quarantined.first))
+                == Data("not-json".utf8))
+        #expect(try await fixture.storage.records() == records)
+    }
+
+    @Test(arguments: [true, false], [true, false])
+    func testInvalidEntryPreservesHealthyTrackAndBytes(
+        invalidEntryFirst: Bool, missingInode: Bool
+    )
+        async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let plan = DownloadPlan(
+            itemID: fixture.itemID,
+            tracks: fixture.plan.tracks + [
+                DownloadTrackPlan(
+                    index: 1, inode: "102", expectedByteLength: 4,
+                    mimeType: "audio/mpeg", safeExtension: .mp3,
+                    destinationEntry: "00001.mp3")
+            ])
+        _ = try await fixture.storage.create(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID, plan: plan, detail: fixture.detail)
+        let healthyIndex = invalidEntryFirst ? 1 : 0
+        let invalidIndex = invalidEntryFirst ? 0 : 1
+        let identity = try DownloadTaskIdentity(
+            downloadID: fixture.downloadID,
+            accountID: fixture.accountID, itemID: fixture.itemID,
+            track: plan.tracks[healthyIndex])
+        let chunk = fixture.rootURL.appendingPathComponent("healthy.chunk")
+        let bytes = Data([1, 2, 3, 4])
+        try bytes.write(to: chunk)
+        _ = try fixture.layout.placeCompleteTestFile(
+            from: chunk, identity: identity)
+        _ = try await fixture.storage.markComplete(
+            identity, observedByteLength: 4)
+        let recordURL = fixture.layout.recordURL(
+            accountID: fixture.accountID, itemID: fixture.itemID)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: recordURL))
+                as? [String: Any])
+        var manifest = try #require(object["manifest"] as? [String: Any])
+        var entries = try #require(manifest["entries"] as? [[String: Any]])
+        if missingInode {
+            entries[invalidIndex].removeValue(forKey: "inode")
+        } else {
+            entries[invalidIndex]["inode"] = ""
+        }
+        manifest["entries"] = entries
+        object["manifest"] = manifest
+        try JSONSerialization.data(withJSONObject: object).write(
+            to: recordURL, options: .atomic)
+        // A legacy entry's unverified bytes must also survive quarantine.
+        let invalidBytesURL = fixture.layout.bookDirectory(
+            accountID: fixture.accountID, itemID: fixture.itemID
+        )
+        .appendingPathComponent(plan.tracks[invalidIndex].destinationEntry)
+        try Data([9, 8]).write(to: invalidBytesURL)
+
+        let records = try await fixture.storage.records()
+        let record = try #require(records.first)
+        #expect(record.manifest.entries[healthyIndex].state == .complete)
+        #expect(record.manifest.entries[invalidIndex].state == .failed)
+        #expect(
+            record.manifest.entries[invalidIndex].reconciliationFailure
+                == (missingInode ? .missingInode : .invalidTaskIdentity))
+        #expect(!record.manifest.isFullBookComplete)
+        let urls = try await fixture.storage.localTrackURLs(
+            for: record, trackIndexes: [healthyIndex])
+        #expect(try Data(contentsOf: #require(urls[healthyIndex])) == bytes)
+        #expect(try Data(contentsOf: invalidBytesURL) == Data([9, 8]))
+        #expect(try await fixture.storage.records() == records)
+        let recreated = DownloadStorage(layout: fixture.layout)
+        #expect(try await recreated.records() == records)
     }
 
     @Test

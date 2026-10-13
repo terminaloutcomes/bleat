@@ -7826,6 +7826,92 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    func
+        testDownloadRestorePreservesQuarantinedLegacyTrackAndPresentsTypedCause()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatQuarantine-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixtureBook(
+                id: "item-1", title: "Retained", libraryID: fixtureLibrary().id)
+        )
+        let layout = try DownloadStorageLayout(rootURL: root)
+        let storage = DownloadStorage(layout: layout)
+        let plan = DownloadPlan(
+            itemID: detail.id,
+            tracks: [
+                DownloadTrackPlan(
+                    index: 0, inode: "101", expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3, destinationEntry: "00000.mp3"),
+                DownloadTrackPlan(
+                    index: 1, inode: "102", expectedByteLength: 4,
+                    mimeType: "audio/mpeg",
+                    safeExtension: .mp3, destinationEntry: "00001.mp3"),
+            ])
+        let record = try await storage.create(
+            downloadID: DownloadID(rawValue: "quarantined"),
+            accountID: account.id,
+            plan: plan, detail: detail, purpose: .automaticCache,
+            automaticTargetTrackIndexes: [0, 1])
+        let identity = try DownloadTaskIdentity(
+            downloadID: record.manifest.downloadID, accountID: account.id,
+            itemID: detail.id, track: plan.tracks[0])
+        let chunk = root.appendingPathComponent("chunk")
+        let bytes = Data([1, 2, 3, 4])
+        try bytes.write(to: chunk)
+        _ = try await storage.commitChunk(
+            identity, temporaryURL: chunk,
+            range: try DownloadByteRange(start: 0, endInclusive: 3),
+            validator: nil)
+        let recordURL = layout.recordURL(
+            accountID: account.id, itemID: detail.id)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: recordURL))
+                as? [String: Any])
+        var manifest = try XCTUnwrap(object["manifest"] as? [String: Any])
+        var entries = try XCTUnwrap(manifest["entries"] as? [[String: Any]])
+        entries[1].removeValue(forKey: "inode")
+        manifest["entries"] = entries
+        // Real older automatic caches lack window metadata.
+        manifest.removeValue(forKey: "automaticWindow")
+        object["manifest"] = manifest
+        try JSONSerialization.data(withJSONObject: object).write(
+            to: recordURL, options: .atomic)
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = DownloadModel(
+            service: TestAppService(activeAccount: .success(account)),
+            storageRootURL: root, diagnostics: diagnostics,
+            backgroundSessionIdentifier:
+                "bleat.tests.quarantine.\(UUID().uuidString)")
+        await model.start(accounts: [account])
+        XCTAssertEqual(model.records.count, 1)
+        XCTAssertEqual(
+            model.presentedFailure, .storedEntryInvalid(.missingInode))
+        XCTAssertEqual(
+            try Data(contentsOf: layout.destinationURL(for: identity)), bytes)
+        var events: [DiagnosticEvent] = []
+        for _ in 0..<100 {
+            events = await diagnostics.events()
+            if events.contains(where: {
+                $0.failureCode == .downloadEntryMissingInode
+            }) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(
+            events.contains(where: {
+                $0.operation == .restoreDownloads
+                    && $0.failureCode == .downloadEntryMissingInode
+                    && $0.stage == .downloadEntryReconciliation
+            }))
+    }
+
     func testDownloadDiagnosticsRemainOrderedWithoutBlockingStart()
         async throws
     {

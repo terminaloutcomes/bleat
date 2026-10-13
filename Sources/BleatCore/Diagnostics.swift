@@ -160,6 +160,9 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case invalidPlaybackChapterOffset = "invalid_playback_chapter_offset"
     case playbackRecoveryExhausted = "playback_recovery_exhausted"
     case progressUnavailable = "progress_unavailable"
+    case downloadEntryMissingInode = "download_entry_missing_inode"
+    case downloadEntryInvalidTaskIdentity =
+        "download_entry_invalid_task_identity"
     case downloadAccountContextMissing = "download_account_context_missing"
     case downloadRecordContextMissing = "download_record_context_missing"
     case downloadAccountContextMismatch = "download_account_context_mismatch"
@@ -377,6 +380,7 @@ public enum DiagnosticEventName: String, Codable, Sendable {
 }
 
 public enum DiagnosticStage: String, Codable, Sendable {
+    case downloadEntryReconciliation = "download_entry_reconciliation"
     case contextValidation = "context_validation"
     case requestConstruction = "request_construction"
     case pageRequest = "page_request"

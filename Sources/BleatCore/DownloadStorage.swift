@@ -1265,16 +1265,10 @@ public actor DownloadStorage {
                     from: data
                 )
             } catch {
-                try removeInvalidRecord(at: url, fileManager: fileManager)
+                try quarantineInvalidRecord(at: url, fileManager: fileManager)
                 continue
             }
-            do {
-                records.append(try reconcileCompletedFiles(in: record))
-            } catch DownloadStorageError.invalidStoredRecord {
-                try removeInvalidRecord(at: url, fileManager: fileManager)
-            } catch let error {
-                throw error
-            }
+            records.append(try reconcileCompletedFiles(in: record))
         }
         return records.sorted {
             $0.detail.title.localizedStandardCompare(
@@ -1283,13 +1277,17 @@ public actor DownloadStorage {
         }
     }
 
-    private func removeInvalidRecord(
+    private func quarantineInvalidRecord(
         at recordURL: URL,
         fileManager: FileManager
     ) throws(DownloadStorageError) {
         do {
-            try fileManager.removeItem(
-                at: recordURL.deletingLastPathComponent()
+            // Keep all media and the rejected manifest for local recovery.
+            try fileManager.moveItem(
+                at: recordURL,
+                to: recordURL.deletingLastPathComponent()
+                    .appendingPathComponent(
+                        "record.invalid-" + UUID().uuidString + ".json")
             )
         } catch {
             throw .persistenceFailed
@@ -1429,22 +1427,28 @@ public actor DownloadStorage {
                 }
                 continue
             }
-            if entry.state == .cancelled {
-                if finalizedLength >= 0 {
-                    do {
-                        try FileManager.default.removeItem(at: destination)
-                    } catch {
-                        throw .persistenceFailed
-                    }
-                }
-                guard let identity = try? identity(for: entry, in: record)
-                else {
+            if entry.inode == nil, entry.state != .cancelled {
+                do {
+                    try record.manifest.quarantineEntry(
+                        trackIndex: entry.trackIndex, cause: .missingInode)
+                } catch {
                     throw .invalidStoredRecord
                 }
-                try discardPartial(identity)
+                changed = true
                 continue
             }
-
+            guard let identity = try? self.identity(for: entry, in: record)
+            else {
+                do {
+                    try record.manifest.quarantineEntry(
+                        trackIndex: entry.trackIndex,
+                        cause: .invalidTaskIdentity)
+                } catch {
+                    throw .invalidStoredRecord
+                }
+                changed = true
+                continue
+            }
             if finalizedLength >= 0 {
                 do {
                     try FileManager.default.removeItem(at: destination)
@@ -1452,12 +1456,11 @@ public actor DownloadStorage {
                     throw .persistenceFailed
                 }
             }
-
-            guard let identity = try? identity(for: entry, in: record),
-                entry.inode != nil
-            else {
-                throw .invalidStoredRecord
+            if entry.state == .cancelled {
+                try discardPartial(identity)
+                continue
             }
+
             let partialLength: Int64
             do {
                 partialLength = try layout.partialByteLength(for: identity)
