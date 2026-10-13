@@ -14048,7 +14048,10 @@ final class AppModelTests: XCTestCase {
     }
 
     func testRetryStartIsNoOpOutsideUnavailable() async {
-        let service = TestAppService(activeAccount: .success(nil))
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudSyncAvailable: false
+        )
         let model = AppModel(service: service)
 
         await model.start()
