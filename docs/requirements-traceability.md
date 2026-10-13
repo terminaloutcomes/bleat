@@ -409,6 +409,23 @@ regressions, and the VoiceOver primary journey passed in the full run. The
 separate corrected iPad audit and repeated playback checks remain recorded
 above. No production source changed between this gate and the evidence update.
 
+### CI search coordination regression (2026-10-13)
+
+The unsigned host lane on the evidence-only commit `1f7e84a` failed in
+`LibrarySearchCoordinatorTests.testNewQuerySupersedesPendingDebounce`.
+Its 1,000-yield polling loop expired after 5 ms before the detached search
+registered its debounce. Search fixtures now notify waiting tests through
+actor-owned continuations after the corresponding sleep or service call is
+registered. The supersession test awaits the cancelled search before releasing
+the replacement debounce, preserving the pending-count and outcome assertions.
+
+All eight search coordination tests passed 100 repetitions each. The exact
+CI host gate, `BLEAT_HOST_SIGNING=unsigned ./scripts/test-host.sh`, passed with
+536 passed tests, the one expected unsigned-Keychain skip, and exported coverage.
+Strict formatting lint and `git diff --check` passed. This correction changes
+host test synchronization only; the application and UI evidence above remains
+applicable.
+
 The automated investigation for issue #347 is complete; [PR #351](https://github.com/terminaloutcomes/bleat/pull/351)
 carries the fix and closes the issue on merge. Simulator results do not establish
 physical-device accessibility behavior; manual spoken-output and gesture work
