@@ -300,6 +300,12 @@ controls clipping, overlapping, disappearing, or becoming unreachable.
 
 ## Bold Text, Increase Contrast, and interaction-target audit
 
+The Now Playing close toolbar control exposes `player.close` while retaining
+its "Close" accessibility label and provides a minimum 44-point target.
+`BleatUITests.testMiniPlayerSwipesUpToOpenNowPlaying`
+addresses it by identifier, checks hittability and a minimum 44-point width and
+height, and verifies dismissal preserves the mini-player.
+
 The 2026-08-31 audit used disposable iPhone and iPad Simulators. The harness
 enabled Bold Text and Increase Contrast separately, and the running app exposed
 the effective SwiftUI legibility-weight and colour-scheme-contrast states to the

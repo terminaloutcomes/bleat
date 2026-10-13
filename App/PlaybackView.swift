@@ -871,8 +871,12 @@ struct NowPlaying: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle")
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Close")
+            .accessibilityIdentifier("player.close")
         }
     }
 
