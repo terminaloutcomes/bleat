@@ -46,6 +46,13 @@ public struct AutomaticDownloadWindow: Codable, Equatable, Sendable {
     }
 }
 
+public enum DownloadEntryReconciliationFailure: String, Codable, Equatable,
+    Sendable
+{
+    case missingInode = "missing_inode"
+    case invalidTaskIdentity = "invalid_task_identity"
+}
+
 public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public let trackIndex: Int
     public let expectedByteLength: Int64
@@ -56,6 +63,8 @@ public struct DownloadManifestEntry: Codable, Equatable, Sendable {
     public internal(set) var state: DownloadTrackState
     public internal(set) var observedByteLength: Int64?
     public internal(set) var placement: DownloadFilePlacement?
+    public internal(set) var reconciliationFailure:
+        DownloadEntryReconciliationFailure? = nil
     public internal(set) var validator: DownloadValidator? = nil
     public internal(set) var retryNotBefore: Date? = nil
     public internal(set) var transferRetryCount: Int? = nil
@@ -342,6 +351,7 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
         guard placement == .finalized else {
             throw .trackNotFinalized(trackIndex)
         }
+        entries[index].reconciliationFailure = nil
         entries[index].state = .complete
         entries[index].observedByteLength = observedByteLength
         entries[index].placement = placement
@@ -363,6 +373,18 @@ public struct DownloadManifest: Codable, Equatable, Sendable {
             entries[index].observedByteLength = observedByteLength
             entries[index].placement = observedByteLength > 0 ? .temporary : nil
         }
+        entries[index].retryNotBefore = nil
+        entries[index].transferRetryCount = nil
+        updateIncompleteState()
+    }
+
+    mutating func quarantineEntry(
+        trackIndex: Int,
+        cause: DownloadEntryReconciliationFailure
+    ) throws(DownloadManifestError) {
+        let index = try entryIndex(for: trackIndex)
+        entries[index].reconciliationFailure = cause
+        entries[index].state = .failed
         entries[index].retryNotBefore = nil
         entries[index].transferRetryCount = nil
         updateIncompleteState()

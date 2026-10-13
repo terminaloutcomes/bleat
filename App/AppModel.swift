@@ -3424,7 +3424,8 @@ final class AppModel {
             switch stage {
             case .contextValidation: code = .carPlayLibraryContextMissing
             case .pageValidation: code = .carPlayLibraryPageInvalid
-            case .requestConstruction, .pageRequest, .listConstruction:
+            case .requestConstruction, .pageRequest, .listConstruction,
+                .downloadEntryReconciliation:
                 code =
                     AppFailure(operation: .loadLibraryPage, serviceError: error)
                     .diagnosticFailureCode

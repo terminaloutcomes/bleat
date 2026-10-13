@@ -5,6 +5,7 @@ import Synchronization
 
 enum DownloadModelFailure: Error, Equatable, Sendable {
     case storageUnavailable
+    case storedEntryInvalid(DownloadEntryReconciliationFailure)
     case permissionDenied
     case localContextUnavailable(DownloadLocalContextFailure)
     case preparationFailed
@@ -18,6 +19,13 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
         switch self {
         case .storageUnavailable:
             "Bleat could not access downloaded media storage."
+        case .storedEntryInvalid(let cause):
+            switch cause {
+            case .missingInode:
+                "A downloaded track is missing its server identity. Retained audio is safe; download the book again to restore the missing track."
+            case .invalidTaskIdentity:
+                "A downloaded track has invalid transfer metadata. Retained audio is safe; download the book again to restore the track."
+            }
         case .permissionDenied:
             "This account is not allowed to download that audiobook."
         case .localContextUnavailable(let cause):
@@ -853,7 +861,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             return records.first(where: {
                 $0.manifest.downloadID == downloadID
             })?.manifest.state == .failed ? failure : nil
-        case .storageUnavailable, .permissionDenied, .localContextUnavailable,
+        case .storedEntryInvalid(let cause):
+            guard let downloadID else { return failure }
+            return records.first(where: { $0.manifest.downloadID == downloadID }
+            )?
+            .manifest.entries.contains(where: {
+                $0.reconciliationFailure == cause
+            }) == true
+                ? failure : nil
+        case .storageUnavailable, .permissionDenied,
+            .localContextUnavailable,
             .preparationFailed,
             .repairPlanChanged, .insufficientStorage:
             return failure
@@ -2694,6 +2711,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         let legacyRecords = records.filter {
             $0.manifest.isLegacyAutomaticCache
                 && $0.manifest.state != .complete
+                && !$0.manifest.entries.contains(where: {
+                    $0.reconciliationFailure != nil
+                })
         }
         guard !legacyRecords.isEmpty else {
             return
@@ -4135,6 +4155,25 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             }
             for record in records {
                 updateProgress(for: record.manifest.downloadID)
+                for entry in record.manifest.entries {
+                    guard let cause = entry.reconciliationFailure else {
+                        continue
+                    }
+                    recordFailure(
+                        .storedEntryInvalid(cause),
+                        for: record.manifest.downloadID)
+                    let code: DiagnosticFailureCode =
+                        switch cause {
+                        case .missingInode: .downloadEntryMissingInode
+                        case .invalidTaskIdentity:
+                            .downloadEntryInvalidTaskIdentity
+                        }
+                    recordDiagnostic(
+                        .failed(
+                            .restoreDownloads, category: .download,
+                            failureCode: code,
+                            stage: .downloadEntryReconciliation))
+                }
             }
         } catch {
             failure = .storageUnavailable
