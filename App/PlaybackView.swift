@@ -138,7 +138,6 @@ enum MiniPlayerSwipeDecision: Equatable {
 
 enum MiniPlayerContrast {
     static let backgroundOpacity = 0.85
-    static let secondaryTextOpacity = 0.85
 }
 
 private struct PlaybackScrubberView: View {
@@ -284,12 +283,8 @@ struct MiniPlayerView: View {
                             .lineLimit(1)
                         if !playback.author.isEmpty {
                             Text(playback.author)
-                                .font(.caption)
-                                .foregroundStyle(
-                                    foreground.opacity(
-                                        MiniPlayerContrast.secondaryTextOpacity
-                                    )
-                                )
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(foreground)
                                 .lineLimit(1)
                         }
                     }

@@ -151,6 +151,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case bookRequestRejected = "book_request_rejected"
     case playbackDenied = "playback_denied"
     case playbackUnavailable = "playback_unavailable"
+    case playbackHourFixtureMissing = "playback_hour_fixture_missing"
+    case playbackHalfHourFixtureMissing = "playback_half_hour_fixture_missing"
     case playbackIdentityMismatch = "playback_identity_mismatch"
     case playbackLibraryInaccessible = "playback_library_inaccessible"
     case playbackTagsInaccessible = "playback_tags_inaccessible"
@@ -381,6 +383,7 @@ public enum DiagnosticEventName: String, Codable, Sendable {
 
 public enum DiagnosticStage: String, Codable, Sendable {
     case downloadEntryReconciliation = "download_entry_reconciliation"
+    case fixtureResourceLookup = "fixture_resource_lookup"
     case contextValidation = "context_validation"
     case requestConstruction = "request_construction"
     case pageRequest = "page_request"

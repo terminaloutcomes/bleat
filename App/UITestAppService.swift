@@ -47,7 +47,7 @@
         }
     }
 
-    private enum UITestScenario: String, Sendable {
+    enum UITestScenario: String, Sendable {
         case signedOut = "--ui-testing-signed-out"
         case openID = "--ui-testing-openid"
         case signedIn = "--ui-testing-signed-in"
@@ -169,6 +169,9 @@
         }
 
         private let scenario: UITestScenario
+        private let usesMultiFilePlayback: Bool
+        private let playbackFixtures:
+            Result<UITestPlaybackFixtures, PlaybackFixtureFailure>
         private let accountResult: Result<ServerAccount, AppServiceError>
         let downloadsStorageRootURL: URL?
         private var firstPageRequests = 0
@@ -287,8 +290,20 @@
             return UITestAppService(scenario: scenario)
         }
 
-        private init(scenario: UITestScenario) {
+        init(
+            scenario: UITestScenario, bundle: Bundle = .main,
+            usesMultiFilePlayback: Bool = ProcessInfo.processInfo.arguments
+                .contains(
+                    "--ui-testing-multi-file-playback")
+        ) {
             self.scenario = scenario
+            self.usesMultiFilePlayback = usesMultiFilePlayback
+            do {
+                playbackFixtures = .success(
+                    try UITestPlaybackFixtures(bundle: bundle))
+            } catch {
+                playbackFixtures = .failure(error)
+            }
             let isContextDownloadRemoval =
                 scenario == .contextDownloadRemoval
                 || scenario == .contextDownloadRemovalFailure
@@ -312,7 +327,7 @@
                             "--ui-testing-complete-automatic-window"
                         )
                 )
-                : nil
+                : Self.makeDownloadFixtureRoot()
         }
 
         private var isSignedInScenario: Bool {
@@ -1348,33 +1363,30 @@
                         title: "Chapter Two"
                     ),
                 ]
+            let fixtures: UITestPlaybackFixtures
+            switch playbackFixtures {
+            case .success(let value): fixtures = value
+            case .failure(let failure): throw .playbackFixture(failure)
+            }
             let playbackTracks = [
                 AppPlaybackTrack(
-                    url: URL(
-                        fileURLWithPath: "/tmp/bleat-ui-test-audio.m4b"
-                    ),
+                    url: fixtures.hour,
                     startOffset: 0,
                     duration: 3_600,
                     title: title
                 )
             ]
             let tracks =
-                ProcessInfo.processInfo.arguments.contains(
-                    "--ui-testing-multi-file-playback"
-                )
+                usesMultiFilePlayback
                 ? [
                     AppPlaybackTrack(
-                        url: URL(
-                            fileURLWithPath: "/tmp/bleat-ui-test-audio-1.m4b"
-                        ),
+                        url: fixtures.halfHour,
                         startOffset: 0,
                         duration: 1_800,
                         title: "Part One"
                     ),
                     AppPlaybackTrack(
-                        url: URL(
-                            fileURLWithPath: "/tmp/bleat-ui-test-audio-2.m4b"
-                        ),
+                        url: fixtures.halfHour,
                         startOffset: 1_800,
                         duration: 1_800,
                         title: "Part Two"
@@ -1793,16 +1805,17 @@
             return 10_000
         }
 
+        private static func makeDownloadFixtureRoot() -> URL {
+            FileManager.default.temporaryDirectory.appendingPathComponent(
+                "BleatUITestDownloads-\(UUID().uuidString)", isDirectory: true)
+        }
+
         private static func makeDownloadFixture(
             itemID: LibraryItemID,
             purpose: DownloadPurpose,
             completedAutomaticWindowOnly: Bool
         ) throws -> URL {
-            let root = FileManager.default.temporaryDirectory
-                .appendingPathComponent(
-                    "BleatUITestDownloads-\(UUID().uuidString)",
-                    isDirectory: true
-                )
+            let root = makeDownloadFixtureRoot()
             let layout = try DownloadStorageLayout(rootURL: root)
             let accountID = AccountID(rawValue: "ui-account")
             let audio = silentWaveFixture()

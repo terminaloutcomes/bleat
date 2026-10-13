@@ -77,6 +77,7 @@ struct RootView: View {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.legibilityWeight) private var legibilityWeight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
@@ -121,6 +122,15 @@ struct RootView: View {
                         .accessibilityIdentifier("perf.memory")
                     }
                     #if os(iOS)
+                        if ProcessInfo.processInfo.arguments.contains(
+                            "--ui-testing-dynamic-type-audit"
+                        ) {
+                            Text(String(describing: dynamicTypeSize))
+                            .accessibilityIdentifier(
+                                "accessibility.dynamicTypeSize")
+                            Text(model.playback.state.diagnosticState.rawValue)
+                            .accessibilityIdentifier("testing.playback.state")
+                        }
                         if ProcessInfo.processInfo.arguments.contains(
                             "--ui-testing-accessibility-audit"
                         ) {
@@ -6455,7 +6465,7 @@ private struct SettingsView: View {
                     .accessibilityIdentifier("settings.resetLocalData.cancel")
             } message: {
                 Text(
-                    "This cannot be undone. It also removes saved credentials, including synchronized native credentials when iCloud Keychain is enabled."
+                    "This cannot be undone. Also deletes credentials from iCloud Keychain."
                 )
                 .accessibilityIdentifier("settings.resetLocalData.message")
             }

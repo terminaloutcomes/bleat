@@ -1,9 +1,11 @@
+import UIKit
 import XCTest
 
 final class BleatDynamicTypeUITests: XCTestCase {
     private let largestContentSizeArguments = [
         "-UIPreferredContentSizeCategoryName",
-        "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+        UIContentSizeCategory.accessibilityExtraExtraExtraLarge.rawValue,
+        "--ui-testing-dynamic-type-audit",
     ]
 
     override func setUp() {
@@ -144,6 +146,11 @@ final class BleatDynamicTypeUITests: XCTestCase {
 
         let miniPlayer = app.buttons["player.mini.open"]
         let miniToggle = app.buttons["player.mini.toggle"]
+        let playing = expectation(
+            for: NSPredicate(format: "label == %@", "playing"),
+            evaluatedWith: app.staticTexts["testing.playback.state"]
+        )
+        wait(for: [playing], timeout: 10)
         assertUsable(miniPlayer, in: app)
         assertUsable(miniToggle, in: app)
         for label in ["Home", "Library", "Downloads", "Settings", "Search"] {
@@ -159,6 +166,7 @@ final class BleatDynamicTypeUITests: XCTestCase {
         let playerScroll = app.descendants(matching: .any)["player.scroll"]
         assertVisible(playerScreen, in: app)
         assertVisible(playerScroll, in: app)
+        XCTAssertFalse(app.staticTexts["player.error"].exists)
         assertVisible(app.staticTexts["player.currentChapter"], in: app)
 
         for identifier in [
@@ -208,6 +216,9 @@ final class BleatDynamicTypeUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = [scenario] + largestContentSizeArguments
         app.launch()
+        let textSize = app.staticTexts["accessibility.dynamicTypeSize"]
+        XCTAssertTrue(textSize.waitForExistence(timeout: 10))
+        XCTAssertEqual(textSize.label, "accessibility5")
         return app
     }
 
@@ -241,7 +252,8 @@ final class BleatDynamicTypeUITests: XCTestCase {
     ) {
         XCTAssertFalse(element.frame.isEmpty, "Empty frame for \(element)")
         XCTAssertTrue(
-            app.frame.contains(element.frame),
+            // Native view frames can differ by a rendered fraction of a point.
+            app.frame.insetBy(dx: -0.5, dy: -0.5).contains(element.frame),
             "Out-of-bounds \(element), element frame: \(element.frame), application frame: \(app.frame)"
         )
     }
@@ -258,29 +270,41 @@ final class BleatDynamicTypeUITests: XCTestCase {
         )
         for _ in 0..<30 {
             if element.exists,
-                app.frame.contains(element.frame),
+                app.frame.insetBy(dx: -0.5, dy: -0.5).contains(element.frame),
                 element.isHittable
             {
                 return
             }
+            var viewport = container.frame.intersection(app.frame)
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists, viewport.intersects(keyboard.frame) {
+                viewport.size.height = max(
+                    0, keyboard.frame.minY - viewport.minY)
+            }
             let scrollsTowardTop =
                 !element.exists
-                || element.frame.midY >= app.frame.midY
-            let start = container.coordinate(
-                withNormalizedOffset: CGVector(
-                    dx: 0.1,
-                    dy: scrollsTowardTop ? 0.7 : 0.3
-                )
+                || element.frame.midY >= viewport.midY
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            // Keep the drag in the scroll margin rather than on action buttons.
+            let dragX = viewport.minX + 4
+            let start = origin.withOffset(
+                CGVector(
+                    dx: dragX,
+                    dy: viewport.minY + viewport.height
+                        * (scrollsTowardTop ? 0.7 : 0.3))
             )
-            let end = container.coordinate(
-                withNormalizedOffset: CGVector(
-                    dx: 0.1,
-                    dy: scrollsTowardTop ? 0.4 : 0.6
-                )
+            let end = origin.withOffset(
+                CGVector(
+                    dx: dragX,
+                    dy: viewport.minY + viewport.height
+                        * (scrollsTowardTop ? 0.4 : 0.6))
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
+        let targetFrame =
+            element.exists ? String(describing: element.frame) : "missing"
         XCTFail(
-            "Could not scroll to hittable element \(element) in \(container)")
+            "Could not scroll to hittable element \(element) with frame \(targetFrame) in \(container) with frame \(container.frame)"
+        )
     }
 }

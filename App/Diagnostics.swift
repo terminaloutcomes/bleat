@@ -248,6 +248,13 @@ extension PrivateCloudState {
 }
 
 extension AppFailure {
+    var playbackPreparationDiagnosticStage: DiagnosticStage? {
+        if case .playbackFixture = cause {
+            return .fixtureResourceLookup
+        }
+        return nil
+    }
+
     var diagnosticFailureCode: DiagnosticFailureCode {
         switch (operation, cause) {
         case (.loadBook, .itemNotFound): .bookNotFound
@@ -267,6 +274,10 @@ extension AppFailure {
         case (_, .persistenceUnavailable): .persistenceUnavailable
         case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput
+        case (_, .playbackFixture(.missingResource(.hour))):
+            .playbackHourFixtureMissing
+        case (_, .playbackFixture(.missingResource(.halfHour))):
+            .playbackHalfHourFixtureMissing
         case (_, .statisticsHistoryChanged): .statisticsHistoryChanged
         case (_, .libraryCatalogChanged): .libraryCatalogChanged
         case (_, .statistics(let error)): error.diagnosticFailureCode

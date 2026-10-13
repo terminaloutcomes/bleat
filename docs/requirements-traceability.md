@@ -280,23 +280,113 @@ on 2026-09-21; both manual results are recorded in `docs/statistics-validation.m
 | AC-25 | Concurrent progress never silently overwrites two changed positions | `APP-OFFLINE-POSITION-001` | verified |
 | AC-26 | Metadata editing uses best-effort stale-draft handling without claiming atomic conflict prevention | `APP-METADATA-001` | verified |
 | AC-27 | Account removal leaves no credential or cross-account cache record | `APP-ACCOUNT-001`, `ACCOUNT-003` | verified |
-| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is covered by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`, with the completed device audit recorded below. VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The completed maintainer Reduce Motion audit is recorded below; the mini-player follow-up is tracked by [#201](https://github.com/terminaloutcomes/bleat/issues/201), with automated evidence in `docs/release-evidence/mini-player-reduce-motion.md`. The remaining iPad keyboard audit is tracked by [#40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
+| AC-28 | VoiceOver and largest Dynamic Type remain usable | Largest Dynamic Type is audited by `BleatDynamicTypeUITests` and `mise run test:dynamic-type`; historical Simulator coverage is qualified below and current full automated evidence remains tracked by [#347](https://github.com/terminaloutcomes/bleat/issues/347). VoiceOver accessibility-tree semantics are covered by `BleatVoiceOverUITests` and `mise run test:voiceover`, with the automated audit recorded below; issue [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the manual spoken-output and gesture audit. Bold Text, Increase Contrast, and app-owned interaction targets are covered by `BleatAccessibilityAuditUITests` and `mise run test:accessibility`, with the completed audit recorded below. Landscape iPhone/iPad UI, rotation preservation, and release screenshots are covered by `BleatLandscapeUITests`, `BleatReleaseScreenshotTests`, and `mise run test:landscape`. The completed maintainer Reduce Motion audit is recorded below; the mini-player follow-up is tracked by [#201](https://github.com/terminaloutcomes/bleat/issues/201), with automated evidence in `docs/release-evidence/mini-player-reduce-motion.md`. The remaining iPad keyboard audit is tracked by [#40](https://github.com/terminaloutcomes/bleat/issues/40) | implemented |
 | AC-29 | Server deletion is permission-gated, distinguishes both deletion modes, and stops matching playback first | `APP-BOOK-DELETE-001` | verified |
 
 ## Largest Dynamic Type audit
 
-The 2026-08-30 audit used Accessibility Extra Extra Extra Large, the largest
-system content-size category. `mise run test:dynamic-type` exercised login,
-Home, Library, Search, Book Detail, Downloads, mini-player, Now Playing, and
-Settings on both devices. It verified keyboard dismissal, scrolling and wrapped
-text, native tab and navigation transitions, the destructive confirmation
-popover, chapter and bookmark sheets, and reachability without essential
-controls clipping, overlapping, disappearing, or becoming unreachable.
+The historical 2026-08-30 Simulator audit passed the journeys below, but its
+launch argument used an invalid content-size category string and did not verify
+the effective size. These results do not establish largest Dynamic Type coverage.
+The subsequent [issue #347](https://github.com/terminaloutcomes/bleat/issues/347)
+investigation also found the successful playback fixture referenced nonexistent
+temporary media, permitting asynchronous failure UI to change the player layout.
+The precise timing of the original sleep-timer assertion remains unproven.
 
 | Device | OS/build | Toolchain | Journey result |
 | --- | --- | --- | --- |
 | iPhone 17 Pro Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatDynamicTypeUITests` journeys |
 | iPad Pro 13-inch (M5) Simulator | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatDynamicTypeUITests` journeys |
+
+### Issue #347 correction (2026-10-13)
+
+The audit now uses UIKit's typed largest-category raw value and verifies the
+app's effective SwiftUI size is `accessibility5`. Successful playback uses
+bundled AAC fixtures under `TestSupport/UIFixtures/` and waits for actual
+`playing` state. Missing resources retain a typed cause through service,
+presentation and diagnostics. Native window bounds use a half-point rendering
+tolerance; controls still require hittability. Scrolling uses the visible area
+above the keyboard and the scroll margin rather than action buttons.
+
+Four `UITestPlaybackFixturesTests` and both the largest-text playback journey
+and explicit playback failure/retry journey passed (six tests, zero skips or
+runtime warnings). The preceding attempt reached the player controls but failed
+on a native scroll view extending one-third of a point beyond each horizontal
+window edge after dismissal; the final run includes the rendering tolerance.
+The focused largest-text playback journey passed on three additional disposable
+iPhone Simulators. An initial repeat attempt failed to launch the runner with
+SpringBoard `Busy` and executed no requested test.
+
+The unsigned host lane passed 531 tests in 39 suites, with the existing expected
+cleanup issue and signed-Keychain skip. The Simulator Release build passed, and
+all 576 app tests passed with no skips or runtime warnings; the four fixture
+tests verified AVFoundation duration/playability, single- and multi-file track
+metadata, and distinct missing-resource diagnostics.
+
+The corrected full audit exposed additional failures: a login gesture landing
+on the keyboard, persisted automatic downloads replacing the next journey's
+Download control, a reset confirmation message extending below the iPhone
+window, and iPad mini-player hittability checked before playback readiness.
+The test helper now avoids the keyboard and action buttons, test-service launches use
+isolated download storage, and readiness precedes every playback-control audit.
+The pre-rebase audits used Xcode 27.0 (27A266a), the iOS 27 SDK, and iOS 26.5 (23F77):
+
+| Device | Pre-rebase serial audit result |
+| --- | --- |
+| iPhone 17 Pro Simulator | Login and playback passed; primary journey failed on the reset-confirmation message extending below the window (`y=222`, height `696.67`, window height `874`) |
+| iPad Pro 13-inch (M5) Simulator | All three journeys passed |
+
+Both final audit bundles recorded zero skips and runtime warnings. The four
+fixture tests also passed again alongside the final iPhone audit. The iPhone
+primary journey now reaches the reset confirmation without download-state
+contamination. Final successful playback and explicit failure/retry each passed
+three repetitions (two test identifiers, six executions, zero skips or runtime
+warnings).
+
+The broader serial UI attempt completed before the final download-isolation
+change: 101 passed, five failed, and six expected live/screenshot tests skipped,
+with zero runtime warnings. It failed the Dynamic Type and VoiceOver primary
+journeys after persisted downloads replaced their Download control, plus
+`testMiniPlayerMaintainsReadableAccessoryContrast`,
+`testBookTranscriptionLoadsCacheAndSearchesEveryChapterIgnoringCase`, and
+`testPartialTranscriptExportExplainsCoverageBeforeSharing`. All test-service
+launches now isolate download storage. The focused final recheck passed all
+four media/typed-failure tests, both transcript journeys, and the VoiceOver
+primary journey (seven passed, two failed, no skips or runtime warnings).
+Only the iPhone reset-confirmation overflow and mini-player contrast audit still
+failed in that recheck. The full broader suite has not passed and was not rerun
+after the final storage-isolation change.
+The separate download-storage isolation regression also executed and passed,
+with no skips or runtime warnings. Two intermediate build attempts failed on
+diagnostic-stage exhaustiveness and a nonisolated test read of an actor property;
+both were corrected before the verified reruns and executed no tests.
+After rebasing onto main (`f060a60`), the reset confirmation now uses a shorter
+warning; the full erasure details remain in the Settings footer. All three
+largest-Dynamic-Type journeys passed on both iPhone and iPad. The five fixture
+regressions and VoiceOver primary journey passed on iPhone. These runs recorded
+zero skips or runtime warnings. The mini-player contrast check still failed on
+both devices after making its author text fully opaque. Increasing that text
+from caption to medium-weight subheadline subsequently passed the unchanged
+native contrast audit on both iPhone and iPad. The first iPad legibility recheck failed to launch
+the runner with SpringBoard `Busy` and executed no requested tests; the retry
+explicitly waited for Simulator boot readiness, then passed both the contrast
+check and largest-text playback journey with zero skips or runtime warnings.
+The rebased host lane passed 532 tests in 39 suites,
+with the existing expected cleanup issue and signed-Keychain skip.
+
+The final rebased iPhone regression run passed largest-text playback, explicit
+playback failure/retry, and transcript cache/search. Partial transcript export
+passed its coverage warning and opened the share sheet, then failed the system
+file-picker assertion. Its screen recording and synthesized tap showed the
+system share cell's center falling below the visible Save to Files action.
+The journey now taps the visible action label instead of the cell center. Its
+focused rerun passed, including the system file picker, with zero skips or
+runtime warnings. Every failure from the earlier broad run now has a focused
+passing regression on the rebased source; the full broader suite still requires
+a fresh passing run. Strict Swift formatting lint and `git diff --check` passed.
+
+Issue #347 remains open pending the complete broader UI gate. Simulator results
+do not establish physical-device accessibility behavior.
 
 ## Bold Text, Increase Contrast, and interaction-target audit
 
