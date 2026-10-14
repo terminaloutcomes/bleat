@@ -163,6 +163,7 @@ enum AppServiceError: Error, Equatable, Sendable {
     case bookDetail(LibraryRepositoryError)
     case playbackSession(PlaybackSessionError)
     case playbackSource(PlaybackSourceError)
+    case playbackFixture(PlaybackFixtureFailure)
     case playbackSync(PlaybackSyncError)
     case localPlaybackSession(LocalPlaybackSessionError)
     case metadataPatch(BookMetadataPatchError)

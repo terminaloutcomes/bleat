@@ -36,6 +36,9 @@ targets:
           - Info.plist
           - Info-macOS.plist
       - path: Bleat.icon
+      - path: TestSupport/UIFixtures
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: BleatPackage
         product: BleatCore

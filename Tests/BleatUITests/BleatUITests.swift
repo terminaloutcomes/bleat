@@ -1,4 +1,5 @@
 import CoreGraphics
+import UIKit
 import XCTest
 
 @MainActor
@@ -594,10 +595,17 @@ final class BleatUITests: XCTestCase {
 
     @MainActor
     func testMiniPlayerMaintainsReadableAccessoryContrast() throws {
-        let app = launch(scenario: "--ui-testing-playback")
+        let app = launch(
+            scenario: "--ui-testing-playback",
+            additionalArguments: ["--ui-testing-dynamic-type-audit"])
         let play = app.buttons["home.book.ui-book.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 3))
         play.tap()
+
+        let playing = expectation(
+            for: NSPredicate(format: "label == %@", "playing"),
+            evaluatedWith: app.staticTexts["testing.playback.state"])
+        wait(for: [playing], timeout: 10)
 
         let miniPlayer = app.descendants(matching: .any)["player.mini"]
         XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3))
@@ -1838,7 +1846,8 @@ final class BleatUITests: XCTestCase {
             additionalArguments: [
                 "--ui-testing-open-settings", "--ui-testing-statistics",
                 "-UIPreferredContentSizeCategoryName",
-                "UICTContentSizeCategoryAccessibilityXXXL",
+                UIContentSizeCategory.accessibilityExtraExtraExtraLarge
+                    .rawValue,
             ])
         tabButton("Settings", in: app).tap()
         let link = app.descendants(matching: .any)["settings.statistics"]
@@ -2301,7 +2310,7 @@ final class BleatUITests: XCTestCase {
     func testLibraryCategoryModesAtLargestDynamicType() {
         assertLibraryCategoryModes(additionalArguments: [
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            UIContentSizeCategory.accessibilityExtraExtraExtraLarge.rawValue,
         ])
     }
 
@@ -2655,7 +2664,8 @@ final class BleatUITests: XCTestCase {
             scenario: "--ui-testing-playback",
             additionalArguments: [
                 "-UIPreferredContentSizeCategoryName",
-                "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+                UIContentSizeCategory.accessibilityExtraExtraExtraLarge
+                    .rawValue,
             ]
         )
 
@@ -3557,7 +3567,11 @@ final class BleatUITests: XCTestCase {
 
         let saveToFiles = app.cells["Save to Files"]
         XCTAssertTrue(saveToFiles.waitForExistence(timeout: 3))
-        saveToFiles.tap()
+        // The system share grid's cell can extend below its visible action.
+        let saveToFilesLabel = saveToFiles.staticTexts["Save to Files"]
+        XCTAssertTrue(saveToFilesLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(saveToFilesLabel.isHittable)
+        saveToFilesLabel.tap()
         let files = XCUIApplication(
             bundleIdentifier: "com.apple.DocumentManagerUICore.SaveToFiles"
         )
@@ -3902,7 +3916,17 @@ final class BleatUITests: XCTestCase {
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [scenario] + additionalArguments
+        let auditsLargestText = additionalArguments.contains(
+            UIContentSizeCategory.accessibilityExtraExtraExtraLarge.rawValue)
+        if auditsLargestText {
+            app.launchArguments.append("--ui-testing-dynamic-type-audit")
+        }
         app.launch()
+        if auditsLargestText {
+            let textSize = app.staticTexts["accessibility.dynamicTypeSize"]
+            XCTAssertTrue(textSize.waitForExistence(timeout: 10))
+            XCTAssertEqual(textSize.label, "accessibility5")
+        }
         return app
     }
 

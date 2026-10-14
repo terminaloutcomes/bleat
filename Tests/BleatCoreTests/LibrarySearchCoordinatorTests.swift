@@ -43,9 +43,7 @@ final class LibrarySearchCoordinatorTests {
                 operation: service.search
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         let initialCallCount = await service.callCount()
         let requestedDurations = await sleeper.requestedDurations()
         #expect(initialCallCount == 0)
@@ -79,9 +77,7 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         let second = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
@@ -90,15 +86,11 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            let durationCount =
-                await sleeper.requestedDurations().count
-            let pendingCount = await sleeper.pendingCount()
-            return durationCount == 2 && pendingCount == 1
-        }
+        await sleeper.waitForSleepCount(2)
+        let firstResult = await first.value
+        #expect(await sleeper.pendingCount() == 1)
         await sleeper.resumeAll()
 
-        let firstResult = await first.value
         let secondResult = await second.value
         Self.assertFailure(firstResult, equals: .superseded)
         guard case .success = secondResult else {
@@ -138,13 +130,9 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         await sleeper.resumeAll()
-        try await waitUntil {
-            await service.callCount() == 1
-        }
+        await service.waitForFirstCall()
 
         let second = Task.detached {
             await performSearchForTest(
@@ -154,9 +142,7 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(2)
         await sleeper.resumeAll()
 
         let firstResult = await first.value
@@ -193,9 +179,7 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         task.cancel()
 
         let result = await task.value
@@ -227,13 +211,9 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         await sleeper.resumeAll()
-        try await waitUntil {
-            await service.callCount() == 1
-        }
+        await service.waitForFirstCall()
 
         task.cancel()
         await service.resumeBlockedCall()
@@ -265,9 +245,7 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         await sleeper.resumeAll()
 
         let result = await task.value
@@ -298,9 +276,7 @@ final class LibrarySearchCoordinatorTests {
                 service: service
             )
         }
-        try await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await sleeper.waitForSleepCount(1)
         await sleeper.resumeAll()
 
         let result = await task.value
@@ -332,22 +308,6 @@ final class LibrarySearchCoordinatorTests {
         }
         #expect(error == expected, sourceLocation: sourceLocation)
     }
-
-    private func waitUntil(
-        _ condition: () async -> Bool,
-        sourceLocation: SourceLocation = #_sourceLocation
-    ) async throws {
-        for _ in 0..<1_000 {
-            if await condition() {
-                return
-            }
-            await Task.yield()
-        }
-        Issue.record(
-            "Timed out waiting for asynchronous condition",
-            sourceLocation: sourceLocation)
-        throw SearchTestError.timeout
-    }
 }
 
 private func performSearchForTest(
@@ -376,13 +336,27 @@ private actor SearchTestSleeper {
     private var continuations: [UUID: CheckedContinuation<Void, any Error>] =
         [:]
     private var durations: [Duration] = []
+    private var sleepWaiters:
+        [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    func waitForSleepCount(_ count: Int) async {
+        guard durations.count < count else { return }
+        await withCheckedContinuation { continuation in
+            sleepWaiters.append((count, continuation))
+        }
+    }
 
     func sleep(for duration: Duration) async throws {
         let id = UUID()
-        durations.append(duration)
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 continuations[id] = continuation
+                durations.append(duration)
+                let ready = sleepWaiters.filter { $0.count <= durations.count }
+                sleepWaiters.removeAll { $0.count <= durations.count }
+                for waiter in ready {
+                    waiter.continuation.resume()
+                }
             }
         } onCancel: {
             Task {
@@ -425,6 +399,14 @@ private actor SearchTestService {
     private var recordedCalls: [Call] = []
     private var cancelledCalls = 0
     private var blockedContinuation: CheckedContinuation<Void, Never>?
+    private var firstCallWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func waitForFirstCall() async {
+        guard recordedCalls.isEmpty else { return }
+        await withCheckedContinuation { continuation in
+            firstCallWaiters.append(continuation)
+        }
+    }
 
     init(
         blockFirstCall: Bool = false,
@@ -448,6 +430,11 @@ private actor SearchTestService {
                 context: context,
                 request: request
             ))
+        let waiters = firstCallWaiters
+        firstCallWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
         if blockFirstCall, recordedCalls.count == 1 {
             do {
                 try await Task.sleep(for: .seconds(30))
@@ -490,8 +477,4 @@ private actor SearchTestService {
         blockedContinuation?.resume()
         blockedContinuation = nil
     }
-}
-
-private enum SearchTestError: Error {
-    case timeout
 }

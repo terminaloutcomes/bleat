@@ -36,7 +36,7 @@ enum PlaybackTranscriptNavigationPosition: Equatable, Sendable {
 }
 
 extension PlaybackState {
-    fileprivate var diagnosticState: DiagnosticState {
+    var diagnosticState: DiagnosticState {
         switch self {
         case .idle:
             .idle
@@ -961,7 +961,8 @@ final class PlaybackModel {
                 .failed(
                     .openPlayback,
                     category: .playback,
-                    failureCode: failure.diagnosticFailureCode
+                    failureCode: failure.diagnosticFailureCode,
+                    stage: failure.playbackPreparationDiagnosticStage
                 )
             )
         } catch {

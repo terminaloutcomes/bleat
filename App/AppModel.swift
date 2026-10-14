@@ -617,6 +617,7 @@ enum AppFailureCause: Equatable, Sendable, Codable {
     case invalidBookMetadata(BookMetadataFailure)
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case audioSessionActivationFailed
+    case playbackFixture(PlaybackFixtureFailure)
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
     case authenticationCancelled, authenticationSessionInProgress
@@ -692,6 +693,7 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .localLoginUnavailable: "Local login unavailable"
         case .audioSessionActivationFailed: "Audio session unavailable"
         case .mediaUnavailable: "Playback unavailable"
+        case .playbackFixture: "Playback fixture missing"
         case .uncertainMutation: "Change needs attention"
         case .requestRejected: "Request rejected"
         case .authenticationCancelled: "Sign-in cancelled"
@@ -806,6 +808,8 @@ struct AppFailure: Equatable, Sendable, Codable {
             "Audiobookshelf returned incomplete or mismatched account credentials."
         case .audioSessionActivationFailed:
             "iOS could not activate audio playback. Try Play again."
+        case .playbackFixture(.missingResource(let resource)):
+            "The test app is missing the bundled \(resource.rawValue).m4a audio fixture."
         case .mediaUnavailable:
             switch operation {
             case .localPlayback, .recoverPlayback:
@@ -847,7 +851,8 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
             "wifi.exclamationmark"
         case .requestCancelled: "xmark.circle"
-        case .mediaUnavailable, .audioSessionActivationFailed: "play.slash"
+        case .mediaUnavailable, .audioSessionActivationFailed, .playbackFixture:
+            "play.slash"
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
         case .serverNotReady, .serverUnsupported, .localLoginUnavailable,
@@ -1011,6 +1016,7 @@ struct AppFailure: Equatable, Sendable, Codable {
             }
         case .playbackSession(let error): return playbackSessionCause(error)
         case .playbackSource: return .mediaUnavailable
+        case .playbackFixture(let failure): return .playbackFixture(failure)
         case .playbackSync(let error): return playbackSyncCause(error)
         case .localPlaybackSession(let error): return localSessionCause(error)
         case .metadataUpdate(let error): return metadataCause(error)
@@ -1287,7 +1293,7 @@ extension AppFailureCause {
         case .persistenceUnavailable, .storedDataMigrationFailed,
             .localStorageUnavailable, .localDataReset, .statistics:
             .localStorage
-        case .mediaUnavailable, .audioSessionActivationFailed:
+        case .mediaUnavailable, .audioSessionActivationFailed, .playbackFixture:
             .media
         case .serverUnsupported, .localLoginUnavailable:
             .unsupported
@@ -3425,7 +3431,7 @@ final class AppModel {
             case .contextValidation: code = .carPlayLibraryContextMissing
             case .pageValidation: code = .carPlayLibraryPageInvalid
             case .requestConstruction, .pageRequest, .listConstruction,
-                .downloadEntryReconciliation:
+                .downloadEntryReconciliation, .fixtureResourceLookup:
                 code =
                     AppFailure(operation: .loadLibraryPage, serviceError: error)
                     .diagnosticFailureCode

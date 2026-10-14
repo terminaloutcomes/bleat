@@ -554,6 +554,23 @@ mini-player, Now Playing, and Settings with the system content-size category set
 to Accessibility Extra Extra Extra Large. It fails when an essential audited
 element is outside the application window or cannot be reached and operated.
 The result bundles are written beneath `.build/dynamic-type-ui-results/`.
+The tests verify the effective SwiftUI size is `accessibility5` inside the app,
+wait for actual playback readiness, and retain hittability assertions. Window
+bounds permit only a half-point rendering tolerance for native view frames.
+Scrolling gestures stay inside the visible container above the keyboard, so
+the audit does not repeatedly drag on an obscuring keyboard.
+Test-service launches also use isolated download storage: successful playback can
+create automatic downloads, which must not change the next journey's fixture.
+
+The successful playback fixture uses checked-in silent mono AAC media under
+`TestSupport/UIFixtures/`, bundled through `project.yml`: `playback-hour.m4a`
+is 3,600 seconds and `playback-half-hour.m4a` is 1,800 seconds (reused for both
+multi-file tracks). Resolve those resources at test-service construction;
+do not depend on host `/tmp` files or generate media during playback.
+`UITestPlaybackFixturesTests` checks AVFoundation playability and duration,
+typed missing-resource failures, and download-storage isolation between journeys.
+Explicit failure/retry journeys keep their
+existing failure-injection controls.
 
 Run the Bold Text, Increase Contrast, and minimum interaction-target journeys
 with:
