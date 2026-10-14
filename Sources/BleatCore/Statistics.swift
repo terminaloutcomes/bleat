@@ -1670,33 +1670,34 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
+            let sliceDescriptor = FetchDescriptor<ListeningSliceRecord>(
+                predicate: #Predicate<ListeningSliceRecord> {
+                    ($0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil)
+                        && $0.isFinalized != false
+                })
+            let completionDescriptor = FetchDescriptor<
+                CompletionMilestoneRecord
+            >(
+                predicate: #Predicate<CompletionMilestoneRecord> {
+                    $0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil
+                })
+            let sessionDescriptor = FetchDescriptor<
+                RemoteListeningSessionRecord
+            >(
+                predicate: #Predicate<RemoteListeningSessionRecord> {
+                    $0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil
+                })
+            let slices = try context.fetch(sliceDescriptor).map(\.domainValue)
+            let completions = try context.fetch(completionDescriptor)
+                .compactMap(\.domainValue)
+            let sessions = try context.fetch(sessionDescriptor).map(
+                \.domainValue)
             return StatisticsArchive(
-                slices: try context.fetch(
-                    FetchDescriptor<ListeningSliceRecord>(
-                        predicate: #Predicate {
-                            ($0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil)
-                                && $0.isFinalized != false
-                        }
-                    )
-                ).map(\.domainValue),
-                completions: try context.fetch(
-                    FetchDescriptor<CompletionMilestoneRecord>(
-                        predicate: #Predicate {
-                            $0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil
-                        }
-                    )
-                ).compactMap(\.domainValue),
-                remoteSessions: try context.fetch(
-                    FetchDescriptor<RemoteListeningSessionRecord>(
-                        predicate: #Predicate {
-                            $0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil
-                        }
-                    )
-                ).map(\.domainValue)
-            )
+                slices: slices, completions: completions,
+                remoteSessions: sessions)
         } catch {
             throw .persistenceFailed
         }
