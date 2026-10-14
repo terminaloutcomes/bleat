@@ -4,6 +4,17 @@ import XCTest
 @testable import Bleat
 
 final class AppMetadataTests: XCTestCase {
+    func testBuiltBundleContainsGeneratedMetadata() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        let commit = try XCTUnwrap(info["BleatGitCommit"] as? String)
+        XCTAssertGreaterThanOrEqual(commit.count, 8)
+        XCTAssertTrue(commit.allSatisfy { $0.isHexDigit })
+        let date = try XCTUnwrap(info["BleatBuildDate"] as? String)
+        XCTAssertNotNil(ISO8601DateFormatter().date(from: date))
+        let version = try XCTUnwrap(info["CFBundleVersion"] as? String)
+        XCTAssertFalse(version.contains("$("))
+    }
+
     func testUsesBundleMetadata() {
         let metadata = AppMetadata(
             infoDictionary: [

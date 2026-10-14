@@ -21,6 +21,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEAD_CODE_STRIPPING: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    USE_RECURSIVE_SCRIPT_INPUTS_IN_SCRIPT_PHASES: YES
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
@@ -77,9 +78,10 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: Bleat
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_ID_PREFIX).Bleat"
         PRODUCT_NAME: Bleat
-        INFOPLIST_FILE: App/Info-macOS.plist
-        "INFOPLIST_FILE[sdk=iphoneos*]": App/Info.plist
-        "INFOPLIST_FILE[sdk=iphonesimulator*]": App/Info.plist
+        BLEAT_INFOPLIST_TEMPLATE: App/Info-macOS.plist
+        "BLEAT_INFOPLIST_TEMPLATE[sdk=iphoneos*]": App/Info.plist
+        "BLEAT_INFOPLIST_TEMPLATE[sdk=iphonesimulator*]": App/Info.plist
+        INFOPLIST_FILE: "$(TARGET_TEMP_DIR)/Bleat-Info.plist"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: true
       configs:
@@ -88,22 +90,32 @@ targets:
         Release:
           BLEAT_APP_ATTEST_ENVIRONMENT: production
     preBuildScripts:
-      - name: Validate Release Version
+      - name: Prepare Build Metadata
         script: |
-          cargo run --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --package scripts --bin validate-release-version -- --repository-root "${SRCROOT}" --version "${MARKETING_VERSION}" --build "${CURRENT_PROJECT_VERSION}"
-        basedOnDependencyAnalysis: false
-        showEnvVars: false
-      - name: Validate Paid Developer Build Settings
-        script: |
-          "${SRCROOT}/scripts/validate-paid-developer-build-settings.sh"
-        basedOnDependencyAnalysis: false
-        showEnvVars: false
-    postBuildScripts:
-      - path: scripts/write-build-metadata.sh
-        name: Write Build Metadata
+          set -eu
+          xcrun --sdk macosx cargo build --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --target-dir "${TARGET_TEMP_DIR}/RustBuildTools" --package scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata
+          "${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-release-version" --repository-root "${SRCROOT}" --version "${MARKETING_VERSION}" --build "${CURRENT_PROJECT_VERSION}"
+          "${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-paid-developer-build-settings"
+          "${TARGET_TEMP_DIR}/RustBuildTools/debug/write-build-metadata" --repository-root "${SRCROOT}" --template "${SRCROOT}/${BLEAT_INFOPLIST_TEMPLATE}" --output "${TARGET_TEMP_DIR}/Bleat-Info.plist"
         basedOnDependencyAnalysis: false
         inputFiles:
-          - "$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"
+          - "$(SRCROOT)/Cargo.toml"
+          - "$(SRCROOT)/Cargo.lock"
+          - "$(SRCROOT)/.cargo"
+          - "$(SRCROOT)/scripts"
+          - "$(SRCROOT)/bleat-api/Cargo.toml"
+          - "$(SRCROOT)/bleat-api/src"
+          - "$(SRCROOT)/bleat-api/tests"
+          - "$(SRCROOT)/project.yml"
+          - "$(SRCROOT)/CHANGELOG.md"
+          - "$(SRCROOT)/Bleat.xcodeproj/project.pbxproj"
+          - "$(SRCROOT)/.git"
+          - "$(SRCROOT)/$(BLEAT_INFOPLIST_TEMPLATE)"
+        outputFiles:
+          - "$(TARGET_TEMP_DIR)/RustBuildTools/debug/validate-release-version"
+          - "$(TARGET_TEMP_DIR)/RustBuildTools/debug/validate-paid-developer-build-settings"
+          - "$(TARGET_TEMP_DIR)/RustBuildTools/debug/write-build-metadata"
+          - "$(TARGET_TEMP_DIR)/Bleat-Info.plist"
         showEnvVars: false
 
   BleatAppTests:

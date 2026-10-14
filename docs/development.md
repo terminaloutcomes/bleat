@@ -331,6 +331,23 @@ brew install xcodegen
 xcodegen generate
 ```
 
+Xcode's `Prepare Build Metadata` phase runs with user script sandboxing enabled.
+It declares its repository inputs with recursive directory access, builds the Rust
+helpers with the macOS SDK even for iOS destinations, and runs the release and
+capability validators. The metadata helper reads the platform's `App/Info.plist`
+or `App/Info-macOS.plist` template and Git HEAD, then writes `Bleat-Info.plist` in
+the target's intermediate directory. Cargo build products live in that same
+target-owned temporary directory, with the three helper executables declared as
+outputs; Cargo's user-level caches stay in their normal locations. Xcode processes
+that generated input into the app bundle; scripts do not edit the final bundle
+plist.
+
+When changing build phases, validate from canonical filesystem paths: a `/tmp`
+alias can prevent sandbox rules from restricting the underlying `/private/tmp`
+checkout. Focused helper regressions run with
+`cargo test --locked -p scripts --test build_metadata --test release_version_check`;
+`BleatAppTests/AppMetadataTests` also checks metadata in the built app bundle.
+
 ## Test
 
 Run every automated test that does not require a physical device:
