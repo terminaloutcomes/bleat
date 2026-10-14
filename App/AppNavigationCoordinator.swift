@@ -20,7 +20,7 @@ enum AppRootTab: CaseIterable, Hashable, Sendable {
     }
 }
 
-enum BookNavigationOrigin {
+enum BookNavigationOrigin: Hashable {
     case home
     case library
     case search
@@ -44,6 +44,11 @@ struct SeriesDestination: Hashable, Sendable {
     let libraryID: LibraryID
     let id: SeriesID
     let name: String
+}
+
+struct BookDestination: Hashable, Sendable {
+    let id = UUID()
+    let book: LibraryBookSummary
 }
 
 @MainActor
@@ -108,6 +113,8 @@ final class AppNavigationCoordinator {
     var searchQuery = ""
     var searchScope: DeepLinkSearchScope = .all
     var showsPlayer = false
+    private var bookDestinations: [BookNavigationOrigin: [Int: UUID]] =
+        [:]
     var pendingRoute: DeepLinkRoute?
     var deepLinkFailure: DeepLinkPresentationFailure?
     @ObservationIgnored
@@ -266,7 +273,7 @@ final class AppNavigationCoordinator {
             guard let book else { return .unavailable }
             selectedTab = .library
             libraryPath = NavigationPath()
-            libraryPath.append(book)
+            showBook(book, from: .library)
         case .settings(let destination):
             selectedTab = .settings
             settingsPath = NavigationPath()
@@ -298,6 +305,9 @@ final class AppNavigationCoordinator {
                 case .home: homePath = path
                 case .library: libraryPath = path
                 case .search: searchPath = path
+                }
+                bookDestinations[tab] = bookDestinations[tab]?.filter {
+                    $0.key <= path.count
                 }
             }
         )
@@ -344,17 +354,43 @@ final class AppNavigationCoordinator {
         case .search:
             searchPath.append(destination)
         }
+        bookDestinations[tab] = bookDestinations[tab]?.filter {
+            $0.key < pathBinding(for: tab).wrappedValue.count
+        }
     }
 
-    func showBook(_ book: LibraryBookSummary, from tab: BookNavigationOrigin) {
+    @discardableResult
+    func showBook(_ book: LibraryBookSummary, from tab: BookNavigationOrigin)
+        -> BookDestination
+    {
+        let destination = BookDestination(book: book)
         switch tab {
         case .home:
-            homePath.append(book)
+            homePath.append(destination)
         case .library:
-            libraryPath.append(book)
+            libraryPath.append(destination)
         case .search:
-            searchPath.append(book)
+            searchPath.append(destination)
         }
+        let depth = pathBinding(for: tab).wrappedValue.count
+        bookDestinations[tab] =
+            bookDestinations[tab]?.filter { $0.key < depth } ?? [:]
+        bookDestinations[tab, default: [:]][depth] = destination.id
+        return destination
+    }
+
+    func isVisibleBook(_ destinationID: UUID, from tab: BookNavigationOrigin)
+        -> Bool
+    {
+        let rootTab: AppRootTab =
+            switch tab {
+            case .home: .home
+            case .library: .library
+            case .search: .search
+            }
+        return selectedTab == rootTab
+            && bookDestinations[tab]?[pathBinding(for: tab).wrappedValue.count]
+                == destinationID
     }
 
     private func resolveScope(
