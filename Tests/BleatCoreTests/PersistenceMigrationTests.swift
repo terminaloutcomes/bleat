@@ -49,6 +49,45 @@ final class PersistenceMigrationTests {
                 == 0)
     }
 
+    @Test func cloudMetadataSchemaUpgradePreservesLegacyListeningRows() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Bleat.store")
+        let slice = ListeningSlice(
+            accountID: AccountID(rawValue: "retained-account"),
+            itemID: LibraryItemID(rawValue: "retained-item"),
+            sessionID: PlaybackSessionID(rawValue: "retained-session"),
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 105), startPosition: 0,
+            endPosition: 5, realSeconds: 5,
+            audiobookSeconds: 5, playbackRate: 1, chapterID: nil,
+            chapterTitle: nil, chapterStart: nil,
+            chapterEnd: nil, title: "Retained", author: "Reader", duration: 100)
+        do {
+            let old = try container(
+                schema: Schema(
+                    versionedSchema: BleatPersistenceSchemaV0_1_7.self),
+                storeURL: url)
+            let context = ModelContext(old)
+            let row = BleatPersistenceSchemaV0_1_7.ListeningSliceRecord(slice)
+            row.privateCloudSynchronized = true
+            context.insert(row)
+            try context.save()
+        }
+        let upgraded = try container(
+            schema: Schema(versionedSchema: BleatPersistenceSchemaCurrent.self),
+            storeURL: url,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self)
+        let rows = try ModelContext(upgraded).fetch(
+            FetchDescriptor<ListeningSliceRecord>())
+        #expect(rows.map(\.domainValue) == [slice])
+        #expect(rows.first?.privateCloudSynchronized == true)
+        #expect(rows.first?.isFinalized == nil)
+    }
+
     private func assertReleasedStoreFixtureMigrates(
         version: BleatPersistenceSchemaVersion
     ) throws {

@@ -1710,6 +1710,14 @@ The app may use `/api/me/listening-stats` for a fast summary, but canonical per-
 Maintain two related sources:
 
 - local `ListeningSlice` rows for exact playback observed by this app;
+  new continuous segments retain one stable identity and extend their end time,
+  position and accumulated audible listening quantities in place. Five seconds
+  is a durable save interval, not a record-length limit. Pauses, buffering,
+  seeks, rate/chapter changes, playback-context changes and UTC reporting-day
+  boundaries finalize segments. Existing history retains its identities and
+  values. Recovered active rows finalize once without carrying monotonic samples
+  across process launches. Incremental summaries count only new contributions;
+  original start dates retain the existing range-selection contract.
 - `RemoteSessionSnapshot` rows for history imported from each Audiobookshelf account.
 
 For all-device real time, aggregate remote snapshots plus local session time not yet known to be represented remotely. Associate every local slice with its online or offline UUIDv4 playback-session ID. After a confirmed online 2xx sync, advance the local expected remote total immediately. After a successful offline-session import, remove that session's pending overlay. When the corresponding remote session is later fetched, replace the expected snapshot rather than adding a second copy.
@@ -1808,6 +1816,30 @@ Audiobookshelf outage. Local diagnostics exclude localized descriptions,
 CloudKit record identifiers, and CloudKit `userInfo`. On native macOS, remote
 OpenTelemetry export is out of scope and the same typed lifecycle remains
 on-device only. The iOS build retains the reviewed remote telemetry behavior.
+Only finalized listening segments enter CloudKit; published listening records
+remain immutable for clients that insert by stable identity. Lifecycle sync
+finalizes current local segments before upload, and later playback starts new
+segments. Other devices see them after finalization and synchronization. New
+finalized payloads have an optional continuous-segment format marker; legacy
+payloads without that marker remain supported.
+
+Individual CloudKit record metadata and durable coordinator state live in the
+existing local SwiftData store. Fetched/sent callbacks persist only changed
+metadata rows and deletions, never a full UserDefaults record dictionary. The
+versioned schema upgrade preserves existing history; a restartable legacy
+import verifies opaque archive fidelity and structured state before removing
+source preferences. CloudKit waits for migration; browsing and playback do not.
+Invalid data or save/verification failures retain the source and surface the
+specific typed processing failure rather than resetting sync state.
+
+Successful legacy reconciliation queues one acknowledged **Cloud storage
+update** notice per installation across accounts and relaunches. It recommends
+updating every device to the fixed introducing release, 2026.10.14, or later,
+without claiming that an outdated device is currently running. It does not
+block synchronization or remove history. Design, signed-device migration and
+matched bidirectional mixed-version evidence are tracked in `docs/design/cloud-sync-storage.md` and
+[issue #355](https://github.com/terminaloutcomes/bleat/issues/355).
+
 Successful record system fields, including server change tags, must survive
 process relaunch. Mutable records retain the last successfully synchronized
 payload digest, and statistics rows retain explicit synchronized state plus
@@ -1823,7 +1855,7 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
-Settings provides **Clear My CloudKit Data**, including when synchronization is
+Settings provides **Clear My CloudKit Data** in its own section below Diagnostics, including when synchronization is
 already disabled. After confirmation, Bleat turns off synchronization on this
 device, cancels and drains its current sync, and directly deletes its entire
 private record zone, including unrecognized records. It clears local sync

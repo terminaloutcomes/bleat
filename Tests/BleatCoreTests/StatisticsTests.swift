@@ -480,6 +480,145 @@ final class StatisticsTests {
         #expect(pending == 10)
     }
 
+    @Test func checkpointsExtendOneRecordAndDoNotDoubleCount() async throws {
+        let repository = try repository()
+        let start = Date(timeIntervalSince1970: 1_000)
+        _ = try await repository.summary()
+        for second in stride(from: 0, through: 60, by: 5) {
+            try await repository.record(
+                sample(
+                    observedAt: start.addingTimeInterval(Double(second)),
+                    monotonicTime: Double(second),
+                    position: Double(second) * 1.5))
+            if second > 0 {
+                let archive = try await repository.archive()
+                #expect(archive.slices.count == 1)
+                #expect(archive.slices[0].recordingState == .active)
+                #expect(
+                    abs(archive.slices[0].realSeconds - Double(second)) < 0.001)
+                #expect(
+                    try await repository.privateCloudArchive().slices.isEmpty)
+                #expect(
+                    abs(
+                        try await repository.summary().localRealSeconds
+                            - Double(second)) < 0.001)
+            }
+        }
+        let id = try #require(try await repository.archive().slices.first?.id)
+        try await repository.finishAll()
+        let cloud = try await repository.privateCloudArchive()
+        #expect(cloud.slices.count == 1)
+        #expect(cloud.slices[0].id == id)
+        #expect(cloud.slices[0].recordingState == .finalized)
+        #expect(cloud.slices[0].audiobookSeconds == 90)
+    }
+
+    @Test func restartRecoversActiveProgressOnceUnderTheSameIdentity()
+        async throws
+    {
+        let writer = try repository()
+        let start = Date(timeIntervalSince1970: 1_000)
+        try await writer.record(
+            sample(observedAt: start, monotonicTime: 0, position: 0))
+        try await writer.record(
+            sample(
+                observedAt: start.addingTimeInterval(5), monotonicTime: 5,
+                position: 7.5))
+        let before = try await writer.archive()
+        let reader = StatisticsRepository(
+            modelContainer: await writer.modelContainer)
+        let recovered = try await reader.privateCloudArchive()
+        #expect(recovered.slices.map(\.id) == before.slices.map(\.id))
+        #expect(recovered.slices.first?.realSeconds == 5)
+        #expect(recovered.slices.first?.recordingState == .finalized)
+        #expect(
+            try await reader.privateCloudArchive().slices == recovered.slices)
+    }
+
+    @Test func pausesRateChangesAndStaleSamplesPreserveExactTotals()
+        async throws
+    {
+        let repository = try repository()
+        let start = Date(timeIntervalSince1970: 1_000)
+        try await repository.record(
+            sample(observedAt: start, monotonicTime: 0, position: 0))
+        try await repository.record(
+            sample(
+                observedAt: start.addingTimeInterval(5), monotonicTime: 5,
+                position: 7.5))
+        try await repository.record(
+            sample(
+                observedAt: start.addingTimeInterval(6), monotonicTime: 6,
+                position: 9, audible: false))
+        #expect(try await repository.privateCloudArchive().slices.count == 1)
+        try await repository.record(
+            sample(
+                observedAt: start.addingTimeInterval(10), monotonicTime: 10,
+                position: 9, generation: 2))
+        try await repository.record(
+            sample(
+                observedAt: start.addingTimeInterval(15), monotonicTime: 15,
+                position: 16.5, generation: 2, rate: 2))
+        try await repository.record(
+            sample(
+                observedAt: start.addingTimeInterval(14), monotonicTime: 14,
+                position: 15, generation: 1))
+        try await repository.finishAll()
+        let values = try await repository.archive().slices
+        #expect(values.count == 2)
+        #expect(values.reduce(0) { $0 + $1.realSeconds } == 10)
+        #expect(Set(values.map(\.id)).count == 2)
+    }
+
+    @Test func midnightSplitsAnObservedIntervalWithoutLosingTime() throws {
+        var accumulator = ListeningAccumulator()
+        let midnight = Date(timeIntervalSince1970: 86_400)
+        _ = try accumulator.ingest(
+            sample(
+                observedAt: midnight.addingTimeInterval(-2), monotonicTime: 0,
+                position: 0))
+        var slices = try accumulator.ingest(
+            sample(
+                observedAt: midnight.addingTimeInterval(3), monotonicTime: 5,
+                position: 7.5))
+        slices.append(contentsOf: accumulator.finish())
+        let final = Dictionary(
+            slices.map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest })
+        #expect(final.count == 2)
+        #expect(final.values.reduce(0) { $0 + $1.realSeconds } == 5)
+        #expect(
+            final.values.contains {
+                $0.endedAt == midnight && $0.realSeconds == 2
+            })
+        #expect(
+            final.values.contains {
+                $0.startedAt == midnight && $0.realSeconds == 3
+            })
+    }
+
+    @Test func finalizedPayloadIsReadableByTheLegacySliceShape() throws {
+        struct LegacySlice: Decodable {
+            let id: UUID
+            let realSeconds: Double
+            let endedAt: Date
+        }
+        var accumulator = ListeningAccumulator()
+        let start = Date(timeIntervalSince1970: 1_000)
+        _ = try accumulator.ingest(
+            sample(observedAt: start, monotonicTime: 0, position: 0))
+        _ = try accumulator.ingest(
+            sample(
+                observedAt: start.addingTimeInterval(5), monotonicTime: 5,
+                position: 7.5))
+        let value = try #require(accumulator.finish().first)
+        let legacy = try JSONDecoder().decode(
+            LegacySlice.self, from: JSONEncoder().encode(value))
+        #expect(legacy.id == value.id)
+        #expect(legacy.realSeconds == value.realSeconds)
+        #expect(legacy.endedAt == value.endedAt)
+    }
+
     private let accountID = AccountID(rawValue: "account")
     private let itemID = LibraryItemID(rawValue: "item")
     private let sessionID = PlaybackSessionID(rawValue: "session")
@@ -510,7 +649,8 @@ final class StatisticsTests {
         observedAt: Date,
         monotonicTime: TimeInterval,
         position: Double,
-        generation: UInt64 = 1
+        generation: UInt64 = 1,
+        audible: Bool = true, rate: Double = 1.5
     ) -> StatisticsPlaybackSample {
         StatisticsPlaybackSample(
             accountID: accountID,
@@ -519,9 +659,9 @@ final class StatisticsTests {
             observedAt: observedAt,
             monotonicTime: monotonicTime,
             wholeBookPosition: position,
-            playbackRate: 1.5,
+            playbackRate: rate,
             playbackGeneration: generation,
-            isAudibleAndAdvancing: true,
+            isAudibleAndAdvancing: audible,
             chapter: nil,
             title: "Example",
             author: "Reader",

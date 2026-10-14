@@ -692,3 +692,30 @@ runs passed and were superseded by the final three-test run after adding date an
 The live build emitted an upstream OpenTelemetry package warning about its
 deprecated watchOS minimum; the selected live test executed and passed. Empty
 unselected SwiftPM test bundles are not counted as additional coverage.
+
+## CloudKit metadata migration and listening records
+
+`docs/design/cloud-sync-storage.md` describes issue #355's growing local listening
+segments, immutable finalized CloudKit payloads, and incremental metadata store.
+The SwiftData store is `Library/Application Support/Bleat/Bleat.store` inside the
+app data container; preserve its SQLite `-wal` and `-shm` companions when taking
+a private copy. The legacy preference dictionary contains secure system-field
+archives, not listening-history payloads. Do not commit or publish phone extracts.
+
+The user approved the native synchronous SwiftData fetch/save boundary on the
+owning persistence actor. ModelContext has no native asynchronous transaction
+API; this boundary runs off MainActor and must not be replaced by a semaphore,
+dispatch wrapper, or an async-to-sync protocol fallback. Remove it when native
+async transactions become available. Migration commits/verifies batches before
+removing legacy keys; malformed input and I/O failures preserve the source.
+
+Focused regression suites are `StatisticsTests`, `StatisticsExplorationTests`,
+`PrivateCloudSyncTests`, `PrivateCloudPersistenceTests`, and
+`PersistenceMigrationTests`. The large-store test exercises a 200-record update
+in a synthetic 58,404-record database. Native app tests cover the upgrade notice
+and its device-local acknowledgment, including arbitrary-executor notification
+delivery while CloudKit remains suspended. Signed-device migration on 2026-10-14
+preserved the extracted history and imported metadata; see the traceability row
+for evidence. Mixed-version physical testing with Bleat 0.1.3 verified explicitly matched
+records in both directions and preserved original history; see traceability.
+Host and simulator tests alone do not prove that journey.

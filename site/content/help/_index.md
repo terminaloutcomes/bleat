@@ -8,3 +8,4 @@ template = "section.html"
   - [Log an issue on GitHub](https://github.com/terminaloutcomes/bleat/issues/new)
   - [See outstanding issues on GitHub](https://github.com/terminaloutcomes/bleat/issues/new)
 - [OIDC Setup](/help/oidc-setup/)
+- [Listening history and iCloud storage update](/help/cloud-storage-update/)

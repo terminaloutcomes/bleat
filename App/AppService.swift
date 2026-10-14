@@ -3439,13 +3439,13 @@ actor LiveAppService: AppServicing {
         } catch let error {
             throw .transcriptCache(error)
         }
-        await privateCloudSync?.ignoreAccountOnThisDevice(
-            account.id,
-            includeStatistics: includeStatistics
-        )
+        do {
+            try await privateCloudSync?.ignoreAccountOnThisDevice(
+                account.id, includeStatistics: includeStatistics)
+        } catch { throw .privateCloud(error) }
         let logoutResult: LogoutResult
         do {
-            if privateCloudSync?.isEnabled == true {
+            if await privateCloudSync?.isEnabled == true {
                 logoutResult =
                     try await coordinator
                     .removePersistedAccountFromDevice(
@@ -3687,6 +3687,7 @@ actor LiveAppService: AppServicing {
             throw .statistics(.invalidAccountMapping)
         }
         do {
+            try await statisticsRepository.finishAll()
             let archive = try await statisticsRepository.archive(query: query)
             let document = PortableStatisticsDocument(
                 version: 1,
@@ -3848,7 +3849,7 @@ actor LiveAppService: AppServicing {
     }
 
     func isPrivateCloudSyncEnabled() async -> Bool {
-        privateCloudSync?.isEnabled ?? false
+        await privateCloudSync?.isEnabled ?? false
     }
 
     func synchronizePrivateCloud() async throws(AppServiceError)
@@ -3861,6 +3862,9 @@ actor LiveAppService: AppServicing {
                     cause: .disabled
                 )
             )
+        }
+        do { try await statisticsRepository.finishAll() } catch {
+            throw .statistics(error)
         }
         do {
             try await privateCloudSync.synchronize()

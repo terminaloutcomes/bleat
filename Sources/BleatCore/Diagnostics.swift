@@ -259,6 +259,18 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case privateCloudCallbackTimedOut = "private_cloud_callback_timed_out"
     case privateCloudStopping = "private_cloud_stopping"
     case privateCloudInvalidRecord = "private_cloud_invalid_record"
+    case privateCloudStorageInvalidLegacyMetadata =
+        "private_cloud_invalid_legacy_metadata"
+    case privateCloudStorageInvalidStoredState =
+        "private_cloud_invalid_stored_state"
+    case privateCloudStorageInvalidLegacyState =
+        "private_cloud_invalid_legacy_state"
+    case privateCloudStorageMigrationVerificationFailed =
+        "private_cloud_migration_verification_failed"
+    case privateCloudMetadataReadFailed = "private_cloud_metadata_read_failed"
+    case privateCloudMetadataWriteFailed = "private_cloud_metadata_write_failed"
+    case privateCloudStateReadFailed = "private_cloud_state_read_failed"
+    case privateCloudStateWriteFailed = "private_cloud_state_write_failed"
     case privateCloudPersistenceFailed = "private_cloud_persistence_failed"
     case privateCloudNonPrivateDatabase =
         "private_cloud_non_private_database"
@@ -300,6 +312,12 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
             retryAfterMilliseconds = nil
             unexpectedErrorDomain = error.domain
             unexpectedErrorCode = error.code
+        case .storage(let failure):
+            cloudKitCode = nil
+            partialFailureCodes = []
+            retryAfterMilliseconds = nil
+            unexpectedErrorDomain = failure.systemError?.domain
+            unexpectedErrorCode = failure.systemError?.code
         case .disabled, .cancelled, .callbackTimedOut, .stopping,
             .invalidRecord, .persistenceFailed,
             .nonPrivateDatabase, .engineUnavailable, .none:
@@ -693,6 +711,19 @@ extension PrivateCloudSyncError {
         case .callbackTimedOut: .privateCloudCallbackTimedOut
         case .stopping: .privateCloudStopping
         case .invalidRecord: .privateCloudInvalidRecord
+        case .storage(let failure):
+            switch failure {
+            case .invalidLegacyMetadata:
+                .privateCloudStorageInvalidLegacyMetadata
+            case .invalidLegacyState: .privateCloudStorageInvalidLegacyState
+            case .invalidStoredState: .privateCloudStorageInvalidStoredState
+            case .migrationVerificationFailed:
+                .privateCloudStorageMigrationVerificationFailed
+            case .metadataReadFailed: .privateCloudMetadataReadFailed
+            case .metadataWriteFailed: .privateCloudMetadataWriteFailed
+            case .stateReadFailed: .privateCloudStateReadFailed
+            case .stateWriteFailed: .privateCloudStateWriteFailed
+            }
         case .persistenceFailed: .privateCloudPersistenceFailed
         case .nonPrivateDatabase: .privateCloudNonPrivateDatabase
         case .engineUnavailable: .privateCloudEngineUnavailable

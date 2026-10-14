@@ -376,7 +376,8 @@
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
-    "statisticsCacheMigrationPreservesReleasedLedger()"
+    "statisticsCacheMigrationPreservesReleasedLedger()",
+    "cloudMetadataSchemaUpgradePreservesLegacyListeningRows()"
   ],
   "BleatCoreTests.PersistenceModelCatalogTests": [
     "testCatalogListsEveryPersistentModelInCore()",
@@ -433,6 +434,7 @@
     "testBatchedAccountConflictsPersistCompletedStateAfterRecreation()",
     "testSavedRecordSystemFieldsSurviveStoreRecreation()",
     "testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend()",
+    "testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction()",
     "testUnconfirmedRecordsRemainPreparedForRetry()",
     "testOnlyChangedConfigurationIsPreparedAfterBaseline()",
     "testSynchronizedStatisticsAreExcludedFromLaterPreparation()",
@@ -448,7 +450,9 @@
     "testFetchedStatisticsBatchIsImportedIdempotently()",
     "testPendingConfigurationConflictSurvivesStoreRecreation()",
     "testInvalidPersistedConfigurationConflictFailsClosed()",
-    "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()"
+    "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()",
+    "testFailedPendingStateSavesPreserveRetryState()",
+    "testAccountDeletionAfterCacheEvictionPreservesHistory()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
     "testOlderServerReadsAllProgressFromCurrentUser()",
@@ -548,6 +552,7 @@
     "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
     "testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()",
     "testRepositorySummarizesAndAccountsForDeliveredTime()",
+    "testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()",
     "testSessionIdentityIncludesAccount()",
     "testAmbiguousSyncKeepsExactLocalTimeAndBoundsAllDevices()",
     "testInvalidArchiveLeavesLedgerUnchanged()",
@@ -556,7 +561,11 @@
     "testRangeResetRejectsPartiallySyncedSplitSession()",
     "testRangeResetRejectsMixedConfirmedAndUncertainSplitSession()",
     "testRangeResetCannotResendConfirmedRetainedTime()",
-    "testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()"
+    "checkpointsExtendOneRecordAndDoNotDoubleCount()",
+    "restartRecoversActiveProgressOnceUnderTheSameIdentity()",
+    "pausesRateChangesAndStaleSamplesPreserveExactTotals()",
+    "midnightSplitsAnObservedIntervalWithoutLosingTime()",
+    "finalizedPayloadIsReadableByTheLegacySliceShape()"
   ],
   "BleatCoreTests.TelemetryAuthenticationTests": [
     "testCachedTokenAvailabilityDoesNotRefresh()",
@@ -619,5 +628,19 @@
   "BleatTranscriptionTests.WholeBookTranscriptTimelineTests": [
     "addsChapterOffset()",
     "rejectsInvalidTimes(relativeStart:duration:chapterStart:)"
+  ],
+  "BleatCoreTests.PrivateCloudPersistenceTests": [
+    "migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources()",
+    "cancelledMigrationRetainsCommittedProgressAndCoalescesCallers()",
+    "malformedStoredStateDoesNotBecomeAnEmptyDefault()",
+    "secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap()",
+    "nativeStorageFailureRetainsItsSpecificDomainCodeAndStage()",
+    "failedMigrationSaveRetainsLegacyPreferences()",
+    "partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows()",
+    "malformedCoordinatorStateRetainsAllLegacyData()",
+    "migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource()",
+    "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection()",
+    "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows()",
+    "malformedBookkeepingContentsRemainRetained()"
   ]
 }

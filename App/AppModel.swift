@@ -1323,6 +1323,7 @@ extension PrivateCloudSyncFailure {
             }
         case .disabled: "iCloud sync is off"
         case .invalidRecord: "Invalid iCloud data"
+        case .storage: "iCloud storage update failed"
         case .persistenceFailed: "Local storage unavailable"
         case .nonPrivateDatabase: "Unsafe iCloud configuration"
         case .engineUnavailable: "iCloud sync unavailable"
@@ -1342,6 +1343,25 @@ extension PrivateCloudSyncFailure {
             "The previous iCloud synchronization is still stopping."
         case .invalidRecord:
             "Bleat received incomplete or inconsistent data from iCloud."
+        case .storage(let failure):
+            switch failure {
+            case .invalidLegacyMetadata:
+                "Bleat could not read older iCloud record metadata. Your local history and original metadata have been preserved."
+            case .invalidLegacyState:
+                "Bleat could not read older iCloud synchronization state. The original data has been preserved."
+            case .invalidStoredState:
+                "Bleat could not read stored iCloud synchronization state. Your local history has been preserved."
+            case .migrationVerificationFailed:
+                "Bleat could not verify the iCloud storage update. The original data has been preserved."
+            case .metadataReadFailed:
+                "Bleat could not read local iCloud record metadata."
+            case .metadataWriteFailed:
+                "Bleat could not save local iCloud record metadata."
+            case .stateReadFailed:
+                "Bleat could not read local iCloud synchronization state."
+            case .stateWriteFailed:
+                "Bleat could not save local iCloud synchronization state."
+            }
         case .persistenceFailed:
             "Bleat could not save or read the iCloud data on this device."
         case .nonPrivateDatabase:
@@ -1371,7 +1391,7 @@ extension PrivateCloudSyncFailure {
             default:
                 "exclamationmark.triangle"
             }
-        case .persistenceFailed:
+        case .persistenceFailed, .storage:
             "externaldrive.badge.exclamationmark"
         case .cancelled:
             "xmark.circle"
@@ -1387,6 +1407,7 @@ extension PrivateCloudSyncFailure {
     fileprivate var isRetryable: Bool {
         switch cause {
         case .cloudKit(let failure): failure.isRetryable
+        case .storage: cause.isRetryable
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
@@ -1420,7 +1441,7 @@ extension PrivateCloudSyncFailure {
             default:
                 .serverRejected
             }
-        case .persistenceFailed:
+        case .persistenceFailed, .storage:
             .localStorage
         case .nonPrivateDatabase:
             .sourceBug
@@ -1515,6 +1536,8 @@ final class AppModel {
     private var networkPathUpdatesTask: Task<Void, Never>?
     @ObservationIgnored
     private var privateCloudSyncTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var cloudStorageNoticeObservation: CloudStorageNoticeObservation?
     @ObservationIgnored
     private var privateCloudSyncGeneration: UInt64 = 0
     private var liveUpdatesAreActive = true
@@ -1682,6 +1705,8 @@ final class AppModel {
     private(set) var privateCloudDataClearState: PrivateCloudDataClearState =
         .idle
     private(set) var cloudAccountRestoreState: CloudAccountRestoreState = .idle
+    private(set) var cloudStorageUpgradeNoticePending = false
+    @ObservationIgnored private let cloudStorageNoticeDefaults: UserDefaults
     private(set) var privateCloudSyncAvailable = true
     private(set) var privateCloudSyncEnabled = true
     private(set) var canCancelPrivateCloudSynchronization = false
@@ -1832,6 +1857,7 @@ final class AppModel {
 
     init(
         service: any AppServicing,
+        cloudStorageNoticeDefaults: UserDefaults = .standard,
         nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
         bootstrapError: AppBootstrapError? = nil,
         downloadsStorageRootURL: URL? = nil,
@@ -1869,6 +1895,9 @@ final class AppModel {
             @escaping @MainActor @Sendable () async throws -> Void = {}
     ) {
         self.service = service
+        self.cloudStorageNoticeDefaults = cloudStorageNoticeDefaults
+        cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
+            in: cloudStorageNoticeDefaults)
         self.playbackPositionStore = playbackPositionStore
         self.statisticsNow = statisticsNow
         self.statisticsSleepUntil = statisticsSleepUntil
@@ -1933,6 +1962,15 @@ final class AppModel {
                 remoteTelemetryEnabled,
                 storageGeneration: consentStore.reconcileStorageGeneration()
             )
+        cloudStorageNoticeObservation = CloudStorageNoticeObservation {
+            [weak self] in
+            guard let self else { return }
+            self.cloudStorageUpgradeNoticePending =
+                CloudStorageUpgradeNotice.isPending(
+                    in: self.cloudStorageNoticeDefaults)
+        }
+        cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
+            in: cloudStorageNoticeDefaults)
     }
 
     func setRemoteTelemetryEnabled(_ enabled: Bool) {
@@ -6515,6 +6553,11 @@ final class AppModel {
         await task.value
     }
 
+    func acknowledgeCloudStorageUpgradeNotice() {
+        CloudStorageUpgradeNotice.acknowledge(in: cloudStorageNoticeDefaults)
+        cloudStorageUpgradeNoticePending = false
+    }
+
     func cancelPrivateCloudSynchronization() async {
         guard let task = privateCloudSyncTask else {
             return
@@ -6597,6 +6640,9 @@ final class AppModel {
             else {
                 return false
             }
+            cloudStorageUpgradeNoticePending =
+                CloudStorageUpgradeNotice.isPending(
+                    in: cloudStorageNoticeDefaults)
             queueCloudServerConfigurationChanges(changes)
             pendingCloudConfigurationConflict = configurationConflict
             accounts = synchronizedAccounts

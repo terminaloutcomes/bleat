@@ -432,7 +432,7 @@ extension PrivateCloudSyncError {
             default:
                 .serverRejected
             }
-        case .persistenceFailed:
+        case .persistenceFailed, .storage:
             .localStorage
         case .callbackTimedOut:
             .timeout

@@ -13,3 +13,8 @@ The published website includes the stable
 linked from Bleat's add-server screen. It documents the canonical
 `bleat://oauth2redirect` callback and the root-hosted and path-prefixed
 Audiobookshelf provider callbacks.
+
+The Help section also includes `site/content/help/cloud-storage-update.md`, a
+plain-language guide to the 2026.10.14 listening-history and iCloud storage
+changes, preserved history, mixed-version sync, the one-time notice, and the
+separate clear-cloud-data control.
