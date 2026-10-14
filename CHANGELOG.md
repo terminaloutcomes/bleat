@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.10.14 - 2026-10-14
+
+### Fixed
+
+- Moved Clear My CloudKit Data into a separate Settings section below Diagnostics.
+- Keep one growing listening record per continuous segment instead of creating a record every five seconds. Save locally every five seconds and sync finalized records so older devices can still read them.
+- Move local iCloud synchronization metadata out of preferences with a verified migration that preserves existing listening history. Sync batches now save only changed metadata.
+- Show a one-time cloud storage update notice recommending this version or later on every device.
+- Preserve healthy live-update connections through duplicate and link-quality-only network notifications.
+- Support phone rebuilds after the release date while retaining the source application version.
+
 ## 2026.10.13 - 2026-10-13
 
 ### Added

@@ -294,10 +294,106 @@ public enum BleatPersistenceSchemaV0_1_3: VersionedSchema {
     }
 }
 
+public enum BleatPersistenceSchemaV0_1_7: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 7) }
+    public static let models: [any PersistentModel.Type] = [
+        ServerAccountRecord.self,
+        AccountIdentityAliasRecord.self,
+        CachedLibraryCollectionRecord.self,
+        CachedLibraryRecord.self,
+        CachedLibraryPageRecord.self,
+        CachedLibrarySearchRecord.self,
+        CachedLibraryHomeRecord.self,
+        CachedLibraryBookDetailRecord.self,
+        CachedChapterTranscriptRecord.self,
+        CachedChapterTranscriptionTaskRecord.self,
+        CachedChapterTranscriptionJobRecord.self,
+        ListeningSliceRecord.self,
+        CompletionMilestoneRecord.self,
+        RemoteListeningSessionRecord.self,
+        PrivateCloudStatisticsDeletionRecord.self,
+        StatisticsSessionAccountingRecord.self,
+        StatisticsHistoryImportRecord.self,
+        StatisticsSnapshotRecord.self,
+    ]
+
+    @Model
+    public final class ListeningSliceRecord {
+        #Index<ListeningSliceRecord>([\.privateCloudSynchronized])
+
+        @Attribute(.unique)
+        var eventID: UUID
+        var accountID: String
+        var itemID: String
+        var sessionID: String
+        var startedAt: Date
+        var endedAt: Date
+        var startPosition: Double
+        var endPosition: Double
+        var realSeconds: Double
+        var audiobookSeconds: Double
+        var playbackRate: Double
+        var chapterID: Int?
+        var chapterTitle: String?
+        var chapterStart: Double?
+        var chapterEnd: Double?
+        var title: String
+        var author: String
+        var duration: Double
+        var privateCloudSynchronized: Bool?
+
+        init(_ slice: ListeningSlice) {
+            eventID = slice.id
+            accountID = slice.accountID.rawValue
+            itemID = slice.itemID.rawValue
+            sessionID = slice.sessionID.rawValue
+            startedAt = slice.startedAt
+            endedAt = slice.endedAt
+            startPosition = slice.startPosition
+            endPosition = slice.endPosition
+            realSeconds = slice.realSeconds
+            audiobookSeconds = slice.audiobookSeconds
+            playbackRate = slice.playbackRate
+            chapterID = slice.chapterID
+            chapterTitle = slice.chapterTitle
+            chapterStart = slice.chapterStart
+            chapterEnd = slice.chapterEnd
+            title = slice.title
+            author = slice.author
+            duration = slice.duration
+            privateCloudSynchronized = false
+        }
+
+        var domainValue: ListeningSlice {
+            ListeningSlice(
+                id: eventID,
+                accountID: AccountID(rawValue: accountID),
+                itemID: LibraryItemID(rawValue: itemID),
+                sessionID: PlaybackSessionID(rawValue: sessionID),
+                startedAt: startedAt,
+                endedAt: endedAt,
+                startPosition: startPosition,
+                endPosition: endPosition,
+                realSeconds: realSeconds,
+                audiobookSeconds: audiobookSeconds,
+                playbackRate: playbackRate,
+                chapterID: chapterID,
+                chapterTitle: chapterTitle,
+                chapterStart: chapterStart,
+                chapterEnd: chapterEnd,
+                title: title,
+                author: author,
+                duration: duration
+            )
+        }
+    }
+
+}
+
 public enum BleatPersistenceSchemaV0_1_4: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 4) }
     public static var models: [any PersistentModel.Type] {
-        BleatPersistenceModelCatalog.currentModelTypes.filter {
+        BleatPersistenceSchemaV0_1_7.models.filter {
             $0 != CachedChapterTranscriptionJobRecord.self
                 && $0 != StatisticsHistoryImportRecord.self
                 && $0 != StatisticsSnapshotRecord.self
@@ -308,7 +404,7 @@ public enum BleatPersistenceSchemaV0_1_4: VersionedSchema {
 public enum BleatPersistenceSchemaV0_1_5: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 5) }
     public static var models: [any PersistentModel.Type] {
-        BleatPersistenceModelCatalog.currentModelTypes.filter {
+        BleatPersistenceSchemaV0_1_7.models.filter {
             $0 != StatisticsHistoryImportRecord.self
                 && $0 != StatisticsSnapshotRecord.self
         }
@@ -318,14 +414,14 @@ public enum BleatPersistenceSchemaV0_1_5: VersionedSchema {
 public enum BleatPersistenceSchemaV0_1_6: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 6) }
     public static var models: [any PersistentModel.Type] {
-        BleatPersistenceModelCatalog.currentModelTypes.filter {
+        BleatPersistenceSchemaV0_1_7.models.filter {
             $0 != StatisticsSnapshotRecord.self
         }
     }
 }
 
 public enum BleatPersistenceSchemaCurrent: VersionedSchema {
-    public static var versionIdentifier: Schema.Version { .init(0, 1, 7) }
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 8) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -339,6 +435,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             BleatPersistenceSchemaV0_1_4.self,
             BleatPersistenceSchemaV0_1_5.self,
             BleatPersistenceSchemaV0_1_6.self,
+            BleatPersistenceSchemaV0_1_7.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -363,6 +460,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_6.self,
+                toVersion: BleatPersistenceSchemaV0_1_7.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_7.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]

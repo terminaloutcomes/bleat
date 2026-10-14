@@ -635,7 +635,7 @@ final class PrivateCloudSyncTests {
         let stored = try await fixture.accounts.account(id: edited.id)
         let pending = await fixture.store
             .pendingServerConfigurationChanges()
-        let retainedRecordValue = await fixture.store.record(
+        let retainedRecordValue = try await fixture.store.record(
             for: pushedRecord.recordID
         )
         let retainedRecord = try #require(retainedRecordValue)
@@ -791,7 +791,7 @@ final class PrivateCloudSyncTests {
             recordName: "account.\(canonical.id.rawValue)",
             zoneID: fixture.zoneID
         )
-        let savedValue = await fixture.store.record(for: canonicalRecordID)
+        let savedValue = try await fixture.store.record(for: canonicalRecordID)
         let saved = try #require(savedValue)
 
         #expect(changes.isEmpty)
@@ -927,10 +927,11 @@ final class PrivateCloudSyncTests {
                 ],
                 failedRecordDeletes: [:]
             )
-        let cached = await fixture.store.record(for: clientRecord.recordID)
+        let cached = try await fixture.store.record(for: clientRecord.recordID)
 
         #expect(pending.isEmpty)
-        #expect(cached === serverRecord)
+        #expect(cached?.recordID == serverRecord.recordID)
+        #expect(cached?.recordChangeTag == serverRecord.recordChangeTag)
     }
 
     @Test
@@ -979,7 +980,7 @@ final class PrivateCloudSyncTests {
                 ],
                 failedRecordDeletes: [:]
             )
-        let cachedValue = await fixture.store.record(
+        let cachedValue = try await fixture.store.record(
             for: clientRecord.recordID
         )
         let cached = try #require(cachedValue)
@@ -987,7 +988,8 @@ final class PrivateCloudSyncTests {
             cached[PrivateCloudSyncStore.payloadKey] as? Data)
 
         #expect(pending == [.saveRecord(clientRecord.recordID)])
-        #expect(cached === serverRecord)
+        #expect(cached.recordID == serverRecord.recordID)
+        #expect(cached.recordChangeTag == serverRecord.recordChangeTag)
         #expect(
             try JSONDecoder().decode(
                 CloudConfigurationSnapshot.self,
@@ -1161,7 +1163,7 @@ final class PrivateCloudSyncTests {
                 try #require(UserDefaults(suiteName: fixture.suite))
             )
         )
-        let restoredValue = await restoredStore.record(for: record.recordID)
+        let restoredValue = try await restoredStore.record(for: record.recordID)
         let restored = try #require(restoredValue)
         #expect(restored.recordID == record.recordID)
         #expect(restored.recordType == record.recordType)
@@ -1232,7 +1234,8 @@ final class PrivateCloudSyncTests {
             )
         )
         for server in serverRecords {
-            let restoredValue = await restoredStore.record(for: server.recordID)
+            let restoredValue = try await restoredStore.record(
+                for: server.recordID)
             let restored = try #require(restoredValue)
             #expect(restored.recordID == server.recordID)
             #expect(restored.recordType == server.recordType)
@@ -1284,7 +1287,7 @@ final class PrivateCloudSyncTests {
             defaults: PrivateCloudDefaultsReference(fixture.defaults)
         )
 
-        let restored = await restoredStore.record(for: recordID)
+        let restored = try await restoredStore.record(for: recordID)
 
         #expect(restored?.recordID == recordID)
         #expect(restored?.recordType == "Configuration")
@@ -1328,6 +1331,198 @@ final class PrivateCloudSyncTests {
             zoneID: fixture.zoneID
         )
         #expect(unchangedAfterRelaunch.isEmpty)
+    }
+
+    @Test
+    func testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+        }
+        let slices = [makeSlice(index: 0), makeSlice(index: 1)]
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: slices, completions: [], remoteSessions: []))
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let statistics = prepared.filter { $0.recordType == "ListeningSlice" }
+        let failed = try #require(statistics.first)
+        let unsent = try #require(statistics.last)
+        let retry = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: prepared.filter { $0.recordType != "ListeningSlice" },
+            deletedRecordIDs: [],
+            failedRecordSaves: [(failed, CKError(.batchRequestFailed))],
+            failedRecordDeletes: [:])
+        #expect(retry.contains(.saveRecord(failed.recordID)))
+        let restoredStore = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil, configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        try await restoredStore.prepareStorage()
+        for store in [fixture.store, restoredStore] {
+            for original in [failed, unsent] {
+                let reloaded = try #require(
+                    try await store.record(for: original.recordID))
+                let payload = try #require(
+                    reloaded[PrivateCloudSyncStore.payloadKey] as? Data)
+                let originalPayload = try #require(
+                    original[PrivateCloudSyncStore.payloadKey] as? Data)
+                #expect(
+                    try JSONDecoder().decode(ListeningSlice.self, from: payload)
+                        == JSONDecoder().decode(
+                            ListeningSlice.self, from: originalPayload))
+            }
+        }
+        _ = try await restoredStore.reconcileSentRecordZoneChanges(
+            savedRecords: statistics, deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let persistence = PrivateCloudPersistence(container: fixture.container)
+        for record in statistics {
+            #expect(
+                try persistence.metadata(record.recordID)?.retainedPayload
+                    == nil)
+        }
+        #expect(
+            try await restoredStore.prepareRecords(zoneID: fixture.zoneID)
+                .isEmpty)
+    }
+
+    @Test func testFailedPendingStateSavesPreserveRetryState() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("pending.store")
+        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
+        let account = try makeAccount(
+            server: "https://pending.example", localServer: nil)
+        let conflict = CloudConfigurationConflict(
+            local: makeSnapshot(
+                previousCommandAction: .skipBackward,
+                nextCommandAction: .skipForward),
+            iCloud: makeSnapshot(
+                previousCommandAction: .previousChapter,
+                nextCommandAction: .nextChapter))
+        let change = CloudServerConfigurationChange(
+            current: nil, incoming: account)
+        do {
+            let writable = try ModelContainer(
+                for: schema,
+                configurations: [
+                    ModelConfiguration(
+                        schema: schema, url: url, cloudKitDatabase: .none)
+                ])
+            let storage = PrivateCloudPersistence(container: writable)
+            try storage.set(true, forKey: PrivateCloudPersistence.migrationKey)
+            try storage.set(
+                try JSONEncoder().encode(conflict),
+                forKey: "bleat.cloudKit.pendingConfigurationConflict.v1")
+            try storage.set(
+                try JSONEncoder().encode([change]),
+                forKey: "bleat.cloudKit.pendingAccountChanges.v1")
+        }
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema, url: url, allowsSave: false,
+                    cloudKitDatabase: .none)
+            ])
+        let store = PrivateCloudSyncStore(
+            statistics: StatisticsRepository(modelContainer: container),
+            accounts: AccountStore(modelContainer: container),
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        try await store.prepareStorage()
+        let revision = try #require(await store.configurationConflictRevision())
+        for _ in 0..<2 {
+            do {
+                try await store.completeConfigurationConflictResolution(
+                    revision: revision)
+                Issue.record(
+                    "Read-only conflict removal must fail on every retry")
+            } catch let error as PrivateCloudSyncError {
+                guard case .storage(.stateWriteFailed(let native)) = error
+                else {
+                    Issue.record("Expected typed state write failure")
+                    return
+                }
+                #expect(native.domain == NSCocoaErrorDomain)
+                #expect(native.code == NSFileWriteNoPermissionError)
+            }
+            #expect(await store.configurationConflict() == conflict)
+            #expect(await store.configurationConflictRevision() == revision)
+            do {
+                _ = try await store.prepareAccountRecord(
+                    account, zoneID: fixture.zoneID)
+                Issue.record(
+                    "Read-only account resolution must fail on every retry")
+            } catch let error as PrivateCloudSyncError {
+                guard case .storage(.stateWriteFailed) = error else {
+                    Issue.record("Expected typed pending-account write failure")
+                    return
+                }
+            }
+            #expect(await store.pendingServerConfigurationChanges() == [change])
+            let legacy = AccountID(rawValue: "legacy-pending-account")
+            let record = CKRecord(
+                recordType: "ServerAccount",
+                recordID: CKRecord.ID(
+                    recordName: "account.\(legacy.rawValue)",
+                    zoneID: fixture.zoneID))
+            record[PrivateCloudSyncStore.payloadKey] =
+                try JSONEncoder().encode(
+                    CloudServerAccountRecordPayload(
+                        supersededPayloadDigest: nil,
+                        account: account, legacyAccountIDs: [legacy]))
+                as CKRecordValue
+            do {
+                _ = try await store.applyFetchedRecord(
+                    record, persistSystemFields: true)
+                Issue.record(
+                    "Failed mapping save must be attempted again on retry")
+            } catch let error as PrivateCloudSyncError {
+                guard case .storage(.stateWriteFailed) = error else {
+                    Issue.record("Expected typed mapping write failure")
+                    return
+                }
+            }
+        }
+    }
+
+    @Test func testAccountDeletionAfterCacheEvictionPreservesHistory()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+        }
+        let account = try makeAccount(
+            server: "https://deletion.example", localServer: nil)
+        try await fixture.accounts.save(account)
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let accountRecord = try #require(
+            prepared.first { $0.recordType == "ServerAccount" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: prepared, deletedRecordIDs: [], failedRecordSaves: [],
+            failedRecordDeletes: [:])
+        let restored = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil,
+            configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        let ids = try await restored.recordIDs(
+            for: account.id, includeStatistics: false, zoneID: fixture.zoneID)
+        #expect(ids == [accountRecord.recordID])
     }
 
     @Test
@@ -1865,6 +2060,7 @@ final class PrivateCloudSyncTests {
             configuration: fixture.configuration,
             defaults: PrivateCloudDefaultsReference(fixture.defaults)
         )
+        try await restoredStore.prepareStorage()
         let restoredConflict = await restoredStore.configurationConflict()
         let prepared = try await restoredStore.prepareRecords(
             zoneID: fixture.zoneID
@@ -1910,7 +2106,7 @@ final class PrivateCloudSyncTests {
             )
             Issue.record("Expected invalid persisted conflict to stop uploads")
         } catch let error as PrivateCloudSyncError {
-            #expect(error == .invalidRecord)
+            #expect(error == .storage(.invalidLegacyState))
         }
     }
 
@@ -1941,7 +2137,7 @@ final class PrivateCloudSyncTests {
             )
             Issue.record("Expected invalid persisted conflict to stop uploads")
         } catch let error as PrivateCloudSyncError {
-            #expect(error == .invalidRecord)
+            #expect(error == .storage(.invalidLegacyState))
         }
 
         try await restoredStore.removeAllRecords()

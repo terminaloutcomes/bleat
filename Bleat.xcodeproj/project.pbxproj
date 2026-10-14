@@ -79,6 +79,7 @@
 		C17545E7FE86937506709C5D /* LibraryBrowseModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CA293B87B8C3951A02A00B /* LibraryBrowseModels.swift */; };
 		CA30409A7B8350281DF6BFD0 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BC7735A08B9D198087831D /* AboutView.swift */; };
 		CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */; };
+		E68E758AEC7AB4CA2F88D7E1 /* CloudStorageNoticeObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B7353C4288AC9800776A8B /* CloudStorageNoticeObservation.swift */; };
 		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
 		F1E8803189D30226BDF5A910 /* BonjourDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF092B4585B9DD5C5509498E /* BonjourDiscovery.swift */; };
 		F2986136829FE13ACAF3D426 /* StatisticsLiveDeliverySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */; };
@@ -108,6 +109,7 @@
 /* Begin PBXFileReference section */
 		003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStoreTests.swift; sourceTree = "<group>"; };
 		0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		03B7353C4288AC9800776A8B /* CloudStorageNoticeObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageNoticeObservation.swift; sourceTree = "<group>"; };
 		077086F35259DE8E90E3E355 /* ProcessMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessMemory.swift; sourceTree = "<group>"; };
 		0939A59208E8A93ED0CE1ED2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		09B26309512E738CF21FDF57 /* BleatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatApp.swift; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 				6462208874E3752B46A8D7AC /* ChapterTranscriptionModel.swift */,
 				E890D74C6F56A62319D7C32C /* ChapterTranscriptionSourceValidator.swift */,
 				20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */,
+				03B7353C4288AC9800776A8B /* CloudStorageNoticeObservation.swift */,
 				492EEF1B9C0F3CD4D2BDD29A /* DeepLink.swift */,
 				83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */,
 				6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */,
@@ -605,6 +608,7 @@
 				52920A99096E21066DCAAC51 /* ChapterTranscriptionModel.swift in Sources */,
 				1194E9B9599CE01CE2C84728 /* ChapterTranscriptionSourceValidator.swift in Sources */,
 				8AE66A03CF3CC0A20F94CC74 /* ChapterTranscriptionView.swift in Sources */,
+				E68E758AEC7AB4CA2F88D7E1 /* CloudStorageNoticeObservation.swift in Sources */,
 				77EE2020CDB865FDB391F7FD /* DeepLink.swift in Sources */,
 				305FC1C033F98F51115F4B9C /* Diagnostics.swift in Sources */,
 				9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */,
@@ -837,14 +841,14 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261013.0000.00;
+				CURRENT_PROJECT_VERSION = 20261014.0835.34;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "$(TARGET_TEMP_DIR)/Bleat-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.13;
+				MARKETING_VERSION = 2026.10.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;
@@ -910,14 +914,14 @@
 				CODE_SIGN_ENTITLEMENTS = "$(BLEAT_CARPLAY_$(BLEAT_EFFECTIVE_CARPLAY_MODE)_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/BleatMac.$(BLEAT_EFFECTIVE_CLOUDKIT_MODE).entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 20261013.0000.00;
+				CURRENT_PROJECT_VERSION = 20261014.0835.34;
 				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = "$(TARGET_TEMP_DIR)/Bleat-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2026.10.13;
+				MARKETING_VERSION = 2026.10.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_PREFIX).Bleat";
 				PRODUCT_NAME = Bleat;
 				SDKROOT = auto;

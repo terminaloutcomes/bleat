@@ -704,6 +704,76 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.presentedFailure)
     }
 
+    func
+        testCloudStorageUpgradeNoticeUsesFixedReleaseAndPersistsAcknowledgment()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        let model = AppModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            cloudStorageNoticeDefaults: defaults)
+        XCTAssertTrue(model.cloudStorageUpgradeNoticePending)
+        let alert = SignedInAlert.cloudStorageUpgrade
+        XCTAssertEqual(alert.title, "Cloud storage update")
+        XCTAssertEqual(
+            alert.message,
+            "We’ve changed how Bleat stores listening history in iCloud. Please update Bleat on all your devices to version 2026.10.14 or later. Your existing history is preserved."
+        )
+        let queue = SignedInAlertQueue()
+        queue.reconcile([
+            alert, .progress(AppFailure(.openPlayback, .serverUnavailable)),
+        ])
+        XCTAssertEqual(queue.active?.alert, alert)
+        queue.reset(ignoring: [alert])
+        queue.reconcile([alert])
+        XCTAssertEqual(queue.active?.alert, alert)
+        model.acknowledgeCloudStorageUpgradeNotice()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        let recreated = AppModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            cloudStorageNoticeDefaults: defaults)
+        XCTAssertFalse(recreated.cloudStorageUpgradeNoticePending)
+    }
+
+    func testCloudStorageNoticeArrivesBeforeCloudSynchronizationFinishes()
+        async throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil), privateCloudSyncGate: gate)
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: defaults)
+        await model.start()
+        await gate.waitUntilEntered()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        // Exercise the native adapter on an arbitrary executor, independently
+        // of the still-suspended CloudKit lifecycle.
+        await Task.detached {
+            NotificationCenter.default.post(
+                name: UserDefaults.didChangeNotification, object: nil)
+        }.value
+        let noticeQueued = await waitUntil(timeout: .seconds(1)) {
+            model.cloudStorageUpgradeNoticePending
+        }
+        XCTAssertTrue(noticeQueued)
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        await gate.release()
+        let finished = await waitUntil(timeout: .seconds(1)) {
+            model.privateCloudState == .idle
+        }
+        XCTAssertTrue(finished)
+        model.acknowledgeCloudStorageUpgradeNotice()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+    }
+
     func testSignedInAlertQueueSerializesAndResetsForAccountChange()
         async
     {

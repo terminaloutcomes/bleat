@@ -1405,6 +1405,39 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch() {
+        let scenario = "--ui-testing-signed-in"
+        let noticeArgument = "--ui-testing-cloud-storage-notice"
+        let app = launch(
+            scenario: scenario,
+            additionalArguments: [
+                noticeArgument, "--ui-testing-cloud-storage-notice-reset",
+            ])
+        defer {
+            app.terminate()
+            app.launchArguments = [
+                scenario, "--ui-testing-cloud-storage-notice-clear",
+            ]
+            app.launch()
+            app.terminate()
+        }
+        let notice = app.alerts["Cloud storage update"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        notice.buttons["OK"].tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertFalse(notice.waitForExistence(timeout: 2))
+        app.terminate()
+        app.launchArguments = [scenario, noticeArgument]
+        app.launch()
+        XCTAssertFalse(notice.waitForExistence(timeout: 2))
+    }
+
+    @MainActor
     func testSignedInAlertsPresentInSequence() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
@@ -2370,7 +2403,11 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.clear", direction: .up
         )
-        app.buttons["settings.icloud.clear"].tap()
+        let clear = app.buttons["settings.icloud.clear"]
+        let diagnostics = app.buttons["settings.diagnostics"]
+        XCTAssertTrue(diagnostics.exists)
+        XCTAssertGreaterThan(clear.frame.minY, diagnostics.frame.maxY)
+        clear.tap()
         let confirm = app.alerts["Clear My CloudKit Data?"].buttons[
             "settings.icloud.clear.confirm"
         ].firstMatch
@@ -2380,6 +2417,8 @@ final class BleatUITests: XCTestCase {
             app.staticTexts["settings.icloud.clear.completed"]
                 .waitForExistence(timeout: 5)
         )
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.enabled", direction: .down)
         XCTAssertEqual(
             app.switches["settings.icloud.enabled"].value as? String, "0")
         tabButton("Library", in: app).tap()
