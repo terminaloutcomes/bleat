@@ -545,7 +545,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cargo run --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --package scripts --bin validate-release-version -- --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n";
+			shellScript = "env -u SDKROOT cargo run --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --package scripts --bin validate-release-version -- --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

@@ -31,8 +31,10 @@ pub enum ReleaseVersionError {
         "CURRENT_PROJECT_VERSION must be a UTC timestamp matching MARKETING_VERSION in project.yml and generated Xcode settings"
     )]
     BuildMismatch,
-    #[error("the effective build number must be a UTC timestamp on the marketing-version date")]
+    #[error("the effective build number must be a valid UTC timestamp in YYYYMMDD.HHmm.SS format")]
     EffectiveBuildMismatch,
+    #[error("the effective build timestamp predates the marketing-version date")]
+    EffectiveBuildPrecedesVersion,
     #[error("could not decode Bleat.app/Info.plist")]
     BuiltMetadataInvalid,
     #[error("Bleat.app/Info.plist is missing {0}")]
@@ -44,15 +46,20 @@ pub enum ReleaseVersionError {
 }
 
 pub fn validate_effective_build(version: &str, build: &str) -> Result<(), ReleaseVersionError> {
-    let build_version = match resolve_marketing_version(build, None) {
-        Ok(version) => version,
+    match resolve_marketing_version(build, None) {
+        Ok(_) => (),
         Err(VersionError::MissingMarketingVersionForCustomBuild) => {
             return Err(ReleaseVersionError::EffectiveBuildMismatch);
         }
         Err(error) => return Err(error.into()),
     };
-    if build_version != version {
-        return Err(ReleaseVersionError::EffectiveBuildMismatch);
+    resolve_marketing_version("1", Some(version))?;
+    let built_at = chrono::NaiveDateTime::parse_from_str(build, "%Y%m%d.%H%M.%S")
+        .map_err(|_| ReleaseVersionError::EffectiveBuildMismatch)?;
+    let released_at = chrono::NaiveDate::parse_from_str(version, "%Y.%m.%d")
+        .map_err(|_| VersionError::InvalidMarketingVersionDate)?;
+    if built_at.date() < released_at {
+        return Err(ReleaseVersionError::EffectiveBuildPrecedesVersion);
     }
     Ok(())
 }

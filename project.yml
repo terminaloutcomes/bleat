@@ -84,7 +84,7 @@ targets:
     preBuildScripts:
       - name: Validate Release Version
         script: |
-          cargo run --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --package scripts --bin validate-release-version -- --repository-root "${SRCROOT}" --version "${MARKETING_VERSION}" --build "${CURRENT_PROJECT_VERSION}"
+          env -u SDKROOT cargo run --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --package scripts --bin validate-release-version -- --repository-root "${SRCROOT}" --version "${MARKETING_VERSION}" --build "${CURRENT_PROJECT_VERSION}"
         basedOnDependencyAnalysis: false
         showEnvVars: false
       - name: Validate Paid Developer Build Settings

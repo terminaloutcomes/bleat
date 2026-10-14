@@ -411,7 +411,7 @@ evidence chain. The archive marketing version defaults to the date component of
 that build number in `YYYY.MM.DD` format. Set `BLEAT_MARKETING_VERSION` to a
 valid calendar date only when a reproducible or otherwise explicit release
 version is required. An explicit `BLEAT_BUILD_NUMBER` must retain the UTC
-timestamp shape and match the marketing-version date. Both supplied values are
+timestamp shape and be on or after the marketing-version date. Both supplied values are
 propagated unchanged after validation. Update `MARKETING_VERSION` in `project.yml`, add the
 matching dated changelog section, bump the project's fallback UTC build number,
 and regenerate the Xcode project before every new release version.
@@ -419,8 +419,13 @@ and regenerate the Xcode project before every new release version.
 configurations, including the fallback build date and nonempty latest changelog
 section. CI, every Xcode app build, archive, upload, and phone deployment enforce
 this check. A timestamp or explicit archive version cannot override stale
-project metadata. Phone deployments resolve a fresh UTC build number instead
-of reusing the project's fallback build number.
+project metadata. Phone builds and deployments keep the marketing version from `project.yml` and
+resolve one fresh UTC build number instead of reusing the project's fallback.
+Rebuilding a released version on a later day is supported; it does not create a
+new marketing version or require a source-version bump. Source and generated
+fallback metadata must still agree with the release date. Device build and
+signed-capability verification are implemented in `scripts/src/device_build.rs`;
+`scripts/build-device.sh` is its thin CLI entry point.
 
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.
