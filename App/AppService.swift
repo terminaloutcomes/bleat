@@ -1253,6 +1253,8 @@ actor LiveAppService: AppServicing {
     private let diagnostics: any DiagnosticRecording
     private let transport: URLSessionHTTPTransport
     private let directTransport: URLSessionHTTPTransport
+    private let localEndpointProbe:
+        @Sendable (NormalizedServerURL) async throws -> Void
     private let endpointRouter: ServerEndpointRouter
     private let credentialStore: TokenVault
     private let coordinator: Coordinator
@@ -1279,9 +1281,17 @@ actor LiveAppService: AppServicing {
     private let privateCloudSync: PrivateCloudSyncCoordinator?
     private var didMigrateAccountIdentities = false
     private var networkPathMonitor: AppNetworkPathMonitor?
+    private var networkPathTask: Task<Void, Never>?
+    private let suppliedNetworkPathUpdates: AsyncStream<AppNetworkPathState>?
+    private var liveRequests: [AccountID: UUID] = [:]
     private struct LiveClientRegistration: Sendable {
         let token: UUID
         let client: AudiobookshelfLiveEventClient
+    }
+
+    deinit {
+        networkPathTask?.cancel()
+        networkProbeTask?.cancel()
     }
 
     func authenticateRestoredAccount(
@@ -1416,6 +1426,10 @@ actor LiveAppService: AppServicing {
             InactiveRemoteTelemetryTracer(),
         diagnostics: any DiagnosticRecording =
             SystemDiagnosticRecorder.shared,
+        networkPathUpdates: AsyncStream<AppNetworkPathState>? = nil,
+        localEndpointProbe: (
+            @Sendable (NormalizedServerURL) async throws -> Void
+        )? = nil,
         privateCloudEvents: (
             any PrivateCloudSyncEventRecording
         )? = nil,
@@ -1427,6 +1441,7 @@ actor LiveAppService: AppServicing {
             -> any OpenIDBrowserSession
     ) throws(AppBootstrapError) {
         self.diagnostics = diagnostics
+        suppliedNetworkPathUpdates = networkPathUpdates
         let schema = Schema(
             versionedSchema: BleatPersistenceSchemaCurrent.self
         )
@@ -1463,12 +1478,18 @@ actor LiveAppService: AppServicing {
 
         let endpointRouter = ServerEndpointRouter()
         self.endpointRouter = endpointRouter
-        directTransport = URLSessionHTTPTransport(
+        let directTransport = URLSessionHTTPTransport(
             diagnostics: diagnostics,
             endpointRouter: endpointRouter,
             routesRequests: false,
             tracer: remoteTelemetryTracer
         )
+        self.directTransport = directTransport
+        self.localEndpointProbe =
+            localEndpointProbe ?? { server in
+                _ = try await ServerDiscoveryClient(transport: directTransport)
+                    .discover(server)
+            }
         transport = URLSessionHTTPTransport(
             diagnostics: diagnostics,
             endpointRouter: endpointRouter,
@@ -1588,7 +1609,26 @@ actor LiveAppService: AppServicing {
     func liveUpdates(
         for account: ServerAccount
     ) async -> AsyncStream<AudiobookshelfLiveUpdate> {
-        guard networkPathState.allowsRealtimeUpdates else {
+        let requestID = UUID()
+        liveRequests[account.id] = requestID
+        await diagnostics.record(
+            .network(.subscriptionRequested, stage: .subscriptionStart))
+        // A new subscription must use the completed authoritative endpoint selection.
+        // Cancellation/retirement during the probe cannot resurrect it afterward.
+        while let probe = networkProbeTask {
+            guard liveRequests[account.id] == requestID, !Task.isCancelled,
+                networkPathState.allowsRealtimeUpdates
+            else { return AsyncStream { $0.finish() } }
+            let generation = networkProbeGeneration
+            await probe.value
+            guard liveRequests[account.id] == requestID, !Task.isCancelled,
+                networkPathState.allowsRealtimeUpdates
+            else { return AsyncStream { $0.finish() } }
+            if generation == networkProbeGeneration { break }
+        }
+        guard liveRequests[account.id] == requestID, !Task.isCancelled,
+            networkPathState.allowsRealtimeUpdates
+        else {
             let state: AudiobookshelfLiveConnectionState =
                 networkPathState.isConstrained
                 ? .suspendedForLowDataMode : .disconnected
@@ -1602,6 +1642,9 @@ actor LiveAppService: AppServicing {
         if let existing = liveClients.removeValue(forKey: account.id) {
             await existing.client.stop()
         }
+        guard liveRequests[account.id] == requestID, !Task.isCancelled,
+            networkPathState.allowsRealtimeUpdates
+        else { return AsyncStream { $0.finish() } }
         let clientToken = UUID()
         let client = AudiobookshelfLiveEventClient(
             serverProvider: {
@@ -1682,11 +1725,14 @@ actor LiveAppService: AppServicing {
     }
 
     func stopLiveUpdates(for accountID: AccountID) async {
+        liveRequests[accountID] = nil
         guard let registration = liveClients.removeValue(forKey: accountID)
         else {
             return
         }
         await registration.client.stop()
+        await diagnostics.record(
+            .network(.subscriptionStopped, stage: .subscriptionStop))
     }
 
     private func removeLiveClient(
@@ -1699,43 +1745,66 @@ actor LiveAppService: AppServicing {
         liveClients.removeValue(forKey: accountID)
     }
 
-    private func networkPathChanged(_ state: AppNetworkPathState) async {
+    private func networkPathChanged(_ incoming: AppNetworkPathState) async {
+        var state = incoming
+        state.endpointRevision = networkPathState.endpointRevision
+        let previous = networkPathState
+        let reason = state.change(from: previous)
+        networkPathState = state
+        switch reason {
+        case .duplicatePath, .qualityOnly:
+            await diagnostics.record(
+                .network(reason, stage: .pathClassification))
+            return
+        default: break
+        }
+        let routingChanged = state.routing != previous.routing
         let reconnectClientTokens = Dictionary(
             uniqueKeysWithValues: liveClients.map { ($0.key, $0.value.token) }
         )
-        let endpointPathGeneration =
-            await endpointRouter.networkPathDidChange()
-        networkPathState = state
         networkProbeGeneration &+= 1
         let generation = networkProbeGeneration
+        networkProbeTask?.cancel()
+        networkProbeTask = nil
+        let endpointPathGeneration = await endpointRouter.networkPathDidChange()
+        // Install the probe before notifying consumers, so new subscriptions wait
+        // for endpoint selection rather than opening a temporary primary socket.
+        if state.availability == .satisfied {
+            networkProbeTask = Task { [weak self] in
+                await self?.probeNetworkEndpoints(
+                    generation: generation,
+                    endpointPathGeneration: endpointPathGeneration,
+                    reconnectClientTokens: reconnectClientTokens,
+                    routingChanged: routingChanged,
+                    pathChangeReason: reason
+                )
+            }
+        }
         for continuation in networkPathContinuations.values {
             continuation.yield(state)
         }
         if !state.allowsRealtimeUpdates {
             let clients = liveClients.values.map(\.client)
+            liveRequests.removeAll()
             liveClients.removeAll()
-            for client in clients {
-                await client.stop()
-            }
+            for client in clients { await client.stop() }
+            await diagnostics.record(.network(reason, stage: .subscriptionStop))
         }
-        networkProbeTask?.cancel()
-        networkProbeTask = Task { [weak self] in
-            await self?.probeNetworkEndpoints(
-                generation: generation,
-                endpointPathGeneration: endpointPathGeneration,
-                reconnectClientTokens: reconnectClientTokens
-            )
-        }
+        await diagnostics.record(.network(reason, stage: .pathClassification))
     }
 
     private func probeNetworkEndpoints(
         generation: Int,
         endpointPathGeneration: ServerEndpointPathGeneration,
-        reconnectClientTokens: [AccountID: UUID]
+        reconnectClientTokens: [AccountID: UUID],
+        routingChanged: Bool,
+        pathChangeReason: DiagnosticNetworkReason
     ) async {
         guard generation == networkProbeGeneration else {
             return
         }
+        await diagnostics.record(
+            .network(pathChangeReason, stage: .endpointProbe))
         do {
             let accounts = try await accountStore.accounts()
             for account in accounts {
@@ -1749,9 +1818,7 @@ actor LiveAppService: AppServicing {
                     continue
                 }
                 do {
-                    _ = try await ServerDiscoveryClient(
-                        transport: directTransport
-                    ).discover(localServer)
+                    try await localEndpointProbe(localServer)
                     guard generation == networkProbeGeneration,
                         !Task.isCancelled
                     else {
@@ -1766,12 +1833,18 @@ actor LiveAppService: AppServicing {
                                 server: localServer,
                                 expectedUserID: account.user.id
                             )
+                        guard generation == networkProbeGeneration,
+                            !Task.isCancelled
+                        else { return }
                         try await accountStore.setLocalServer(
                             localServer,
                             validated: true,
                             for: account.id
                         )
                     }
+                    guard generation == networkProbeGeneration,
+                        !Task.isCancelled
+                    else { return }
                     await endpointRouter.configure(
                         primary: account.server,
                         local: localServer
@@ -1780,7 +1853,11 @@ actor LiveAppService: AppServicing {
                         for: account.server,
                         pathGeneration: endpointPathGeneration
                     )
+                    guard generation == networkProbeGeneration,
+                        !Task.isCancelled
+                    else { return }
                     if promotedValidation {
+                        networkPathState.endpointRevision &+= 1
                         await endpointRouter.recordAuthenticationUse(
                             primary: account.server,
                             usage: .local
@@ -1825,7 +1902,28 @@ actor LiveAppService: AppServicing {
                 else {
                     continue
                 }
-                await registration.client.reconnect()
+                let accounts = try? await accountStore.accounts()
+                guard
+                    let account = accounts?.first(where: { $0.id == accountID })
+                else { continue }
+                let selection = await endpointRouter.preferredServer(
+                    for: account.server)
+                guard generation == networkProbeGeneration, !Task.isCancelled,
+                    networkPathState.allowsRealtimeUpdates,
+                    liveClients[accountID]?.token == token
+                else { continue }
+                if await registration.client.reconnectIfNeeded(
+                    endpoint: AudiobookshelfLiveServerEndpoint(
+                        server: selection.server, usage: selection.usage,
+                        pathGeneration: selection.pathGeneration),
+                    routingChanged: routingChanged
+                ) {
+                    await diagnostics.record(
+                        .network(
+                            routingChanged
+                                ? pathChangeReason : .endpointChanged,
+                            stage: .subscriptionReconnect))
+                }
             }
         }
         if generation == networkProbeGeneration {
@@ -2014,11 +2112,18 @@ actor LiveAppService: AppServicing {
     }
 
     private func startNetworkPathMonitoring() {
-        guard networkPathMonitor == nil else {
-            return
+        guard networkPathTask == nil else { return }
+        let updates: AsyncStream<AppNetworkPathState>
+        if let suppliedNetworkPathUpdates {
+            updates = suppliedNetworkPathUpdates
+        } else {
+            let monitor = AppNetworkPathMonitor()
+            networkPathMonitor = monitor
+            updates = monitor.updates
         }
-        networkPathMonitor = AppNetworkPathMonitor { [weak self] state in
-            Task {
+        networkPathTask = Task { [weak self] in
+            for await state in updates {
+                guard !Task.isCancelled else { return }
                 await self?.networkPathChanged(state)
             }
         }

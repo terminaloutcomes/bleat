@@ -3442,7 +3442,10 @@ final class AppModel {
             case .contextValidation: code = .carPlayLibraryContextMissing
             case .pageValidation: code = .carPlayLibraryPageInvalid
             case .requestConstruction, .pageRequest, .listConstruction,
-                .downloadEntryReconciliation, .fixtureResourceLookup:
+                .downloadEntryReconciliation, .fixtureResourceLookup,
+                .pathClassification,
+                .endpointProbe,
+                .subscriptionStart, .subscriptionStop, .subscriptionReconnect:
                 code =
                     AppFailure(operation: .loadLibraryPage, serviceError: error)
                     .diagnosticFailureCode
@@ -7158,6 +7161,10 @@ final class AppModel {
                 }
                 let previousState = networkPathState
                 networkPathState = state
+                switch state.change(from: previousState) {
+                case .duplicatePath, .qualityOnly: continue
+                default: break
+                }
                 downloads.updateNetworkPathState(state)
                 schedulePendingLocalSessionSync(for: accounts)
                 scheduleDownloadRecovery(for: accounts)

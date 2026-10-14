@@ -11860,6 +11860,84 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(finalRequests.count, 2)
     }
 
+    func testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery()
+        async throws
+    {
+        let storageKey = "bleat.localPlaybackSessions.v1"
+        let defaults = UserDefaults.standard
+        let existing = defaults.data(forKey: storageKey)
+        defaults.removeObject(forKey: storageKey)
+        defer {
+            if let existing {
+                defaults.set(existing, forKey: storageKey)
+            } else {
+                defaults.removeObject(forKey: storageKey)
+            }
+        }
+        let account = try fixtureAccount()
+        let session = try localSession(
+            id: "69bcba68-3e70-457e-bf07-d9a85f93d366", itemID: "path-quality")
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(session, accountID: account.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            localSessionSync: .failure(.localPlaybackSession(.requestFailed)))
+        let model = AppModel(service: service)
+        await model.start()
+        for _ in 0..<100 {
+            if await service.localSessionSyncRequests().count == 1,
+                await service.networkPathObserverCount() == 1
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let launchSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(launchSyncs, 1)
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            if await service.hasLiveUpdatesSubscriber() { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {
+            if await service.localSessionSyncRequests().count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let baselineSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(baselineSyncs, 2)
+        let baselineAccounts = await service.accountRefreshRequestCount()
+        let baselineLibraries = await service.libraryRequestCount()
+        let baselineLifecycle = await service.liveUpdatesLifecycleCounts()
+        for index in 0..<100 {
+            await service.emitNetworkPathUpdate(
+                AppNetworkPathState(
+                    availability: .satisfied, isConstrained: false,
+                    isExpensive: false,
+                    linkQuality: index < 50 ? .moderate : .good))
+        }
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied, isConstrained: false,
+                isExpensive: false,
+                linkQuality: .minimal))
+        for _ in 0..<100 {
+            if model.networkPathState.linkQuality == .minimal { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.networkPathState.linkQuality, .minimal)
+        let finalAccounts = await service.accountRefreshRequestCount()
+        let finalLibraries = await service.libraryRequestCount()
+        let finalLifecycle = await service.liveUpdatesLifecycleCounts()
+        let finalSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(finalSyncs, baselineSyncs)
+        XCTAssertFalse(try store.pending(accountID: account.id).isEmpty)
+        XCTAssertEqual(finalAccounts, baselineAccounts)
+        XCTAssertEqual(finalLibraries, baselineLibraries)
+        XCTAssertEqual(finalLifecycle.starts, baselineLifecycle.starts)
+        XCTAssertEqual(finalLifecycle.stops, baselineLifecycle.stops)
+        model.setLiveUpdatesActive(false)
+    }
+
     func testNetworkPathStateAllowsRealtimeOnlyWhenUnconstrained() {
         XCTAssertFalse(AppNetworkPathState.unknown.allowsRealtimeUpdates)
         XCTAssertFalse(
@@ -26411,6 +26489,7 @@ private actor TestAppService: AppServicing {
     private var liveUpdatesContinuation:
         AsyncStream<AudiobookshelfLiveUpdate>.Continuation?
     private var liveUpdatesToken: UUID?
+    private var accountRefreshRequests = 0
     private var liveUpdatesStartCount = 0
     private var liveUpdatesStopCount = 0
 
@@ -27161,6 +27240,7 @@ private actor TestAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
+        accountRefreshRequests += 1
         if let accountsGate {
             await accountsGate.enterAndWait()
         }
@@ -27950,6 +28030,8 @@ private actor TestAppService: AppServicing {
     ) {
         progressUpdateResult = result
     }
+
+    func accountRefreshRequestCount() -> Int { accountRefreshRequests }
 
     func activeAccountRequestCount() -> Int {
         activeAccountRequests

@@ -6,6 +6,99 @@ import Testing
 @Suite(.serialized)
 final class LiveUpdatesTests {
     @Test
+    func testUnchangedEndpointPreservesPendingConnection() async throws {
+        let primary = try NormalizedServerURL("https://example.test/primary")
+        let local = try NormalizedServerURL("https://example.test/prefix")
+        let router = ServerEndpointRouter()
+        await router.configure(primary: primary, local: local)
+        let initial = await router.preferredServer(for: primary)
+        let endpoint = AudiobookshelfLiveServerEndpoint(
+            server: local, usage: .local, pathGeneration: initial.pathGeneration
+        )
+        let gate = LiveCredentialGate()
+        let client = AudiobookshelfLiveEventClient(
+            serverProvider: { endpoint },
+            tokenProvider: { try await gate.retrieve() },
+            tokenRecovery: { _ in throw CancellationError() })
+        let stream = await client.updates()
+        let drain = Task { for await _ in stream {} }
+        var entries = gate.entries.makeAsyncIterator()
+        #expect(await entries.next() == true)
+        for _ in 0..<100 {
+            #expect(
+                await client.reconnectIfNeeded(
+                    endpoint: endpoint, routingChanged: false) == false)
+        }
+        let generation = await router.networkPathDidChange()
+        await router.markLocalAvailable(
+            for: primary, pathGeneration: generation)
+        await router.finishNetworkPathEvaluation(generation)
+        let preserved = AudiobookshelfLiveServerEndpoint(
+            server: local, usage: .local, pathGeneration: generation)
+        #expect(
+            await client.reconnectIfNeeded(
+                endpoint: preserved, routingChanged: false) == false)
+        let current = try #require(await client.connectionEndpoint)
+        #expect(current.pathGeneration == generation)
+        #expect(current.pathGeneration != initial.pathGeneration)
+        await router.markLocalUnavailable(
+            ServerEndpointCandidate(
+                url: current.server.url, primary: primary, isLocal: true,
+                pathGeneration: generation))
+        #expect(await router.preferredServer(for: primary).usage == .primary)
+        await client.stop()
+        await gate.fail()
+        await drain.value
+    }
+
+    @Test
+    func
+        testRouteOrEndpointChangeRetiresPendingCredentialsAndStopSuppressesRestart()
+        async throws
+    {
+        for routingChanged in [true, false] {
+            let endpoint = AudiobookshelfLiveServerEndpoint(
+                server: try NormalizedServerURL("https://example.test/local"),
+                usage: .local)
+            let replacement = try NormalizedServerURL(
+                "https://example.test/primary")
+            let gate = LiveCredentialGate()
+            let client = AudiobookshelfLiveEventClient(
+                serverProvider: { endpoint },
+                tokenProvider: { try await gate.retrieve() },
+                tokenRecovery: { _ in throw CancellationError() })
+            let stream = await client.updates()
+            let cancelled = Task { () -> Bool in
+                for await update in stream {
+                    if case .connectionAttempt(let attempt) = update,
+                        attempt.phase == .cancelled
+                    {
+                        return true
+                    }
+                }
+                return false
+            }
+            var entries = gate.entries.makeAsyncIterator()
+            #expect(await entries.next() == true)
+            #expect(
+                await client.reconnectIfNeeded(
+                    endpoint: routingChanged
+                        ? endpoint
+                        : AudiobookshelfLiveServerEndpoint(
+                            server: replacement, usage: .primary),
+                    routingChanged: routingChanged))
+            await gate.succeed()
+            #expect(await cancelled.value)
+            await client.stop()
+            #expect(
+                await client.reconnectIfNeeded(
+                    endpoint: AudiobookshelfLiveServerEndpoint(
+                        server: replacement, usage: .primary),
+                    routingChanged: true) == false)
+        }
+    }
+
+    @Test
     func testRetiredStreamTerminationCannotStopReplacement() async throws {
         let endpoint = AudiobookshelfLiveServerEndpoint(
             server: try NormalizedServerURL("https://example.test"),
@@ -333,6 +426,10 @@ private actor LiveCredentialGate {
             waiter = $0
             entryContinuation.yield(true)
         }
+    }
+    func succeed() {
+        waiter?.resume(returning: "test-token")
+        waiter = nil
     }
     func fail() {
         waiter?.resume(throwing: CancellationError())

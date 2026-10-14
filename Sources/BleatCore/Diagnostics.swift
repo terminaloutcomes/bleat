@@ -34,6 +34,8 @@ public enum DiagnosticLevel: String, Codable, Sendable {
 }
 
 public enum DiagnosticOperation: String, Codable, Sendable {
+    case networkPathChanged = "network_path_changed"
+    case liveSubscription = "live_subscription"
     case remotePlayCommand = "remote_play_command"
     case sceneActive = "scene_active"
     case sceneInactive = "scene_inactive"
@@ -382,6 +384,11 @@ public enum DiagnosticEventName: String, Codable, Sendable {
 }
 
 public enum DiagnosticStage: String, Codable, Sendable {
+    case pathClassification = "path_classification"
+    case endpointProbe = "endpoint_probe"
+    case subscriptionStart = "subscription_start"
+    case subscriptionStop = "subscription_stop"
+    case subscriptionReconnect = "subscription_reconnect"
     case downloadEntryReconciliation = "download_entry_reconciliation"
     case fixtureResourceLookup = "fixture_resource_lookup"
     case contextValidation = "context_validation"
@@ -389,6 +396,23 @@ public enum DiagnosticStage: String, Codable, Sendable {
     case pageRequest = "page_request"
     case pageValidation = "page_validation"
     case listConstruction = "list_construction"
+}
+
+public enum DiagnosticNetworkReason: String, Codable, Sendable {
+    case initialPath = "initial_path"
+    case duplicatePath = "duplicate_path"
+    case qualityOnly = "quality_only"
+    case connectivityLost = "connectivity_lost"
+    case connectivityRecovered = "connectivity_recovered"
+    case lowDataModeEntered = "low_data_mode_entered"
+    case lowDataModeExited = "low_data_mode_exited"
+    case routingChanged = "routing_changed"
+    case routeAddressEnumerationFailed = "route_address_enumeration_failed"
+    case routeAddressDecodingFailed = "route_address_decoding_failed"
+    case costChanged = "cost_changed"
+    case endpointChanged = "endpoint_changed"
+    case subscriptionStopped = "subscription_stopped"
+    case subscriptionRequested = "subscription_requested"
 }
 
 public struct DiagnosticEvent: Codable, Equatable, Sendable {
@@ -405,6 +429,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let fromState: DiagnosticState?
     public let toState: DiagnosticState?
     public let failureCode: DiagnosticFailureCode?
+    public let networkReason: DiagnosticNetworkReason?
     public let stage: DiagnosticStage?
     public let privateCloud: PrivateCloudDiagnosticDetail?
 
@@ -422,6 +447,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         fromState: DiagnosticState? = nil,
         toState: DiagnosticState? = nil,
         failureCode: DiagnosticFailureCode? = nil,
+        networkReason: DiagnosticNetworkReason? = nil,
         stage: DiagnosticStage? = nil,
         privateCloud: PrivateCloudDiagnosticDetail? = nil
     ) {
@@ -438,8 +464,20 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.fromState = fromState
         self.toState = toState
         self.failureCode = failureCode
+        self.networkReason = networkReason
         self.stage = stage
         self.privateCloud = privateCloud
+    }
+
+    public static func network(
+        _ reason: DiagnosticNetworkReason, stage: DiagnosticStage
+    ) -> DiagnosticEvent {
+        DiagnosticEvent(
+            category: .api, level: .debug, name: .operationCompleted,
+            operation: stage == .pathClassification
+                ? .networkPathChanged : .liveSubscription,
+            networkReason: reason, stage: stage
+        )
     }
 
     public static func started(
@@ -586,6 +624,9 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         ]
         if let operation {
             fields.append("operation=\(operation.rawValue)")
+        }
+        if let networkReason {
+            fields.append("network_reason=\(networkReason.rawValue)")
         }
         if let stage {
             fields.append("stage=\(stage.rawValue)")
