@@ -568,7 +568,13 @@ previously successful validation; only explicit URL replacement/removal or
 account removal clears it.
 
 The app monitors changes to the available network path using the platform
-Network framework on iOS and native macOS. A path change clears the temporary
+Network framework on iOS and native macOS. Effective routing changes compare
+ordered interface indices/types and usage, gateway endpoints, interface IP addresses, and
+IPv4/IPv6/DNS capabilities in memory, independently of link quality. Availability,
+Low Data Mode, and cost transitions are also actionable. These snapshots never
+leave the device or establish local-server trust. Interface address enumeration
+and decoding failures retain distinct typed diagnostic reasons. A meaningful
+path change clears the temporary
 local-endpoint failure state and performs a non-mutating `GET <local>/status`
 probe for each validated local alias and an authenticated native-credential
 probe for an unvalidated alias. The app does not infer home-network
@@ -579,8 +585,21 @@ They are optional foreground refresh channels: when `NWPath.isConstrained` is
 true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
 starts one connection and one catch-up browse refresh. Duplicate path updates
-that do not cross the realtime-allowed boundary do not replace the active
-subscription. Inactive scenes suspend both socket consumption and browse-refresh
+and quality-only notifications do not invalidate endpoint selection, probe the
+server, replace a healthy subscription, or schedule synchronization/download
+recovery. A completed probe replaces an existing socket only after routing or
+selected-server changes; a new subscription waits for authoritative endpoint
+selection. Ordered callback consumption, probe generations, subscription tokens,
+and connection revisions reject retired callbacks and in-flight completions.
+Actual socket failures retain bounded backoff and primary fallback. Typed local
+diagnostics record path classification, endpoint-probe, subscription-start,
+subscription-stop, and subscription-reconnect stages without network identifiers.
+Issue [#353](https://github.com/terminaloutcomes/bleat/issues/353) retains signed
+device validation for stable Wi-Fi foreground/locked playback, real network
+switches, Low Data Mode, and before/after CPU/network/energy captures. Battery
+attribution remains unmeasured. Public routing snapshots cannot distinguish two
+networks with identical interface, address, gateway, and capability values;
+transport failure remains authoritative for recovery in that case. Inactive scenes suspend both socket consumption and browse-refresh
 scheduling, including network-recovery notifications. Cancellation stops each
 subsequent stage of an in-flight live refresh; foreground return performs one
 catch-up refresh. Progress-only events patch the account-scoped finished state

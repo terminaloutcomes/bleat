@@ -305,6 +305,8 @@ public actor AudiobookshelfLiveEventClient {
     private var task: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var streamID: UUID?
+    private var connectionRevision = 0
+    private(set) var connectionEndpoint: AudiobookshelfLiveServerEndpoint?
 
     public init(
         serverProvider: @escaping ServerProvider,
@@ -341,15 +343,28 @@ public actor AudiobookshelfLiveEventClient {
 
     public func stop() {
         streamID = nil
+        connectionEndpoint = nil
         task?.cancel()
         task = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
     }
 
-    public func reconnect() {
+    public func reconnectIfNeeded(
+        endpoint: AudiobookshelfLiveServerEndpoint, routingChanged: Bool
+    ) -> Bool {
+        guard streamID != nil,
+            routingChanged || connectionEndpoint?.server != endpoint.server
+        else {
+            // Preserve the socket while advancing the router generation used by
+            // later transport failures, so local-to-primary fallback stays valid.
+            if streamID != nil { connectionEndpoint = endpoint }
+            return false
+        }
+        connectionRevision &+= 1
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
+        return true
     }
 
     private func run(
@@ -385,9 +400,13 @@ public actor AudiobookshelfLiveEventClient {
         continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation,
         streamID: UUID
     ) async -> Bool {
+        let revision = connectionRevision
         let endpoint = await serverProvider()
-        guard !Task.isCancelled, self.streamID == streamID else { return false }
+        guard !Task.isCancelled, self.streamID == streamID,
+            revision == connectionRevision
+        else { return false }
         let server = endpoint.server
+        connectionEndpoint = endpoint
         let attemptID = UUID()
         let retryBucket = RemoteTelemetryRetryBucket(retryCount: retryCount)
         continuation.yield(
@@ -437,7 +456,9 @@ public actor AudiobookshelfLiveEventClient {
         do {
             initialToken = try await tokenProvider()
         } catch {
-            guard !Task.isCancelled, self.streamID == streamID else {
+            guard !Task.isCancelled, self.streamID == streamID,
+                revision == connectionRevision
+            else {
                 finishAttempt(.cancelled)
                 return false
             }
@@ -451,7 +472,9 @@ public actor AudiobookshelfLiveEventClient {
             return false
         }
 
-        guard !Task.isCancelled, self.streamID == streamID else {
+        guard !Task.isCancelled, self.streamID == streamID,
+            revision == connectionRevision
+        else {
             finishAttempt(.cancelled)
             return false
         }
@@ -508,7 +531,7 @@ public actor AudiobookshelfLiveEventClient {
                 case .initialized:
                     authenticated = true
                     finishAttempt(.authenticated)
-                    await onAuthenticated(endpoint)
+                    await onAuthenticated(connectionEndpoint ?? endpoint)
                     guard !Task.isCancelled, self.streamID == streamID,
                         self.socket === socket
                     else { return authenticated }
@@ -604,7 +627,7 @@ public actor AudiobookshelfLiveEventClient {
                         stage: failureStage
                     )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
-            await onTransportFailure(endpoint)
+            await onTransportFailure(connectionEndpoint ?? endpoint)
         }
         return authenticated
     }

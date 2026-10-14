@@ -314,7 +314,9 @@
     "testAuthenticationPacketKeepsTokenOutOfSocketURL()",
     "testRetiredStreamTerminationCannotStopReplacement()",
     "testStopWhileRestoringEndpointDoesNotRetrieveCredentials()",
-    "testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()"
+    "testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()",
+    "testUnchangedEndpointPreservesPendingConnection()",
+    "testRouteOrEndpointChangeRetiresPendingCredentialsAndStopSuppressesRestart()"
   ],
   "BleatCoreTests.LocalPlaybackSessionTests": [
     "testBatchUsesExactAuthenticatedContractAndListeningTime()",
