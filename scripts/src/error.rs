@@ -4,6 +4,8 @@ use thiserror::Error;
 
 pub enum BleatError {
     #[error("{0}")]
+    DeviceBuild(#[from] crate::device_build::DeviceBuildError),
+    #[error("{0}")]
     ReleaseVersion(#[from] crate::release_version_check::ReleaseVersionError),
     #[error("Missing environment variable: {0}")]
     MissingEnvironmentVariable(String),
