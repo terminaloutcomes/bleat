@@ -58,7 +58,7 @@ jobs:
           key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
           restore-keys: |
             ${{ steps.cache-keys.outputs.build }}-
-      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # 14594264cd68ce8a2345dd349bc3d138a4ef85c8
+      - uses: ruby/setup-ruby@e81a8fa391b11a595c1b7ed84177cc0fe02faf83 # 14594264cd68ce8a2345dd349bc3d138a4ef85c8
         with:
           ruby-version: "3.4"
           bundler-cache: true
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: "*-coverage"
           path: coverage
