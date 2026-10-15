@@ -642,6 +642,11 @@ enum AppFailureCause: Equatable, Sendable, Codable {
 
 typealias BookDetailFailure = AppFailureCause
 
+private enum BookDetailLoadResult: Sendable {
+    case success(LibraryBookDetail)
+    case failure(AppFailure)
+}
+
 enum PlaybackFailureResolution: Equatable {
     case retry, signIn, dismiss
 }
@@ -877,6 +882,9 @@ struct AppFailure: Equatable, Sendable, Codable {
     }
 
     var allowsRetry: Bool {
+        if operation == .loadBook, cause == .requestCancelled {
+            return true
+        }
         if case .privateCloud(let failure) = cause {
             return operation.isSafeToRetry && failure.isRetryable
         }
@@ -1550,6 +1558,7 @@ final class AppModel {
     @ObservationIgnored
     private(set) var bookProgressActionGeneration: UInt64 = 0
     private let bookProgressOperationTimeout: Duration
+    private let bookDetailOperationTimeout: Duration
     private let bookProgressSleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored
     private var downloadRecoveryTask: Task<Void, Never>?
@@ -1858,6 +1867,7 @@ final class AppModel {
         playbackPositionStore: PlaybackPositionStore = .shared,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         bookProgressOperationTimeout: Duration = .seconds(30),
+        bookDetailOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
             {
                 try await Task.sleep(for: $0)
@@ -1887,6 +1897,7 @@ final class AppModel {
             remoteTelemetryConsentController
         self.remoteTelemetryTracer = remoteTelemetryTracer
         self.bookProgressOperationTimeout = bookProgressOperationTimeout
+        self.bookDetailOperationTimeout = bookDetailOperationTimeout
         self.bookProgressSleep = bookProgressSleep
         remoteTelemetryEnabled = consentStore.isEnabled
         let launchStage =
@@ -4327,23 +4338,22 @@ final class AppModel {
             .started(.loadBook, category: .api)
         )
 
-        do {
-            let detail = try await fetchBookDetail(book, account: account)
-            guard bookDetailGeneration == operationGeneration else {
-                return
-            }
+        let loadResult = await timedBookDetail(book, account: account)
+        guard bookDetailGeneration == operationGeneration,
+            self.account?.id == account.id,
+            selectedBookID == book.id
+        else { return }
+        let result =
+            Task.isCancelled
+            ? .failure(AppFailure(.loadBook, .requestCancelled)) : loadResult
+        switch result {
+        case .success(let detail):
             bookDetail = .loaded(detail)
             await diagnostics.record(
                 .completed(.loadBook, category: .api)
             )
             await loadBookBookmarks()
-        } catch let error {
-            guard bookDetailGeneration == operationGeneration,
-                !Task.isCancelled
-            else {
-                return
-            }
-            let failure = AppFailure(operation: .loadBook, serviceError: error)
+        case .failure(let failure):
             bookDetail = .failed(failure)
             await diagnostics.record(
                 .failed(
@@ -4353,6 +4363,46 @@ final class AppModel {
                 )
             )
         }
+    }
+
+    private func timedBookDetail(
+        _ book: LibraryBookSummary,
+        account: ServerAccount
+    ) async -> BookDetailLoadResult {
+        let (stream, continuation) =
+            AsyncStream<BookDetailLoadResult>.makeStream(
+                bufferingPolicy: .bufferingOldest(1)
+            )
+        let operation = Task {
+            do throws(AppServiceError) {
+                let detail = try await fetchBookDetail(book, account: account)
+                continuation.yield(.success(detail))
+            } catch {
+                continuation.yield(
+                    .failure(
+                        AppFailure(operation: .loadBook, serviceError: error))
+                )
+            }
+            continuation.finish()
+        }
+        let deadline = Task {
+            do {
+                try await Task.sleep(for: bookDetailOperationTimeout)
+                guard !Task.isCancelled else { return }
+                continuation.yield(.failure(AppFailure(.loadBook, .timeout)))
+                continuation.finish()
+            } catch {
+                // The load finished or its owning view was cancelled.
+            }
+        }
+        var iterator = stream.makeAsyncIterator()
+        let result =
+            await iterator.next()
+            ?? .failure(AppFailure(.loadBook, .requestCancelled))
+        continuation.finish()
+        operation.cancel()
+        deadline.cancel()
+        return result
     }
 
     func refreshBookDetail(_ book: LibraryBookSummary) async {

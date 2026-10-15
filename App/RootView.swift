@@ -2732,14 +2732,15 @@ private struct HomeView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 homeContext
             }
-            .navigationDestination(for: LibraryBookSummary.self) { book in
+            .navigationDestination(for: BookDestination.self) { destination in
                 BookDetailView(
                     model: model,
-                    book: book,
+                    destination: destination,
                     navigation: navigation,
                     origin: .home,
                     handlePlaybackOutcome: handlePlaybackOutcome
                 )
+                .id(destination.id)
             }
             .navigationDestination(for: SeriesDestination.self) { series in
                 SeriesDetailView(
@@ -3411,14 +3412,15 @@ private struct BookListContent: View {
                 }
             }
         }
-        .navigationDestination(for: LibraryBookSummary.self) { book in
+        .navigationDestination(for: BookDestination.self) { destination in
             BookDetailView(
                 model: model,
-                book: book,
+                destination: destination,
                 navigation: navigation,
                 origin: origin,
                 handlePlaybackOutcome: handlePlaybackOutcome
             )
+            .id(destination.id)
         }
         .navigationDestination(for: SeriesDestination.self) { series in
             SeriesDetailView(
@@ -3625,14 +3627,16 @@ private struct SearchView: View {
         NavigationStack(path: navigation.pathBinding(for: .search)) {
             content
                 .navigationTitle("Search")
-                .navigationDestination(for: LibraryBookSummary.self) { book in
+                .navigationDestination(for: BookDestination.self) {
+                    destination in
                     BookDetailView(
                         model: model,
-                        book: book,
+                        destination: destination,
                         navigation: navigation,
                         origin: .search,
                         handlePlaybackOutcome: handlePlaybackOutcome
                     )
+                    .id(destination.id)
                 }
                 .navigationDestination(for: SeriesDestination.self) { series in
                     SeriesDetailView(
@@ -3965,50 +3969,52 @@ private struct SeriesDetailView: View {
     @State private var coverSwipeOffset: CGFloat = 0
 
     var body: some View {
-        content
-            .navigationTitle(destination.name)
-            .iOSInlineNavigationTitle()
-            .task(id: destination) {
-                await model.loadSeries(destination)
-            }
-            .refreshable {
-                await model.refreshSeries(destination)
-            }
-            .toolbar {
-                if let account = model.account,
-                    account.user.permissions.download,
-                    case .loaded(let page) = model.seriesBooks,
-                    !page.items.isEmpty
-                {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            model.beginSeriesDownloadPreparation(
-                                destination,
-                                account: account
-                            )
-                        } label: {
-                            if model.isSeriesDownloadActive(
-                                destination,
-                                accountID: account.id
-                            ) {
-                                ProgressView()
-                            } else {
-                                Label(
-                                    "Download Series",
-                                    systemImage: "arrow.down.circle"
-                                )
-                            }
-                        }
-                        .disabled(
-                            model.isSeriesDownloadActive(
-                                destination,
-                                accountID: account.id
-                            )
+        ZStack {
+            content
+        }
+        .navigationTitle(destination.name)
+        .iOSInlineNavigationTitle()
+        .task(id: destination) {
+            await model.loadSeries(destination)
+        }
+        .refreshable {
+            await model.refreshSeries(destination)
+        }
+        .toolbar {
+            if let account = model.account,
+                account.user.permissions.download,
+                case .loaded(let page) = model.seriesBooks,
+                !page.items.isEmpty
+            {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        model.beginSeriesDownloadPreparation(
+                            destination,
+                            account: account
                         )
-                        .accessibilityIdentifier("series.download")
+                    } label: {
+                        if model.isSeriesDownloadActive(
+                            destination,
+                            accountID: account.id
+                        ) {
+                            ProgressView()
+                        } else {
+                            Label(
+                                "Download Series",
+                                systemImage: "arrow.down.circle"
+                            )
+                        }
                     }
+                    .disabled(
+                        model.isSeriesDownloadActive(
+                            destination,
+                            accountID: account.id
+                        )
+                    )
+                    .accessibilityIdentifier("series.download")
                 }
             }
+        }
     }
 
     @ViewBuilder
@@ -4539,7 +4545,8 @@ private struct BookDetailLinkLayout: Layout {
 
 private struct BookDetailView: View {
     @Bindable var model: AppModel
-    let book: LibraryBookSummary
+    let destination: BookDestination
+    private var book: LibraryBookSummary { destination.book }
     @Bindable var navigation: AppNavigationCoordinator
     let origin: BookNavigationOrigin
     let handlePlaybackOutcome: (PlaybackStartOutcome) -> Void
@@ -4557,7 +4564,8 @@ private struct BookDetailView: View {
     @ColourSchemePreference private var colourScheme
 
     var body: some View {
-        Group {
+        // A concrete container preserves the load task across content transitions.
+        ZStack {
             if model.selectedBookID != book.id {
                 ProgressView()
                     .accessibilityIdentifier("book.detail.loading")
@@ -4575,7 +4583,13 @@ private struct BookDetailView: View {
         }
         .navigationTitle(book.title)
         .iOSInlineNavigationTitle()
-        .task(id: book.id.rawValue) {
+        .task(
+            id: navigation.isVisibleBook(destination.id, from: origin)
+                ? destination.id : nil
+        ) {
+            guard navigation.isVisibleBook(destination.id, from: origin) else {
+                return
+            }
             await model.loadBookDetail(book)
             #if DEBUG || BLEAT_UI_TESTING
                 await model.downloads.runEditPresentationDownloadFixture()

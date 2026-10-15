@@ -17263,6 +17263,109 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testRepeatedBookNavigationOwnershipFollowsNestedStackAndSelectedTab()
+        throws
+    {
+        let navigation = AppNavigationCoordinator()
+        let library = fixtureLibrary()
+        let first = fixtureBook(
+            id: "first", title: "First", libraryID: library.id)
+        let second = first
+        for (origin, tab) in [
+            (BookNavigationOrigin.home, AppRootTab.home),
+            (.library, .library), (.search, .search),
+        ] {
+            navigation.selectedTab = tab
+            let firstDestination = navigation.showBook(first, from: origin)
+            XCTAssertTrue(
+                navigation.isVisibleBook(firstDestination.id, from: origin))
+            navigation.showSeries(
+                id: try XCTUnwrap(SeriesID(rawValue: "series")), name: "Series",
+                libraryID: library.id, from: origin
+            )
+            XCTAssertFalse(
+                navigation.isVisibleBook(firstDestination.id, from: origin))
+            let secondDestination = navigation.showBook(second, from: origin)
+            XCTAssertNotEqual(firstDestination.id, secondDestination.id)
+            XCTAssertEqual(firstDestination.book, secondDestination.book)
+            XCTAssertTrue(
+                navigation.isVisibleBook(secondDestination.id, from: origin))
+            XCTAssertFalse(
+                navigation.isVisibleBook(firstDestination.id, from: origin))
+            navigation.selectedTab = .settings
+            XCTAssertFalse(
+                navigation.isVisibleBook(secondDestination.id, from: origin))
+            navigation.selectedTab = tab
+            var path = navigation.pathBinding(for: origin).wrappedValue
+            path.removeLast(2)
+            navigation.pathBinding(for: origin).wrappedValue = path
+            XCTAssertTrue(
+                navigation.isVisibleBook(firstDestination.id, from: origin))
+            XCTAssertFalse(
+                navigation.isVisibleBook(secondDestination.id, from: origin))
+        }
+    }
+
+    func testBookDetailTimeoutAllowsRetryAndRejectsLateResponse() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixturePage(libraryID: library.id).items[0]
+        let detail = fixtureBookDetail(item: book)
+        let updated = fixtureBookDetail(
+            item: fixtureBook(
+                id: book.id.rawValue, title: "Updated", libraryID: library.id)
+        )
+        let gate = AsyncGate()
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library])
+        )
+        await service.queueBookDetails(
+            [.success(detail), .success(updated)], gates: [gate])
+        let model = AppModel(
+            service: service, diagnostics: diagnostics,
+            bookDetailOperationTimeout: .milliseconds(100)
+        )
+        await model.start()
+        await model.loadBookDetail(book)
+        let failure = AppFailure(.loadBook, .timeout)
+        XCTAssertEqual(model.bookDetail, .failed(failure))
+        XCTAssertTrue(failure.allowsRetry)
+        let events = await diagnostics.events()
+        XCTAssertTrue(events.contains { $0.failureCode == .requestTimedOut })
+
+        await model.loadBookDetail(book)
+        XCTAssertEqual(model.bookDetail, .loaded(updated))
+        await gate.release()
+        let lateResponseFinished = await waitUntil(timeout: .seconds(3)) {
+            await service.completedBookDetailRequests() == 2
+        }
+        XCTAssertTrue(lateResponseFinished)
+        XCTAssertEqual(model.bookDetail, .loaded(updated))
+    }
+
+    func testCancelledBookDetailLoadDoesNotLeaveSpinner() async throws {
+        let account = try fixtureAccount()
+        let library = fixtureLibrary()
+        let book = fixturePage(libraryID: library.id).items[0]
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account), libraries: .success([library]),
+            bookDetail: .success(fixtureBookDetail(item: book)),
+            bookDetailGate: gate
+        )
+        let model = AppModel(service: service)
+        await model.start()
+        let load = Task { await model.loadBookDetail(book) }
+        await gate.waitUntilEntered()
+        load.cancel()
+        await load.value
+        XCTAssertEqual(
+            model.bookDetail, .failed(AppFailure(.loadBook, .requestCancelled)))
+        XCTAssertTrue(AppFailure(.loadBook, .requestCancelled).allowsRetry)
+        await gate.release()
+    }
+
     func testBookDetailFailureRemainsTyped() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -26347,6 +26450,7 @@ private actor TestAppService: AppServicing {
     private var recordedHomeRequests: [LibraryID] = []
     private var recordedSearchRequests: [SearchRequest] = []
     private var recordedBookDetailRequests: [BookDetailRequest] = []
+    private var completedBookDetailRequestCount = 0
     private var recordedRefreshedBookDetailRequests: [BookDetailRequest] = []
     private var recordedPlaybackOpenRequests: [PlaybackOpenRequest] = []
     private var recordedPlaybackCloseSessionIDs: [PlaybackSessionID] = []
@@ -27497,6 +27601,7 @@ private actor TestAppService: AppServicing {
         libraryID: LibraryID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) -> LibraryBookDetail {
+        defer { completedBookDetailRequestCount += 1 }
         recordedBookDetailRequests.append(
             BookDetailRequest(
                 accountID: account.id,
@@ -27896,6 +28001,10 @@ private actor TestAppService: AppServicing {
 
     func bookDetailRequests() -> [BookDetailRequest] {
         recordedBookDetailRequests
+    }
+
+    func completedBookDetailRequests() -> Int {
+        completedBookDetailRequestCount
     }
 
     func refreshedBookDetailRequests() -> [BookDetailRequest] {

@@ -923,6 +923,92 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookDetailTimeoutShowsRetryAndRecovers() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-book-detail-timeout"]
+        )
+        let book = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        let retry = app.buttons["Try Again"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Request timed out"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["book.detail.loading"].exists)
+        retry.tap()
+        XCTAssertTrue(
+            app.buttons["book.detail.play"].waitForExistence(timeout: 5)
+        )
+        XCTAssertFalse(retry.exists)
+    }
+
+    @MainActor
+    func testSecondSeriesBookDetailRemainsLoaded() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let book = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 5))
+        series.tap()
+        let secondBook = app.buttons["series.book.1"]
+        XCTAssertTrue(secondBook.waitForExistence(timeout: 5))
+        secondBook.tap()
+
+        assertBookDetailRemainsLoaded(app, title: "Test Series Volume Two")
+    }
+
+    @MainActor
+    func testRepeatedSeriesBookDetailKeepsOnlyTopEntryActive() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        let homeBook = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(homeBook.waitForExistence(timeout: 5))
+        homeBook.tap()
+        let series = app.buttons["book.detail.series.0"]
+        XCTAssertTrue(series.waitForExistence(timeout: 5))
+        series.tap()
+        let firstBook = app.buttons["series.book.0"]
+        XCTAssertTrue(firstBook.waitForExistence(timeout: 5))
+        firstBook.tap()
+        XCTAssertTrue(series.waitForExistence(timeout: 5))
+        series.tap()
+        XCTAssertTrue(firstBook.waitForExistence(timeout: 5))
+        firstBook.tap()
+        assertBookDetailRemainsLoaded(app, title: "Test Series Volume One")
+
+        app.navigationBars["Test Series Volume One"].buttons.firstMatch.tap()
+        XCTAssertTrue(
+            app.navigationBars["Test Series"].waitForExistence(timeout: 5))
+        app.navigationBars["Test Series"].buttons.firstMatch.tap()
+        assertBookDetailRemainsLoaded(app, title: "Test Series Volume One")
+    }
+
+    @MainActor
+    private func assertBookDetailRemainsLoaded(
+        _ app: XCUIApplication, title: String
+    ) {
+        let play = app.buttons["book.detail.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        let loading = app.descendants(matching: .any)["book.detail.loading"]
+        XCTAssertEqual(
+            XCTWaiter.wait(
+                for: [
+                    XCTNSPredicateExpectation(
+                        predicate: NSPredicate(format: "exists == true"),
+                        object: loading
+                    )
+                ],
+                timeout: 3
+            ),
+            .timedOut,
+            "Loaded series book detail must not return to the loading state"
+        )
+        XCTAssertTrue(play.exists)
+        XCTAssertTrue(app.navigationBars[title].exists)
+    }
+
+    @MainActor
     func testBookDetailPlacesChapterProgressBelowPlayback() {
         let app = launch(
             scenario: "--ui-testing-signed-in",

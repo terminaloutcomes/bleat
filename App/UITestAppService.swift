@@ -973,6 +973,11 @@
         ) async throws(AppServiceError) -> LibraryBookDetail {
             bookDetailRequests += 1
             if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-book-detail-timeout"
+            ), bookDetailRequests == 1 {
+                throw .bookDetail(.remote(.unexpectedStatus(408)))
+            }
+            if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-book-detail-refresh"
             ), bookDetailRequests >= 2 {
                 try? await Task.sleep(for: .seconds(2))

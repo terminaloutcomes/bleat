@@ -821,6 +821,12 @@ Treat `403` as an authorization result, not an authentication failure. Do not re
   login and destination redirect ([web page](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/client/pages/item/_id/index.vue),
   [login](https://github.com/advplyr/audiobookshelf/blob/v2.36.0/client/pages/login.vue)).
 - Load book detail with `GET /api/items/<id>?expanded=1&include=progress`.
+- Each pushed book has a distinct navigation identity, including repeated
+  entries for the same audiobook. Only the top entry in the selected tab owns
+  detail loading; covered screens cannot replace its shared state. Keep the load task mounted when
+  loading changes to content or an error. Bound initial detail loading to 30 seconds; expiry shows a typed timeout
+  with **Try Again**. Cancellation also offers retry rather than leaving a
+  spinner. Reject late results after timeout, retry, or account/selection changes.
 - Use server pagination with an initial page size of 40–60 items.
 - Cancel superseded searches and requests when account/library changes.
 - Debounce text search by approximately 300 ms.
