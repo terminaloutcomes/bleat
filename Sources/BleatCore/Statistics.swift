@@ -891,7 +891,7 @@ public struct StatisticsSessionListeningTime: Equatable, Sendable {
 
 public struct ListeningAccumulator: Sendable {
     private var previous: StatisticsPlaybackSample?
-    private var pending: ListeningSlice?
+    fileprivate private(set) var pending: ListeningSlice?
     private var checkpoint: ListeningSlice?
 
     public init() {}
@@ -2105,7 +2105,7 @@ public actor StatisticsRepository {
                         || query.accountID == identity.account
                 else { return false }
                 if query.start == nil && query.end == nil { return true }
-                guard let pending = accumulator.uncommittedSlice else {
+                guard let pending = accumulator.pending else {
                     return false
                 }
                 return query.contains(

@@ -543,6 +543,7 @@
     "duplicateCompletionEventsCountOneHistoricalRuntime()",
     "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
     "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
+    "rangeResetDiscardsGrowingSegmentAfterCheckpoint(second:)",
     "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
