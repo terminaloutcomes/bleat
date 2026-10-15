@@ -28,3 +28,6 @@ site/static/styles.css
 
 # mdbook stuff
 book
+
+# Generated from CHANGELOG.md
+site/content/news.md

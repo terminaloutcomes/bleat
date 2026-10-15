@@ -1,7 +1,8 @@
 # Bleat website
 
 The website is a Zola project with Tailwind CSS. Its source lives entirely in
-`site/`; generated CSS and the rendered site are ignored.
+`site/`, with release news loaded from the repository's `CHANGELOG.md` at build
+time; generated CSS and the rendered site are ignored.
 
 Install the pinned tools from the repository root:
 

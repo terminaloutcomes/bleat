@@ -18,3 +18,10 @@ The Help section also includes `site/content/help/cloud-storage-update.md`, a
 plain-language guide to the 2026.10.14 listening-history and iCloud storage
 changes, preserved history, mixed-version sync, the one-time notice, and the
 separate clear-cloud-data control.
+
+The [News page](https://bleat.terminaloutcomes.com/news/) renders the repository's
+`CHANGELOG.md` at build time. The `site-news` task generates the ignored
+`site/content/news.md` before site checks and builds. Edit the
+changelog to update release news; no separate news copy needs maintaining. The
+app's About page links to the website and News, while build date, developer, and
+bundle identifier appear in Diagnostics.

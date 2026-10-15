@@ -2110,6 +2110,11 @@ Every diagnostic failure event carries its operation and a stable typed cause.
 Do not derive either from localized text, serialized errors, or raw server
 payloads.
 
+About shows the app version and links to the Bleat website and its News page at
+`https://bleat.terminaloutcomes.com/news`. Compile date, developer, and bundle
+identifier belong in Diagnostics. The website generates News from the
+repository's `CHANGELOG.md` at build time.
+
 The Diagnostics status screen remains available in every build and presents
 live operational state, the Bonjour troubleshooter, and telemetry consent. It
 does not export a diagnostic snapshot, retain app-owned diagnostic history, or

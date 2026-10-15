@@ -24,3 +24,4 @@ pub mod listening_repair;
 pub mod live_fixtures;
 pub mod release_version_check;
 pub mod release_versions;
+pub mod site_news;

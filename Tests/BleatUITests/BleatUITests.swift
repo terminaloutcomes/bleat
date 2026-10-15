@@ -2338,6 +2338,39 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testAboutLinksAndDiagnosticBuildMetadata() {
+        let app = launch(scenario: "--ui-testing-signed-in")
+        tabButton("Settings", in: app).tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.about", direction: .up
+        )
+        app.buttons["settings.about"].tap()
+        XCTAssertTrue(app.staticTexts["Version"].waitForExistence(timeout: 3))
+        for (identifier, label) in [
+            ("settings.about.website", "Website"),
+            ("settings.about.news", "News"),
+        ] {
+            let link = app.descendants(matching: .any)[identifier]
+            XCTAssertTrue(link.waitForExistence(timeout: 3))
+            XCTAssertEqual(link.label, label)
+            XCTAssertTrue(link.isEnabled)
+            XCTAssertTrue(link.isHittable)
+        }
+        for label in ["Compiled", "Developer", "Bundle ID"] {
+            XCTAssertFalse(app.staticTexts[label].exists)
+        }
+
+        app.navigationBars.buttons.firstMatch.tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.diagnostics", direction: .up
+        )
+        app.buttons["settings.diagnostics"].tap()
+        for label in ["Compiled", "Developer", "Bundle ID"] {
+            XCTAssertTrue(app.staticTexts[label].waitForExistence(timeout: 3))
+        }
+    }
+
+    @MainActor
     func testDiagnosticTelemetryConsentLivesInSystemSettings() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
