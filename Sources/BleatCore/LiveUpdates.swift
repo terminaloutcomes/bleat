@@ -305,6 +305,7 @@ public actor AudiobookshelfLiveEventClient {
     private var task: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var streamID: UUID?
+    private(set) var connectionEndpoint: AudiobookshelfLiveServerEndpoint?
 
     public init(
         serverProvider: @escaping ServerProvider,
@@ -341,15 +342,22 @@ public actor AudiobookshelfLiveEventClient {
 
     public func stop() {
         streamID = nil
+        connectionEndpoint = nil
         task?.cancel()
         task = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
     }
 
-    public func reconnect() {
-        socket?.cancel(with: .goingAway, reason: nil)
-        socket = nil
+    public func updatePathGeneration(
+        _ generation: ServerEndpointPathGeneration
+    ) {
+        // Preserve the actual server and socket, even if endpoint preference has
+        // changed. A subsequent transport failure must use the current generation.
+        guard let endpoint = connectionEndpoint else { return }
+        connectionEndpoint = AudiobookshelfLiveServerEndpoint(
+            server: endpoint.server, usage: endpoint.usage,
+            pathGeneration: generation)
     }
 
     private func run(
@@ -386,8 +394,10 @@ public actor AudiobookshelfLiveEventClient {
         streamID: UUID
     ) async -> Bool {
         let endpoint = await serverProvider()
-        guard !Task.isCancelled, self.streamID == streamID else { return false }
+        guard !Task.isCancelled, self.streamID == streamID
+        else { return false }
         let server = endpoint.server
+        connectionEndpoint = endpoint
         let attemptID = UUID()
         let retryBucket = RemoteTelemetryRetryBucket(retryCount: retryCount)
         continuation.yield(
@@ -437,7 +447,8 @@ public actor AudiobookshelfLiveEventClient {
         do {
             initialToken = try await tokenProvider()
         } catch {
-            guard !Task.isCancelled, self.streamID == streamID else {
+            guard !Task.isCancelled, self.streamID == streamID
+            else {
                 finishAttempt(.cancelled)
                 return false
             }
@@ -451,7 +462,8 @@ public actor AudiobookshelfLiveEventClient {
             return false
         }
 
-        guard !Task.isCancelled, self.streamID == streamID else {
+        guard !Task.isCancelled, self.streamID == streamID
+        else {
             finishAttempt(.cancelled)
             return false
         }
@@ -508,7 +520,7 @@ public actor AudiobookshelfLiveEventClient {
                 case .initialized:
                     authenticated = true
                     finishAttempt(.authenticated)
-                    await onAuthenticated(endpoint)
+                    await onAuthenticated(connectionEndpoint ?? endpoint)
                     guard !Task.isCancelled, self.streamID == streamID,
                         self.socket === socket
                     else { return authenticated }
@@ -604,7 +616,7 @@ public actor AudiobookshelfLiveEventClient {
                         stage: failureStage
                     )))
             continuation.yield(.connection(.failed(.transportUnavailable)))
-            await onTransportFailure(endpoint)
+            await onTransportFailure(connectionEndpoint ?? endpoint)
         }
         return authenticated
     }

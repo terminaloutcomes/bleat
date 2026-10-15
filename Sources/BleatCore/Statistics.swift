@@ -48,6 +48,14 @@ public struct StatisticsPlaybackSample: Equatable, Sendable {
     }
 }
 
+public enum ListeningRecordingFormat: String, Codable, Sendable {
+    case continuousSegment = "continuous_segment_v2"
+}
+
+public enum ListeningRecordingState: String, Codable, Sendable {
+    case active, finalized
+}
+
 public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let accountID: AccountID
@@ -67,6 +75,8 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
     public let title: String
     public let author: String
     public let duration: Double
+    public let recordingFormat: ListeningRecordingFormat?
+    public let recordingState: ListeningRecordingState?
 
     public init(
         id: UUID = UUID(),
@@ -86,7 +96,9 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         chapterEnd: Double?,
         title: String,
         author: String,
-        duration: Double
+        duration: Double,
+        recordingFormat: ListeningRecordingFormat? = nil,
+        recordingState: ListeningRecordingState? = nil
     ) {
         self.id = id
         self.accountID = accountID
@@ -106,6 +118,8 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         self.title = title
         self.author = author
         self.duration = duration
+        self.recordingFormat = recordingFormat
+        self.recordingState = recordingState
     }
 
     func reidentified(as accountID: AccountID) -> ListeningSlice {
@@ -127,7 +141,8 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             chapterEnd: chapterEnd,
             title: title,
             author: author,
-            duration: duration
+            duration: duration, recordingFormat: recordingFormat,
+            recordingState: recordingState
         )
     }
 
@@ -140,9 +155,78 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             playbackRate: playbackRate, chapterID: chapterID,
             chapterTitle: chapterTitle, chapterStart: chapterStart,
             chapterEnd: chapterEnd, title: title, author: author,
-            duration: duration
+            duration: duration, recordingFormat: recordingFormat,
+            recordingState: recordingState
         )
     }
+    func splitAtReportingDay() -> (ListeningSlice, ListeningSlice)? {
+        let boundary = StatisticsQuery.reportingCalendar.startOfDay(
+            for: endedAt)
+        guard startedAt < boundary, boundary < endedAt else { return nil }
+        let fraction =
+            boundary.timeIntervalSince(startedAt)
+            / endedAt.timeIntervalSince(startedAt)
+        func part(start: Date, end: Date, lower: Double, upper: Double)
+            -> ListeningSlice
+        {
+            ListeningSlice(
+                accountID: accountID, itemID: itemID, sessionID: sessionID,
+                startedAt: start, endedAt: end,
+                startPosition: startPosition + audiobookSeconds * lower,
+                endPosition: startPosition + audiobookSeconds * upper,
+                realSeconds: realSeconds * (upper - lower),
+                audiobookSeconds: audiobookSeconds * (upper - lower),
+                playbackRate: playbackRate,
+                chapterID: chapterID, chapterTitle: chapterTitle,
+                chapterStart: chapterStart,
+                chapterEnd: chapterEnd, title: title, author: author,
+                duration: duration,
+                recordingFormat: recordingFormat, recordingState: recordingState
+            )
+        }
+        return (
+            part(start: startedAt, end: boundary, lower: 0, upper: fraction),
+            part(start: boundary, end: endedAt, lower: fraction, upper: 1)
+        )
+    }
+
+    var finalized: ListeningSlice {
+        copying(state: .finalized)
+    }
+
+    func copying(state: ListeningRecordingState) -> ListeningSlice {
+        ListeningSlice(
+            id: id, accountID: accountID, itemID: itemID,
+            sessionID: sessionID, startedAt: startedAt, endedAt: endedAt,
+            startPosition: startPosition, endPosition: endPosition,
+            realSeconds: realSeconds, audiobookSeconds: audiobookSeconds,
+            playbackRate: playbackRate, chapterID: chapterID,
+            chapterTitle: chapterTitle, chapterStart: chapterStart,
+            chapterEnd: chapterEnd,
+            title: title, author: author, duration: duration,
+            recordingFormat: recordingFormat, recordingState: state)
+    }
+
+    /// Only newly observed quantities contribute to committed summaries. Keep
+    /// the original start date so incremental range selection matches a rebuild;
+    /// this transient contribution is never persisted or uploaded.
+    func tail(after previous: ListeningSlice?) -> ListeningSlice? {
+        guard let previous else { return self }
+        guard realSeconds > previous.realSeconds else { return nil }
+        return ListeningSlice(
+            id: id, accountID: accountID, itemID: itemID,
+            sessionID: sessionID, startedAt: startedAt, endedAt: endedAt,
+            startPosition: previous.endPosition, endPosition: endPosition,
+            realSeconds: realSeconds - previous.realSeconds,
+            audiobookSeconds: audiobookSeconds - previous.audiobookSeconds,
+            playbackRate: playbackRate, chapterID: chapterID,
+            chapterTitle: chapterTitle,
+            chapterStart: chapterStart, chapterEnd: chapterEnd, title: title,
+            author: author,
+            duration: duration, recordingFormat: recordingFormat,
+            recordingState: recordingState)
+    }
+
 }
 
 public enum CompletionEvidence: String, Codable, Sendable {
@@ -475,6 +559,8 @@ public final class ListeningSliceRecord {
     var title: String
     var author: String
     var duration: Double
+    var recordingFormat: ListeningRecordingFormat?
+    var isFinalized: Bool?
     var privateCloudSynchronized: Bool?
 
     init(_ slice: ListeningSlice) {
@@ -496,6 +582,8 @@ public final class ListeningSliceRecord {
         title = slice.title
         author = slice.author
         duration = slice.duration
+        recordingFormat = slice.recordingFormat
+        isFinalized = slice.recordingState != .active
         privateCloudSynchronized = false
     }
 
@@ -518,8 +606,21 @@ public final class ListeningSliceRecord {
             chapterEnd: chapterEnd,
             title: title,
             author: author,
-            duration: duration
+            duration: duration, recordingFormat: recordingFormat,
+            recordingState: recordingFormat == nil
+                ? nil : (isFinalized == false ? .active : .finalized)
         )
+    }
+}
+
+extension ListeningSliceRecord {
+    func extend(to slice: ListeningSlice) {
+        endedAt = slice.endedAt
+        endPosition = slice.endPosition
+        realSeconds = slice.realSeconds
+        audiobookSeconds = slice.audiobookSeconds
+        isFinalized = slice.recordingState != .active
+        privateCloudSynchronized = false
     }
 }
 
@@ -790,11 +891,14 @@ public struct StatisticsSessionListeningTime: Equatable, Sendable {
 
 public struct ListeningAccumulator: Sendable {
     private var previous: StatisticsPlaybackSample?
-    private var pending: ListeningSlice?
+    fileprivate private(set) var pending: ListeningSlice?
+    private var checkpoint: ListeningSlice?
 
     public init() {}
 
-    public var uncommittedSlice: ListeningSlice? { pending }
+    public var uncommittedSlice: ListeningSlice? {
+        pending?.tail(after: checkpoint)
+    }
 
     public mutating func ingest(
         _ sample: StatisticsPlaybackSample
@@ -849,9 +953,28 @@ public struct ListeningAccumulator: Sendable {
             chapterEnd: previous.chapter?.end,
             title: previous.title,
             author: previous.author,
-            duration: previous.duration
+            duration: previous.duration, recordingFormat: .continuousSegment,
+            recordingState: .active
         )
 
+        var output: [ListeningSlice]
+        if let (first, second) = interval.splitAtReportingDay() {
+            output = append(first)
+            output.append(contentsOf: flush())
+            output.append(contentsOf: append(second))
+        } else {
+            output = append(interval)
+        }
+        if previous.playbackRate != sample.playbackRate
+            || previous.chapter != sample.chapter
+        {
+            output.append(contentsOf: flush())
+        }
+        return output
+    }
+
+    private mutating func append(_ interval: ListeningSlice) -> [ListeningSlice]
+    {
         if let pending, Self.canMerge(pending, interval) {
             self.pending = ListeningSlice(
                 id: pending.id,
@@ -872,19 +995,24 @@ public struct ListeningAccumulator: Sendable {
                 chapterEnd: pending.chapterEnd,
                 title: pending.title,
                 author: pending.author,
-                duration: pending.duration
+                duration: pending.duration, recordingFormat: .continuousSegment,
+                recordingState: .active
             )
         } else {
             var output = flush()
             pending = interval
             if interval.realSeconds >= 5 {
-                output.append(contentsOf: flush())
+                output.append(interval)
+                checkpoint = interval
             }
             return output
         }
 
-        if self.pending?.realSeconds ?? 0 >= 5 {
-            return flush()
+        if let pending,
+            pending.realSeconds - (checkpoint?.realSeconds ?? 0) >= 5
+        {
+            checkpoint = pending
+            return [pending]
         }
         return []
     }
@@ -899,7 +1027,8 @@ public struct ListeningAccumulator: Sendable {
             return []
         }
         self.pending = nil
-        return [pending]
+        checkpoint = nil
+        return [pending.finalized]
     }
 
     private static func canMerge(
@@ -942,7 +1071,7 @@ public struct ListeningAccumulator: Sendable {
 /// callers await it without blocking MainActor. Remove this boundary when
 /// SwiftData provides native asynchronous fetch/save operations.
 public actor StatisticsRepository {
-    private let modelContainer: ModelContainer
+    let modelContainer: ModelContainer
     private var accumulators:
         [StatisticsAggregation.SessionKey: ListeningAccumulator] = [:]
     private struct Observation {
@@ -953,6 +1082,10 @@ public actor StatisticsRepository {
     private var observations: [UUID: Observation] = [:]
     private var preparedSnapshots: [StatisticsQuery: StatisticsSnapshot] = [:]
     private var updateRevision: UInt64 = 0
+    private var recoveredActiveSegments = false
+    private var latestSamples:
+        [StatisticsAggregation.SessionKey: (generation: UInt64, time: Double)] =
+            [:]
 
     public func updates(
         id: UUID, query: StatisticsQuery, accountIDs: [AccountID]
@@ -1097,6 +1230,8 @@ public actor StatisticsRepository {
 
     public func discardAfterPersistentReset() {
         accumulators.removeAll()
+        latestSamples.removeAll()
+        recoveredActiveSegments = false
         preparedSnapshots.removeAll()
         publishPresentation()
         for accountID in Set(
@@ -1120,12 +1255,22 @@ public actor StatisticsRepository {
     public func record(
         _ sample: StatisticsPlaybackSample
     ) throws(StatisticsRepositoryError) {
+        try recoverActiveSegments()
         let identity = StatisticsAggregation.SessionKey(
             account: sample.accountID, session: sample.sessionID)
+        if let latest = latestSamples[identity],
+            sample.playbackGeneration < latest.generation
+                || sample.monotonicTime <= latest.time
+        {
+            return
+        }
         var accumulator = accumulators[identity] ?? ListeningAccumulator()
         let slices = try accumulator.ingest(sample)
         if !slices.isEmpty { try save(slices, publish: false) }
         accumulators[identity] = accumulator
+        latestSamples[identity] = (
+            sample.playbackGeneration, sample.monotonicTime
+        )
         publishPresentation(liveOnly: slices.isEmpty)
     }
 
@@ -1140,6 +1285,34 @@ public actor StatisticsRepository {
         if !slices.isEmpty { try save(slices, publish: false) }
         for identity in matching.keys { accumulators[identity] = nil }
         publishPresentation()
+    }
+
+    public func finishAll() throws(StatisticsRepositoryError) {
+        try recoverActiveSegments()
+        let slices = accumulators.values.flatMap { value in
+            var accumulator = value
+            return accumulator.finish()
+        }
+        if !slices.isEmpty { try save(slices, publish: false) }
+        accumulators.removeAll()
+        publishPresentation()
+    }
+
+    private func recoverActiveSegments() throws(StatisticsRepositoryError) {
+        guard !recoveredActiveSegments else { return }
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            let records = try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.isFinalized == false }))
+            for record in records {
+                record.isFinalized = true
+                record.privateCloudSynchronized = false
+            }
+            try context.save()
+            recoveredActiveSegments = true
+        } catch { throw .persistenceFailed }
     }
 
     public func recordCompletion(
@@ -1327,7 +1500,8 @@ public actor StatisticsRepository {
     public func summary(
         query: StatisticsQuery = StatisticsQuery()
     ) throws(StatisticsRepositoryError) -> StatisticsSummary {
-        try snapshot(query: query).summary
+        try recoverActiveSegments()
+        return try snapshot(query: query).summary
     }
 
     public func exploration(query: StatisticsQuery = StatisticsQuery())
@@ -1492,35 +1666,38 @@ public actor StatisticsRepository {
     func privateCloudArchive() throws(StatisticsRepositoryError)
         -> StatisticsArchive
     {
+        try recoverActiveSegments()
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
+            let sliceDescriptor = FetchDescriptor<ListeningSliceRecord>(
+                predicate: #Predicate<ListeningSliceRecord> {
+                    ($0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil)
+                        && $0.isFinalized != false
+                })
+            let completionDescriptor = FetchDescriptor<
+                CompletionMilestoneRecord
+            >(
+                predicate: #Predicate<CompletionMilestoneRecord> {
+                    $0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil
+                })
+            let sessionDescriptor = FetchDescriptor<
+                RemoteListeningSessionRecord
+            >(
+                predicate: #Predicate<RemoteListeningSessionRecord> {
+                    $0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil
+                })
+            let slices = try context.fetch(sliceDescriptor).map(\.domainValue)
+            let completions = try context.fetch(completionDescriptor)
+                .compactMap(\.domainValue)
+            let sessions = try context.fetch(sessionDescriptor).map(
+                \.domainValue)
             return StatisticsArchive(
-                slices: try context.fetch(
-                    FetchDescriptor<ListeningSliceRecord>(
-                        predicate: #Predicate {
-                            $0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil
-                        }
-                    )
-                ).map(\.domainValue),
-                completions: try context.fetch(
-                    FetchDescriptor<CompletionMilestoneRecord>(
-                        predicate: #Predicate {
-                            $0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil
-                        }
-                    )
-                ).compactMap(\.domainValue),
-                remoteSessions: try context.fetch(
-                    FetchDescriptor<RemoteListeningSessionRecord>(
-                        predicate: #Predicate {
-                            $0.privateCloudSynchronized == false
-                                || $0.privateCloudSynchronized == nil
-                        }
-                    )
-                ).map(\.domainValue)
-            )
+                slices: slices, completions: completions,
+                remoteSessions: sessions)
         } catch {
             throw .persistenceFailed
         }
@@ -1707,7 +1884,9 @@ public actor StatisticsRepository {
                     )
                 }
             ).count == archive.remoteSessions.count,
-            archive.slices.allSatisfy(Self.isValid),
+            archive.slices.allSatisfy({
+                Self.isValid($0) && $0.recordingState != .active
+            }),
             archive.completions.allSatisfy({
                 !$0.accountID.rawValue.isEmpty
                     && !$0.itemID.rawValue.isEmpty
@@ -1926,7 +2105,7 @@ public actor StatisticsRepository {
                         || query.accountID == identity.account
                 else { return false }
                 if query.start == nil && query.end == nil { return true }
-                guard let pending = accumulator.uncommittedSlice else {
+                guard let pending = accumulator.pending else {
                     return false
                 }
                 return query.contains(
@@ -2022,10 +2201,31 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
+            var tails: [ListeningSlice] = []
             for slice in slices {
-                context.insert(ListeningSliceRecord(slice))
+                let id = slice.id
+                let previous = try context.fetch(
+                    FetchDescriptor<ListeningSliceRecord>(
+                        predicate: #Predicate { $0.eventID == id })
+                ).first
+                if let previous {
+                    guard previous.isFinalized == false,
+                        previous.accountID == slice.accountID.rawValue,
+                        slice.realSeconds >= previous.realSeconds,
+                        slice.audiobookSeconds >= previous.audiobookSeconds
+                    else { throw StatisticsRepositoryError.invalidSlice }
+                    if let tail = slice.tail(after: previous.domainValue) {
+                        tails.append(tail)
+                    }
+                    previous.extend(to: slice)
+                } else {
+                    context.insert(ListeningSliceRecord(slice))
+                    tails.append(slice)
+                }
             }
-            try saveMutation(context, publish: publish) { $0.append(slices) }
+            try saveMutation(context, publish: publish) { $0.append(tails) }
+        } catch let error as StatisticsRepositoryError {
+            throw error
         } catch {
             throw .persistenceFailed
         }

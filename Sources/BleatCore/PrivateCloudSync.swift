@@ -1,6 +1,7 @@
 import CloudKit
 import CryptoKit
 import Foundation
+import SwiftData
 
 public enum PrivateCloudSyncStatus: Equatable, Sendable {
     case disabled
@@ -12,6 +13,7 @@ public enum PrivateCloudSyncStatus: Equatable, Sendable {
 
 public enum PrivateCloudSyncOperation: String, Codable, Equatable, Sendable {
     case synchronize
+    case migrateLocalState = "migrate_local_state"
     case setupZone = "setup_zone"
     case fetchChanges = "fetch_changes"
     case prepareLocalChanges = "prepare_local_changes"
@@ -248,6 +250,7 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
     case stopping
     case invalidRecord
     case persistenceFailed
+    case storage(PrivateCloudStorageFailure)
     case nonPrivateDatabase
     case engineUnavailable
     case cloudKit(CloudKitFailure)
@@ -256,6 +259,16 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
     public var isRetryable: Bool {
         switch self {
         case .cloudKit(let failure): failure.isRetryable
+        case .storage(let failure):
+            switch failure {
+            case .invalidLegacyMetadata, .invalidLegacyState,
+                .invalidStoredState,
+                .migrationVerificationFailed:
+                false
+            case .metadataReadFailed, .metadataWriteFailed, .stateReadFailed,
+                .stateWriteFailed:
+                true
+            }
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
@@ -782,7 +795,15 @@ actor PrivateCloudSyncStore {
     private let accounts: AccountStore
     private let credentialStore: (any AccountCredentialStore)?
     private let configuration: CloudConfigurationStore
-    private let defaults: UserDefaults
+    private let defaults: PrivateCloudPersistence
+    private let legacyDefaults: UserDefaults
+    private var storageReady = false
+    private var storagePreparationTask: Task<Void, Error>?
+    private let migrationBatchDidCommit: (@Sendable (Int) async throws -> Void)?
+    private(set) var lastCommittedMetadataCount = 0
+    private var synchronizedRecords: Set<CKRecord.ID> = []
+    private var dirtyRecords: Set<CKRecord.ID> = []
+    private var deletedRecords: Set<CKRecord.ID> = []
     private let recordSystemFieldsKey =
         "bleat.cloudKit.recordSystemFields.v1"
     private let synchronizedPayloadDigestsKey =
@@ -831,88 +852,274 @@ actor PrivateCloudSyncStore {
         configuration: CloudConfigurationStore,
         defaults: PrivateCloudDefaultsReference = PrivateCloudDefaultsReference(
             .standard
-        )
+        ),
+        migrationBatchDidCommit: (@Sendable (Int) async throws -> Void)? = nil
     ) {
         self.statistics = statistics
         self.accounts = accounts
         self.credentialStore = credentialStore
         self.configuration = configuration
-        self.defaults = defaults.value
-        if let archivedRecords = defaults.value.dictionary(
-            forKey: recordSystemFieldsKey
-        ) as? [String: Data] {
-            for data in archivedRecords.values {
-                guard let record = Self.decodeSystemFields(data) else {
-                    continue
-                }
-                records[record.recordID] = record
-            }
+        self.migrationBatchDidCommit = migrationBatchDidCommit
+        self.legacyDefaults = defaults.value
+        self.defaults = PrivateCloudPersistence(
+            container: statistics.modelContainer)
+    }
+
+    func prepareStorage() async throws {
+        guard !storageReady else { return }
+        if let storagePreparationTask {
+            return try await storagePreparationTask.value
         }
-        synchronizedPayloadDigests =
-            defaults.value.dictionary(
-                forKey: synchronizedPayloadDigestsKey
-            ) as? [String: Data] ?? [:]
-        legacyAccountIdentityMappings =
-            defaults.value.dictionary(
-                forKey: legacyAccountIdentityMappingsKey
-            ) as? [String: String] ?? [:]
-        pendingLegacyRecordDeletions =
-            (defaults.value.dictionary(
-                forKey: pendingLegacyRecordDeletionsKey
-            ) as? [String: [String]] ?? [:]).mapValues(Set.init)
-        if let retainedPayloads = defaults.value.dictionary(
-            forKey: retainedRecordPayloadsKey
-        ) as? [String: Data] {
-            for (recordName, payload) in retainedPayloads {
-                guard
-                    let record = records.first(where: {
-                        $0.key.recordName == recordName
-                    })?.value
-                else {
-                    continue
-                }
-                record[Self.payloadKey] = payload as CKRecordValue
+        let task = Task { try await migrateStorage() }
+        storagePreparationTask = task
+        do {
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
             }
+            storagePreparationTask = nil
+        } catch {
+            storagePreparationTask = nil
+            throw error
         }
-        if let data = defaults.value.data(
-            forKey: pendingConfigurationConflictKey
-        ) {
-            guard
-                let conflict = try? JSONDecoder().decode(
-                    CloudConfigurationConflict.self,
-                    from: data
-                )
-            else {
-                pendingConfigurationConflictIsInvalid = true
-                return
-            }
-            pendingConfigurationConflict = conflict
-            pendingConfigurationConflictRevision = UUID()
-            if let record = records.first(where: {
-                $0.key.recordName == "configuration.singleton"
-                    && $0.value.recordType == "Configuration"
-            })?.value,
-                let payload = try? JSONEncoder().encode(conflict.iCloud)
+    }
+
+    func cancelStoragePreparation() { storagePreparationTask?.cancel() }
+
+    private func migrateStorage() async throws {
+        if !(try defaults.migrationComplete()) {
+            let archived: [String: Data]
+            if let value = legacyDefaults.object(forKey: recordSystemFieldsKey)
             {
-                record[Self.payloadKey] = payload as CKRecordValue
+                guard let values = value as? [String: Data] else {
+                    throw PrivateCloudSyncError.storage(.invalidLegacyMetadata)
+                }
+                archived = values
+            } else {
+                archived = [:]
+            }
+            let digests: [String: Data]
+            let payloads: [String: Data]
+            if let value = legacyDefaults.object(
+                forKey: synchronizedPayloadDigestsKey)
+            {
+                guard let values = value as? [String: Data] else {
+                    throw PrivateCloudSyncError.storage(.invalidLegacyState)
+                }
+                digests = values
+            } else {
+                digests = [:]
+            }
+            if let value = legacyDefaults.object(
+                forKey: retainedRecordPayloadsKey)
+            {
+                guard let values = value as? [String: Data] else {
+                    throw PrivateCloudSyncError.storage(.invalidLegacyState)
+                }
+                payloads = values
+            } else {
+                payloads = [:]
+            }
+            guard Set(payloads.keys).isSubset(of: Set(archived.keys)),
+                Set(digests.keys).isSubset(of: Set(archived.keys))
+            else {
+                throw PrivateCloudSyncError.storage(.invalidLegacyState)
+            }
+            let entries = Array(archived).sorted { $0.key < $1.key }
+            for offset in stride(from: 0, to: entries.count, by: 200) {
+                try Task.checkCancellation()
+                let batch = Array(
+                    entries[offset..<min(offset + 200, entries.count)]
+                ).map { ($0.key, $0.value) }
+                try defaults.importBatch(
+                    batch, digests: digests, payloads: payloads)
+                try defaults.verifyBatch(
+                    batch, digests: digests, payloads: payloads)
+                if let migrationBatchDidCommit {
+                    try await migrationBatchDidCommit(
+                        min(offset + 200, entries.count))
+                } else {
+                    await Task.yield()
+                }
+            }
+            try Task.checkCancellation()
+            for key in PrivateCloudPersistence.stateKeys {
+                if let value = legacyDefaults.object(forKey: key) {
+                    switch key {
+                    case PrivateCloudPersistence.engineKey:
+                        guard let data = value as? Data,
+                            (try? JSONDecoder().decode(
+                                CKSyncEngine.State.Serialization.self,
+                                from: data)) != nil
+                        else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    case pendingConfigurationConflictKey:
+                        guard let data = value as? Data,
+                            (try? JSONDecoder().decode(
+                                CloudConfigurationConflict.self, from: data))
+                                != nil
+                        else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    case pendingAccountChangesKey:
+                        guard let data = value as? Data,
+                            (try? JSONDecoder().decode(
+                                [CloudServerConfigurationChange].self,
+                                from: data)) != nil
+                        else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    case legacyAccountIdentityMappingsKey:
+                        guard value is [String: String] else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    case pendingLegacyRecordDeletionsKey:
+                        guard value is [String: [String]] else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    default:
+                        guard value is [String] else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
+                    }
+                    try defaults.set(value, forKey: key)
+                    guard
+                        let stored = try defaults.value(forKey: key)
+                            as? NSObject,
+                        let original = value as? NSObject,
+                        stored.isEqual(original)
+                    else {
+                        throw PrivateCloudSyncError.storage(
+                            .migrationVerificationFailed)
+                    }
+                }
+            }
+            if !entries.isEmpty {
+                try defaults.set(
+                    true, forKey: PrivateCloudPersistence.legacyNoticeNeededKey)
+            }
+            try defaults.set(true, forKey: PrivateCloudPersistence.migrationKey)
+        }
+        // Completion is durable before any legacy source is removed; this also
+        // resumes cleanup after interruption between individual key removals.
+        for key in [
+            recordSystemFieldsKey, synchronizedPayloadDigestsKey,
+            retainedRecordPayloadsKey,
+        ] + PrivateCloudPersistence.stateKeys {
+            if legacyDefaults.object(forKey: key) != nil {
+                legacyDefaults.removeObject(forKey: key)
             }
         }
-        if let data = defaults.value.data(forKey: pendingAccountChangesKey),
-            let changes = try? JSONDecoder().decode(
-                [CloudServerConfigurationChange].self,
-                from: data
-            )
+        if try defaults.value(
+            forKey: PrivateCloudPersistence.legacyNoticeNeededKey) as? Bool
+            == true
         {
-            pendingAccountChanges = Dictionary(grouping: changes, by: \.id)
-                .mapValues { candidates in
-                    candidates.sorted { $0.structuralKey < $1.structuralKey }
-                }
+            CloudStorageUpgradeNotice.detectLegacy(in: legacyDefaults)
         }
+        if let value = try defaults.dictionary(
+            forKey: legacyAccountIdentityMappingsKey)
+        {
+            guard let mappings = value as? [String: String] else {
+                throw PrivateCloudSyncError.storage(.invalidStoredState)
+            }
+            legacyAccountIdentityMappings = mappings
+        }
+        if let value = try defaults.dictionary(
+            forKey: pendingLegacyRecordDeletionsKey)
+        {
+            guard let deletions = value as? [String: [String]] else {
+                throw PrivateCloudSyncError.storage(.invalidStoredState)
+            }
+            pendingLegacyRecordDeletions = deletions.mapValues(Set.init)
+        }
+        if let data = try defaults.data(forKey: pendingConfigurationConflictKey)
+        {
+            do {
+                pendingConfigurationConflict = try JSONDecoder().decode(
+                    CloudConfigurationConflict.self, from: data)
+                pendingConfigurationConflictRevision = UUID()
+            } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
+        }
+        if let data = try defaults.data(forKey: pendingAccountChangesKey) {
+            do {
+                let changes = try JSONDecoder().decode(
+                    [CloudServerConfigurationChange].self, from: data)
+                pendingAccountChanges = Dictionary(grouping: changes, by: \.id)
+                    .mapValues {
+                        $0.sorted { $0.structuralKey < $1.structuralKey }
+                    }
+            } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
+        }
+        storageReady = true
+    }
+
+    func engineState() async throws -> Data? {
+        try await prepareStorage()
+        return try defaults.data(forKey: PrivateCloudPersistence.engineKey)
+    }
+    func clearEngineState() throws {
+        try defaults.removeObject(forKey: PrivateCloudPersistence.engineKey)
+    }
+    func saveEngineState(_ data: Data) throws {
+        try defaults.set(data, forKey: PrivateCloudPersistence.engineKey)
+    }
+
+    private func cachedRecord(_ id: CKRecord.ID) throws -> CKRecord? {
+        if let record = records[id] { return record }
+        guard let row = try defaults.metadata(id) else { return nil }
+        guard
+            let record = PrivateCloudPersistence.decodeSystemFields(
+                row.systemFields)
+        else {
+            throw PrivateCloudSyncError.storage(.invalidLegacyMetadata)
+        }
+        if let payload = row.retainedPayload {
+            record[Self.payloadKey] = payload as CKRecordValue
+        }
+        if let digest = row.synchronizedDigest {
+            synchronizedPayloadDigests[id.recordName] = digest
+        }
+        records[id] = record
+        return record
+    }
+
+    private func recordNamed(_ name: String) throws -> CKRecord? {
+        if let record = records.values.first(where: {
+            $0.recordID.recordName == name
+        }) {
+            return record
+        }
+        let context = defaults.context()
+        let rows: [PrivateCloudRecordMetadata]
+        do {
+            rows = try context.fetch(
+                FetchDescriptor<PrivateCloudRecordMetadata>(
+                    predicate: #Predicate { $0.recordName == name }))
+        } catch {
+            throw PrivateCloudSyncError.storage(
+                .metadataReadFailed(PrivateCloudSystemError(error)))
+        }
+        guard rows.count <= 1 else { throw PrivateCloudSyncError.invalidRecord }
+        guard let row = rows.first else { return nil }
+        return try cachedRecord(
+            CKRecord.ID(
+                recordName: row.recordName,
+                zoneID: CKRecordZone.ID(
+                    zoneName: row.zoneName, ownerName: row.ownerName)))
     }
 
     func prepareRecords(
         zoneID: CKRecordZone.ID
     ) async throws -> [CKRecord] {
+        try await prepareStorage()
         guard !pendingConfigurationConflictIsInvalid else {
             throw PrivateCloudSyncError.invalidRecord
         }
@@ -927,6 +1134,9 @@ actor PrivateCloudSyncStore {
         }
 
         var localRecords: [CKRecord] = []
+        if archive.slices.contains(where: { $0.recordingFormat == nil }) {
+            CloudStorageUpgradeNotice.detectLegacy(in: legacyDefaults)
+        }
         for slice in archive.slices {
             localRecords.append(
                 try record(
@@ -985,17 +1195,20 @@ actor PrivateCloudSyncStore {
         }
         for record in localRecords {
             records[record.recordID] = record
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
         }
         return localRecords.filter(needsUpload)
     }
 
-    func record(for id: CKRecord.ID) -> CKRecord? {
-        records[id]
+    func record(for id: CKRecord.ID) throws -> CKRecord? {
+        try cachedRecord(id)
     }
 
     func prepareDeletionChanges(
         zoneID: CKRecordZone.ID
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        try await prepareStorage()
         do {
             var changes: [CKSyncEngine.PendingRecordZoneChange] =
                 try await statistics.privateCloudDeletions().map {
@@ -1008,9 +1221,7 @@ actor PrivateCloudSyncStore {
                 }
             for (canonicalName, legacyNames) in pendingLegacyRecordDeletions {
                 guard
-                    let canonicalRecord = records.first(where: {
-                        $0.key.recordName == canonicalName
-                    })?.value,
+                    let canonicalRecord = try recordNamed(canonicalName),
                     !needsUpload(canonicalRecord)
                 else {
                     continue
@@ -1024,6 +1235,8 @@ actor PrivateCloudSyncStore {
                 )
             }
             return changes
+        } catch let error as PrivateCloudSyncError {
+            throw error
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
@@ -1034,6 +1247,7 @@ actor PrivateCloudSyncStore {
         deletions: [CKDatabase.RecordZoneChange.Deletion],
         checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        try await prepareStorage()
         try await checkActive()
         let fetchedResult = try await applyFetchedRecordsToleratingFailures(
             modifications.map(\.record),
@@ -1043,6 +1257,7 @@ actor PrivateCloudSyncStore {
         for deletion in deletions {
             try await checkActive()
             records.removeValue(forKey: deletion.recordID)
+            deletedRecords.insert(deletion.recordID)
             synchronizedPayloadDigests[deletion.recordID.recordName] = nil
             try await applyDeletion(
                 recordID: deletion.recordID,
@@ -1057,7 +1272,7 @@ actor PrivateCloudSyncStore {
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
-        persistRecordState()
+        try persistRecordState()
         if let failure = fetchedResult.failure {
             throw failure
         }
@@ -1069,6 +1284,7 @@ actor PrivateCloudSyncStore {
         persistState: Bool = true,
         checkActive: @Sendable () async throws -> Void = {}
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
+        try await prepareStorage()
         let result = try await applyFetchedRecordsToleratingFailures(
             fetchedRecords,
             persistState: persistState,
@@ -1091,7 +1307,7 @@ actor PrivateCloudSyncStore {
         var recordsToApply: [CKRecord] = []
         var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
         try await seedLegacyAccountMappingsFromAliases()
-        learnLegacyAccountMappings(from: fetchedRecords)
+        try learnLegacyAccountMappings(from: fetchedRecords)
         let pendingDeletionNames: Set<String>
         do {
             pendingDeletionNames = Set(
@@ -1125,15 +1341,17 @@ actor PrivateCloudSyncStore {
             do {
                 let resolution = try await resolveIncomingRecord(
                     record,
-                    previousRecord: records[record.recordID]
+                    previousRecord: try cachedRecord(record.recordID)
                 )
                 switch resolution {
                 case .applyRemote:
                     recordsToApply.append(record)
                     if canonicalization.requiresUpload {
                         records[record.recordID] = record
+                        synchronizedRecords.remove(record.recordID)
+                        dirtyRecords.insert(record.recordID)
                         pendingChanges.append(.saveRecord(record.recordID))
-                        registerLegacyRecordDeletion(
+                        try registerLegacyRecordDeletion(
                             canonicalization.legacyRecordID,
                             afterSaving: record.recordID
                         )
@@ -1141,6 +1359,8 @@ actor PrivateCloudSyncStore {
                 case .preserveLocal(let data):
                     record[Self.payloadKey] = data as CKRecordValue
                     records[record.recordID] = record
+                    synchronizedRecords.remove(record.recordID)
+                    dirtyRecords.insert(record.recordID)
                     pendingChanges.append(.saveRecord(record.recordID))
                 case .requestAccountConfirmation(let change):
                     if canonicalization.legacyRecordID != nil,
@@ -1152,24 +1372,30 @@ actor PrivateCloudSyncStore {
                             forceNewGeneration: false
                         )
                         records[localRecord.recordID] = localRecord
+                        synchronizedRecords.remove(localRecord.recordID)
+                        dirtyRecords.insert(localRecord.recordID)
                         pendingChanges.append(
                             .saveRecord(localRecord.recordID)
                         )
-                        registerLegacyRecordDeletion(
+                        try registerLegacyRecordDeletion(
                             canonicalization.legacyRecordID,
                             afterSaving: localRecord.recordID
                         )
                         continue
                     }
                     records[fetchedRecord.recordID] = fetchedRecord
-                    appendPendingAccountChange(change)
-                    registerLegacyRecordDeletion(
+                    synchronizedRecords.remove(fetchedRecord.recordID)
+                    dirtyRecords.insert(fetchedRecord.recordID)
+                    try appendPendingAccountChange(change)
+                    try registerLegacyRecordDeletion(
                         canonicalization.legacyRecordID,
                         afterSaving: record.recordID
                     )
                     markSynchronized(fetchedRecord)
                 case .requestConfigurationConfirmation(let conflict):
                     records[record.recordID] = record
+                    synchronizedRecords.remove(record.recordID)
+                    dirtyRecords.insert(record.recordID)
                     try setPendingConfigurationConflict(conflict)
                     markSynchronized(record)
                 }
@@ -1193,6 +1419,8 @@ actor PrivateCloudSyncStore {
         }
         for record in application.appliedRecords {
             records[record.recordID] = record
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
             if !pendingChanges.contains(where: {
                 if case .saveRecord(let recordID) = $0 {
                     return recordID == record.recordID
@@ -1204,32 +1432,34 @@ actor PrivateCloudSyncStore {
         }
         if persistState {
             try await checkActive()
-            persistRecordState()
+            try persistRecordState()
         }
         return (pendingChanges, firstFailure)
     }
 
-    /// Applies one fetched record. Passing `true` archives the whole cached
-    /// record state, including system fields. Callers passing `false` must
-    /// persist record state at their owning batch boundary.
+    /// Applies one fetched record. Persist only changed metadata at this boundary
+    /// or at the owning batch boundary when persistence is deferred.
     @discardableResult
     func applyFetchedRecord(
         _ record: CKRecord,
         persistSystemFields: Bool
     ) async throws -> Bool {
-        learnLegacyAccountMappings(from: [record])
+        try await prepareStorage()
+        try learnLegacyAccountMappings(from: [record])
         let canonicalization = try canonicalizedCloudRecord(record)
         let incomingRecord = canonicalization.record
         let resolution = try await resolveIncomingRecord(
             incomingRecord,
-            previousRecord: records[incomingRecord.recordID]
+            previousRecord: try cachedRecord(incomingRecord.recordID)
         )
         switch resolution {
         case .applyRemote:
             records[incomingRecord.recordID] = incomingRecord
+            synchronizedRecords.remove(incomingRecord.recordID)
+            dirtyRecords.insert(incomingRecord.recordID)
             try await apply(incomingRecord)
             if canonicalization.requiresUpload {
-                registerLegacyRecordDeletion(
+                try registerLegacyRecordDeletion(
                     canonicalization.legacyRecordID,
                     afterSaving: incomingRecord.recordID
                 )
@@ -1237,14 +1467,16 @@ actor PrivateCloudSyncStore {
                 markSynchronized(incomingRecord)
             }
             if persistSystemFields {
-                persistRecordState()
+                try persistRecordState()
             }
             return canonicalization.requiresUpload
         case .preserveLocal(let data):
             incomingRecord[Self.payloadKey] = data as CKRecordValue
             records[incomingRecord.recordID] = incomingRecord
+            synchronizedRecords.remove(incomingRecord.recordID)
+            dirtyRecords.insert(incomingRecord.recordID)
             if persistSystemFields {
-                persistRecordState()
+                try persistRecordState()
             }
             return true
         case .requestAccountConfirmation(let change):
@@ -1257,32 +1489,38 @@ actor PrivateCloudSyncStore {
                     forceNewGeneration: false
                 )
                 records[localRecord.recordID] = localRecord
-                registerLegacyRecordDeletion(
+                synchronizedRecords.remove(localRecord.recordID)
+                dirtyRecords.insert(localRecord.recordID)
+                try registerLegacyRecordDeletion(
                     canonicalization.legacyRecordID,
                     afterSaving: localRecord.recordID
                 )
                 if persistSystemFields {
-                    persistRecordState()
+                    try persistRecordState()
                 }
                 return true
             }
             records[record.recordID] = record
-            appendPendingAccountChange(change)
-            registerLegacyRecordDeletion(
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
+            try appendPendingAccountChange(change)
+            try registerLegacyRecordDeletion(
                 canonicalization.legacyRecordID,
                 afterSaving: incomingRecord.recordID
             )
             markSynchronized(record)
             if persistSystemFields {
-                persistRecordState()
+                try persistRecordState()
             }
             return false
         case .requestConfigurationConfirmation(let conflict):
             records[record.recordID] = record
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
             try setPendingConfigurationConflict(conflict)
             markSynchronized(record)
             if persistSystemFields {
-                persistRecordState()
+                try persistRecordState()
             }
             return false
         }
@@ -1296,6 +1534,8 @@ actor PrivateCloudSyncStore {
     ) async throws -> [CKSyncEngine.PendingRecordZoneChange] {
         for record in savedRecords {
             records[record.recordID] = record
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
             markSynchronized(record)
         }
         let savedStatistics = try statisticsArchive(from: savedRecords)
@@ -1313,7 +1553,14 @@ actor PrivateCloudSyncStore {
         }
         for recordID in deletedRecordIDs {
             records.removeValue(forKey: recordID)
+            deletedRecords.insert(recordID)
             synchronizedPayloadDigests[recordID.recordName] = nil
+        }
+        for (id, error) in failedRecordDeletes where error.code == .unknownItem
+        {
+            records.removeValue(forKey: id)
+            deletedRecords.insert(id)
+            synchronizedPayloadDigests[id.recordName] = nil
         }
         let confirmedDeletedRecordNames = Set(
             deletedRecordIDs.map(\.recordName)
@@ -1371,6 +1618,8 @@ actor PrivateCloudSyncStore {
                 }
             case .batchRequestFailed:
                 records[failure.record.recordID] = failure.record
+                synchronizedRecords.remove(failure.record.recordID)
+                dirtyRecords.insert(failure.record.recordID)
                 pendingChanges.append(.saveRecord(failure.record.recordID))
             default:
                 break
@@ -1380,7 +1629,7 @@ actor PrivateCloudSyncStore {
         where error.code == .batchRequestFailed {
             pendingChanges.append(.deleteRecord(recordID))
         }
-        persistRecordState()
+        try persistRecordState()
         return pendingChanges
     }
 
@@ -1422,11 +1671,15 @@ actor PrivateCloudSyncStore {
         let local = await configuration.snapshot()
         if client == server {
             records[serverRecord.recordID] = serverRecord
+            synchronizedRecords.remove(serverRecord.recordID)
+            dirtyRecords.insert(serverRecord.recordID)
             markSynchronized(serverRecord)
             return false
         }
         if local == server {
             records[serverRecord.recordID] = serverRecord
+            synchronizedRecords.remove(serverRecord.recordID)
+            dirtyRecords.insert(serverRecord.recordID)
             markSynchronized(serverRecord)
             return false
         }
@@ -1436,6 +1689,8 @@ actor PrivateCloudSyncStore {
                 iCloud: server
             )
             records[serverRecord.recordID] = serverRecord
+            synchronizedRecords.remove(serverRecord.recordID)
+            dirtyRecords.insert(serverRecord.recordID)
             try setPendingConfigurationConflict(conflict)
             markSynchronized(serverRecord)
             return false
@@ -1447,6 +1702,8 @@ actor PrivateCloudSyncStore {
             throw PrivateCloudSyncError.persistenceFailed
         }
         records[serverRecord.recordID] = serverRecord
+        synchronizedRecords.remove(serverRecord.recordID)
+        dirtyRecords.insert(serverRecord.recordID)
         return true
     }
 
@@ -1454,14 +1711,17 @@ actor PrivateCloudSyncStore {
         _ account: ServerAccount,
         zoneID: CKRecordZone.ID
     ) throws -> CKRecord {
-        pendingAccountChanges[account.id] = nil
-        persistPendingAccountChanges()
         let record = try accountRecord(
             account,
             zoneID: zoneID,
             forceNewGeneration: true
         )
+        var updated = pendingAccountChanges
+        updated[account.id] = nil
+        try persistPendingAccountChanges(updated)
         records[record.recordID] = record
+        synchronizedRecords.remove(record.recordID)
+        dirtyRecords.insert(record.recordID)
         return record
     }
 
@@ -1477,9 +1737,8 @@ actor PrivateCloudSyncStore {
     }
 
     private func appendPendingAccountChange(
-        _ change: CloudServerConfigurationChange,
-        persist: Bool = true
-    ) {
+        _ change: CloudServerConfigurationChange
+    ) throws {
         var candidates = pendingAccountChanges[change.id] ?? []
         guard
             !candidates.contains(where: {
@@ -1488,17 +1747,24 @@ actor PrivateCloudSyncStore {
         else { return }
         candidates.append(change)
         candidates.sort { $0.structuralKey < $1.structuralKey }
-        pendingAccountChanges[change.id] = candidates
-        if persist { persistPendingAccountChanges() }
+        var updated = pendingAccountChanges
+        updated[change.id] = candidates
+        try persistPendingAccountChanges(updated)
     }
 
-    private func persistPendingAccountChanges() {
-        let changes = pendingAccountChanges.values.flatMap { $0 }.sorted {
+    private func persistPendingAccountChanges(
+        _ updated: [AccountID: [CloudServerConfigurationChange]]
+    ) throws {
+        let changes = updated.values.flatMap { $0 }.sorted {
             $0.structuralKey < $1.structuralKey
         }
-        if let data = try? JSONEncoder().encode(changes) {
-            defaults.set(data, forKey: pendingAccountChangesKey)
+        let data: Data
+        do { data = try JSONEncoder().encode(changes) } catch {
+            throw PrivateCloudSyncError.storage(
+                .stateWriteFailed(PrivateCloudSystemError(error)))
         }
+        try defaults.set(data, forKey: pendingAccountChangesKey)
+        pendingAccountChanges = updated
     }
 
     private func firstPendingAccountChange(
@@ -1525,12 +1791,7 @@ actor PrivateCloudSyncStore {
         guard let conflict = pendingConfigurationConflict else {
             return nil
         }
-        guard
-            let (recordID, record) = records.first(where: {
-                $0.key.recordName == "configuration.singleton"
-                    && $0.value.recordType == "Configuration"
-            })
-        else {
+        guard let record = try recordNamed("configuration.singleton") else {
             throw PrivateCloudSyncError.invalidRecord
         }
         switch resolution {
@@ -1542,7 +1803,9 @@ actor PrivateCloudSyncStore {
             } catch {
                 throw PrivateCloudSyncError.persistenceFailed
             }
-            records[recordID] = record
+            records[record.recordID] = record
+            synchronizedRecords.remove(record.recordID)
+            dirtyRecords.insert(record.recordID)
             return record
         case .useICloud:
             do {
@@ -1552,18 +1815,18 @@ actor PrivateCloudSyncStore {
             } catch {
                 throw PrivateCloudSyncError.persistenceFailed
             }
-            clearPendingConfigurationConflict()
+            try clearPendingConfigurationConflict()
             return nil
         }
     }
 
     func completeConfigurationConflictResolution(
         revision: UUID
-    ) {
+    ) throws {
         guard pendingConfigurationConflictRevision == revision else {
             return
         }
-        clearPendingConfigurationConflict()
+        try clearPendingConfigurationConflict()
     }
 
     func acceptServerConfigurationChange(
@@ -1578,8 +1841,9 @@ actor PrivateCloudSyncStore {
         else {
             return nil
         }
-        pendingAccountChanges[accountID] = nil
-        persistPendingAccountChanges()
+        var updated = pendingAccountChanges
+        updated[accountID] = nil
+        try persistPendingAccountChanges(updated)
         do {
             if change.current == nil {
                 try await accounts.savePendingRestoredAccount(
@@ -1589,8 +1853,9 @@ actor PrivateCloudSyncStore {
                 try await accounts.save(change.incoming)
             }
         } catch {
-            pendingAccountChanges[accountID] = candidates
-            persistPendingAccountChanges()
+            var restored = pendingAccountChanges
+            restored[accountID] = candidates
+            try persistPendingAccountChanges(restored)
             throw PrivateCloudSyncError.persistenceFailed
         }
         do {
@@ -1612,27 +1877,28 @@ actor PrivateCloudSyncStore {
         zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
         guard
-            let candidates = pendingAccountChanges.removeValue(
-                forKey: accountID
-            ), let change = candidates.first
+            let candidates = pendingAccountChanges[accountID],
+            let change = candidates.first
         else {
             return nil
         }
-        persistPendingAccountChanges()
         guard let current = change.current else {
-            var ignored = ignoredAccountIDs()
+            var ignored = try ignoredAccountIDs()
             ignored.insert(accountID.rawValue)
-            defaults.set(
+            try defaults.set(
                 Array(ignored).sorted(),
                 forKey: ignoredAccountsKey
             )
+            var updated = pendingAccountChanges
+            updated[accountID] = nil
+            try persistPendingAccountChanges(updated)
             return nil
         }
         return try prepareAccountRecord(current, zoneID: zoneID)
     }
 
-    func allRecordIDs() -> [CKRecord.ID] {
-        Array(records.keys)
+    func allRecordIDs() throws -> [CKRecord.ID] {
+        Array(Set(try defaults.recordIDs()).union(records.keys))
     }
 
     func removeAllRecords() async throws {
@@ -1641,27 +1907,39 @@ actor PrivateCloudSyncStore {
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
+        try defaults.removeMetadata()
+        for key in [
+            pendingConfigurationConflictKey, recordSystemFieldsKey,
+            synchronizedPayloadDigestsKey, retainedRecordPayloadsKey,
+            PrivateCloudPersistence.engineKey,
+        ] {
+            legacyDefaults.removeObject(forKey: key)
+            try defaults.removeObject(forKey: key)
+        }
+        pendingConfigurationConflict = nil
+        pendingConfigurationConflictRevision = nil
+        pendingConfigurationConflictIsInvalid = false
+        try await prepareStorage()
         records.removeAll()
+        dirtyRecords.removeAll()
+        deletedRecords.removeAll()
         synchronizedPayloadDigests.removeAll()
-        defaults.removeObject(forKey: recordSystemFieldsKey)
-        defaults.removeObject(forKey: synchronizedPayloadDigestsKey)
-        defaults.removeObject(forKey: retainedRecordPayloadsKey)
         if pendingConfigurationConflictIsInvalid {
-            clearPendingConfigurationConflict()
+            try clearPendingConfigurationConflict()
         }
     }
 
     func ignoreAccountOnThisDevice(
         _ accountID: AccountID,
         includeStatistics: Bool
-    ) {
-        var ignored = ignoredAccountIDs()
+    ) throws {
+        var ignored = try ignoredAccountIDs()
         ignored.insert(accountID.rawValue)
-        defaults.set(Array(ignored).sorted(), forKey: ignoredAccountsKey)
+        try defaults.set(Array(ignored).sorted(), forKey: ignoredAccountsKey)
         if includeStatistics {
-            var ignoredStatistics = ignoredStatisticsAccountIDs()
+            var ignoredStatistics = try ignoredStatisticsAccountIDs()
             ignoredStatistics.insert(accountID.rawValue)
-            defaults.set(
+            try defaults.set(
                 Array(ignoredStatistics).sorted(),
                 forKey: ignoredStatisticsKey
             )
@@ -1673,6 +1951,7 @@ actor PrivateCloudSyncStore {
         includeStatistics: Bool,
         zoneID: CKRecordZone.ID
     ) async throws -> [CKRecord.ID] {
+        try await prepareStorage()
         var matchingRecordIDs = Set(
             records.values.compactMap { record in
                 if record.recordType == "ServerAccount" {
@@ -1727,6 +2006,9 @@ actor PrivateCloudSyncStore {
             }
         )
         matchingRecordIDs.formUnion(
+            try defaults.recordIDs(
+                accountID: accountID, includeStatistics: includeStatistics))
+        matchingRecordIDs.formUnion(
             legacyAccountIdentityMappings.compactMap { legacy, canonical in
                 canonical == accountID.rawValue
                     ? CKRecord.ID(
@@ -1763,7 +2045,7 @@ actor PrivateCloudSyncStore {
             zoneID: zoneID
         )
         let record =
-            records[recordID]
+            try cachedRecord(recordID)
             ?? CKRecord(recordType: type, recordID: recordID)
         do {
             record[Self.payloadKey] =
@@ -1784,7 +2066,7 @@ actor PrivateCloudSyncStore {
             zoneID: zoneID
         )
         let record =
-            records[recordID]
+            try cachedRecord(recordID)
             ?? CKRecord(recordType: "ServerAccount", recordID: recordID)
         let previousData = record[Self.payloadKey] as? Data
         let legacyAccountIDs = legacyAccountIdentityMappings.compactMap {
@@ -1899,8 +2181,8 @@ actor PrivateCloudSyncStore {
         var configurations: [CloudConfigurationSnapshot] = []
         var appliedRecords: [CKRecord] = []
         var firstFailure: PrivateCloudSyncError?
-        let ignoredStatisticsAccounts = ignoredStatisticsAccountIDs()
-        let ignoredAccounts = ignoredAccountIDs()
+        let ignoredStatisticsAccounts = try ignoredStatisticsAccountIDs()
+        let ignoredAccounts = try ignoredAccountIDs()
         for record in recordsToApply {
             try await checkActive()
             do {
@@ -1913,6 +2195,9 @@ actor PrivateCloudSyncStore {
                         ListeningSlice.self,
                         from: data
                     )
+                    guard value.recordingState != .active else {
+                        throw PrivateCloudSyncError.invalidRecord
+                    }
                     if !ignoredStatisticsAccounts.contains(
                         value.accountID.rawValue
                     ) {
@@ -1993,10 +2278,16 @@ actor PrivateCloudSyncStore {
         } catch {
             throw PrivateCloudSyncError.invalidRecord
         }
+        if slices.contains(where: { $0.recordingFormat == nil }) {
+            CloudStorageUpgradeNotice.detectLegacy(in: legacyDefaults)
+        }
         return (appliedRecords, firstFailure)
     }
 
-    private func learnLegacyAccountMappings(from cloudRecords: [CKRecord]) {
+    private func learnLegacyAccountMappings(from cloudRecords: [CKRecord])
+        throws
+    {
+        var updated = legacyAccountIdentityMappings
         var changed = false
         for record in cloudRecords where record.recordType == "ServerAccount" {
             guard let data = record[Self.payloadKey] as? Data,
@@ -2010,20 +2301,21 @@ actor PrivateCloudSyncStore {
             )
             for legacyID in payload.legacyAccountIDs + [payload.account.id]
             where legacyID != canonicalID {
-                if legacyAccountIdentityMappings[legacyID.rawValue]
+                if updated[legacyID.rawValue]
                     != canonicalID.rawValue
                 {
-                    legacyAccountIdentityMappings[legacyID.rawValue] =
+                    updated[legacyID.rawValue] =
                         canonicalID.rawValue
                     changed = true
                 }
             }
         }
         guard changed else { return }
-        defaults.set(
-            legacyAccountIdentityMappings,
+        try defaults.set(
+            updated,
             forKey: legacyAccountIdentityMappingsKey
         )
+        legacyAccountIdentityMappings = updated
     }
 
     private func seedLegacyAccountMappingsFromAliases() async throws {
@@ -2033,24 +2325,26 @@ actor PrivateCloudSyncStore {
         } catch {
             throw PrivateCloudSyncError.persistenceFailed
         }
+        var updated = legacyAccountIdentityMappings
         var changed = false
         for alias in aliases {
-            if let existing = legacyAccountIdentityMappings[
+            if let existing = updated[
                 alias.legacyID.rawValue
             ], existing != alias.canonicalID.rawValue {
                 throw PrivateCloudSyncError.invalidRecord
             }
-            if legacyAccountIdentityMappings[alias.legacyID.rawValue] == nil {
-                legacyAccountIdentityMappings[alias.legacyID.rawValue] =
+            if updated[alias.legacyID.rawValue] == nil {
+                updated[alias.legacyID.rawValue] =
                     alias.canonicalID.rawValue
                 changed = true
             }
         }
         guard changed else { return }
-        defaults.set(
-            legacyAccountIdentityMappings,
+        try defaults.set(
+            updated,
             forKey: legacyAccountIdentityMappingsKey
         )
+        legacyAccountIdentityMappings = updated
     }
 
     private func canonicalizedCloudRecord(
@@ -2094,7 +2388,7 @@ actor PrivateCloudSyncStore {
                 zoneID: record.recordID.zoneID
             )
             canonicalRecord =
-                records[canonicalIDValue]
+                try cachedRecord(canonicalIDValue)
                 ?? CKRecord(
                     recordType: record.recordType,
                     recordID: canonicalIDValue
@@ -2151,7 +2445,7 @@ actor PrivateCloudSyncStore {
                 zoneID: record.recordID.zoneID
             )
             canonicalRecord =
-                records[canonicalIDValue]
+                try cachedRecord(canonicalIDValue)
                 ?? CKRecord(
                     recordType: record.recordType,
                     recordID: canonicalIDValue
@@ -2196,7 +2490,7 @@ actor PrivateCloudSyncStore {
     private func registerLegacyRecordDeletion(
         _ legacyRecordID: CKRecord.ID?,
         afterSaving canonicalRecordID: CKRecord.ID
-    ) {
+    ) throws {
         guard let legacyRecordID,
             legacyRecordID != canonicalRecordID
         else {
@@ -2206,11 +2500,11 @@ actor PrivateCloudSyncStore {
             canonicalRecordID.recordName,
             default: []
         ].insert(legacyRecordID.recordName)
-        persistPendingLegacyRecordDeletions()
+        try persistPendingLegacyRecordDeletions()
     }
 
-    private func persistPendingLegacyRecordDeletions() {
-        defaults.set(
+    private func persistPendingLegacyRecordDeletions() throws {
+        try defaults.set(
             pendingLegacyRecordDeletions.mapValues {
                 $0.sorted()
             },
@@ -2231,7 +2525,7 @@ actor PrivateCloudSyncStore {
             case "ServerAccount":
                 let incomingPayload = try decodeAccountPayload(incomingData)
                 let incoming = incomingPayload.account
-                if ignoredAccountIDs().contains(incoming.id.rawValue) {
+                if try ignoredAccountIDs().contains(incoming.id.rawValue) {
                     return .applyRemote
                 }
                 let current = try await accounts.account(id: incoming.id)
@@ -2386,12 +2680,12 @@ actor PrivateCloudSyncStore {
         }
     }
 
-    private func ignoredAccountIDs() -> Set<String> {
-        Set(defaults.stringArray(forKey: ignoredAccountsKey) ?? [])
+    private func ignoredAccountIDs() throws -> Set<String> {
+        Set(try defaults.stringArray(forKey: ignoredAccountsKey) ?? [])
     }
 
-    private func ignoredStatisticsAccountIDs() -> Set<String> {
-        Set(defaults.stringArray(forKey: ignoredStatisticsKey) ?? [])
+    private func ignoredStatisticsAccountIDs() throws -> Set<String> {
+        Set(try defaults.stringArray(forKey: ignoredStatisticsKey) ?? [])
     }
 
     private func needsUpload(_ record: CKRecord) -> Bool {
@@ -2403,6 +2697,7 @@ actor PrivateCloudSyncStore {
     }
 
     private func markSynchronized(_ record: CKRecord) {
+        synchronizedRecords.insert(record.recordID)
         if record.recordType == "ListeningSlice"
             || record.recordType == "CompletionMilestone",
             record.recordChangeTag != nil
@@ -2417,46 +2712,18 @@ actor PrivateCloudSyncStore {
             Self.payloadDigest(data)
     }
 
-    private func persistRecordState() {
-        persistPendingLegacyRecordDeletions()
-        let archivedRecords = records.reduce(
-            into: [String: Data]()
-        ) { result, element in
-            result[element.key.recordName] = Self.encodeSystemFields(
-                element.value
-            )
-        }
-        defaults.set(archivedRecords, forKey: recordSystemFieldsKey)
-        let recordTypes = Dictionary(
-            uniqueKeysWithValues: records.map {
-                ($0.key.recordName, $0.value.recordType)
-            }
-        )
-        let durablePayloadDigests = synchronizedPayloadDigests.filter {
-            recordName, _ in
-            guard let type = recordTypes[recordName] else {
-                return false
-            }
-            return type != "ListeningSlice"
-                && type != "CompletionMilestone"
-        }
-        defaults.set(
-            durablePayloadDigests,
-            forKey: synchronizedPayloadDigestsKey
-        )
-        let retainedPayloads = records.reduce(
-            into: [String: Data]()
-        ) { result, element in
-            guard
-                element.value.recordType == "ServerAccount"
-                    || element.value.recordType == "Configuration",
-                let data = element.value[Self.payloadKey] as? Data
-            else {
-                return
-            }
-            result[element.key.recordName] = data
-        }
-        defaults.set(retainedPayloads, forKey: retainedRecordPayloadsKey)
+    private func persistRecordState() throws {
+        try persistPendingLegacyRecordDeletions()
+        try defaults.commit(
+            records: dirtyRecords.compactMap { records[$0] },
+            deleted: deletedRecords, digests: synchronizedPayloadDigests,
+            retainingPayloadFor: dirtyRecords.subtracting(synchronizedRecords))
+        lastCommittedMetadataCount = dirtyRecords.count + deletedRecords.count
+        synchronizedRecords.removeAll()
+        dirtyRecords.removeAll()
+        deletedRecords.removeAll()
+        records.removeAll()
+        synchronizedPayloadDigests.removeAll()
     }
 
     private static func encodePayload<Value: Encodable>(
@@ -2471,43 +2738,27 @@ actor PrivateCloudSyncStore {
         _ conflict: CloudConfigurationConflict
     ) throws {
         do {
-            defaults.set(
+            try defaults.set(
                 try JSONEncoder().encode(conflict),
                 forKey: pendingConfigurationConflictKey
             )
             pendingConfigurationConflict = conflict
             pendingConfigurationConflictRevision = UUID()
+        } catch let error as PrivateCloudSyncError {
+            throw error
         } catch {
-            throw PrivateCloudSyncError.persistenceFailed
+            throw PrivateCloudSyncError.storage(
+                .stateWriteFailed(PrivateCloudSystemError(error)))
         }
     }
 
-    private func clearPendingConfigurationConflict() {
+    private func clearPendingConfigurationConflict() throws {
+        try defaults.removeObject(forKey: pendingConfigurationConflictKey)
         pendingConfigurationConflict = nil
         pendingConfigurationConflictRevision = nil
         pendingConfigurationConflictIsInvalid = false
-        defaults.removeObject(forKey: pendingConfigurationConflictKey)
     }
 
-    private static func encodeSystemFields(_ record: CKRecord) -> Data {
-        let archiver = NSKeyedArchiver(requiringSecureCoding: true)
-        record.encodeSystemFields(with: archiver)
-        archiver.finishEncoding()
-        return archiver.encodedData
-    }
-
-    private static func decodeSystemFields(_ data: Data) -> CKRecord? {
-        guard
-            let unarchiver = try? NSKeyedUnarchiver(
-                forReadingFrom: data
-            )
-        else {
-            return nil
-        }
-        unarchiver.requiresSecureCoding = true
-        defer { unarchiver.finishDecoding() }
-        return CKRecord(coder: unarchiver)
-    }
 }
 
 /// One visible result may finish before CloudKit has drained. The run remains
@@ -2682,9 +2933,8 @@ actor PrivateCloudSyncLifecycle {
     }
 }
 
-public final class PrivateCloudSyncCoordinator:
-    CKSyncEngineDelegate,
-    @unchecked Sendable
+public actor PrivateCloudSyncCoordinator:
+    CKSyncEngineDelegate
 {
     public static let containerIdentifier =
         "iCloud.com.terminaloutcomes.Bleat"
@@ -2693,7 +2943,7 @@ public final class PrivateCloudSyncCoordinator:
     private let defaults: UserDefaults
     private let eventRecorder: any PrivateCloudSyncEventRecording
     private let configurationFailure: PrivateCloudSyncError?
-    private let stateKey = "bleat.cloudKit.syncEngineState.v1"
+    private let container: CKContainer
     private let enabledKey = "bleat.cloudKit.enabled.v1"
     private let zoneID = CKRecordZone.ID(
         zoneName: PrivateCloudSyncStore.zoneName,
@@ -2723,42 +2973,8 @@ public final class PrivateCloudSyncCoordinator:
             defaults: PrivateCloudDefaultsReference(defaults)
         )
         self.defaults = defaults
+        self.container = container
         self.eventRecorder = eventRecorder
-        let serialization: CKSyncEngine.State.Serialization?
-        if let data = defaults.data(forKey: stateKey) {
-            do {
-                serialization = try JSONDecoder().decode(
-                    CKSyncEngine.State.Serialization.self,
-                    from: data
-                )
-            } catch {
-                serialization = nil
-                let failure = PrivateCloudSyncFailure(
-                    operation: .persistEngineState,
-                    cause: .persistenceFailed
-                )
-                Task {
-                    let correlationID = UUID()
-                    await eventRecorder.record(
-                        PrivateCloudSyncEvent(
-                            correlationID: correlationID,
-                            operation: failure.operation,
-                            phase: .started
-                        )
-                    )
-                    await eventRecorder.record(
-                        PrivateCloudSyncEvent(
-                            correlationID: correlationID,
-                            operation: failure.operation,
-                            phase: .failed(failure),
-                            durationMilliseconds: 0
-                        )
-                    )
-                }
-            }
-        } else {
-            serialization = nil
-        }
         // Bleat synchronizes listening history and account configuration. Keep
         // that user data in the owner's private database even though the
         // container schema also exists for CloudKit's public database scope.
@@ -2770,7 +2986,7 @@ public final class PrivateCloudSyncCoordinator:
             engine = nil
             return
         }
-        engine = makeEngine(database: database, serialization: serialization)
+        engine = nil
     }
 
     private func makeEngine(
@@ -2793,16 +3009,31 @@ public final class PrivateCloudSyncCoordinator:
         databaseScope == .private ? nil : .nonPrivateDatabase
     }
 
-    private func configuredEngine() throws(PrivateCloudSyncError)
+    private func configuredEngine() async throws(PrivateCloudSyncError)
         -> CKSyncEngine
     {
         if let configurationFailure {
             throw configurationFailure
         }
-        guard let engine else {
-            throw PrivateCloudSyncError.engineUnavailable
+        if let engine { return engine }
+        let serialization: CKSyncEngine.State.Serialization?
+        do {
+            if let data = try await store.engineState() {
+                serialization = try JSONDecoder().decode(
+                    CKSyncEngine.State.Serialization.self, from: data)
+            } else {
+                serialization = nil
+            }
+        } catch let error as PrivateCloudSyncError { throw error } catch {
+            throw .storage(.invalidStoredState)
         }
-        return engine
+        // Actor reentrancy permits another caller to initialize while awaiting storage.
+        if let engine { return engine }
+        let newEngine = makeEngine(
+            database: container.privateCloudDatabase,
+            serialization: serialization)
+        engine = newEngine
+        return newEngine
     }
 
     public var isEnabled: Bool {
@@ -2861,7 +3092,12 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            let engine = try configuredEngine()
+            try await perform(.migrateLocalState) {
+                try await store.prepareStorage()
+            }
+            if let failure = await run.failure() { throw failure }
+            guard isEnabled else { throw PrivateCloudSyncError.disabled }
+            let engine = try await configuredEngine()
             try await perform(.setupZone) {
                 engine.state.add(
                     pendingDatabaseChanges: [
@@ -2926,15 +3162,18 @@ public final class PrivateCloudSyncCoordinator:
                 phase: .started
             )
         )
-        guard let engine else {
-            await recordCompletion(
-                operation: .cancel,
-                correlationID: correlationID,
-                startedAt: startedAt
-            )
-            return
+        await store.cancelStoragePreparation()
+        if let run = await lifecycle.current() {
+            await run.failCallback(
+                PrivateCloudSyncFailure(operation: .cancel, cause: .cancelled))
+            await run.requestCancellation { [self] in
+                await engine?.cancelOperations()
+            }
+            await run.waitForCancellation()
+        } else {
+            await engine?.cancelOperations()
         }
-        await engine.cancelOperations()
+
         await recordCompletion(
             operation: .cancel,
             correlationID: correlationID,
@@ -2949,7 +3188,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            let engine = try configuredEngine()
+            let engine = try await configuredEngine()
             let record = try await store.prepareAccountRecord(
                 account,
                 zoneID: zoneID
@@ -2992,6 +3231,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
+            let engine = try await configuredEngine()
             guard await store.configurationConflict() != nil,
                 let revision = await store.configurationConflictRevision()
             else {
@@ -3003,7 +3243,6 @@ public final class PrivateCloudSyncCoordinator:
             guard let record else {
                 return
             }
-            let engine = try configuredEngine()
             engine.state.add(
                 pendingRecordZoneChanges: [.saveRecord(record.recordID)]
             )
@@ -3013,7 +3252,7 @@ public final class PrivateCloudSyncCoordinator:
                     scope: .recordIDs([record.recordID])
                 )
             )
-            await store.completeConfigurationConflictResolution(
+            try await store.completeConfigurationConflictResolution(
                 revision: revision
             )
         }
@@ -3025,6 +3264,7 @@ public final class PrivateCloudSyncCoordinator:
         accept: Bool
     ) async throws(PrivateCloudSyncFailure) {
         try await perform(.resolveServerConfiguration) {
+            let engine = try await configuredEngine()
             let record: CKRecord?
             if accept {
                 record = try await store.acceptServerConfigurationChange(
@@ -3042,7 +3282,6 @@ public final class PrivateCloudSyncCoordinator:
                 return
             }
             do {
-                let engine = try configuredEngine()
                 engine.state.add(
                     pendingRecordZoneChanges: [
                         .saveRecord(record.recordID)
@@ -3074,7 +3313,7 @@ public final class PrivateCloudSyncCoordinator:
     ) async throws(PrivateCloudSyncFailure) {
         if enabled {
             try await perform(.enable) {
-                _ = try configuredEngine()
+                _ = try await configuredEngine()
                 defaults.set(true, forKey: enabledKey)
                 do {
                     try await synchronize()
@@ -3089,11 +3328,11 @@ public final class PrivateCloudSyncCoordinator:
             // Persist opt-out before cancellation or deletion can suspend or
             // fail, so foreground sync cannot repopulate the cleared zone.
             defaults.set(false, forKey: enabledKey)
+            await cancelSynchronization()
             if deleteCloudData {
-                let engine = try configuredEngine()
-                await engine.cancelOperations()
+                if let configurationFailure { throw configurationFailure }
                 await lifecycle.waitForDrain()
-                let database = engine.database
+                let database = container.privateCloudDatabase
                 do {
                     // Delete the entire app-owned zone directly. Sending the
                     // sync engine's queue could also upload pending records.
@@ -3102,7 +3341,7 @@ public final class PrivateCloudSyncCoordinator:
                     // An already absent zone has the requested empty state.
                 }
                 try await store.removeAllRecords()
-                defaults.removeObject(forKey: stateKey)
+                try await store.clearEngineState()
                 self.engine = makeEngine(database: database, serialization: nil)
             } else {
                 // Local opt-out must remain available when a source or
@@ -3121,7 +3360,7 @@ public final class PrivateCloudSyncCoordinator:
             guard isEnabled else {
                 throw PrivateCloudSyncError.disabled
             }
-            let engine = try configuredEngine()
+            let engine = try await configuredEngine()
             _ = try await store.prepareRecords(zoneID: zoneID)
             let recordIDs = try await store.recordIDs(
                 for: accountID,
@@ -3145,11 +3384,14 @@ public final class PrivateCloudSyncCoordinator:
     public func ignoreAccountOnThisDevice(
         _ accountID: AccountID,
         includeStatistics: Bool
-    ) async {
-        await store.ignoreAccountOnThisDevice(
-            accountID,
-            includeStatistics: includeStatistics
-        )
+    ) async throws(PrivateCloudSyncFailure) {
+        do {
+            try await store.prepareStorage()
+            try await store.ignoreAccountOnThisDevice(
+                accountID, includeStatistics: includeStatistics)
+        } catch {
+            throw Self.mappedFailure(operation: .deleteAccount, error: error)
+        }
     }
 
     public func handleEvent(
@@ -3171,7 +3413,7 @@ public final class PrivateCloudSyncCoordinator:
                 let data = try JSONEncoder().encode(
                     update.stateSerialization
                 )
-                defaults.set(data, forKey: stateKey)
+                try await store.saveEngineState(data)
                 await recordCompletion(
                     operation: .persistEngineState,
                     correlationID: correlationID,
@@ -3181,7 +3423,7 @@ public final class PrivateCloudSyncCoordinator:
                 await recordFailure(
                     Self.mappedFailure(
                         operation: .persistEngineState,
-                        error: PrivateCloudSyncError.persistenceFailed
+                        error: error
                     ),
                     correlationID: correlationID,
                     startedAt: startedAt
@@ -3463,7 +3705,14 @@ public final class PrivateCloudSyncCoordinator:
                     context.options.scope.contains($0)
                 },
             recordProvider: { [store] recordID in
-                await store.record(for: recordID)
+                do { return try await store.record(for: recordID) } catch {
+                    let failure = Self.mappedFailure(
+                        operation: .prepareLocalChanges, error: error)
+                    await self.lifecycle.current()?.failCallback(failure)
+                    await self.recordFailure(
+                        failure, correlationID: UUID(), startedAt: .now)
+                    return nil
+                }
             }
         )
     }

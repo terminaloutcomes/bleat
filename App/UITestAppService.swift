@@ -191,6 +191,21 @@
                 .compactMap(UITestScenario.init(rawValue:))
                 .first
             if explicitScenario != nil {
+                let noticeKeys = [
+                    "bleat.cloudStorageUpgrade.v2.detected",
+                    "bleat.cloudStorageUpgrade.v2.acknowledged",
+                ]
+                if arguments.contains("--ui-testing-cloud-storage-notice-reset")
+                    || arguments.contains(
+                        "--ui-testing-cloud-storage-notice-clear")
+                {
+                    for key in noticeKeys {
+                        UserDefaults.standard.removeObject(forKey: key)
+                    }
+                }
+                if arguments.contains("--ui-testing-cloud-storage-notice") {
+                    CloudStorageUpgradeNotice.detectLegacy(in: .standard)
+                }
                 PlaybackPositionStore.shared.clearLastPlaying()
                 do {
                     try PlaybackPositionStore.shared.remove(

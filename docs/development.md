@@ -276,6 +276,13 @@ schemas differ, and the CloudKit schema pull-request check requires the same
 parity. CloudKit-disabled and Personal Team archives still validate the desired
 schema against the code but do not require production parity.
 
+Xcode bootstraps the Rust build helpers with the macOS SDK and clears inherited
+`RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER` settings for that compilation. A
+persistent compiler-cache process can retain an earlier build phase's sandbox
+and cannot safely write a fresh Xcode build directory. The standalone capability
+validator uses the same compiler environment. This is checked by the
+`release_versions` regression target.
+
 The physical-device workflows use paid capabilities by default:
 
 ```sh
@@ -428,7 +435,7 @@ evidence chain. The archive marketing version defaults to the date component of
 that build number in `YYYY.MM.DD` format. Set `BLEAT_MARKETING_VERSION` to a
 valid calendar date only when a reproducible or otherwise explicit release
 version is required. An explicit `BLEAT_BUILD_NUMBER` must retain the UTC
-timestamp shape and match the marketing-version date. Both supplied values are
+timestamp shape and be on or after the marketing-version date. Both supplied values are
 propagated unchanged after validation. Update `MARKETING_VERSION` in `project.yml`, add the
 matching dated changelog section, bump the project's fallback UTC build number,
 and regenerate the Xcode project before every new release version.
@@ -436,8 +443,19 @@ and regenerate the Xcode project before every new release version.
 configurations, including the fallback build date and nonempty latest changelog
 section. CI, every Xcode app build, archive, upload, and phone deployment enforce
 this check. A timestamp or explicit archive version cannot override stale
-project metadata. Phone deployments resolve a fresh UTC build number instead
-of reusing the project's fallback build number.
+project metadata. Phone builds and deployments keep the marketing version from `project.yml` and
+resolve one fresh UTC build number instead of reusing the project's fallback.
+Rebuilding a released version on a later day is supported; it does not create a
+new marketing version or require a source-version bump. Source and generated
+fallback metadata must still agree with the release date. Device build and
+signed-capability verification are implemented in `scripts/src/device_build.rs`;
+`scripts/build-device.sh` is its thin CLI entry point.
+
+Xcode's Rust build preparation and standalone capability validator launch
+Cargo through `xcrun --sdk macosx` so
+native host dependencies use macOS headers even during iPhone and Simulator
+builds. This selection is scoped to Cargo; the application retains its target
+SDK. `mise run iphone` requires no caller-supplied SDK or compiler flags.
 
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.
@@ -721,3 +739,30 @@ runs passed and were superseded by the final three-test run after adding date an
 The live build emitted an upstream OpenTelemetry package warning about its
 deprecated watchOS minimum; the selected live test executed and passed. Empty
 unselected SwiftPM test bundles are not counted as additional coverage.
+
+## CloudKit metadata migration and listening records
+
+`docs/design/cloud-sync-storage.md` describes issue #355's growing local listening
+segments, immutable finalized CloudKit payloads, and incremental metadata store.
+The SwiftData store is `Library/Application Support/Bleat/Bleat.store` inside the
+app data container; preserve its SQLite `-wal` and `-shm` companions when taking
+a private copy. The legacy preference dictionary contains secure system-field
+archives, not listening-history payloads. Do not commit or publish phone extracts.
+
+The user approved the native synchronous SwiftData fetch/save boundary on the
+owning persistence actor. ModelContext has no native asynchronous transaction
+API; this boundary runs off MainActor and must not be replaced by a semaphore,
+dispatch wrapper, or an async-to-sync protocol fallback. Remove it when native
+async transactions become available. Migration commits/verifies batches before
+removing legacy keys; malformed input and I/O failures preserve the source.
+
+Focused regression suites are `StatisticsTests`, `StatisticsExplorationTests`,
+`PrivateCloudSyncTests`, `PrivateCloudPersistenceTests`, and
+`PersistenceMigrationTests`. The large-store test exercises a 200-record update
+in a synthetic 58,404-record database. Native app tests cover the upgrade notice
+and its device-local acknowledgment, including arbitrary-executor notification
+delivery while CloudKit remains suspended. Signed-device migration on 2026-10-14
+preserved the extracted history and imported metadata; see the traceability row
+for evidence. Mixed-version physical testing with Bleat 0.1.3 verified explicitly matched
+records in both directions and preserved original history; see traceability.
+Host and simulator tests alone do not prove that journey.

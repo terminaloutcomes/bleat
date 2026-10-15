@@ -235,7 +235,8 @@
   ],
   "BleatCoreTests.HTTPTransportTests": [
     "testEndpointRouterUsesLocalServerAndPreservesPathPrefix()",
-    "testEndpointRouterTemporarilySkipsFailedLocalServer()",
+    "testEndpointRouterSkipsFailedLocalServerUntilRevalidated()",
+    "testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe(prefix:)",
     "testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange()",
     "testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated()",
     "testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation()",
@@ -243,7 +244,7 @@
     "testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable()",
     "testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL()",
     "testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy()",
-    "testSuccessfulLocalUseClearsLocalCooldown()",
+    "testSuccessfulProbeRestoresFailedLocalServer()",
     "testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()",
     "testEndpointRouterStreamsEveryServerConnectionPurpose()",
     "testURLSessionTransportReturnsTypedHTTPResponse()",
@@ -314,7 +315,8 @@
     "testAuthenticationPacketKeepsTokenOutOfSocketURL()",
     "testRetiredStreamTerminationCannotStopReplacement()",
     "testStopWhileRestoringEndpointDoesNotRetrieveCredentials()",
-    "testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()"
+    "testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket()",
+    "testRoutingAndEndpointPreferenceChangesPreservePendingConnection()"
   ],
   "BleatCoreTests.LocalPlaybackSessionTests": [
     "testBatchUsesExactAuthenticatedContractAndListeningTime()",
@@ -374,7 +376,8 @@
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
-    "statisticsCacheMigrationPreservesReleasedLedger()"
+    "statisticsCacheMigrationPreservesReleasedLedger()",
+    "cloudMetadataSchemaUpgradePreservesLegacyListeningRows()"
   ],
   "BleatCoreTests.PersistenceModelCatalogTests": [
     "testCatalogListsEveryPersistentModelInCore()",
@@ -431,6 +434,7 @@
     "testBatchedAccountConflictsPersistCompletedStateAfterRecreation()",
     "testSavedRecordSystemFieldsSurviveStoreRecreation()",
     "testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend()",
+    "testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction()",
     "testUnconfirmedRecordsRemainPreparedForRetry()",
     "testOnlyChangedConfigurationIsPreparedAfterBaseline()",
     "testSynchronizedStatisticsAreExcludedFromLaterPreparation()",
@@ -446,7 +450,9 @@
     "testFetchedStatisticsBatchIsImportedIdempotently()",
     "testPendingConfigurationConflictSurvivesStoreRecreation()",
     "testInvalidPersistedConfigurationConflictFailsClosed()",
-    "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()"
+    "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()",
+    "testFailedPendingStateSavesPreserveRetryState()",
+    "testAccountDeletionAfterCacheEvictionPreservesHistory()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
     "testOlderServerReadsAllProgressFromCurrentUser()",
@@ -537,6 +543,7 @@
     "duplicateCompletionEventsCountOneHistoricalRuntime()",
     "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
     "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
+    "rangeResetDiscardsGrowingSegmentAfterCheckpoint(second:)",
     "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
@@ -546,6 +553,7 @@
     "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
     "testAccumulatorCountsAudiblePlaybackAndRejectsSeekTime()",
     "testRepositorySummarizesAndAccountsForDeliveredTime()",
+    "testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()",
     "testSessionIdentityIncludesAccount()",
     "testAmbiguousSyncKeepsExactLocalTimeAndBoundsAllDevices()",
     "testInvalidArchiveLeavesLedgerUnchanged()",
@@ -554,7 +562,11 @@
     "testRangeResetRejectsPartiallySyncedSplitSession()",
     "testRangeResetRejectsMixedConfirmedAndUncertainSplitSession()",
     "testRangeResetCannotResendConfirmedRetainedTime()",
-    "testCumulativeListeningTimeSurvivesAcknowledgementAndRetry()"
+    "checkpointsExtendOneRecordAndDoNotDoubleCount()",
+    "restartRecoversActiveProgressOnceUnderTheSameIdentity()",
+    "pausesRateChangesAndStaleSamplesPreserveExactTotals()",
+    "midnightSplitsAnObservedIntervalWithoutLosingTime()",
+    "finalizedPayloadIsReadableByTheLegacySliceShape()"
   ],
   "BleatCoreTests.TelemetryAuthenticationTests": [
     "testCachedTokenAvailabilityDoesNotRefresh()",
@@ -617,5 +629,19 @@
   "BleatTranscriptionTests.WholeBookTranscriptTimelineTests": [
     "addsChapterOffset()",
     "rejectsInvalidTimes(relativeStart:duration:chapterStart:)"
+  ],
+  "BleatCoreTests.PrivateCloudPersistenceTests": [
+    "migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources()",
+    "cancelledMigrationRetainsCommittedProgressAndCoalescesCallers()",
+    "malformedStoredStateDoesNotBecomeAnEmptyDefault()",
+    "secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap()",
+    "nativeStorageFailureRetainsItsSpecificDomainCodeAndStage()",
+    "failedMigrationSaveRetainsLegacyPreferences()",
+    "partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows()",
+    "malformedCoordinatorStateRetainsAllLegacyData()",
+    "migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource()",
+    "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection()",
+    "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows()",
+    "malformedBookkeepingContentsRemainRetained()"
   ]
 }

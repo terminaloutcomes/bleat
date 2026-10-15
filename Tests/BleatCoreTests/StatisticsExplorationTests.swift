@@ -440,6 +440,65 @@ struct StatisticsExplorationTests {
         #expect(try await repository.summary().localRealSeconds == 2)
     }
 
+    @Test(arguments: [5, 7])
+    func rangeResetDiscardsGrowingSegmentAfterCheckpoint(second: Int)
+        async throws
+    {
+        let repository = try repository()
+        let other = AccountID(rawValue: "other")
+        let session = PlaybackSessionID(rawValue: "range-reset")
+        func sample(accountID: AccountID, second: Int)
+            -> StatisticsPlaybackSample
+        {
+            StatisticsPlaybackSample(
+                accountID: accountID, itemID: item, sessionID: session,
+                observedAt: date.addingTimeInterval(Double(second)),
+                monotonicTime: Double(second),
+                wholeBookPosition: Double(second), playbackRate: 1,
+                playbackGeneration: 1, isAudibleAndAdvancing: true,
+                chapter: nil, title: "Book", author: "Author", duration: 100)
+        }
+        for selectedAccount in [account, other] {
+            for time in 0...second {
+                try await repository.record(
+                    sample(accountID: selectedAccount, second: time))
+            }
+        }
+        let original = try #require(
+            try await repository.archive().slices.first {
+                $0.accountID == account
+            })
+        #expect(original.realSeconds == 5)
+        try await repository.reset(
+            query: StatisticsQuery(
+                accountID: account, start: date,
+                end: date.addingTimeInterval(60)))
+        #expect(
+            try await repository.summary().localRealSeconds == 5)
+
+        // Continuing playback must start a new segment without resurrecting
+        // the deleted checkpoint or affecting the other account's segment.
+        for time in (second + 1)...(second + 6) {
+            for selectedAccount in [account, other] {
+                try await repository.record(
+                    sample(accountID: selectedAccount, second: time))
+            }
+        }
+        try await repository.finish(sessionID: session)
+        let slices = try await repository.archive().slices
+        let replacement = try #require(
+            slices.first { $0.accountID == account })
+        #expect(slices.count == 2)
+        #expect(replacement.id != original.id)
+        #expect(replacement.realSeconds == 5)
+        #expect(
+            replacement.startedAt == date.addingTimeInterval(Double(second + 1))
+        )
+        #expect(
+            slices.first { $0.accountID == other }?.realSeconds
+                == Double(second + 6))
+    }
+
     @Test
     func dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()
         async throws

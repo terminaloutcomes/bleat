@@ -46,11 +46,18 @@ private func pullToRefresh(_ element: XCUIElement) {
 
 @MainActor
 func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
-    let notNow = app.buttons["Not Now"]
-    if notNow.waitForExistence(timeout: 5) {
-        notNow.tap()
-        _ = notNow.waitForNonExistence(timeout: 3)
+    let sheet = app.sheets["Save Password?"]
+    guard sheet.waitForExistence(timeout: 5) else { return }
+    let notNow = sheet.buttons["Not Now"]
+    let ready = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "exists == true AND hittable == true"),
+        object: notNow)
+    guard XCTWaiter.wait(for: [ready], timeout: 10) == .completed else {
+        XCTFail("Save Password dismissal did not become interactive")
+        return
     }
+    notNow.tap()
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 10))
 }
 
 final class BleatUITests: XCTestCase {
@@ -1405,6 +1412,39 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch() {
+        let scenario = "--ui-testing-signed-in"
+        let noticeArgument = "--ui-testing-cloud-storage-notice"
+        let app = launch(
+            scenario: scenario,
+            additionalArguments: [
+                noticeArgument, "--ui-testing-cloud-storage-notice-reset",
+            ])
+        defer {
+            app.terminate()
+            app.launchArguments = [
+                scenario, "--ui-testing-cloud-storage-notice-clear",
+            ]
+            app.launch()
+            app.terminate()
+        }
+        let notice = app.alerts["Cloud storage update"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        notice.buttons["OK"].tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertFalse(notice.waitForExistence(timeout: 2))
+        app.terminate()
+        app.launchArguments = [scenario, noticeArgument]
+        app.launch()
+        XCTAssertFalse(notice.waitForExistence(timeout: 2))
+    }
+
+    @MainActor
     func testSignedInAlertsPresentInSequence() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
@@ -2370,7 +2410,11 @@ final class BleatUITests: XCTestCase {
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.clear", direction: .up
         )
-        app.buttons["settings.icloud.clear"].tap()
+        let clear = app.buttons["settings.icloud.clear"]
+        let diagnostics = app.buttons["settings.diagnostics"]
+        XCTAssertTrue(diagnostics.exists)
+        XCTAssertGreaterThan(clear.frame.minY, diagnostics.frame.maxY)
+        clear.tap()
         let confirm = app.alerts["Clear My CloudKit Data?"].buttons[
             "settings.icloud.clear.confirm"
         ].firstMatch
@@ -2380,6 +2424,8 @@ final class BleatUITests: XCTestCase {
             app.staticTexts["settings.icloud.clear.completed"]
                 .waitForExistence(timeout: 5)
         )
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.enabled", direction: .down)
         XCTAssertEqual(
             app.switches["settings.icloud.enabled"].value as? String, "0")
         tabButton("Library", in: app).tap()
@@ -3696,10 +3742,18 @@ final class BleatUITests: XCTestCase {
         setting.name = "Transcript navigation system setting"
         setting.lifetime = .keepAlways
         add(setting)
+        let highlight = app.buttons["transcription.currentPositionHighlight"]
+        let completed = app.staticTexts["transcription.completedHighlightCount"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 3))
+        XCTAssertEqual(Int(completed.label), 0)
         action.tap()
 
-        let highlight = app.buttons["transcription.currentPositionHighlight"]
-        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        // App idling can outlast the pulse. The audit counter records completed
+        // highlight lifecycles without changing the real two-second lifetime.
+        let firstHighlight = expectation(
+            for: NSPredicate(format: "label == %@", "1"),
+            evaluatedWith: completed)
+        wait(for: [firstHighlight], timeout: 3)
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
         let target = app.buttons["transcription.segment.1.30"]
         XCTAssertTrue(target.isHittable)
@@ -3711,7 +3765,10 @@ final class BleatUITests: XCTestCase {
         }
         XCTAssertTrue(action.isHittable)
         action.tap()
-        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        let secondHighlight = expectation(
+            for: NSPredicate(format: "label == %@", "2"),
+            evaluatedWith: completed)
+        wait(for: [secondHighlight], timeout: 3)
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
         XCTAssertTrue(target.isHittable)
         XCTAssertTrue(target.label.contains("Another DOOMSDAY mention"))

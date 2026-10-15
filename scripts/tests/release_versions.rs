@@ -102,3 +102,6 @@ fn command_line_resolvers_use_environment_without_shells() {
         .expect("marketing resolver starts");
     assert_eq!(failure.status.code(), Some(65));
 }
+#[cfg(target_os = "macos")]
+#[path = "release_versions/xcode_host_sdk.rs"]
+mod xcode_host_sdk;

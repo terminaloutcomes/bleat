@@ -30,12 +30,13 @@ final class HTTPTransportTests {
     }
 
     @Test
-    func testEndpointRouterTemporarilySkipsFailedLocalServer() async throws {
+    func testEndpointRouterSkipsFailedLocalServerUntilRevalidated() async throws
+    {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        await router.markLocalUnavailable(for: primary, duration: 60)
+        await router.markLocalUnavailable(for: primary)
 
         let requestURL = try #require(
             URL(string: "https://books.example/api/libraries"))
@@ -46,6 +47,96 @@ final class HTTPTransportTests {
         #expect(candidates[0].url == requestURL)
     }
 
+    @Test(arguments: ["", "/audiobookshelf"])
+    func testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe(prefix: String)
+        async throws
+    {
+        let router = ServerEndpointRouter()
+        let primary = try NormalizedServerURL("https://books.example\(prefix)")
+        let local = try NormalizedServerURL("https://books.home/local\(prefix)")
+        await router.configure(primary: primary, local: local)
+        let url = try #require(
+            URL(
+                string:
+                    "https://books.example\(prefix)/api/session/session/sync"))
+        let oldLocal = await router.preferredCandidate(for: url)
+        let recorder = RoutedRequestRecorder()
+        URLProtocolStub.setHandler { request in
+            recorder.append(request.materializingBody())
+            let url = try #require(request.url)
+            if url.host == "books.home" {
+                throw URLError(.timedOut)
+            }
+            let response = try #require(
+                HTTPURLResponse(
+                    url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                    headerFields: nil))
+            return (response, Data())
+        }
+        defer { URLProtocolStub.setHandler(nil) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        let transport = URLSessionHTTPTransport(
+            configuration: configuration, endpointRouter: router)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer fixture", forHTTPHeaderField: "Authorization")
+        request.httpBody = Data(
+            #"{"currentTime":12,"duration":30,"timeListened":0}"#.utf8)
+        let traced = TracedHTTPRequest(request: request, endpoint: .syncSession)
+
+        let initialResponse = try await transport.send(traced)
+        #expect(initialResponse.statusCode == 200)
+        // An older in-flight local success is not a fresh reachability probe.
+        await router.recordSuccessfulUse(oldLocal, endpoint: .syncSession)
+        for _ in 0..<4 {
+            let response = try await transport.send(traced)
+            #expect(response.statusCode == 200)
+        }
+        let requests = recorder.requests()
+        #expect(requests.count == 6)
+        #expect(requests.filter { $0.url?.host == "books.home" }.count == 1)
+        #expect(requests.filter { $0.url == url }.count == 5)
+        #expect(requests.allSatisfy { $0.httpMethod == "POST" })
+        #expect(
+            requests.allSatisfy {
+                $0.value(forHTTPHeaderField: "Authorization")
+                    == "Bearer fixture"
+            })
+        for sent in requests {
+            let body = try #require(sent.httpBody)
+            let payload = try JSONDecoder().decode(
+                [String: Double].self, from: body)
+            #expect(
+                payload == [
+                    "currentTime": 12, "duration": 30, "timeListened": 0,
+                ])
+        }
+        let failedAvailability = await router.localAvailability(for: primary)
+        #expect(failedAvailability == .temporarilyUnavailable)
+
+        let failedProbe = await router.networkPathDidChange()
+        await router.markLocalUnavailable(
+            for: primary, pathGeneration: failedProbe)
+        await router.finishNetworkPathEvaluation(failedProbe)
+        let afterFailedProbe = try await transport.send(traced)
+        #expect(afterFailedProbe.statusCode == 200)
+        #expect(
+            recorder.requests().filter { $0.url?.host == "books.home" }.count
+                == 1)
+
+        let successfulProbe = await router.networkPathDidChange()
+        await router.markLocalAvailable(
+            for: primary, pathGeneration: successfulProbe)
+        await router.finishNetworkPathEvaluation(successfulProbe)
+        let recovered = await router.preferredCandidate(for: url)
+        #expect(recovered.isLocal)
+        #expect(
+            recovered.url.path == "/local\(prefix)/api/session/session/sync")
+        let recoveredAvailability = await router.localAvailability(for: primary)
+        #expect(recoveredAvailability == .available)
+    }
+
     @Test
     func testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange()
         async throws
@@ -54,7 +145,7 @@ final class HTTPTransportTests {
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        await router.markLocalUnavailable(for: primary, duration: 60)
+        await router.markLocalUnavailable(for: primary)
 
         let failedPreferredServer = await router.preferredServer(
             for: primary
@@ -231,14 +322,17 @@ final class HTTPTransportTests {
     }
 
     @Test
-    func testSuccessfulLocalUseClearsLocalCooldown() async throws {
+    func testSuccessfulProbeRestoresFailedLocalServer() async throws {
         let router = ServerEndpointRouter()
         let primary = try NormalizedServerURL("https://books.example")
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
-        await router.markLocalUnavailable(for: primary, duration: 60)
+        await router.markLocalUnavailable(for: primary)
 
-        await router.markLocalAvailable(for: primary)
+        let generation = await router.networkPathDidChange()
+        await router.markLocalAvailable(
+            for: primary, pathGeneration: generation)
+        await router.finishNetworkPathEvaluation(generation)
 
         let preferredServer = await router.preferredServer(for: primary)
         #expect(preferredServer.server == local)
@@ -539,7 +633,7 @@ private actor DiagnosticRecorderSpy: DiagnosticRecording {
 }
 
 private final class URLProtocolStub: URLProtocol, @unchecked Sendable {
-    typealias Handler = @Sendable (URLRequest) -> (URLResponse, Data)
+    typealias Handler = @Sendable (URLRequest) throws -> (URLResponse, Data)
 
     private static let handlerLock = NSLock()
     nonisolated(unsafe) private static var handler: Handler?
@@ -572,7 +666,14 @@ private final class URLProtocolStub: URLProtocol, @unchecked Sendable {
             return
         }
 
-        let (response, data) = currentHandler(request)
+        let response: URLResponse
+        let data: Data
+        do {
+            (response, data) = try currentHandler(request)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
         client?.urlProtocol(
             self,
             didReceive: response,
@@ -603,5 +704,18 @@ private final class CookieFlowRecorder: @unchecked Sendable {
         lock.withLock {
             cookie
         }
+    }
+}
+
+private final class RoutedRequestRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [URLRequest] = []
+
+    func append(_ request: URLRequest) {
+        lock.withLock { recorded.append(request) }
+    }
+
+    func requests() -> [URLRequest] {
+        lock.withLock { recorded }
     }
 }

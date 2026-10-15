@@ -568,19 +568,51 @@ previously successful validation; only explicit URL replacement/removal or
 account removal clears it.
 
 The app monitors changes to the available network path using the platform
-Network framework on iOS and native macOS. A path change clears the temporary
+Network framework on iOS and native macOS. Effective routing changes compare
+ordered interface indices/types and usage, gateway endpoints, interface IP addresses, and
+IPv4/IPv6/DNS capabilities in memory, independently of link quality. Availability,
+Low Data Mode, and cost transitions are also actionable. These snapshots never
+leave the device or establish local-server trust. Interface address enumeration
+and decoding failures retain distinct typed diagnostic reasons. A meaningful
+path change clears the temporary
 local-endpoint failure state and performs a non-mutating `GET <local>/status`
 probe for each validated local alias and an authenticated native-credential
 probe for an unvalidated alias. The app does not infer home-network
 identity from Wi-Fi, DNS search domains, or interface names. A successful probe
-restores local-first routing; a failed probe keeps the bounded primary fallback.
+restores local-first routing; a failed probe keeps primary routing for the
+current path. Local failure does not expire on a timer: ordinary requests,
+including playback synchronization, keep using primary until a fresh successful
+probe restores local availability. Late responses from requests issued before
+the failure cannot restore local routing. Replacing the configured local URL
+starts a new availability evaluation.
 Live WebSocket connections use the same endpoint selection and fallback policy.
 They are optional foreground refresh channels: when `NWPath.isConstrained` is
 true the app closes the current socket, suppresses reconnects, and also sets
 `URLRequest.allowsConstrainedNetworkAccess` to false. Becoming unconstrained
 starts one connection and one catch-up browse refresh. Duplicate path updates
-that do not cross the realtime-allowed boundary do not replace the active
-subscription. Inactive scenes suspend both socket consumption and browse-refresh
+and quality-only notifications do not invalidate endpoint selection, probe the
+server, replace a healthy subscription, or schedule synchronization/download
+recovery. An existing socket is preserved across routing, cost, and selected-server
+preference changes; those changes are not socket failures. Low Data Mode and
+an unavailable network stop the subscription. Leaving Low Data Mode or
+recovering network availability starts one subscription and one catch-up refresh.
+After an actual transport failure, the next connection uses the current preferred server.
+The preserved connection adopts the latest endpoint generation without changing
+its actual server, so a subsequent transport failure still records current-path
+fallback. Endpoint setup is registered before any actor hop; a
+new subscription waits for its own account's authoritative endpoint selection,
+without waiting for another account's unavailable local server. Saved-account
+probes run independently. Ordered callback consumption, probe generations, and
+subscription tokens reject retired callbacks and in-flight completions.
+Actual socket failures retain bounded backoff and primary fallback. Typed local
+diagnostics record path classification, endpoint-probe, subscription-start,
+and subscription-stop stages without network identifiers.
+Issue [#353](https://github.com/terminaloutcomes/bleat/issues/353) retains signed
+device validation for stable Wi-Fi foreground/locked playback, real network
+switches, Low Data Mode, and before/after CPU/network/energy captures. Battery
+attribution remains unmeasured. Public routing snapshots cannot distinguish two
+networks with identical interface, address, gateway, and capability values;
+transport failure remains authoritative for recovery in that case. Inactive scenes suspend both socket consumption and browse-refresh
 scheduling, including network-recovery notifications. Cancellation stops each
 subsequent stage of an in-flight live refresh; foreground return performs one
 catch-up refresh. Progress-only events patch the account-scoped finished state
@@ -1697,6 +1729,14 @@ The app may use `/api/me/listening-stats` for a fast summary, but canonical per-
 Maintain two related sources:
 
 - local `ListeningSlice` rows for exact playback observed by this app;
+  new continuous segments retain one stable identity and extend their end time,
+  position and accumulated audible listening quantities in place. Five seconds
+  is a durable save interval, not a record-length limit. Pauses, buffering,
+  seeks, rate/chapter changes, playback-context changes and UTC reporting-day
+  boundaries finalize segments. Existing history retains its identities and
+  values. Recovered active rows finalize once without carrying monotonic samples
+  across process launches. Incremental summaries count only new contributions;
+  original start dates retain the existing range-selection contract.
 - `RemoteSessionSnapshot` rows for history imported from each Audiobookshelf account.
 
 For all-device real time, aggregate remote snapshots plus local session time not yet known to be represented remotely. Associate every local slice with its online or offline UUIDv4 playback-session ID. After a confirmed online 2xx sync, advance the local expected remote total immediately. After a successful offline-session import, remove that session's pending overlay. When the corresponding remote session is later fetched, replace the expected snapshot rather than adding a second copy.
@@ -1795,6 +1835,30 @@ Audiobookshelf outage. Local diagnostics exclude localized descriptions,
 CloudKit record identifiers, and CloudKit `userInfo`. On native macOS, remote
 OpenTelemetry export is out of scope and the same typed lifecycle remains
 on-device only. The iOS build retains the reviewed remote telemetry behavior.
+Only finalized listening segments enter CloudKit; published listening records
+remain immutable for clients that insert by stable identity. Lifecycle sync
+finalizes current local segments before upload, and later playback starts new
+segments. Other devices see them after finalization and synchronization. New
+finalized payloads have an optional continuous-segment format marker; legacy
+payloads without that marker remain supported.
+
+Individual CloudKit record metadata and durable coordinator state live in the
+existing local SwiftData store. Fetched/sent callbacks persist only changed
+metadata rows and deletions, never a full UserDefaults record dictionary. The
+versioned schema upgrade preserves existing history; a restartable legacy
+import verifies opaque archive fidelity and structured state before removing
+source preferences. CloudKit waits for migration; browsing and playback do not.
+Invalid data or save/verification failures retain the source and surface the
+specific typed processing failure rather than resetting sync state.
+
+Successful legacy reconciliation queues one acknowledged **Cloud storage
+update** notice per installation across accounts and relaunches. It recommends
+updating every device to the fixed introducing release, 2026.10.14, or later,
+without claiming that an outdated device is currently running. It does not
+block synchronization or remove history. Design, signed-device migration and
+matched bidirectional mixed-version evidence are tracked in `docs/design/cloud-sync-storage.md` and
+[issue #355](https://github.com/terminaloutcomes/bleat/issues/355).
+
 Successful record system fields, including server change tags, must survive
 process relaunch. Mutable records retain the last successfully synchronized
 payload digest, and statistics rows retain explicit synchronized state plus
@@ -1810,7 +1874,7 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
-Settings provides **Clear My CloudKit Data**, including when synchronization is
+Settings provides **Clear My CloudKit Data** in its own section below Diagnostics, including when synchronization is
 already disabled. After confirmation, Bleat turns off synchronization on this
 device, cancels and drains its current sync, and directly deletes its entire
 private record zone, including unrecognized records. It clears local sync

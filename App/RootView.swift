@@ -1560,6 +1560,7 @@ private struct DiagnosticsView: View {
 }
 
 enum SignedInAlert: Equatable {
+    case cloudStorageUpgrade
     case series(AppFailure)
     case cellular(PendingCellularDownload)
     case playback(AppFailure)
@@ -1567,11 +1568,13 @@ enum SignedInAlert: Equatable {
     case progress(AppFailure)
 
     enum Source: Hashable {
-        case series, cellular, playback, bookAction, progress
+        case series, cellular, playback, bookAction, progress,
+            cloudStorageUpgrade
     }
 
     var source: Source {
         switch self {
+        case .cloudStorageUpgrade: .cloudStorageUpgrade
         case .series: .series
         case .cellular: .cellular
         case .playback: .playback
@@ -1582,6 +1585,7 @@ enum SignedInAlert: Equatable {
 
     var title: String {
         switch self {
+        case .cloudStorageUpgrade: "Cloud storage update"
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.title
@@ -1592,6 +1596,8 @@ enum SignedInAlert: Equatable {
 
     var message: String {
         switch self {
+        case .cloudStorageUpgrade:
+            "We’ve changed how Bleat stores listening history in iCloud. Please update Bleat on all your devices to version \(CloudStorageUpgradeNotice.introducedInVersion) or later. Your existing history is preserved."
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.message
@@ -1643,7 +1649,9 @@ final class SignedInAlertQueue {
         active = nil
         pending = []
         observed = Dictionary(
-            uniqueKeysWithValues: candidates.map { ($0.source, $0) }
+            uniqueKeysWithValues: candidates.filter {
+                $0.source != .cloudStorageUpgrade
+            }.map { ($0.source, $0) }
         )
     }
 
@@ -1760,6 +1768,16 @@ private struct SignedInView: View {
         }
         .alert(item: alertBinding) { entry in
             switch entry.alert {
+            case .cloudStorageUpgrade:
+                Alert(
+                    title: Text(entry.alert.title),
+                    message: Text(entry.alert.message),
+                    dismissButton: .default(Text("OK")) {
+                        // Acknowledgment belongs to this installation-wide notice,
+                        // even if foreground/account changes replaced its queue entry.
+                        model.acknowledgeCloudStorageUpgradeNotice()
+                        alertQueue.finish(entry)
+                    })
             case .cellular:
                 Alert(
                     title: Text(entry.alert.title),
@@ -1839,6 +1857,9 @@ private struct SignedInView: View {
 
     private var alertCandidates: [SignedInAlert] {
         var candidates: [SignedInAlert] = []
+        if scenePhase == .active, model.cloudStorageUpgradeNoticePending {
+            candidates.append(.cloudStorageUpgrade)
+        }
         if let failure = model.seriesDownloadFailure {
             candidates.append(.series(failure))
         }
@@ -1880,6 +1901,10 @@ private struct SignedInView: View {
     ) {
         guard alertQueue.active?.id == entry.id else { return }
         switch entry.alert {
+        case .cloudStorageUpgrade:
+            // Only the notice's OK action acknowledges it; presentation changes
+            // can dismiss an alert without a user response.
+            break
         case .series:
             model.dismissSeriesDownloadFailure()
         case .cellular(let pending):
@@ -6388,6 +6413,7 @@ private struct SettingsView: View {
                     )
                 }
 
+                cloudDataClearSection
             }
             .accessibilityIdentifier("settings.form")
             .navigationTitle("Settings")
@@ -6486,6 +6512,33 @@ private struct SettingsView: View {
         }
     }
 
+    private var cloudDataClearSection: some View {
+        Section {
+            Button("Clear My CloudKit Data", role: .destructive) {
+                showClearCloudDataConfirmation = true
+            }
+            .disabled(
+                model.privateCloudDataClearState == .clearing
+                    || model.isResettingLocalData
+            )
+            .accessibilityIdentifier("settings.icloud.clear")
+
+            switch model.privateCloudDataClearState {
+            case .idle:
+                EmptyView()
+            case .clearing:
+                ProgressView("Clearing CloudKit data…")
+            case .cleared:
+                Text("CloudKit data cleared. iCloud sync is off.")
+                    .accessibilityIdentifier("settings.icloud.clear.completed")
+            case .failed:
+                // The shared iCloud failure below retains the typed cause.
+                EmptyView()
+            }
+
+        }
+    }
+
     private var localDataResetSection: some View {
         Section {
             Button("Reset All Local Data", role: .destructive) {
@@ -6557,28 +6610,6 @@ private struct SettingsView: View {
                     || model.privateCloudState.isStopping
             )
             .accessibilityIdentifier("settings.icloud.enabled")
-
-            Button("Clear My CloudKit Data", role: .destructive) {
-                showClearCloudDataConfirmation = true
-            }
-            .disabled(
-                model.privateCloudDataClearState == .clearing
-                    || model.isResettingLocalData
-            )
-            .accessibilityIdentifier("settings.icloud.clear")
-
-            switch model.privateCloudDataClearState {
-            case .idle:
-                EmptyView()
-            case .clearing:
-                ProgressView("Clearing CloudKit data…")
-            case .cleared:
-                Text("CloudKit data cleared. iCloud sync is off.")
-                    .accessibilityIdentifier("settings.icloud.clear.completed")
-            case .failed:
-                // The shared iCloud failure below retains the typed cause.
-                EmptyView()
-            }
 
             if model.canCancelPrivateCloudSynchronization {
                 Button(

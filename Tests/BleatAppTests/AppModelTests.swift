@@ -704,6 +704,76 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.presentedFailure)
     }
 
+    func
+        testCloudStorageUpgradeNoticeUsesFixedReleaseAndPersistsAcknowledgment()
+        throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        let model = AppModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            cloudStorageNoticeDefaults: defaults)
+        XCTAssertTrue(model.cloudStorageUpgradeNoticePending)
+        let alert = SignedInAlert.cloudStorageUpgrade
+        XCTAssertEqual(alert.title, "Cloud storage update")
+        XCTAssertEqual(
+            alert.message,
+            "We’ve changed how Bleat stores listening history in iCloud. Please update Bleat on all your devices to version 2026.10.14 or later. Your existing history is preserved."
+        )
+        let queue = SignedInAlertQueue()
+        queue.reconcile([
+            alert, .progress(AppFailure(.openPlayback, .serverUnavailable)),
+        ])
+        XCTAssertEqual(queue.active?.alert, alert)
+        queue.reset(ignoring: [alert])
+        queue.reconcile([alert])
+        XCTAssertEqual(queue.active?.alert, alert)
+        model.acknowledgeCloudStorageUpgradeNotice()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        let recreated = AppModel(
+            service: TestAppService(activeAccount: .success(nil)),
+            cloudStorageNoticeDefaults: defaults)
+        XCTAssertFalse(recreated.cloudStorageUpgradeNoticePending)
+    }
+
+    func testCloudStorageNoticeArrivesBeforeCloudSynchronizationFinishes()
+        async throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(nil), privateCloudSyncGate: gate)
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: defaults)
+        await model.start()
+        await gate.waitUntilEntered()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        // Exercise the native adapter on an arbitrary executor, independently
+        // of the still-suspended CloudKit lifecycle.
+        await Task.detached {
+            NotificationCenter.default.post(
+                name: UserDefaults.didChangeNotification, object: nil)
+        }.value
+        let noticeQueued = await waitUntil(timeout: .seconds(1)) {
+            model.cloudStorageUpgradeNoticePending
+        }
+        XCTAssertTrue(noticeQueued)
+        XCTAssertEqual(model.privateCloudState, .syncing)
+        await gate.release()
+        let finished = await waitUntil(timeout: .seconds(1)) {
+            model.privateCloudState == .idle
+        }
+        XCTAssertTrue(finished)
+        model.acknowledgeCloudStorageUpgradeNotice()
+        XCTAssertFalse(model.cloudStorageUpgradeNoticePending)
+    }
+
     func testSignedInAlertQueueSerializesAndResetsForAccountChange()
         async
     {
@@ -7529,11 +7599,11 @@ final class AppModelTests: XCTestCase {
         await model.recoverAfterNetworkChange(for: [account])
 
         var descriptors: [DownloadChunkTaskDescription] = []
-        for _ in 0..<100 {
+        let didSchedule = await waitUntil(timeout: .seconds(3)) {
             descriptors = await model.scheduledTransferDescriptorsForTesting()
-            if descriptors.count == 1 { break }
-            await Task.yield()
+            return descriptors.count == 1
         }
+        XCTAssertTrue(didSchedule)
         XCTAssertEqual(descriptors.count, 1)
         XCTAssertEqual(descriptors.first?.range.start, 5)
         session.invalidateAndCancel()
@@ -11858,6 +11928,154 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(try store.pending(accountID: account.id).isEmpty)
         let finalRequests = await service.localSessionSyncRequests()
         XCTAssertEqual(finalRequests.count, 2)
+    }
+
+    func testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery()
+        async throws
+    {
+        let storageKey = "bleat.localPlaybackSessions.v1"
+        let defaults = UserDefaults.standard
+        let existing = defaults.data(forKey: storageKey)
+        defaults.removeObject(forKey: storageKey)
+        defer {
+            if let existing {
+                defaults.set(existing, forKey: storageKey)
+            } else {
+                defaults.removeObject(forKey: storageKey)
+            }
+        }
+        let account = try fixtureAccount()
+        let session = try localSession(
+            id: "69bcba68-3e70-457e-bf07-d9a85f93d366", itemID: "path-quality")
+        let store = LocalPlaybackSessionStore(defaults: defaults)
+        try store.save(session, accountID: account.id)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            localSessionSync: .failure(.localPlaybackSession(.requestFailed)))
+        let model = AppModel(service: service)
+        await model.start()
+        for _ in 0..<100 {
+            if await service.localSessionSyncRequests().count == 1,
+                await service.networkPathObserverCount() == 1
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let launchSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(launchSyncs, 1)
+        await service.emitNetworkPathUpdate()
+        for _ in 0..<100 {
+            if await service.hasLiveUpdatesSubscriber() { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {
+            if await service.localSessionSyncRequests().count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let baselineSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(baselineSyncs, 2)
+        let baselineAccounts = await service.accountRefreshRequestCount()
+        let baselineLibraries = await service.libraryRequestCount()
+        let baselineLifecycle = await service.liveUpdatesLifecycleCounts()
+        for index in 0..<100 {
+            await service.emitNetworkPathUpdate(
+                AppNetworkPathState(
+                    availability: .satisfied, isConstrained: false,
+                    isExpensive: false,
+                    linkQuality: index < 50 ? .moderate : .good))
+        }
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied, isConstrained: false,
+                isExpensive: false,
+                linkQuality: .minimal))
+        for _ in 0..<100 {
+            if model.networkPathState.linkQuality == .minimal { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.networkPathState.linkQuality, .minimal)
+        let finalAccounts = await service.accountRefreshRequestCount()
+        let finalLibraries = await service.libraryRequestCount()
+        let finalLifecycle = await service.liveUpdatesLifecycleCounts()
+        let finalSyncs = await service.localSessionSyncRequests().count
+        XCTAssertEqual(finalSyncs, baselineSyncs)
+        XCTAssertFalse(try store.pending(accountID: account.id).isEmpty)
+        XCTAssertEqual(finalAccounts, baselineAccounts)
+        XCTAssertEqual(finalLibraries, baselineLibraries)
+        XCTAssertEqual(finalLifecycle.starts, baselineLifecycle.starts)
+        XCTAssertEqual(finalLifecycle.stops, baselineLifecycle.stops)
+        model.setLiveUpdatesActive(false)
+    }
+
+    func testRoutingAndCostPreserveSubscriptionButDisconnectionRestartsOnce()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(service: service)
+        defer { model.setLiveUpdatesActive(false) }
+        await model.start()
+        let observing = await waitUntil(timeout: .seconds(3)) {
+            await service.networkPathObserverCount() == 1
+        }
+        XCTAssertTrue(observing)
+        await service.emitNetworkPathUpdate()
+        let subscribed = await waitUntil(timeout: .seconds(3)) {
+            await service.hasLiveUpdatesSubscriber()
+        }
+        XCTAssertTrue(subscribed)
+        await service.emitLiveUpdate(.connection(.authenticated))
+        let authenticated = await waitUntil(timeout: .seconds(3)) {
+            model.liveUpdateConnectionState == .authenticated
+        }
+        XCTAssertTrue(authenticated)
+        for index in 0..<10 {
+            await service.emitNetworkPathUpdate(
+                AppNetworkPathState(
+                    availability: .satisfied, isConstrained: false,
+                    isExpensive: index.isMultiple(of: 2),
+                    routing: AppNetworkRoutingState(
+                        interfaces: [], gateways: [],
+                        supportsIPv4: index.isMultiple(of: 2))))
+        }
+        // This final quality notification is consumed only after the preceding
+        // meaningful path changes finish their model lifecycle work.
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied, isConstrained: false,
+                isExpensive: false,
+                routing: AppNetworkRoutingState(
+                    interfaces: [], gateways: [], supportsIPv4: false),
+                linkQuality: .minimal))
+        let consumed = await waitUntil(timeout: .seconds(3)) {
+            model.networkPathState.linkQuality == .minimal
+        }
+        XCTAssertTrue(consumed)
+        let lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 0)
+        XCTAssertEqual(model.liveUpdateConnectionState, .authenticated)
+
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .unavailable, isConstrained: false,
+                isExpensive: false))
+        let disconnected = await waitUntil(timeout: .seconds(3)) {
+            let lifecycle = await service.liveUpdatesLifecycleCounts()
+            let hasSubscriber = await service.hasLiveUpdatesSubscriber()
+            return model.liveUpdateConnectionState == .disconnected
+                && lifecycle.stops == 1 && !hasSubscriber
+        }
+        XCTAssertTrue(disconnected)
+        await service.emitNetworkPathUpdate()
+        let recovered = await waitUntil(timeout: .seconds(3)) {
+            let lifecycle = await service.liveUpdatesLifecycleCounts()
+            let hasSubscriber = await service.hasLiveUpdatesSubscriber()
+            return lifecycle.starts == 2 && lifecycle.stops == 1
+                && hasSubscriber
+        }
+        XCTAssertTrue(recovered)
     }
 
     func testNetworkPathStateAllowsRealtimeOnlyWhenUnconstrained() {
@@ -26411,6 +26629,7 @@ private actor TestAppService: AppServicing {
     private var liveUpdatesContinuation:
         AsyncStream<AudiobookshelfLiveUpdate>.Continuation?
     private var liveUpdatesToken: UUID?
+    private var accountRefreshRequests = 0
     private var liveUpdatesStartCount = 0
     private var liveUpdatesStopCount = 0
 
@@ -27161,6 +27380,7 @@ private actor TestAppService: AppServicing {
     func accounts()
         async throws(AppServiceError) -> [ServerAccount]
     {
+        accountRefreshRequests += 1
         if let accountsGate {
             await accountsGate.enterAndWait()
         }
@@ -27950,6 +28170,8 @@ private actor TestAppService: AppServicing {
     ) {
         progressUpdateResult = result
     }
+
+    func accountRefreshRequestCount() -> Int { accountRefreshRequests }
 
     func activeAccountRequestCount() -> Int {
         activeAccountRequests
