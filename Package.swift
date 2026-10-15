@@ -30,11 +30,11 @@ let package = Package(
         .package(
             url:
                 "https://github.com/open-telemetry/opentelemetry-swift-core.git",
-            exact: "2.5.1"
+            exact: "2.6.0"
         ),
         .package(
             url: "https://github.com/open-telemetry/opentelemetry-swift.git",
-            exact: "2.5.1"
+            exact: "2.6.0"
         ),
         .package(
             url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
