@@ -305,7 +305,6 @@ public actor AudiobookshelfLiveEventClient {
     private var task: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var streamID: UUID?
-    private var connectionRevision = 0
     private(set) var connectionEndpoint: AudiobookshelfLiveServerEndpoint?
 
     public init(
@@ -350,21 +349,15 @@ public actor AudiobookshelfLiveEventClient {
         socket = nil
     }
 
-    public func reconnectIfNeeded(
-        endpoint: AudiobookshelfLiveServerEndpoint, routingChanged: Bool
-    ) -> Bool {
-        guard streamID != nil,
-            routingChanged || connectionEndpoint?.server != endpoint.server
-        else {
-            // Preserve the socket while advancing the router generation used by
-            // later transport failures, so local-to-primary fallback stays valid.
-            if streamID != nil { connectionEndpoint = endpoint }
-            return false
-        }
-        connectionRevision &+= 1
-        socket?.cancel(with: .goingAway, reason: nil)
-        socket = nil
-        return true
+    public func updatePathGeneration(
+        _ generation: ServerEndpointPathGeneration
+    ) {
+        // Preserve the actual server and socket, even if endpoint preference has
+        // changed. A subsequent transport failure must use the current generation.
+        guard let endpoint = connectionEndpoint else { return }
+        connectionEndpoint = AudiobookshelfLiveServerEndpoint(
+            server: endpoint.server, usage: endpoint.usage,
+            pathGeneration: generation)
     }
 
     private func run(
@@ -400,10 +393,8 @@ public actor AudiobookshelfLiveEventClient {
         continuation: AsyncStream<AudiobookshelfLiveUpdate>.Continuation,
         streamID: UUID
     ) async -> Bool {
-        let revision = connectionRevision
         let endpoint = await serverProvider()
-        guard !Task.isCancelled, self.streamID == streamID,
-            revision == connectionRevision
+        guard !Task.isCancelled, self.streamID == streamID
         else { return false }
         let server = endpoint.server
         connectionEndpoint = endpoint
@@ -456,8 +447,7 @@ public actor AudiobookshelfLiveEventClient {
         do {
             initialToken = try await tokenProvider()
         } catch {
-            guard !Task.isCancelled, self.streamID == streamID,
-                revision == connectionRevision
+            guard !Task.isCancelled, self.streamID == streamID
             else {
                 finishAttempt(.cancelled)
                 return false
@@ -472,8 +462,7 @@ public actor AudiobookshelfLiveEventClient {
             return false
         }
 
-        guard !Task.isCancelled, self.streamID == streamID,
-            revision == connectionRevision
+        guard !Task.isCancelled, self.streamID == streamID
         else {
             finishAttempt(.cancelled)
             return false

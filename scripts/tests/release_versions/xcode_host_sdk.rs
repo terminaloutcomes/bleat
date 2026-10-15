@@ -15,7 +15,7 @@ fn sdk_path(sdk: &str) -> String {
 }
 
 #[test]
-fn xcode_cargo_launchers_select_host_sdk_for_native_dependencies() {
+fn xcode_cargo_launchers_isolate_host_compiler_environment() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root");
@@ -36,12 +36,18 @@ fn xcode_cargo_launchers_select_host_sdk_for_native_dependencies() {
     let fixture = tempfile::tempdir().expect("compiler fixture");
     let bin = fixture.path().join("bin");
     fs::create_dir(&bin).expect("fixture tools");
-    // Substitute only Cargo. The actual launchers must select the host SDK, and
-    // Xcode's real compiler must compile the same headers its native crates use.
+    // Substitute only Cargo. The actual launchers must clear inherited wrappers
+    // and select the host SDK. Xcode's real compiler checks the native headers.
     let cargo = bin.join("cargo");
     fs::write(
         &cargo,
-        "#!/bin/sh\nprintf '%s' \"$SDKROOT\" > sdk.txt\nexec \"$BLEAT_TEST_CC\" -c probe.c -o probe.o\n",
+        r#"#!/bin/sh
+set -eu
+test -z "${RUSTC_WRAPPER:-}" || exit 71
+test -z "${RUSTC_WORKSPACE_WRAPPER:-}" || exit 72
+printf '%s' "$SDKROOT" > sdk.txt
+exec "$BLEAT_TEST_CC" -c probe.c -o probe.o
+"#,
     )
     .expect("Cargo boundary probe");
     fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).expect("executable probe");
@@ -85,14 +91,19 @@ fn xcode_cargo_launchers_select_host_sdk_for_native_dependencies() {
                 .env("TARGET_TEMP_DIR", fixture.path())
                 .env("SDKROOT", sdk_path(incoming_sdk))
                 .env("PATH", &paths)
+                // Resolve the fixture Cargo rather than a cached real executable.
+                .env("xcrun_nocache", "1")
                 .env("BLEAT_TEST_CC", compiler)
+                .env("RUSTC_WRAPPER", "inherited-compiler-wrapper")
+                .env("RUSTC_WORKSPACE_WRAPPER", "inherited-workspace-wrapper")
                 .env_remove("CFLAGS_aarch64_apple_darwin")
                 .env_remove("CFLAGS_x86_64_apple_darwin")
                 .output()
                 .expect("run actual Xcode Cargo launcher");
             assert!(
                 output.status.success(),
-                "native compilation failed with incoming {incoming_sdk}: {}",
+                "host bootstrap failed with incoming {incoming_sdk} ({}): {}",
+                output.status,
                 String::from_utf8_lossy(&output.stderr)
             );
             let selected =

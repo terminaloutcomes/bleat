@@ -12008,6 +12008,76 @@ final class AppModelTests: XCTestCase {
         model.setLiveUpdatesActive(false)
     }
 
+    func testRoutingAndCostPreserveSubscriptionButDisconnectionRestartsOnce()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let service = TestAppService(activeAccount: .success(account))
+        let model = AppModel(service: service)
+        defer { model.setLiveUpdatesActive(false) }
+        await model.start()
+        let observing = await waitUntil(timeout: .seconds(3)) {
+            await service.networkPathObserverCount() == 1
+        }
+        XCTAssertTrue(observing)
+        await service.emitNetworkPathUpdate()
+        let subscribed = await waitUntil(timeout: .seconds(3)) {
+            await service.hasLiveUpdatesSubscriber()
+        }
+        XCTAssertTrue(subscribed)
+        await service.emitLiveUpdate(.connection(.authenticated))
+        let authenticated = await waitUntil(timeout: .seconds(3)) {
+            model.liveUpdateConnectionState == .authenticated
+        }
+        XCTAssertTrue(authenticated)
+        for index in 0..<10 {
+            await service.emitNetworkPathUpdate(
+                AppNetworkPathState(
+                    availability: .satisfied, isConstrained: false,
+                    isExpensive: index.isMultiple(of: 2),
+                    routing: AppNetworkRoutingState(
+                        interfaces: [], gateways: [],
+                        supportsIPv4: index.isMultiple(of: 2))))
+        }
+        // This final quality notification is consumed only after the preceding
+        // meaningful path changes finish their model lifecycle work.
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .satisfied, isConstrained: false,
+                isExpensive: false,
+                routing: AppNetworkRoutingState(
+                    interfaces: [], gateways: [], supportsIPv4: false),
+                linkQuality: .minimal))
+        let consumed = await waitUntil(timeout: .seconds(3)) {
+            model.networkPathState.linkQuality == .minimal
+        }
+        XCTAssertTrue(consumed)
+        let lifecycle = await service.liveUpdatesLifecycleCounts()
+        XCTAssertEqual(lifecycle.starts, 1)
+        XCTAssertEqual(lifecycle.stops, 0)
+        XCTAssertEqual(model.liveUpdateConnectionState, .authenticated)
+
+        await service.emitNetworkPathUpdate(
+            AppNetworkPathState(
+                availability: .unavailable, isConstrained: false,
+                isExpensive: false))
+        let disconnected = await waitUntil(timeout: .seconds(3)) {
+            let lifecycle = await service.liveUpdatesLifecycleCounts()
+            let hasSubscriber = await service.hasLiveUpdatesSubscriber()
+            return model.liveUpdateConnectionState == .disconnected
+                && lifecycle.stops == 1 && !hasSubscriber
+        }
+        XCTAssertTrue(disconnected)
+        await service.emitNetworkPathUpdate()
+        let recovered = await waitUntil(timeout: .seconds(3)) {
+            let lifecycle = await service.liveUpdatesLifecycleCounts()
+            let hasSubscriber = await service.hasLiveUpdatesSubscriber()
+            return lifecycle.starts == 2 && lifecycle.stops == 1
+                && hasSubscriber
+        }
+        XCTAssertTrue(recovered)
+    }
+
     func testNetworkPathStateAllowsRealtimeOnlyWhenUnconstrained() {
         XCTAssertFalse(AppNetworkPathState.unknown.allowsRealtimeUpdates)
         XCTAssertFalse(

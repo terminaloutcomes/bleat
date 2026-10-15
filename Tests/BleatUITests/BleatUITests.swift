@@ -46,11 +46,18 @@ private func pullToRefresh(_ element: XCUIElement) {
 
 @MainActor
 func dismissSavePasswordPromptIfNeeded(app: XCUIApplication) {
-    let notNow = app.buttons["Not Now"]
-    if notNow.waitForExistence(timeout: 5) {
-        notNow.tap()
-        _ = notNow.waitForNonExistence(timeout: 3)
+    let sheet = app.sheets["Save Password?"]
+    guard sheet.waitForExistence(timeout: 5) else { return }
+    let notNow = sheet.buttons["Not Now"]
+    let ready = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "exists == true AND hittable == true"),
+        object: notNow)
+    guard XCTWaiter.wait(for: [ready], timeout: 10) == .completed else {
+        XCTFail("Save Password dismissal did not become interactive")
+        return
     }
+    notNow.tap()
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 10))
 }
 
 final class BleatUITests: XCTestCase {

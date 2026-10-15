@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly repository_root="${SRCROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-exec xcrun --sdk macosx \
+exec env RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= xcrun --sdk macosx \
     cargo run \
     --quiet \
     --locked \

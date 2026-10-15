@@ -539,7 +539,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\nxcrun --sdk macosx cargo build --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --target-dir \"${TARGET_TEMP_DIR}/RustBuildTools\" --package scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-release-version\" --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-paid-developer-build-settings\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/write-build-metadata\" --repository-root \"${SRCROOT}\" --template \"${SRCROOT}/${BLEAT_INFOPLIST_TEMPLATE}\" --output \"${TARGET_TEMP_DIR}/Bleat-Info.plist\"\n";
+			shellScript = "set -eu\nenv RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= xcrun --sdk macosx cargo build --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --target-dir \"${TARGET_TEMP_DIR}/RustBuildTools\" --package scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-release-version\" --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-paid-developer-build-settings\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/write-build-metadata\" --repository-root \"${SRCROOT}\" --template \"${SRCROOT}/${BLEAT_INFOPLIST_TEMPLATE}\" --output \"${TARGET_TEMP_DIR}/Bleat-Info.plist\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

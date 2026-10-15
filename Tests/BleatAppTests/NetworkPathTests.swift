@@ -195,6 +195,44 @@ final class NetworkPathTests: XCTestCase {
         input.continuation.finish()
     }
 
+    func testUnavailablePathStopsExistingSubscription() async throws {
+        let input = AsyncStream<AppNetworkPathState>.makeStream()
+        let classified = expectation(description: "Both paths classified")
+        classified.expectedFulfillmentCount = 2
+        let recorder = NetworkDiagnosticRecorder(classified: classified)
+        let probe = NetworkProbeGate()
+        let (service, account) = try await serviceFixture(
+            input: input.stream, recorder: recorder, probe: probe)
+        var entries = probe.entries.makeAsyncIterator()
+        input.continuation.yield(state())
+        let firstEntry = await entries.next()
+        XCTAssertEqual(firstEntry, 1)
+        await probe.release(1, success: true)
+        let stream = await service.liveUpdates(for: account)
+        let started = expectation(description: "Original connection admitted")
+        let consumer = Task {
+            var didStart = false
+            for await update in stream {
+                if case .connectionAttempt = update, !didStart {
+                    didStart = true
+                    started.fulfill()
+                }
+            }
+        }
+        await fulfillment(of: [started], timeout: 3)
+        input.continuation.yield(state(availability: .unavailable))
+        await fulfillment(of: [classified], timeout: 3)
+        let events = await recorder.events
+        XCTAssertEqual(
+            events.filter {
+                $0.stage == .subscriptionStop
+                    && $0.networkReason == .connectivityLost
+            }.count, 1)
+        await service.stopLiveUpdates(for: account.id)
+        await consumer.value
+        input.continuation.finish()
+    }
+
     func testSubscriptionDoesNotWaitForUnrelatedAccountProbe() async throws {
         let input = AsyncStream<AppNetworkPathState>.makeStream()
         let classified = expectation(description: "Path classified")

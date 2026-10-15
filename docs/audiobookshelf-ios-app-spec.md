@@ -587,15 +587,21 @@ true the app closes the current socket, suppresses reconnects, and also sets
 starts one connection and one catch-up browse refresh. Duplicate path updates
 and quality-only notifications do not invalidate endpoint selection, probe the
 server, replace a healthy subscription, or schedule synchronization/download
-recovery. A completed probe replaces an existing socket only after routing or
-selected-server changes. Endpoint setup is registered before any actor hop; a
+recovery. An existing socket is preserved across routing, cost, and selected-server
+preference changes; those changes are not socket failures. Low Data Mode and
+an unavailable network stop the subscription. Leaving Low Data Mode or
+recovering network availability starts one subscription and one catch-up refresh.
+After an actual transport failure, the next connection uses the current preferred server.
+The preserved connection adopts the latest endpoint generation without changing
+its actual server, so a subsequent transport failure still records current-path
+fallback. Endpoint setup is registered before any actor hop; a
 new subscription waits for its own account's authoritative endpoint selection,
 without waiting for another account's unavailable local server. Saved-account
-probes run independently. Ordered callback consumption, probe generations, subscription tokens,
-and connection revisions reject retired callbacks and in-flight completions.
+probes run independently. Ordered callback consumption, probe generations, and
+subscription tokens reject retired callbacks and in-flight completions.
 Actual socket failures retain bounded backoff and primary fallback. Typed local
 diagnostics record path classification, endpoint-probe, subscription-start,
-subscription-stop, and subscription-reconnect stages without network identifiers.
+and subscription-stop stages without network identifiers.
 Issue [#353](https://github.com/terminaloutcomes/bleat/issues/353) retains signed
 device validation for stable Wi-Fi foreground/locked playback, real network
 switches, Low Data Mode, and before/after CPU/network/energy captures. Battery

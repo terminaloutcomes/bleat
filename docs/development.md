@@ -276,6 +276,13 @@ schemas differ, and the CloudKit schema pull-request check requires the same
 parity. CloudKit-disabled and Personal Team archives still validate the desired
 schema against the code but do not require production parity.
 
+Xcode bootstraps the Rust build helpers with the macOS SDK and clears inherited
+`RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER` settings for that compilation. A
+persistent compiler-cache process can retain an earlier build phase's sandbox
+and cannot safely write a fresh Xcode build directory. The standalone capability
+validator uses the same compiler environment. This is checked by the
+`release_versions` regression target.
+
 The physical-device workflows use paid capabilities by default:
 
 ```sh

@@ -1779,8 +1779,7 @@ actor LiveAppService: AppServicing {
             return
         default: break
         }
-        let routingChanged = state.routing != previous.routing
-        let reconnectClientTokens = Dictionary(
+        let liveClientTokens = Dictionary(
             uniqueKeysWithValues: liveClients.map { ($0.key, $0.value.token) }
         )
         networkProbeGeneration &+= 1
@@ -1793,8 +1792,7 @@ actor LiveAppService: AppServicing {
         networkProbeTask = Task { [weak self] in
             await self?.prepareNetworkEndpointProbes(
                 generation: generation,
-                reconnectClientTokens: reconnectClientTokens,
-                routingChanged: routingChanged,
+                liveClientTokens: liveClientTokens,
                 pathChangeReason: reason
             )
         }
@@ -1814,8 +1812,7 @@ actor LiveAppService: AppServicing {
 
     private func prepareNetworkEndpointProbes(
         generation: Int,
-        reconnectClientTokens: [AccountID: UUID],
-        routingChanged: Bool,
+        liveClientTokens: [AccountID: UUID],
         pathChangeReason: DiagnosticNetworkReason
     ) async {
         await diagnostics.record(
@@ -1842,9 +1839,7 @@ actor LiveAppService: AppServicing {
                     await self?.probeNetworkEndpoint(
                         account: account, generation: generation,
                         endpointPathGeneration: endpointPathGeneration,
-                        reconnectToken: reconnectClientTokens[account.id],
-                        routingChanged: routingChanged,
-                        pathChangeReason: pathChangeReason
+                        clientToken: liveClientTokens[account.id]
                     )
                 }
             }
@@ -1860,9 +1855,7 @@ actor LiveAppService: AppServicing {
         account: ServerAccount,
         generation: Int,
         endpointPathGeneration: ServerEndpointPathGeneration,
-        reconnectToken: UUID?,
-        routingChanged: Bool,
-        pathChangeReason: DiagnosticNetworkReason
+        clientToken: UUID?
     ) async {
         await probeLocalEndpoint(
             account: account, generation: generation,
@@ -1870,14 +1863,12 @@ actor LiveAppService: AppServicing {
         guard generation == networkProbeGeneration, !Task.isCancelled else {
             return
         }
-        if networkPathState.allowsRealtimeUpdates, let token = reconnectToken,
+        if let token = clientToken,
             let registration = liveClients[account.id],
             registration.token == token
         {
-            await reconcileLiveEndpoint(
-                account: account, registration: registration,
-                generation: generation, routingChanged: routingChanged,
-                pathChangeReason: pathChangeReason)
+            await registration.client.updatePathGeneration(
+                endpointPathGeneration)
         }
         guard generation == networkProbeGeneration, !Task.isCancelled else {
             return
@@ -1955,33 +1946,6 @@ actor LiveAppService: AppServicing {
                 for: account.server,
                 pathGeneration: endpointPathGeneration
             )
-        }
-    }
-
-    private func reconcileLiveEndpoint(
-        account: ServerAccount, registration: LiveClientRegistration,
-        generation: Int, routingChanged: Bool,
-        pathChangeReason: DiagnosticNetworkReason
-    ) async {
-        let token = registration.token
-        let accountID = account.id
-        let selection = await endpointRouter.preferredServer(
-            for: account.server)
-        guard generation == networkProbeGeneration, !Task.isCancelled,
-            networkPathState.allowsRealtimeUpdates,
-            liveClients[accountID]?.token == token
-        else { return }
-        if await registration.client.reconnectIfNeeded(
-            endpoint: AudiobookshelfLiveServerEndpoint(
-                server: selection.server, usage: selection.usage,
-                pathGeneration: selection.pathGeneration),
-            routingChanged: routingChanged
-        ) {
-            await diagnostics.record(
-                .network(
-                    routingChanged
-                        ? pathChangeReason : .endpointChanged,
-                    stage: .subscriptionReconnect))
         }
     }
 
