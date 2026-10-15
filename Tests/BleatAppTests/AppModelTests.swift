@@ -7599,11 +7599,11 @@ final class AppModelTests: XCTestCase {
         await model.recoverAfterNetworkChange(for: [account])
 
         var descriptors: [DownloadChunkTaskDescription] = []
-        for _ in 0..<100 {
+        let didSchedule = await waitUntil(timeout: .seconds(3)) {
             descriptors = await model.scheduledTransferDescriptorsForTesting()
-            if descriptors.count == 1 { break }
-            await Task.yield()
+            return descriptors.count == 1
         }
+        XCTAssertTrue(didSchedule)
         XCTAssertEqual(descriptors.count, 1)
         XCTAssertEqual(descriptors.first?.range.start, 5)
         session.invalidateAndCancel()

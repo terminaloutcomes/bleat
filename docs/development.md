@@ -444,6 +444,12 @@ fallback metadata must still agree with the release date. Device build and
 signed-capability verification are implemented in `scripts/src/device_build.rs`;
 `scripts/build-device.sh` is its thin CLI entry point.
 
+Xcode's Rust build preparation and standalone capability validator launch
+Cargo through `xcrun --sdk macosx` so
+native host dependencies use macOS headers even during iPhone and Simulator
+builds. This selection is scoped to Cargo; the application retains its target
+SDK. `mise run iphone` requires no caller-supplied SDK or compiler flags.
+
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.
 Check the binary's available commands before using a browser; use the web console

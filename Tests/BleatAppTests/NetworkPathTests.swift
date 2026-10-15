@@ -195,11 +195,106 @@ final class NetworkPathTests: XCTestCase {
         input.continuation.finish()
     }
 
+    func testSubscriptionDoesNotWaitForUnrelatedAccountProbe() async throws {
+        let input = AsyncStream<AppNetworkPathState>.makeStream()
+        let classified = expectation(description: "Path classified")
+        let recorder = NetworkDiagnosticRecorder(classified: classified)
+        let activeProbe = NetworkProbeGate()
+        let unrelatedProbe = NetworkProbeGate()
+        let (service, account) = try await serviceFixture(
+            input: input.stream, recorder: recorder, probe: activeProbe,
+            unrelatedProbe: unrelatedProbe)
+        var activeEntries = activeProbe.entries.makeAsyncIterator()
+        var unrelatedEntries = unrelatedProbe.entries.makeAsyncIterator()
+        input.continuation.yield(state())
+        let activeEntry = await activeEntries.next()
+        XCTAssertEqual(activeEntry, 1)
+        await activeProbe.release(1, success: true)
+        let unrelatedEntry = await unrelatedEntries.next()
+        XCTAssertEqual(unrelatedEntry, 1)
+        let ready = expectation(
+            description: "Active account connects while unrelated probe waits")
+        let subscription = Task<ServerEndpointUsage?, Never> {
+            let stream = await service.liveUpdates(for: account)
+            for await update in stream {
+                if case .connectionAttempt(let attempt) = update,
+                    case .started = attempt.phase
+                {
+                    ready.fulfill()
+                    return attempt.usage
+                }
+            }
+            return nil as ServerEndpointUsage?
+        }
+        await fulfillment(of: [ready, classified], timeout: 3)
+        // Always drain the suspended probe, including when the assertion fails.
+        await unrelatedProbe.release(1, success: false)
+        let usage = await subscription.value
+        XCTAssertEqual(usage, .local)
+        await service.stopLiveUpdates(for: account.id)
+        input.continuation.finish()
+    }
+
+    func testSubscriptionWaitsThroughEndpointSetupActorHop() async throws {
+        let input = AsyncStream<AppNetworkPathState>.makeStream()
+        let classified = expectation(description: "Path classified")
+        let requested = expectation(
+            description: "Subscription requested during setup")
+        let setup = NetworkProbeGate()
+        let recorder = NetworkDiagnosticRecorder(
+            classified: classified, requested: requested)
+        let probe = NetworkProbeGate()
+        let (service, account) = try await serviceFixture(
+            input: input.stream, recorder: recorder, probe: probe,
+            networkPathEvaluation: { router in
+                try? await setup.enter()
+                return await router.networkPathDidChange()
+            })
+        var setupEntries = setup.entries.makeAsyncIterator()
+        var probeEntries = probe.entries.makeAsyncIterator()
+        input.continuation.yield(state())
+        let setupEntry = await setupEntries.next()
+        XCTAssertEqual(setupEntry, 1)
+        let premature = expectation(
+            description: "No subscription before endpoint setup finishes")
+        premature.isInverted = true
+        let setupHeld = Mutex(true)
+        let subscription = Task<ServerEndpointUsage?, Never> {
+            let stream = await service.liveUpdates(for: account)
+            if setupHeld.withLock({ $0 }) { premature.fulfill() }
+            for await update in stream {
+                if case .connectionAttempt(let attempt) = update,
+                    case .started = attempt.phase
+                {
+                    return attempt.usage
+                }
+            }
+            return nil as ServerEndpointUsage?
+        }
+        await fulfillment(of: [requested], timeout: 3)
+        await fulfillment(of: [premature], timeout: 0.2)
+        setupHeld.withLock { $0 = false }
+        await setup.release(1, success: true)
+        let probeEntry = await probeEntries.next()
+        XCTAssertEqual(probeEntry, 1)
+        await probe.release(1, success: true)
+        await fulfillment(of: [classified], timeout: 3)
+        let usage = await subscription.value
+        XCTAssertEqual(usage, .local)
+        await service.stopLiveUpdates(for: account.id)
+        input.continuation.finish()
+    }
+
     @MainActor
     private func serviceFixture(
         input: AsyncStream<AppNetworkPathState>,
         recorder: NetworkDiagnosticRecorder,
-        probe: NetworkProbeGate
+        probe: NetworkProbeGate,
+        unrelatedProbe: NetworkProbeGate? = nil,
+        networkPathEvaluation: (
+            @Sendable (ServerEndpointRouter) async ->
+                ServerEndpointPathGeneration
+        )? = nil
     ) async throws -> (LiveAppService, ServerAccount) {
         let schema = Schema(versionedSchema: BleatPersistenceSchemaCurrent.self)
         let container = try ModelContainer(
@@ -226,9 +321,29 @@ final class NetworkPathTests: XCTestCase {
             serverVersion: "2.36.0", authenticationMethods: [.local], user: user
         )
         try await AccountStore(modelContainer: container).save(account)
+        if unrelatedProbe != nil {
+            let unrelated = try ServerAccount(
+                id: AccountID.canonical(
+                    server: NormalizedServerURL(
+                        "https://unrelated.example.test"),
+                    userID: user.id),
+                server: NormalizedServerURL("https://unrelated.example.test"),
+                localServer: NormalizedServerURL(
+                    "https://unrelated-local.example.test"),
+                localServerValidated: true, serverVersion: "2.36.0",
+                authenticationMethods: [.local], user: user)
+            try await AccountStore(modelContainer: container).save(unrelated)
+        }
         let service = try LiveAppService(
             diagnostics: recorder, networkPathUpdates: input,
-            localEndpointProbe: { _ in try await probe.enter() },
+            localEndpointProbe: { server in
+                if server == account.localServer {
+                    try await probe.enter()
+                } else if let unrelatedProbe {
+                    try await unrelatedProbe.enter()
+                }
+            },
+            networkPathEvaluation: networkPathEvaluation,
             modelContainer: container, privateCloudAvailable: false,
             openIDBrowserProvider: { NetworkTestBrowser() })
         _ = try await service.accounts()
@@ -286,10 +401,18 @@ final class NetworkPathTests: XCTestCase {
 private actor NetworkDiagnosticRecorder: DiagnosticRecording {
     private let classified: XCTestExpectation
     private(set) var events: [DiagnosticEvent] = []
-    init(classified: XCTestExpectation) { self.classified = classified }
-    func record(_ event: DiagnosticEvent) {
+    private let requested: XCTestExpectation?
+    init(
+        classified: XCTestExpectation,
+        requested: XCTestExpectation? = nil
+    ) {
+        self.classified = classified
+        self.requested = requested
+    }
+    func record(_ event: DiagnosticEvent) async {
         events.append(event)
         if event.stage == .pathClassification { classified.fulfill() }
+        if event.stage == .subscriptionStart { requested?.fulfill() }
     }
 }
 

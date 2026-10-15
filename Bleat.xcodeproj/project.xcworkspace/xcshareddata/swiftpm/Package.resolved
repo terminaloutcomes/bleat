@@ -1,5 +1,5 @@
 {
-  "originHash" : "c24cd0a65f5f02f2b35da884ef343d20039ba7328f11220b39496145566107d8",
+  "originHash" : "c62d4e48d540c1cdfc96931123aba4a307fc0f7a0cd3e51e5543130d7d6a1f35",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/grpc/grpc-swift.git",
       "state" : {
-        "revision" : "6a8927df5a91710b414caba4f8a088dead4633db",
-        "version" : "1.27.5"
+        "revision" : "65d0084f6d7db34b0dfcb1c956b8dd8da8ef9d23",
+        "version" : "1.27.6"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/open-telemetry/opentelemetry-swift.git",
       "state" : {
-        "revision" : "aff36f00b0c6ea237a62057eee3ae0c28706ece8",
-        "version" : "2.5.1"
+        "revision" : "9f350e65e1ae4555da5a0c215b2f1883dbffd2ef",
+        "version" : "2.6.0"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/open-telemetry/opentelemetry-swift-core.git",
       "state" : {
-        "revision" : "06f8a460a66f813758d22f09025d85df45450a63",
-        "version" : "2.5.1"
+        "revision" : "c6fcee77cfc21ba400366f12475217c7b6e1d605",
+        "version" : "2.6.0"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "3ffafb9722d5d918c614feb496c8789a3b59d222",
-        "version" : "1.15.0"
+        "revision" : "4038b6a4f74a1426f47eb1dd5b4bb5628a15d597",
+        "version" : "1.16.1"
       }
     },
     {

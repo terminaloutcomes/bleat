@@ -734,6 +734,9 @@ struct ChapterTranscriptionView: View {
     @State private var currentPositionMessage:
         ChapterTranscriptNavigationMessage?
     @State private var highlightedTarget: ChapterTranscriptNavigationTarget?
+    #if DEBUG || BLEAT_UI_TESTING
+        @State private var completedHighlightCount = 0
+    #endif
     @State private var chapterNavigationRequest: ChapterNavigationRequest?
     @State private var pendingTranscriptionChapter: PlaybackChapter?
     @Environment(\.dismiss) private var dismiss
@@ -893,10 +896,14 @@ struct ChapterTranscriptionView: View {
                         if ProcessInfo.processInfo.arguments.contains(
                             "--ui-testing-accessibility-audit"
                         ) {
-                            Text(reduceMotion ? "enabled" : "disabled")
-                            .accessibilityIdentifier(
-                                "transcription.reduceMotion"
-                            )
+                            VStack {
+                                Text(reduceMotion ? "enabled" : "disabled")
+                                .accessibilityIdentifier(
+                                    "transcription.reduceMotion")
+                                Text("\(completedHighlightCount)")
+                                .accessibilityIdentifier(
+                                    "transcription.completedHighlightCount")
+                            }
                             .opacity(0)
                             .allowsHitTesting(false)
                         }
@@ -958,6 +965,9 @@ struct ChapterTranscriptionView: View {
                     }
                     if highlightedTarget == target {
                         highlightedTarget = nil
+                        #if DEBUG || BLEAT_UI_TESTING
+                            completedHighlightCount += 1
+                        #endif
                     }
                 }
             }

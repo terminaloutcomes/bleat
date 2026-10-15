@@ -3735,10 +3735,18 @@ final class BleatUITests: XCTestCase {
         setting.name = "Transcript navigation system setting"
         setting.lifetime = .keepAlways
         add(setting)
+        let highlight = app.buttons["transcription.currentPositionHighlight"]
+        let completed = app.staticTexts["transcription.completedHighlightCount"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 3))
+        XCTAssertEqual(Int(completed.label), 0)
         action.tap()
 
-        let highlight = app.buttons["transcription.currentPositionHighlight"]
-        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        // App idling can outlast the pulse. The audit counter records completed
+        // highlight lifecycles without changing the real two-second lifetime.
+        let firstHighlight = expectation(
+            for: NSPredicate(format: "label == %@", "1"),
+            evaluatedWith: completed)
+        wait(for: [firstHighlight], timeout: 3)
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
         let target = app.buttons["transcription.segment.1.30"]
         XCTAssertTrue(target.isHittable)
@@ -3750,7 +3758,10 @@ final class BleatUITests: XCTestCase {
         }
         XCTAssertTrue(action.isHittable)
         action.tap()
-        XCTAssertTrue(highlight.waitForExistence(timeout: 3))
+        let secondHighlight = expectation(
+            for: NSPredicate(format: "label == %@", "2"),
+            evaluatedWith: completed)
+        wait(for: [secondHighlight], timeout: 3)
         XCTAssertTrue(highlight.waitForNonExistence(timeout: 3))
         XCTAssertTrue(target.isHittable)
         XCTAssertTrue(target.label.contains("Another DOOMSDAY mention"))
