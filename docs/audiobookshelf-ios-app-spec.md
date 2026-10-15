@@ -53,7 +53,7 @@ These decisions keep the first release bounded:
 | CarPlay | The implemented audio-app scene browses the active account's Home shelves, audiobook libraries, and verified complete downloads; account and download management remain phone-only. Apple approved the managed entitlement, and CarPlay Simulator and maintainer-reported physical validation are recorded in `docs/release-evidence/carplay.md`. The public GitHub release archive enables CarPlay explicitly |
 | watchOS, widgets, Siri/App Intents, SharePlay | Out of scope for 1.0 |
 | Server WebSocket events | Authenticated Socket.IO updates refresh visible library and progress state while foregrounded; reconnect performs a catch-up refresh |
-| Statistics and time tracking | Local measurement and lifetime summaries are implemented. [GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26) tracks server-history, exploration, portability, and remaining validation evidence |
+| Statistics and time tracking | Local measurement, lifetime summaries, server-history import, exploration, and portability are implemented; evidence is recorded in traceability and statistics validation |
 | Cleartext HTTP | Not supported in production builds |
 | Untrusted/self-signed TLS bypass | Never supported; system-trusted private CAs are supported |
 | Third-party analytics | None by default |
@@ -375,9 +375,9 @@ In statistics copy, **file length** means duration, not byte size. Downloaded by
 
 ### 4.6 Listening statistics
 
-A first Statistics view is implemented. Per-book chapter and completion detail,
-large-ledger performance, and end-to-end evidence remain tracked in
-[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
+Statistics, per-book chapter/completion detail, history import/export, and
+large-ledger validation are implemented. See `docs/statistics-validation.md`
+and requirements traceability for the recorded evidence and its limits.
 
 - I can see lifetime totals across all configured Audiobookshelf accounts or filter to one account.
 - I can see real listening time separately from audiobook time heard at the active playback rate.
@@ -496,11 +496,9 @@ The detail screen contains:
 - an explicit retry action only when repeating the detail request can succeed
   without a permission or account change.
 
-### 5.3 Statistics — post-MVP
+### 5.3 Statistics
 
-This screen is not part of the MVP. Its remaining implementation is tracked in
-[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26). When
-implemented, Statistics is a Home destination rather than a sixth tab. Its
+Statistics is implemented as a Home destination rather than a sixth tab. Its
 default range is **Lifetime** and its default account filter is **All Accounts**.
 
 Top-level cards show:
@@ -1662,9 +1660,8 @@ wakeups. Explicit loads fence pending deliveries by request generation and
 observation identity, then reconcile changes received during loading. Bulk
 archive imports and resets invalidate prepared snapshots for a coalesced reload.
 Large-ledger
-measurements and remaining end-to-end evidence are recorded in
-`docs/statistics-validation.md` and tracked in
-[GitHub issue #26](https://github.com/terminaloutcomes/bleat/issues/26).
+measurements and completed end-to-end evidence are recorded in
+`docs/statistics-validation.md`; retain the stated environment and coverage limits.
 
 ### 12.1 Metric definitions
 
@@ -1923,7 +1920,12 @@ Every shipped SwiftData schema requires a versioned migration fixture and
 coverage for upgrade, backup/restore, account removal, and app-data reset
 journeys ([GitHub issue #47](https://github.com/terminaloutcomes/bleat/issues/47)).
 
-Suggested models:
+Domain concepts below are not a SwiftData type inventory. The actual model
+list is maintained by `BleatPersistenceModelCatalog`, and shipped schema
+versions/stages by `BleatPersistenceSchemaHistory`. Follow the
+[contributor migration procedure](contributing.md#change-persistence).
+
+Domain concepts:
 
 - `ServerAccount`
   - local account ID
@@ -1972,48 +1974,27 @@ Use strongly typed wrappers such as `AccountID`, `LibraryID`, `LibraryItemID`, a
 
 UI feature models use Observation and are `@MainActor`. Network, persistence coordination, token refresh, and sync use actors. Avoid a general service locator and avoid exposing raw DTOs to views.
 
-### 14.2 Suggested source layout
+### 14.2 Current source layout and dependencies
 
 ```text
-App/
-Core/
-  Accounts/
-  Auth/
-  Networking/
-  Persistence/
-  Diagnostics/
-Audiobookshelf/
-  API/
-  DTO/
-  Mapping/
-Playback/
-  Engine/
-  Routes/
-  NowPlaying/
-  Progress/
-Statistics/
-  Ledger/
-  Import/
-  Aggregation/
-  Export/
-Downloads/
-Features/
-  Home/
-  Library/
-  Search/
-  BookDetail/
-  MetadataEditor/
-  Player/
-  Statistics/
-  Downloads/
-  Settings/
+App/                         SwiftUI, feature coordination, platform adapters
+Sources/BleatCore/           Domain, API, persistence, playback, telemetry
+Sources/BleatTranscription/  Apple Speech transcription and audio support
+Sources/BleatTranscribeCLI/  Developer transcription harness
+Tests/                      Host, app, UI, and disposable-server suites
+TestSupport/                Server, host-runner, screenshot, and fixture support
+scripts/src/                Rust repository tooling
+bleat-api/                  Rust telemetry-authentication service
+site/                       Zola website and user help
+CloudKit/                   Desired and last verified production schemas
 ```
 
-AppAuth-iOS `2.0.0` is the sole third-party runtime dependency. It is pinned to
-revision `145104f5ea9d58ae21b60add007c33c1cc0c948e`, published by the OpenID
-Foundation under Apache-2.0, and isolated behind Bleat's internal OIDC adapter.
-The upstream release signature and published security-advisory list were
-checked when accepted; dependency updates require the same review.
+The [architecture guide](architecture.md) maps subsystem ownership and lifecycle
+boundaries. `Package.swift` pins AppAuth-iOS 3.0.0, OpenTelemetry Swift/Core 2.6.0,
+and SwiftProtobuf 1.38.1; these are active runtime dependencies. Use the manifest
+and resolved lockfile as current dependency sources of truth. Dependency updates
+require licensing/security review and the affected authentication/telemetry gates.
+Do not reinterpret historical dependency audits as verification of later versions.
 
 ## 15. Current implementation integration map
 
@@ -2543,6 +2524,10 @@ Use a disposable Audiobookshelf container with a seeded library:
   Type, and valid/malformed cold and warm `bleat` links.
 
 ## 21. Delivery phases
+
+The phases below describe the original delivery sequence, not a current backlog.
+Issues #34, #35, and #36 are closed; current evidence and outstanding gates belong
+in requirements traceability and open GitHub issues.
 
 ### Phase 0 — risk spikes
 

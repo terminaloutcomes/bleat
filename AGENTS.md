@@ -21,7 +21,7 @@ Use these documents for their specific purposes:
   test evidence.
 - GitHub issues and milestones record remaining release work. The
   [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
-  is the version 1.0 backlog.
+  records the original version 1.0 delivery work; open issues track ongoing work.
 
 Keep these sources aligned when a change affects their subject matter. Do not
 describe a proposed or partially implemented behavior as complete.
@@ -31,28 +31,42 @@ describe a proposed or partially implemented behavior as complete.
 The current targets are:
 
 - SwiftUI on iPhone, iPad and macOS;
-- iOS 26.0 or newer for the application on mobile devices and Sequoia on mac;
+- iOS 26.0 or newer for the application on mobile devices and macOS 26.0 or newer;
 - Swift 6.2 or newer with complete strict-concurrency checking;
 - SwiftData for structured local state;
 - Security framework and Keychain references for secrets;
 - AVFoundation and MediaPlayer for playback;
 - Foundation `URLSession` for networking;
-- no third-party runtime dependencies in version 1.0.
+- runtime dependencies are pinned in `Package.swift`; review their security
+  and licensing when updating them.
 
-The Swift package also supports macOS 15 so its host-side tests can run without
-an iOS Simulator.
+The package also requires macOS 26. Native password login and server-advertised
+OIDC are implemented; preserve both authentication paths. Local listening-time
+accounting, lifetime statistics, and account-scoped history import/export are
+implemented. CarPlay includes library browsing, folders, and supported search.
+Do not broaden scope to podcasts, ebooks, metadata matching, watchOS, widgets,
+Siri, SharePlay, or server administration without an explicit product request.
+Native macOS remote telemetry remains out of scope. Signed macOS authentication
+and relaunch evidence remains separate from compilation and host tests.
 
-Native Audiobookshelf username/password login with rotating access and refresh
-tokens is the active authentication scope. `OpenIDAuthentication.swift` is
-retained research code only: do not connect OIDC/PKCE to the application or
-live-test matrix unless product scope changes explicitly.
+## Required reading and task routing
 
-The MVP reports playback position while sending zero additional listening
-time. Local listening-time accounting, lifetime statistics, and
-listening-history import/export remain deferred.
+Start with [contributor setup and validation](docs/contributing.md). Read the
+[architecture guide](docs/architecture.md) before changing feature ownership.
 
-Do not broaden version 1.0 to podcasts, ebooks, metadata matching, full CarPlay
-browsing, watchOS, widgets, Siri, SharePlay, or server administration.
+| Change | Read before editing |
+| --- | --- |
+| API, authentication, playback, downloads | Specification sections 3, 6–11, 15, 17; compatibility guide |
+| Persistence, account lifecycle, CloudKit | [Persistence procedure](docs/contributing.md#change-persistence); specification sections 7, 12–14 |
+| Framework callbacks or cancellation | [Callback audit](docs/release-evidence/callback-cancellation-audit.md); concurrency rules below |
+| Telemetry or Rust API | [Logging architecture](docs/architecture-logging.md), [authentication](docs/telemetry-authentication.md), `bleat-api/README.md` |
+| Website or user guidance | [Website guide](docs/website.md); preserve published help URLs |
+| Tests, packaging, devices | [Development guide](docs/development.md); validation and release rules below |
+
+Manifests define current build settings and pinned dependencies; the specification
+defines intended contracts; development documentation defines supported commands;
+traceability records implementation and evidence. If they disagree, inspect the
+implementation and record the discrepancy rather than silently selecting a source.
 
 ## Repository layout
 
@@ -71,8 +85,10 @@ browsing, watchOS, widgets, Siri, SharePlay, or server administration.
   live-test support.
 - `project.yml` is the editable XcodeGen project definition.
 - `Bleat.xcodeproj/` is generated from `project.yml` and is checked in.
-- `scripts/` contains the supported validation, live-test, and archive entry
-  points.
+- `Sources/BleatTranscription/` and `Sources/BleatTranscribeCLI/` contain transcription and its developer CLI.
+- `bleat-api/` contains the Rust telemetry-authentication service.
+- `site/` contains the Zola website and published help.
+- `scripts/` contains Rust tooling and supported validation, live-test, and archive entry points.
 
 Do not hand-edit `Bleat.xcodeproj/project.pbxproj`. Change `project.yml`, run
 `xcodegen generate`, and review the generated project diff.
@@ -106,8 +122,9 @@ changed scripting logic to Rust rather than adding more shell code.
   remain only when an upstream protocol requires it; it must not perform or
   invoke the real operation, and the owning async lifecycle must complete that
   work explicitly.
-- Preserve playback across SwiftUI view reconstruction and account-context
-  changes.
+- Preserve playback across SwiftUI view reconstruction. Explicit browsing-account
+  switches stop playback and clear Now Playing; account removal also closes
+  owned playback.
 - Use protocols only at external boundaries that need test substitution.
 - Do not add a general service locator.
 - Do not expose remote DTOs to views.
@@ -204,8 +221,10 @@ remote IDs or titles match across accounts.
 - Production connections require HTTPS and system trust validation.
 - Never add a trust-all or self-signed-certificate bypass. Live tests install
   their disposable Caddy CA into their disposable Simulator.
-- Store credentials and tokens only through the account-scoped,
-  non-synchronizing, device-only Keychain item.
+- Store rotating access/refresh tokens only in account-scoped, non-synchronizing,
+  device-only Keychain items. Stable native login credentials use iCloud Keychain
+  only when the effective CloudKit mode and user preference enable it; otherwise
+  keep them device-only. Never synchronize rotating tokens.
 - Never persist token text in SwiftData, property lists, fixtures, exports, or
   logs.
 - Never put access or refresh tokens in URLs.
@@ -286,8 +305,8 @@ decoding.
 Run the narrowest relevant check first. Typical host-side examples are:
 
 ```sh
-swift test --filter BleatCoreTests
-swift test --filter TokenVaultTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter BleatCoreTests
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter TokenVaultTests
 ```
 
 A successful command exit is not sufficient test evidence. Verify that every
@@ -311,7 +330,12 @@ intended test actually executed and passed:
   result is unverified. Finish the gate, inspect the evidence, and report any
   unsuccessful or superseded attempts precisely.
 
-Run the complete local validation gate when practical:
+The unsigned focused lane excludes synchronizable-Keychain evidence. Use the
+signed host workflow for complete coverage and update the host test inventory
+when adding, renaming, or removing tests. `mise run check` formats Swift and
+Rust as part of its existing dependencies; inspect the resulting diff.
+
+Run the core local validation gate when practical:
 
 ```sh
 ./scripts/test-core.sh
@@ -404,3 +428,10 @@ validation by creating the release manually.
   live, simulator, signed-host, or physical-device evidence are recorded.
 - Preserve unrelated worktree changes.
 - Prefer small, direct changes that reduce duplication and code sprawl.
+
+## Handoff
+
+Follow the [contributor handoff checklist](docs/contributing.md#handoff).
+Report the scoped changes, exact tests and executed counts, unresolved warnings,
+validation artifacts, and outstanding evidence. Audit changed and adjacent error
+paths as required above. Preserve unrelated changes and inspect the final diff.

@@ -1,5 +1,8 @@
 # Bleat API Issue 64 Design
 
+Historical design/planning record. It describes the proposal at its date; use
+the current specification and traceability for implemented behavior and evidence.
+
 ## Goal
 
 Complete the telemetry-authentication service foundation with PostgreSQL-backed

@@ -1,5 +1,9 @@
 # Host Swift Testing migration
 
+This is a dated migration/evaluation record. Test counts and toolchain versions
+below describe that evaluation; use the development guide and current host
+inventory for present-day validation.
+
 Issue [#125](https://github.com/terminaloutcomes/bleat/issues/125), evaluated and
 converted on 2026-09-20 with Xcode 27.0 (27A266a), Swift 6.4, Testing 2084, and
 macOS 26.6.2 on Apple Silicon. The conversion began on `28daa1fb` and was rebased onto `8e26a7b3`,

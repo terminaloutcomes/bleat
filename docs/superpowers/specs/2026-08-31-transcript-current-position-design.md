@@ -1,5 +1,8 @@
 # Transcript Current-Position Navigation Design
 
+Historical design/planning record. It describes the proposal at its date; use
+the current specification and traceability for implemented behavior and evidence.
+
 ## Scope
 
 Implement GitHub issue #49 on the existing chapter-transcription screen. Add a

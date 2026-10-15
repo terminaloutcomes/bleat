@@ -213,9 +213,13 @@ run = [
   "python3 scripts/validate-cloudkit-schema.py",
 ]
 
+[tasks."docs:check"]
+description = "Check documentation references without modifying files"
+run = "cargo run --quiet --locked --package scripts --bin check-documentation"
+
 [tasks.check]
 description = "Run every automated test that does not require a physical device"
-depends = ["site-check", "swift-fmt", "test:cloudkit-schema"]
+depends = ["site-check", "swift-fmt", "test:cloudkit-schema", "docs:check"]
 run = [
   { task = "security:validate" },
   { task = "rust:check" },

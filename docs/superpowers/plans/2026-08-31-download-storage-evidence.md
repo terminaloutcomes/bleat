@@ -1,5 +1,8 @@
 # Download Storage Evidence Implementation Plan
 
+Historical design/planning record. It describes the proposal at its date; use
+the current specification and traceability for implemented behavior and evidence.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add repeatable Release-Simulator evidence for Issue #151's storage preflight, corruption repair, automatic-cache scope, and 300-track responsiveness requirements.

@@ -1,5 +1,8 @@
 # Download Storage Evidence Design
 
+Historical design/planning record. It describes the proposal at its date; use
+the current specification and traceability for implemented behavior and evidence.
+
 ## Purpose
 
 Close GitHub issue #151 with repeatable Release-Simulator evidence for the

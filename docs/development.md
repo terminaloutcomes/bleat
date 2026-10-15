@@ -4,6 +4,14 @@ This document is the canonical reference for Bleat's supported test and
 validation commands. The workflows require normal host access to Xcode,
 CoreSimulator, SwiftPM caches, Docker, local ports, and network resources.
 
+Start with [contributor setup and validation selection](contributing.md).
+See [detailed developer tools](developer-tools.md) for additional command examples.
+
+`mise run check` changes source: its dependencies format Swift and Rust.
+API/Rust validation tasks also run Rust formatting. Review the resulting diff.
+For read-only formatting validation, use `mise run swift-lint` and
+`cargo fmt --all -- --check`.
+
 ## Focused tests
 
 Run the narrowest relevant test first. Direct SwiftPM runs use the explicitly
@@ -109,8 +117,10 @@ Run every automated test that does not require a physical device:
 mise run check
 ```
 
-This runs the website checks, local host and Simulator gate, disposable-server
-core integration tests, and disposable-server app journeys sequentially. Run an
+The dependency stage checks docs, website, and CloudKit schema and formats Swift.
+The sequential stage runs security, Rust checks (including Rust formatting),
+telemetry integration, the local host/Simulator gate, core live tests, and app-live
+journeys. Signed host tests require the configured development team. Run an
 individual stage with `mise run test:local`, `mise run test:live`, or
 `mise run test:app-live`.
 
@@ -354,21 +364,6 @@ alias can prevent sandbox rules from restricting the underlying `/private/tmp`
 checkout. Focused helper regressions run with
 `cargo test --locked -p scripts --test build_metadata --test release_version_check`;
 `BleatAppTests/AppMetadataTests` also checks metadata in the built app bundle.
-
-## Test
-
-Run every automated test that does not require a physical device:
-
-```sh
-mise run check
-```
-
-The exhaustive check validates the website, then runs the local host and
-Simulator gate, disposable-server core integration tests, and disposable-server
-app journeys sequentially. It requires Xcode with an iOS Simulator runtime and
-Docker, but does not require development signing or a connected iPhone. Run an
-individual app stage with `mise run test:local`, `mise run test:live`, or
-`mise run test:app-live`.
 
 ## Disposable-server validation
 
