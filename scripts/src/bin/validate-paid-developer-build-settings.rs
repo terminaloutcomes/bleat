@@ -55,8 +55,7 @@ fn validate_ios_build_settings() {
     check_var_values("BLEAT_APP_ATTEST_MODE", &["enabled", "disabled"]);
     check_var_values("BLEAT_CARPLAY_MODE", &["enabled", "disabled"]);
 
-    let bleat_telemetry_auth_base_url = std::env::var("BLEAT_TELEMETRY_AUTH_BASE_URL")
-        .expect("BLEAT_TELEMETRY_AUTH_BASE_URL must be set");
+    let bleat_telemetry_auth_base_url = get_env_or_quit("BLEAT_TELEMETRY_AUTH_BASE_URL");
     let bleat_telemetry_auth_base_url =
         match parse_telemetry_url(&bleat_telemetry_auth_base_url, false) {
             Ok(url) => url,

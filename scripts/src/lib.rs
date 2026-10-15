@@ -12,6 +12,7 @@ pub mod appstore;
 pub mod appstore_analytics;
 pub mod appstore_builds;
 pub mod appstore_testflight;
+pub mod build_metadata;
 pub mod ci_artifact_retry;
 pub mod ci_cache_keys;
 pub mod ci_smoke;

@@ -421,12 +421,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1856AE8E5AD719FF155AE47F /* Build configuration list for PBXNativeTarget "BleatApp" */;
 			buildPhases = (
-				ECEE1B9CF8ECE9070D7D4C9B /* Validate Release Version */,
-				CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */,
+				4A1A54D82023883A3C7CE044 /* Prepare Build Metadata */,
 				A478EF5EDBF8264EFEDEBD5B /* Sources */,
 				59425BEF486F1F479E902607 /* Resources */,
 				7DDFAC82CD7597B5ABC8CE66 /* Frameworks */,
-				C6D7D9CBC678CDE9EEFCB4A8 /* Write Build Metadata */,
 			);
 			buildRules = (
 			);
@@ -502,7 +500,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		C6D7D9CBC678CDE9EEFCB4A8 /* Write Build Metadata */ = {
+		4A1A54D82023883A3C7CE044 /* Prepare Build Metadata */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -511,56 +509,31 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+				"$(SRCROOT)/Cargo.toml",
+				"$(SRCROOT)/Cargo.lock",
+				"$(SRCROOT)/.cargo",
+				"$(SRCROOT)/scripts",
+				"$(SRCROOT)/bleat-api/Cargo.toml",
+				"$(SRCROOT)/bleat-api/src",
+				"$(SRCROOT)/bleat-api/tests",
+				"$(SRCROOT)/project.yml",
+				"$(SRCROOT)/CHANGELOG.md",
+				"$(SRCROOT)/Bleat.xcodeproj/project.pbxproj",
+				"$(SRCROOT)/.git",
+				"$(SRCROOT)/$(BLEAT_INFOPLIST_TEMPLATE)",
 			);
-			name = "Write Build Metadata";
+			name = "Prepare Build Metadata";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(TARGET_TEMP_DIR)/RustBuildTools/debug/validate-release-version",
+				"$(TARGET_TEMP_DIR)/RustBuildTools/debug/validate-paid-developer-build-settings",
+				"$(TARGET_TEMP_DIR)/RustBuildTools/debug/write-build-metadata",
+				"$(TARGET_TEMP_DIR)/Bleat-Info.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\nset -eu\n\nbuild_date=\"$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')\"\ninfo_plist=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif ! build_commit=\"$(/usr/bin/git -C \"${SRCROOT}\" rev-parse --short=8 --verify HEAD 2>/dev/null)\"; then\n  echo \"error: Could not determine the Git commit for this build.\" >&2\n  exit 1\nfi\n\nif [ \"${#build_commit}\" -lt 8 ]; then\n  echo \"error: Git returned an invalid short commit for this build.\" >&2\n  exit 1\nfi\n\ncase \"${build_commit}\" in\n  *[!0-9a-fA-F]*)\n    echo \"error: Git returned an invalid short commit for this build.\" >&2\n    exit 1\n    ;;\nesac\n\n/usr/libexec/PlistBuddy -c \"Set :BleatBuildDate ${build_date}\" \"${info_plist}\"\n/usr/libexec/PlistBuddy -c \"Set :BleatGitCommit ${build_commit}\" \"${info_plist}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		CD2DDFBAD77979A79ED9B3ED /* Validate Paid Developer Build Settings */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Validate Paid Developer Build Settings";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/scripts/validate-paid-developer-build-settings.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		ECEE1B9CF8ECE9070D7D4C9B /* Validate Release Version */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Validate Release Version";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "cargo run --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --package scripts --bin validate-release-version -- --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n";
+			shellScript = "set -eu\nxcrun --sdk macosx cargo build --quiet --locked --manifest-path \"${SRCROOT}/Cargo.toml\" --target-dir \"${TARGET_TEMP_DIR}/RustBuildTools\" --package scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-release-version\" --repository-root \"${SRCROOT}\" --version \"${MARKETING_VERSION}\" --build \"${CURRENT_PROJECT_VERSION}\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-paid-developer-build-settings\"\n\"${TARGET_TEMP_DIR}/RustBuildTools/debug/write-build-metadata\" --repository-root \"${SRCROOT}\" --template \"${SRCROOT}/${BLEAT_INFOPLIST_TEMPLATE}\" --output \"${TARGET_TEMP_DIR}/Bleat-Info.plist\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -677,6 +650,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_ID_PREFIX = com.terminaloutcomes;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -709,9 +683,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -729,6 +705,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				USE_RECURSIVE_SCRIPT_INPUTS_IN_SCRIPT_PHASES = YES;
 			};
 			name = Release;
 		};
@@ -736,6 +713,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_ID_PREFIX = com.terminaloutcomes;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -768,9 +746,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -795,6 +775,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				USE_RECURSIVE_SCRIPT_INPUTS_IN_SCRIPT_PHASES = YES;
 			};
 			name = Debug;
 		};
@@ -836,6 +817,9 @@
 				BLEAT_EFFECTIVE_CARPLAY_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CARPLAY_MODE)";
 				"BLEAT_EFFECTIVE_CARPLAY_MODE[sdk=macosx*]" = disabled;
 				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
+				BLEAT_INFOPLIST_TEMPLATE = "App/Info-macOS.plist";
+				"BLEAT_INFOPLIST_TEMPLATE[sdk=iphoneos*]" = App/Info.plist;
+				"BLEAT_INFOPLIST_TEMPLATE[sdk=iphonesimulator*]" = App/Info.plist;
 				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CARPLAY_MODE = "$(BLEAT_CARPLAY_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
@@ -851,9 +835,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 20261013.0000.00;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = "App/Info-macOS.plist";
-				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
-				"INFOPLIST_FILE[sdk=iphonesimulator*]" = App/Info.plist;
+				INFOPLIST_FILE = "$(TARGET_TEMP_DIR)/Bleat-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -908,6 +890,9 @@
 				BLEAT_EFFECTIVE_CARPLAY_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CARPLAY_MODE)";
 				"BLEAT_EFFECTIVE_CARPLAY_MODE[sdk=macosx*]" = disabled;
 				BLEAT_EFFECTIVE_CLOUDKIT_MODE = "$(BLEAT_PAID_DEVELOPER_$(BUILD_WITHOUT_PAID_DEVELOPER)_CLOUDKIT_MODE)";
+				BLEAT_INFOPLIST_TEMPLATE = "App/Info-macOS.plist";
+				"BLEAT_INFOPLIST_TEMPLATE[sdk=iphoneos*]" = App/Info.plist;
+				"BLEAT_INFOPLIST_TEMPLATE[sdk=iphonesimulator*]" = App/Info.plist;
 				BLEAT_PAID_DEVELOPER_NO_APP_ATTEST_MODE = "$(BLEAT_APP_ATTEST_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CARPLAY_MODE = "$(BLEAT_CARPLAY_MODE)";
 				BLEAT_PAID_DEVELOPER_NO_CLOUDKIT_MODE = "$(BLEAT_CLOUDKIT_MODE)";
@@ -923,9 +908,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 20261013.0000.00;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = "App/Info-macOS.plist";
-				"INFOPLIST_FILE[sdk=iphoneos*]" = App/Info.plist;
-				"INFOPLIST_FILE[sdk=iphonesimulator*]" = App/Info.plist;
+				INFOPLIST_FILE = "$(TARGET_TEMP_DIR)/Bleat-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
