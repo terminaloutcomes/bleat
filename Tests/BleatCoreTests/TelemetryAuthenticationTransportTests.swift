@@ -316,7 +316,7 @@ private enum TelemetryURLProtocolError: Error {
 }
 
 extension URLRequest {
-    fileprivate func materializingBody() -> URLRequest {
+    func materializingBody() -> URLRequest {
         guard httpBody == nil, let stream = httpBodyStream else { return self }
         stream.open()
         defer { stream.close() }

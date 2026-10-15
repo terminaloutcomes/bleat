@@ -579,7 +579,12 @@ local-endpoint failure state and performs a non-mutating `GET <local>/status`
 probe for each validated local alias and an authenticated native-credential
 probe for an unvalidated alias. The app does not infer home-network
 identity from Wi-Fi, DNS search domains, or interface names. A successful probe
-restores local-first routing; a failed probe keeps the bounded primary fallback.
+restores local-first routing; a failed probe keeps primary routing for the
+current path. Local failure does not expire on a timer: ordinary requests,
+including playback synchronization, keep using primary until a fresh successful
+probe restores local availability. Late responses from requests issued before
+the failure cannot restore local routing. Replacing the configured local URL
+starts a new availability evaluation.
 Live WebSocket connections use the same endpoint selection and fallback policy.
 They are optional foreground refresh channels: when `NWPath.isConstrained` is
 true the app closes the current socket, suppresses reconnects, and also sets

@@ -142,7 +142,6 @@ public actor ServerEndpointRouter {
     }
 
     private var routes: [NormalizedServerURL: Route] = [:]
-    private var localFailures: [NormalizedServerURL: Date] = [:]
     private var currentPathGeneration = ServerEndpointPathGeneration(value: 0)
     private var activePathEvaluation: ServerEndpointPathGeneration?
     private var pendingLocalPathEvaluations:
@@ -173,7 +172,6 @@ public actor ServerEndpointRouter {
         guard !unchanged else {
             return
         }
-        localFailures[primary] = nil
         if let generation = activePathEvaluation, route.local != nil {
             pendingLocalPathEvaluations[primary] = generation
         } else {
@@ -209,7 +207,8 @@ public actor ServerEndpointRouter {
                 continue
             }
             if pendingLocalPathEvaluations[route.primary] != nil
-                || localFailureIsActive(for: route.primary)
+                || localAvailabilityStates[route.primary]
+                    == .temporarilyUnavailable
             {
                 return [
                     ServerEndpointCandidate(
@@ -333,7 +332,7 @@ public actor ServerEndpointRouter {
             )
         }
         if pendingLocalPathEvaluations[primary] != nil
-            || localFailureIsActive(for: primary)
+            || localAvailabilityStates[primary] == .temporarilyUnavailable
         {
             return ServerEndpointServerSelection(
                 server: primary,
@@ -354,7 +353,6 @@ public actor ServerEndpointRouter {
         )
         activePathEvaluation = currentPathGeneration
         for primary in routes.keys {
-            localFailures[primary] = nil
             if routes[primary]?.local == nil {
                 pendingLocalPathEvaluations[primary] = nil
                 localAvailabilityStates[primary] = .notConfigured
@@ -368,17 +366,6 @@ public actor ServerEndpointRouter {
     }
 
     public func markLocalAvailable(
-        for primary: NormalizedServerURL
-    ) {
-        guard pendingLocalPathEvaluations[primary] == nil else {
-            return
-        }
-        localFailures[primary] = nil
-        localAvailabilityStates[primary] = .available
-        publishCurrentActivity(for: primary)
-    }
-
-    public func markLocalAvailable(
         for primary: NormalizedServerURL,
         pathGeneration: ServerEndpointPathGeneration
     ) {
@@ -388,27 +375,23 @@ public actor ServerEndpointRouter {
             return
         }
         pendingLocalPathEvaluations[primary] = nil
-        localFailures[primary] = nil
         localAvailabilityStates[primary] = .available
         publishCurrentActivity(for: primary)
     }
 
     public func markLocalUnavailable(
-        for primary: NormalizedServerURL,
-        duration: TimeInterval = 30
+        for primary: NormalizedServerURL
     ) {
         guard pendingLocalPathEvaluations[primary] == nil else {
             return
         }
-        localFailures[primary] = Date().addingTimeInterval(duration)
         localAvailabilityStates[primary] = .temporarilyUnavailable
         publishCurrentActivity(for: primary)
     }
 
     public func markLocalUnavailable(
         for primary: NormalizedServerURL,
-        pathGeneration: ServerEndpointPathGeneration,
-        duration: TimeInterval = 30
+        pathGeneration: ServerEndpointPathGeneration
     ) {
         guard pathGeneration == currentPathGeneration,
             pendingLocalPathEvaluations[primary] == pathGeneration
@@ -416,14 +399,12 @@ public actor ServerEndpointRouter {
             return
         }
         pendingLocalPathEvaluations[primary] = nil
-        localFailures[primary] = Date().addingTimeInterval(duration)
         localAvailabilityStates[primary] = .temporarilyUnavailable
         publishCurrentActivity(for: primary)
     }
 
     public func markLocalUnavailable(
-        _ candidate: ServerEndpointCandidate,
-        duration: TimeInterval = 30
+        _ candidate: ServerEndpointCandidate
     ) {
         guard candidate.isLocal,
             let primary = candidate.primary,
@@ -432,7 +413,7 @@ public actor ServerEndpointRouter {
         else {
             return
         }
-        markLocalUnavailable(for: primary, duration: duration)
+        markLocalUnavailable(for: primary)
     }
 
     public func finishNetworkPathEvaluation(
@@ -448,7 +429,6 @@ public actor ServerEndpointRouter {
         }
         for primary in unresolved {
             pendingLocalPathEvaluations[primary] = nil
-            localFailures[primary] = Date().addingTimeInterval(30)
             localAvailabilityStates[primary] = .temporarilyUnavailable
             publishCurrentActivity(for: primary)
         }
@@ -481,9 +461,9 @@ public actor ServerEndpointRouter {
     ) {
         if candidate.isLocal, let primary = candidate.primary {
             if candidate.pathGeneration == currentPathGeneration,
-                pendingLocalPathEvaluations[primary] == nil
+                pendingLocalPathEvaluations[primary] == nil,
+                localAvailabilityStates[primary] != .temporarilyUnavailable
             {
-                localFailures[primary] = nil
                 localAvailabilityStates[primary] = .available
             }
         }
@@ -495,15 +475,6 @@ public actor ServerEndpointRouter {
             usage: candidate.isLocal ? .local : .primary,
             purpose: purpose
         )
-    }
-
-    private func localFailureIsActive(
-        for primary: NormalizedServerURL
-    ) -> Bool {
-        guard let failedUntil = localFailures[primary] else {
-            return false
-        }
-        return failedUntil > Date()
     }
 
     public func recordConnection(

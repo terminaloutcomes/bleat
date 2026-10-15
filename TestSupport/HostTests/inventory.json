@@ -235,7 +235,8 @@
   ],
   "BleatCoreTests.HTTPTransportTests": [
     "testEndpointRouterUsesLocalServerAndPreservesPathPrefix()",
-    "testEndpointRouterTemporarilySkipsFailedLocalServer()",
+    "testEndpointRouterSkipsFailedLocalServerUntilRevalidated()",
+    "testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe(prefix:)",
     "testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange()",
     "testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated()",
     "testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation()",
@@ -243,7 +244,7 @@
     "testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable()",
     "testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL()",
     "testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy()",
-    "testSuccessfulLocalUseClearsLocalCooldown()",
+    "testSuccessfulProbeRestoresFailedLocalServer()",
     "testEndpointRouterTracksAPIAndAuthenticationUsageSeparately()",
     "testEndpointRouterStreamsEveryServerConnectionPurpose()",
     "testURLSessionTransportReturnsTypedHTTPResponse()",
