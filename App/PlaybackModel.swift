@@ -17,6 +17,14 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+struct PlaybackRuntimeSnapshotForTesting {
+    let itemStatus: AVPlayerItem.Status?
+    let timeControlStatus: AVPlayer.TimeControlStatus?
+    let playerRate: Float
+    let wholeBookPosition: Double
+    let duration: Double
+}
+
 struct RetainedPlaybackIdentity: Equatable, Sendable {
     let accountID: AccountID
     let libraryID: LibraryID
@@ -496,6 +504,16 @@ final class PlaybackModel {
     private(set) var pendingBookmarkMutations: [QueuedBookmarkMutation] = []
     private(set) var bookmarkState: BookmarkState = .idle
     private(set) var positionConflict: PlaybackPositionConflict?
+
+    var runtimeSnapshotForTesting: PlaybackRuntimeSnapshotForTesting {
+        PlaybackRuntimeSnapshotForTesting(
+            itemStatus: player?.currentItem?.status,
+            timeControlStatus: player?.timeControlStatus,
+            playerRate: player?.rate ?? 0,
+            wholeBookPosition: currentTime,
+            duration: duration
+        )
+    }
 
     var canSyncBookmarks: Bool {
         activeAccount != nil

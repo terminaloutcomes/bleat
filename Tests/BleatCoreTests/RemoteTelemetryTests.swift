@@ -1402,9 +1402,9 @@ final class RemoteTelemetryTests {
 
         let exportResult = await exporter.export(spans: [span])
         #expect(exportResult == .success)
-        #expect(downstream.waitUntilStarted(timeout: 2) == .success)
+        #expect(await downstream.waitUntilStarted())
         exporter.disable()
-        #expect(downstream.waitUntilFinished(timeout: 2) == .success)
+        #expect(await downstream.waitUntilFinished())
 
         #expect(downstream.recordedSpans.isEmpty)
         exporter.disableAndPurge()
@@ -1803,9 +1803,8 @@ private final class CancellableBlockingSpanExporter:
     RemoteTelemetryDownstreamSpanExporter, @unchecked Sendable
 {
     private let lock = NSLock()
-    private let started = DispatchSemaphore(value: 0)
-    private let release = DispatchSemaphore(value: 0)
-    private let finished = DispatchSemaphore(value: 0)
+    private let started = AuthTelemetryTestSignal()
+    private let finished = AuthTelemetryTestSignal()
     private var cancelled = false
     private var spans: [SpanData] = []
 
@@ -1817,22 +1816,16 @@ private final class CancellableBlockingSpanExporter:
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
-        started.signal()
-        _ = release.wait(timeout: .now() + (explicitTimeout ?? 30))
-        let result: SpanExporterResultCode = lock.withLock {
-            guard !cancelled else { return .failure }
-            self.spans.append(contentsOf: spans)
-            return .success
-        }
-        finished.signal()
-        return result
+        // The production pipeline uses the async witness. Keep this required
+        // synchronous witness inert so the fake never blocks a test executor.
+        .failure
     }
 
     func export(
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) async -> SpanExporterResultCode {
-        started.signal()
+        await started.signal()
         let deadline = ContinuousClock.now.advanced(
             by: .seconds(explicitTimeout ?? 30)
         )
@@ -1840,14 +1833,18 @@ private final class CancellableBlockingSpanExporter:
             !lock.withLock({ cancelled }),
             ContinuousClock.now < deadline
         {
-            try? await Task.sleep(for: .milliseconds(10))
+            do {
+                try await Task.sleep(for: .milliseconds(10))
+            } catch {
+                break
+            }
         }
         let result: SpanExporterResultCode = lock.withLock {
             guard !cancelled, !Task.isCancelled else { return .failure }
             self.spans.append(contentsOf: spans)
             return .success
         }
-        finished.signal()
+        await finished.signal()
         return result
     }
 
@@ -1867,15 +1864,28 @@ private final class CancellableBlockingSpanExporter:
 
     func cancelActiveExports() {
         lock.withLock { cancelled = true }
-        release.signal()
     }
 
-    func waitUntilStarted(timeout: TimeInterval) -> DispatchTimeoutResult {
-        started.wait(timeout: .now() + timeout)
+    func waitUntilStarted(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            started,
+            stage: "downstream telemetry export start",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 
-    func waitUntilFinished(timeout: TimeInterval) -> DispatchTimeoutResult {
-        finished.wait(timeout: .now() + timeout)
+    func waitUntilFinished(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            finished,
+            stage: "downstream telemetry export cancellation completion",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 }
 

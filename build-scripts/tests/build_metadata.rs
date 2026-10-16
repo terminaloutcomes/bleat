@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
+use build_scripts::build_metadata::{MetadataError, write_metadata};
 use plist::Value;
-use scripts::build_metadata::{MetadataError, write_metadata};
 
 fn git(root: &Path, args: &[&str]) -> String {
     let result = Command::new("git")

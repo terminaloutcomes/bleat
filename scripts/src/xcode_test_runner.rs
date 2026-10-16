@@ -196,7 +196,7 @@ fn run_core(root: &Path) -> Result<()> {
                     "test",
                     "--locked",
                     "--package",
-                    "scripts",
+                    "build-scripts",
                     "--test",
                     "release_versions",
                 ]),

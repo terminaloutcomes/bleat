@@ -692,7 +692,14 @@
       "enablement": "Opt-in telemetry recovery/collector integration case within `scripts/test-telemetry.sh`; requires disposable API, collector and health ports and service-control environment configured by that script. Missing required environment skips the case.",
       "setup_dependencies": "DEBUG-only disposable telemetry API/Collector; 1,000ms refreshWindow, 1,100ms elapsed threshold wait, actor recording transport and temporary storage.",
       "action_postconditions": "Starts a telemetry pipeline with a 1,000ms JWT refresh window, waits 1,100ms, emits through the existing pipeline, then asserts a second token was issued, token changed, enrollment and save count stayed stable, and queued span batch drained.",
-      "synchronization_timeout": "Token/collector HTTP requests have 10s timeout; queue drain has a 10s bounded poll with 100ms interval; explicit 1,100ms sleep exceeds the 1,000ms JWT validity window by an unexplained 100ms margin (documented follow-up)."
+      "synchronization_timeout": "Token/collector HTTP requests have 10s timeout; queue drain has a 10s bounded poll with 100ms interval; explicit 1,100ms sleep exceeds the 1,000ms JWT validity window by an unexplained 100ms margin (documented follow-up).",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "live_execution_verified",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
+        "note": "Refresh eligibility is asserted; the documented real-time wait crosses whole-second JWT claims. Passed in the disposable telemetry workflow."
+      }
     },
     {
       "id": "BleatUITests::testBoldTextLoginAccessibilityAudit",
@@ -1588,7 +1595,14 @@
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Shared helper launch uses `--ui-testing-context-download-removal` plus `--ui-testing-edit-download-progress`; transfer/progress is simulated by UITestAppService fixture.",
       "action_postconditions": "Delegates to `checkEditDuringDownload` with `--ui-testing-context-download-removal` and edit-progress scenario; asserts the actions menu remains available during same-book progress, editor remains open with the draft through the progress/completion interval, cancel discards it, and save closes it.",
-      "synchronization_timeout": "synchronous accessibility assertions / XCTest interaction; XCTest waits for UI interaction completion, no explicit timeout in this body."
+      "synchronization_timeout": "synchronous accessibility assertions / XCTest interaction; XCTest waits for UI interaction completion, no explicit timeout in this body.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "focused_repetitions_verified_owning_pending",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
+        "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      }
     },
     {
       "id": "BleatUITests::testBookDetailEditSurvivesUnrelatedDownloadProgress",
@@ -1604,7 +1618,14 @@
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Shared helper launch uses `--ui-testing-home-shelf-order` plus `--ui-testing-edit-download-progress`; transfer/progress is simulated by UITestAppService fixture.",
       "action_postconditions": "Delegates to `checkEditDuringDownload` with `--ui-testing-home-shelf-order` and edit-progress scenario; asserts the actions menu remains available during unrelated-book progress, editor remains open with the draft through the progress/completion interval, cancel discards it, and save closes it.",
-      "synchronization_timeout": "synchronous accessibility assertions / XCTest interaction; XCTest waits for UI interaction completion, no explicit timeout in this body."
+      "synchronization_timeout": "synchronous accessibility assertions / XCTest interaction; XCTest waits for UI interaction completion, no explicit timeout in this body.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "focused_repetitions_verified_owning_pending",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
+        "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      }
     },
     {
       "id": "BleatUITests::testBookContextMenuPresentsExistingEditorAndTranscriptionDirectly",
@@ -2228,7 +2249,14 @@
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-playback. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
       "action_postconditions": "Drives the UI controls identified by app.signedIn, The Test Audiobook, book.detail.play, player.rate. Body-specific asserted postconditions: XCTAssertTrue( XCTAssertTrue(play.waitForExistence(timeout: 3)) XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3)) XCTAssertTrue(rateMenu.waitForExistence(timeout: 3)) XCTAssertTrue(increasedRate.waitForExistence(timeout: 3)) XCTAssertTrue(increasedRate.exists) XCTAssertTrue(increasedRate.isHittable) XCTAssertEqual(rateMenu.label, \"Playback Speed\")",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; fixed elapsed-time waits 2 seconds."
+      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; fixed elapsed-time waits 2 seconds.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "focused_repetitions_verified_owning_pending",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
+        "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      }
     },
     {
       "id": "BleatUITests::testPlaybackActionMenusRemainStableAcrossTimeUpdates",
@@ -2244,7 +2272,14 @@
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-playback. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
       "action_postconditions": "Drives the UI controls identified by app.signedIn, The Test Audiobook, book.detail.play, player.chapters, player.chapter.0, player.sleepTimer, 5 minutes, 5m, Cancel Timer, player.bookmarks, Add Bookmark. Body-specific asserted postconditions: XCTAssertTrue( XCTAssertTrue(play.waitForExistence(timeout: 3)) XCTAssertTrue(miniPlayer.waitForExistence(timeout: 3)) XCTAssertTrue(chapters.waitForExistence(timeout: 3)) XCTAssertTrue(chapter.waitForExistence(timeout: 3)) XCTAssertTrue(chapter.exists) XCTAssertTrue(chapter.isHittable) XCTAssertTrue(sleepTimer.waitForExistence(timeout: 3))",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; fixed elapsed-time waits 2, 2, 2 seconds."
+      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; fixed elapsed-time waits 2, 2, 2 seconds.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "focused_repetitions_verified_owning_pending",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
+        "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      }
     },
     {
       "id": "BleatUITests::testBookmarkEditorShowsFailedSaveAndDismissesAfterSuccess",

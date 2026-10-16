@@ -348,37 +348,102 @@ final class LogoutTests {
             url: try AudiobookshelfRouteBuilder(server: server)
                 .url(for: .libraries)
         )
-        let authenticatedRequest = Task {
-            try await coordinator.sendAuthenticated(
-                librariesRequest,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+        let authenticatedRequestCompletion =
+            AuthTelemetryTestCompletion<
+                Result<HTTPResponse, AuthenticatedRequestError>
+            >()
+        let authenticatedRequestTask = Task {
+            let outcome: Result<HTTPResponse, AuthenticatedRequestError>
+            do {
+                outcome = .success(
+                    try await coordinator.sendAuthenticated(
+                        librariesRequest,
+                        route: .libraries,
+                        accountID: accountID,
+                        server: server
+                    )
+                )
+            } catch let error as AuthenticatedRequestError {
+                outcome = .failure(error)
+            } catch {
+                Issue.record(
+                    "Authenticated request returned an unexpected error")
+                outcome = .failure(.requestTransportFailed)
+            }
+            await authenticatedRequestCompletion.complete(outcome)
         }
         #expect(await transport.waitUntilRefreshStarts())
 
-        let logout = Task {
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
-            )
+        let logoutCompletion = AuthTelemetryTestCompletion<
+            Result<LogoutResult, LogoutError>
+        >()
+        let logoutTask = Task {
+            let outcome: Result<LogoutResult, LogoutError>
+            do {
+                outcome = .success(
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                )
+            } catch let error as LogoutError {
+                outcome = .failure(error)
+            } catch {
+                Issue.record("Logout returned an unexpected error")
+                outcome = .failure(.credentialDeletionFailed)
+            }
+            await logoutCompletion.complete(outcome)
         }
-        #expect(
-            await requireAuthTelemetryCondition(
-                stage: "logout signing-out state"
-            ) {
-                await coordinator.isSigningOut(accountID: accountID)
-            })
+        let signingOutReached = await requireAuthTelemetryCondition(
+            stage: "logout signing-out state",
+            timeout: .seconds(30)
+        ) {
+            await coordinator.isSigningOut(accountID: accountID)
+        }
+        #expect(signingOutReached)
         await transport.completeRefresh()
 
-        let logoutResult = try await logout.value
-        await assertThrowsErrorAsync(
-            try await authenticatedRequest.value
-        ) { error in
-            #expect(
-                error as? AuthenticatedRequestError
-                    == .accountOperationInProgress)
+        let logoutOutcome = await requireAuthTelemetryCompletion(
+            logoutCompletion,
+            stage: "logout completion after refresh release",
+            timeout: .seconds(30)
+        )
+        let requestOutcome = await requireAuthTelemetryCompletion(
+            authenticatedRequestCompletion,
+            stage: "authenticated request completion after logout",
+            timeout: .seconds(30)
+        )
+        guard let logoutOutcome, let requestOutcome else {
+            authenticatedRequestTask.cancel()
+            logoutTask.cancel()
+            await transport.completeRefresh()
+            let requestCleanup = await requireAuthTelemetryCompletion(
+                authenticatedRequestCompletion,
+                stage: "authenticated request cancellation cleanup",
+                timeout: .seconds(5)
+            )
+            let logoutCleanup = await requireAuthTelemetryCompletion(
+                logoutCompletion,
+                stage: "logout cancellation cleanup",
+                timeout: .seconds(5)
+            )
+            if requestCleanup != nil {
+                await authenticatedRequestTask.value
+            }
+            if logoutCleanup != nil {
+                await logoutTask.value
+            }
+            return
+        }
+        await authenticatedRequestTask.value
+        await logoutTask.value
+        let logoutResult = try logoutOutcome.get()
+        switch requestOutcome {
+        case .success:
+            Issue.record(
+                "Authenticated request should be rejected during logout")
+        case .failure(let error):
+            #expect(error == .accountOperationInProgress)
         }
         let storedCredentials = try await store.credentials(for: accountID)
         let counts = await transport.counts()
@@ -650,6 +715,7 @@ private actor BlockingLogoutTransport: HTTPTransport {
     private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
     nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var started = false
+    private var completionReleased = false
 
     func send(
         _ tracedRequest: TracedHTTPRequest
@@ -657,7 +723,13 @@ private actor BlockingLogoutTransport: HTTPTransport {
         started = true
         await logoutStartedSignal.signal()
         return await withCheckedContinuation { continuation in
-            logoutContinuation = continuation
+            if completionReleased {
+                continuation.resume(
+                    returning: .init(data: Data(), statusCode: 200)
+                )
+            } else {
+                logoutContinuation = continuation
+            }
         }
     }
 
@@ -673,6 +745,7 @@ private actor BlockingLogoutTransport: HTTPTransport {
     }
 
     func completeLogout() {
+        completionReleased = true
         logoutContinuation?.resume(
             returning: .init(data: Data(), statusCode: 200)
         )
@@ -684,6 +757,7 @@ private actor BlockingLoginTransport: HTTPTransport {
     private var loginContinuation: CheckedContinuation<HTTPResponse, Never>?
     nonisolated let loginStartedSignal = AuthTelemetryTestSignal()
     private var started = false
+    private var completionReleased = false
 
     func send(
         _ tracedRequest: TracedHTTPRequest
@@ -691,7 +765,13 @@ private actor BlockingLoginTransport: HTTPTransport {
         started = true
         await loginStartedSignal.signal()
         return await withCheckedContinuation { continuation in
-            loginContinuation = continuation
+            if completionReleased {
+                continuation.resume(
+                    returning: .init(data: Data(), statusCode: 401)
+                )
+            } else {
+                loginContinuation = continuation
+            }
         }
     }
 
@@ -707,6 +787,7 @@ private actor BlockingLoginTransport: HTTPTransport {
     }
 
     func rejectLogin() {
+        completionReleased = true
         loginContinuation?.resume(
             returning: .init(data: Data(), statusCode: 401)
         )
@@ -718,6 +799,7 @@ private actor RefreshRaceTransport: HTTPTransport {
     private var refreshContinuation: CheckedContinuation<HTTPResponse, Never>?
     nonisolated let refreshStartedSignal = AuthTelemetryTestSignal()
     private var refreshStarted = false
+    private var refreshReleased = false
     private var refreshRequests = 0
     private var logoutRequests = 0
     private var recordedLogoutRefreshToken: String?
@@ -732,7 +814,19 @@ private actor RefreshRaceTransport: HTTPTransport {
             await refreshStartedSignal.signal()
 
             return await withCheckedContinuation { continuation in
-                refreshContinuation = continuation
+                if refreshReleased {
+                    continuation.resume(
+                        returning: .init(
+                            data: LogoutTests.authenticationJSON(
+                                accessToken: "rotated-access",
+                                refreshToken: "rotated-refresh"
+                            ),
+                            statusCode: 200
+                        )
+                    )
+                } else {
+                    refreshContinuation = continuation
+                }
             }
         }
         if request.url?.path.hasSuffix("/logout") == true {
@@ -762,6 +856,7 @@ private actor RefreshRaceTransport: HTTPTransport {
     }
 
     func completeRefresh() {
+        refreshReleased = true
         refreshContinuation?.resume(
             returning: .init(
                 data: LogoutTests.authenticationJSON(
@@ -794,6 +889,8 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var initialStarted = false
     private var logoutStarted = false
+    private var initialRequestReleased = false
+    private var logoutReleased = false
     private var refreshRequests = 0
 
     func send(
@@ -804,7 +901,13 @@ private actor InitialRequestRaceTransport: HTTPTransport {
             logoutStarted = true
             await logoutStartedSignal.signal()
             return await withCheckedContinuation { continuation in
-                logoutContinuation = continuation
+                if logoutReleased {
+                    continuation.resume(
+                        returning: .init(data: Data(), statusCode: 200)
+                    )
+                } else {
+                    logoutContinuation = continuation
+                }
             }
         }
         if request.url?.path.hasSuffix("/auth/refresh") == true {
@@ -815,7 +918,13 @@ private actor InitialRequestRaceTransport: HTTPTransport {
         initialStarted = true
         await initialStartedSignal.signal()
         return await withCheckedContinuation { continuation in
-            initialRequestContinuation = continuation
+            if initialRequestReleased {
+                continuation.resume(
+                    returning: .init(data: Data(), statusCode: 401)
+                )
+            } else {
+                initialRequestContinuation = continuation
+            }
         }
     }
 
@@ -846,6 +955,7 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     }
 
     func completeInitial(statusCode: Int) {
+        initialRequestReleased = true
         initialRequestContinuation?.resume(
             returning: .init(data: Data(), statusCode: statusCode)
         )
@@ -853,6 +963,7 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     }
 
     func completeLogout() {
+        logoutReleased = true
         logoutContinuation?.resume(
             returning: .init(data: Data(), statusCode: 200)
         )

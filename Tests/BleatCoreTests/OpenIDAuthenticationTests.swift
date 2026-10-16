@@ -221,7 +221,11 @@ final class OpenIDAuthenticationTests {
             at: authorizationURL,
             callbackScheme: "com.example.bleat"
         )
-        #expect(await factory.waitUntilSessionStarts())
+        let sessionStarted = await factory.waitUntilSessionStarts()
+        #expect(sessionStarted)
+        guard sessionStarted, let session = factory.sessions.first else {
+            return
+        }
 
         do {
             _ = try await browser.authenticate(
@@ -233,7 +237,7 @@ final class OpenIDAuthenticationTests {
             #expect(error as? OpenIDBrowserError == .alreadyActive)
         }
 
-        factory.sessions[0].finish(
+        session.finish(
             callbackURL: nil,
             error: .cancelled
         )

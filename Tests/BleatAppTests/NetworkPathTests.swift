@@ -150,32 +150,44 @@ final class NetworkPathTests: XCTestCase {
         async throws
     {
         let input = AsyncStream<AppNetworkPathState>.makeStream()
+        defer { input.continuation.finish() }
         let classified = expectation(description: "Routing changes classified")
         classified.expectedFulfillmentCount = 2
         let recorder = NetworkDiagnosticRecorder(classified: classified)
         let probe = NetworkProbeGate()
         let (service, account) = try await serviceFixture(
             input: input.stream, recorder: recorder, probe: probe)
-        var entries = probe.entries.makeAsyncIterator()
         input.continuation.yield(state())
-        let firstEntry = await entries.next()
-        XCTAssertEqual(firstEntry, 1)
+        await assertEventually(
+            "first local endpoint probe entry",
+            timeout: .seconds(5),
+            observed: { "probe count=\(await probe.count)" },
+            condition: { await probe.count == 1 }
+        )
         let subscription = Task { await service.liveUpdates(for: account) }
-        for _ in 0..<100 {
-            if await recorder.events.contains(where: {
-                $0.stage == .subscriptionStart
-            }) {
-                break
+        addTeardownBlock {
+            await probe.releaseAll()
+            await service.stopLiveUpdates(for: account.id)
+            subscription.cancel()
+            _ = await subscription.value
+        }
+        await assertEventually(
+            "live subscription start diagnostic",
+            timeout: .seconds(5),
+            observed: { "events=\(await recorder.events)" },
+            condition: {
+                await recorder.events.contains {
+                    $0.stage == .subscriptionStart
+                }
             }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        let requested = await recorder.events.contains {
-            $0.stage == .subscriptionStart
-        }
-        XCTAssertTrue(requested)
+        )
         input.continuation.yield(state(gateway: "192.0.2.2"))
-        let secondEntry = await entries.next()
-        XCTAssertEqual(secondEntry, 2)
+        await assertEventually(
+            "second local endpoint probe entry",
+            timeout: .seconds(5),
+            observed: { "probe count=\(await probe.count)" },
+            condition: { await probe.count == 2 }
+        )
         await fulfillment(of: [classified], timeout: 5)
         await service.stopLiveUpdates(for: account.id)
         await probe.release(2, success: false)
@@ -498,6 +510,16 @@ private actor NetworkProbeGate {
         } else {
             waiters.removeValue(forKey: entry)?.resume(
                 throwing: URLError(.notConnectedToInternet))
+        }
+    }
+
+    func releaseAll() {
+        let retained = waiters
+        waiters.removeAll()
+        for continuation in retained.values {
+            continuation.resume(
+                throwing: CancellationError()
+            )
         }
     }
 }

@@ -75,3 +75,25 @@ records partial remediation and its execution evidence. Per-test `timing_batch`
 annotations in the linked audit JSON identify updated test bodies; unchanged
 findings remain open. Do not interpret the original table as a description of
 those updated implementations or as evidence that the whole backlog is closed.
+
+## Follow-on source batch 2026-10-16
+
+The current source diff changes 71 app test bodies recorded individually in
+`TestSupport/TestAudit/app.json`: 69 `AppModelTests` records and two
+`NetworkPathTests` records. Their original review decisions, historical
+counts, and unrelated findings remain intact. The batch also adds a bounded
+source-located `assertEventually` helper and an `AppModelOperationEventProbe`
+in `Tests/BleatAppTests/TestAsyncGates.swift`; the audit inventory describes
+the changed selectors and helper review.
+
+The owning app-suite build and execution are pending. These annotations record
+source changes only and make no claim that any of the 71 tests ran or passed.
+Existing follow-up rows not touched by this source diff remain open.
+
+The follow-on review retains a P2 in the negative request-count assertions of
+`testLiveProgressEchoDoesNotRefreshStreamedPlayback` and
+`testLiveProgressUpdatesFinishedStateImmediately`: `.liveUpdateConsumed` does
+not prove that no debounced refresh was scheduled. A deterministic refresh drain
+or clock boundary is still needed before claiming those assertions catch late
+requests. This is separate from their observed event consumption and final
+model-state checks.

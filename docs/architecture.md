@@ -18,7 +18,7 @@ flows; [traceability](requirements-traceability.md) records evidence.
 | Transcription | `Sources/BleatTranscription/`, core job/cache state, app transcript UI; `Sources/BleatTranscribeCLI/` developer harness | Transcription package and app tests |
 | Diagnostics/telemetry | Core diagnostic types, authentication/export runtime; app consent and platform attester | Telemetry host/live suites, privacy checks; iOS remote export only |
 | Authentication backend | `bleat-api/` Rust service, SeaORM persistence, App Attest, JWT/JWKS, Collector configuration | Rust unit/container tests and telemetry gate |
-| Tooling and website | Rust `scripts` workspace package; `site/` Zola content | Rust tooling tests, documentation checks, Zola checks |
+| Tooling and website | Rust `build-scripts` package for build metadata and configuration; `scripts` for operational tooling; `site/` Zola content | Rust tooling tests, documentation checks, Zola checks |
 
 UI models use Observation on the main actor; mutable core coordination uses
 actors. External-boundary protocols permit test substitution. Views consume

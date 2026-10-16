@@ -1,7 +1,7 @@
 use std::{path::PathBuf, process::ExitCode};
 
+use build_scripts::build_metadata::write_metadata;
 use clap::Parser;
-use scripts::build_metadata::write_metadata;
 
 #[derive(Parser)]
 struct Arguments {

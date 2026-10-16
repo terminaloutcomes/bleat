@@ -51,3 +51,27 @@ records partial remediation and its execution evidence. Per-test `timing_batch`
 annotations in the linked audit JSON identify updated test bodies; unchanged
 findings remain open. Do not interpret the original table as a description of
 those updated implementations or as evidence that the whole backlog is closed.
+
+## Follow-on source batch 2026-10-16
+
+The current follow-on diff annotates 13 core test records in
+`TestSupport/TestAudit/core.json`; their original source-review decisions and
+counts are preserved. The affected records cover the CloudKit cancellation
+probe’s early-release race, five logout race tests, three staged authenticated
+request tests, the OpenID second-session guard, cache-read cancellation/cleanup,
+and remote-telemetry withdrawal. The JSON records carry the exact test
+identifiers and per-test source notes.
+
+Focused unsigned host runs passed 151 tests across the six owning suites
+(`.build/core-timing-focused.xml`) and a 15-test Logout/cache rerun
+(`.build/core-timing-final.xml`); both reports recorded zero failures, errors,
+or skips. The final `AuthenticatedRequestTests` failure-path cleanup edit was
+made after these focused runs. The subsequent signed owning gate verified all 561 identities passing with
+zero skips, including that final edit (`.build/timing-followon-signed-host.log`,
+XML in `.build/host-results/`).
+
+`LibraryCachePerformanceTests.testCacheReadsDoNotBlockTheMainActor` remains an
+open P2. Cleanup now cancels and conditionally joins the worker within a
+bounded wait, but an uncooperative cache/framework call can still outlive that
+wait. The row remains open until the limitation is resolved or explicitly
+accepted with evidence. Other unrelated follow-up rows remain unchanged.

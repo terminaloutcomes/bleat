@@ -1,7 +1,7 @@
 use std::{path::PathBuf, process::ExitCode};
 
+use build_scripts::release_version_check;
 use clap::Parser;
-use scripts::release_version_check;
 
 #[derive(Parser)]
 struct Arguments {

@@ -10,7 +10,7 @@
   "status": "complete; all 593 in-scope test bodies individually source reviewed; unresolved source findings are tracked in docs/release-evidence/test-reliability-app-followups.md",
   "methodCount": 593,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
-  "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift.",
+  "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
     {
       "identifier": "AppAttestTelemetryAttesterTests/testAdapterHandlesServiceWorkCompletedAwayFromMainActor",
@@ -3289,6 +3289,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 100×10ms bounded polling does not assert the observed-ready flag before comparing final spans; comparison catches absence, but failure lacks elapsed diagnostic. Add caller-local bounded wait helper/assertion if unresolved in owner suite."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -3358,6 +3365,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Bounded polling loop is followed by assertions but does not preserve wait result/location; use explicit condition helper and assert it before detailed outcomes."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -3833,6 +3847,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -6149,6 +6170,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Twenty Task.yield calls after save completion-count are not a synchronization contract for MainActor state application; assert terminal state through an explicit completion/state condition instead."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -6398,6 +6426,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Ten yields do not prove delete has not started; use an observable deletion-requested/deleting state before testing absence of persistence call, with explicit completion/failure cleanup."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -7166,6 +7201,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Twenty yields do not prove policy reconciliation/cleanup attempt settled; need explicit cleanup evaluation completion or observable pin state. Thirty-second cleanup poll discards cancellation with try? and should assert cancellation/failure diagnostics."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -9041,6 +9083,13 @@
           "outcome": "keep",
           "reason": "Action-specific state and persistence postconditions are asserted against owned fixtures."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -9228,6 +9277,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Five-second polling is bounded but the code checks `model.failure` while asserting `presentedFailure`; explicit asserted terminal wait and defer-based session/gate cleanup improve timeout diagnostics."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -10119,6 +10175,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 50ms sleep is used as cleanup settling time without completion signal. Await pin/cleanup completion or use bounded asserted state condition; do not remove the pin-protection semantic assertion."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -10212,6 +10275,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 50ms is an absence/ordering guess for completion serialization; expose a completion-task entry/actor barrier before checking it remains blocked. Gate release and task joins are sound."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -10853,6 +10923,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: The post-callback 100-yield loops do not prove callback state applied; replace with observable conditions and assert success. 2s recovery loop final assertions catch absence but should preserve elapsed wait diagnostics. Keep actual delegate callback scenario."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -11093,6 +11170,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 100 yields after retry release do not acknowledge retry task completion; introduce retry cancellation/completion signal and assert it before no-task postcondition."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -11239,6 +11323,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: The loop polls up to 100 times with yield (unbounded in elapsed time in practice) after release; add explicit bounded completion and cancellation cleanup. 120 seconds is captured as injected delay, not real sleep."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -11740,6 +11831,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Polling condition is only a break and no completion-result assertion proves callback happened before pause; record a callback-completion expectation/observable state before asserting precedence. Ensure session cleanup on timeout."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -12029,6 +12127,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 100ms sleep is an unasserted settling delay after async pause. Wait for typed storage failure with bounded caller-site diagnostics; retain relaunch durability assertions."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -12788,6 +12893,13 @@
           "outcome": "keep",
           "reason": "Behavior is asserted through exact typed state and owned fixtures."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -12918,6 +13030,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: The 200×10ms loop is bounded but no task-completion assertion; ensure obsolete callback is observed before asserting it did not restart, and use cleanup defer for gate/session."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -13488,6 +13607,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Two polling loops are bounded but neither asserts observed readiness/timeout before follow-on action; add explicit wait result diagnostics and ensure observer/task cleanup."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -14224,6 +14350,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Several Task.yield calls assume queued confirmation/reset tasks run before assertions; replace with observable completion/selection condition while retaining each queue/resurrection scenario."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -14394,6 +14527,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Task.yield calls after reset/automatic gate try to establish operation ordering without an observable waiter; replace with reset/request completion contract. Gates/tasks otherwise awaited."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -15995,6 +16135,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Uses actual AVPlayer/AVAudioSession boundary; no readiness wait before reset beyond startDownloaded result and state check; ensure fixture duration/readiness diagnostics are sufficient on simulator."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -16116,6 +16263,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: A real-playback elapsed window is central to natural completion, but 200×50ms polling lacks explicit elapsed diagnostic and does not state readiness/rate; report playback diagnostics and ensure audio fixture duration matches 10s budget."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -16235,6 +16389,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Actual AVPlayer progression has 10s loop and final ended assertion but no playback readiness/rate/elapsed diagnostic. Preserve real elapsed behavior, add failure diagnostics."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -16370,6 +16531,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Natural playback timing poll is bounded by 10s but needs readiness/rate/position diagnostics. Sync gate sequencing itself is explicit."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -16485,6 +16653,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Actual playback completion loop up to 10s without readiness diagnostics; preserve scenario and add playback failure context."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -17057,6 +17232,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Actual AVPlayer reset boundary; position tolerance 0.1s but no explicit ready/paused observation before exact boundary assertion; add playback readiness diagnostics."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -17820,6 +18002,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Uses shared UserDefaults.standard and mutates real app key, restoring only on normal teardown/defer; crash or parallel tests can interfere. Inject isolated suite/store and replace three polling loops with asserted condition helpers."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -17944,6 +18133,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Uses shared standard defaults and many polling loops without asserted wait-result diagnostics; use injected isolated store and explicit observer/subscriber condition waits."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -18218,6 +18414,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Multiple bounded 100×10ms loops have only final semantic assertions, not explicit wait-result/elapsed diagnostics; add bounded condition helpers. Fake live events; no server."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -18433,6 +18636,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Many 100×10ms loops only break then later assertions; add explicit bounded condition and diagnostic for each transition. Position is asserted after pause with 0.01s tolerance. No physical network."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -18533,6 +18743,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: The spawned observer task and upload gate are not joined through an operation-completion contract on timeout; add defer cleanup/cancel and ensure release on assertion failure."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -18966,6 +19183,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 30ms sleep is used to infer cancellation task remains blocked; expose a cancellation-started state/continuation or deterministic barrier before asserting, and make drain release failure-safe."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -20701,6 +20925,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -20797,6 +21028,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -20896,6 +21134,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -20971,6 +21216,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21038,6 +21290,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21118,6 +21377,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21210,6 +21476,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21318,6 +21591,13 @@
           "outcome": "keep",
           "reason": "The semantic behavior and exact request accounting are asserted."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21429,6 +21709,13 @@
           "outcome": "keep",
           "reason": "The semantic behavior and exact request accounting are asserted."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21525,6 +21812,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21601,6 +21895,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21708,6 +22009,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -21795,6 +22103,13 @@
           "outcome": "follow_up",
           "reason": "The live-stream behavior is meaningfully asserted, but event delivery should be synchronized by an observable completion signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -22017,6 +22332,13 @@
           "outcome": "keep",
           "reason": "The semantic behavior and exact request accounting are asserted."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -22174,6 +22496,13 @@
           "outcome": "follow_up",
           "reason": "This test has completion-sensitive live delivery but uses scheduler yields/fixed sleeps; a late update can occur after assertions."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -27076,6 +27405,13 @@
           "outcome": "keep",
           "reason": "Exact state transitions and service request parameters are asserted using deterministic injected providers/gates."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -27250,6 +27586,13 @@
           "outcome": "follow_up",
           "reason": "The scenario is meaningfully asserted but one Task.yield is being used as an interleaving barrier rather than observable task admission."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -27370,6 +27713,13 @@
           "outcome": "follow_up",
           "reason": "The scenario is meaningfully asserted but one Task.yield is being used as an interleaving barrier rather than observable task admission."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -27540,6 +27890,13 @@
           "outcome": "follow_up",
           "reason": "The scenario is meaningfully asserted but one Task.yield is being used as an interleaving barrier rather than observable task admission."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -30176,6 +30533,13 @@
           "outcome": "follow_up",
           "reason": "Race state is deadline-bounded but currently polled with Task.yield, and session count accepts a range rather than a single expected path."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31170,6 +31534,13 @@
           "outcome": "follow_up",
           "reason": "The test covers a meaningful concurrent reconciliation edge, but does not prove the independent reconciliation task completed before asserting."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31238,6 +31609,13 @@
           "outcome": "follow_up",
           "reason": "The test covers a meaningful concurrent reconciliation edge, but does not prove the independent reconciliation task completed before asserting."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31322,6 +31700,13 @@
           "outcome": "follow_up",
           "reason": "The test covers a meaningful concurrent reconciliation edge, but does not prove the independent reconciliation task completed before asserting."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31410,6 +31795,13 @@
           "outcome": "follow_up",
           "reason": "The test covers a meaningful concurrent reconciliation edge, but does not prove the independent reconciliation task completed before asserting."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31642,6 +32034,13 @@
           "outcome": "follow_up",
           "reason": "The committed state and failure diagnostics are covered, but asynchronous reconciliation completion is inferred from cancellable polling/sleep rather than an owned signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31738,6 +32137,13 @@
           "outcome": "follow_up",
           "reason": "The committed state and failure diagnostics are covered, but asynchronous reconciliation completion is inferred from cancellable polling/sleep rather than an owned signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -31990,6 +32396,13 @@
           "outcome": "follow_up",
           "reason": "The committed state and failure diagnostics are covered, but asynchronous reconciliation completion is inferred from cancellable polling/sleep rather than an owned signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -37163,6 +37576,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -37457,6 +37877,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -37631,6 +38058,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -37860,6 +38294,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -38284,6 +38725,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -38375,6 +38823,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -38875,6 +39330,13 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -39009,6 +39471,13 @@
           "outcome": "keep",
           "reason": "The scenario uses injected presenter/service and gates and asserts the exact visible state, request count, or callback result."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -39836,6 +40305,13 @@
           "outcome": "follow_up",
           "reason": "The list identity/artwork scenario is meaningful but rendering completion is inferred from a short polling loop rather than an observable signal."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -42611,6 +43087,13 @@
           "outcome": "keep",
           "reason": "The coordinator state, service request or template content is asserted with deterministic inputs and explicit lifecycle cleanup."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -45192,6 +45675,13 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {
@@ -45541,6 +46031,13 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_changed_execution_pending",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending."
       }
     },
     {

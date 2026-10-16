@@ -93,7 +93,7 @@ targets:
       - name: Prepare Build Metadata
         script: |
           set -eu
-          env RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= xcrun --sdk macosx cargo build --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --target-dir "${TARGET_TEMP_DIR}/RustBuildTools" --package scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata
+          cargo build --quiet --locked --manifest-path "${SRCROOT}/Cargo.toml" --target-dir "${TARGET_TEMP_DIR}/RustBuildTools" --package build-scripts --bin validate-release-version --bin validate-paid-developer-build-settings --bin write-build-metadata
           "${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-release-version" --repository-root "${SRCROOT}" --version "${MARKETING_VERSION}" --build "${CURRENT_PROJECT_VERSION}"
           "${TARGET_TEMP_DIR}/RustBuildTools/debug/validate-paid-developer-build-settings"
           "${TARGET_TEMP_DIR}/RustBuildTools/debug/write-build-metadata" --repository-root "${SRCROOT}" --template "${SRCROOT}/${BLEAT_INFOPLIST_TEMPLATE}" --output "${TARGET_TEMP_DIR}/Bleat-Info.plist"
@@ -102,10 +102,7 @@ targets:
           - "$(SRCROOT)/Cargo.toml"
           - "$(SRCROOT)/Cargo.lock"
           - "$(SRCROOT)/.cargo"
-          - "$(SRCROOT)/scripts"
-          - "$(SRCROOT)/bleat-api/Cargo.toml"
-          - "$(SRCROOT)/bleat-api/src"
-          - "$(SRCROOT)/bleat-api/tests"
+          - "$(SRCROOT)/build-scripts"
           - "$(SRCROOT)/project.yml"
           - "$(SRCROOT)/CHANGELOG.md"
           - "$(SRCROOT)/Bleat.xcodeproj/project.pbxproj"

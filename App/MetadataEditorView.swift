@@ -105,6 +105,25 @@ struct MetadataEditorView: View {
             .navigationTitle("Edit Book")
             .iOSInlineNavigationTitle()
             .toolbar {
+                #if DEBUG || BLEAT_UI_TESTING
+                    if ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-edit-download-progress")
+                    {
+                        ToolbarItem(placement: .principal) {
+                            Button(
+                                "Download: \(model.downloads.editDownloadFixtureState.rawValue)"
+                            ) {
+                                model.downloads.completeEditDownloadFixture()
+                            }
+                            .accessibilityIdentifier(
+                                "testing.download.complete"
+                            )
+                            .accessibilityValue(
+                                model.downloads.editDownloadFixtureState
+                                    .rawValue)
+                        }
+                    }
+                #endif
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         model.resetBookEditSaveState()

@@ -315,12 +315,25 @@ schemas differ, and the CloudKit schema pull-request check requires the same
 parity. CloudKit-disabled and Personal Team archives still validate the desired
 schema against the code but do not require production parity.
 
-Xcode bootstraps the Rust build helpers with the macOS SDK and clears inherited
-`RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER` settings for that compilation. A
-persistent compiler-cache process can retain an earlier build phase's sandbox
-and cannot safely write a fresh Xcode build directory. The standalone capability
-validator uses the same compiler environment. This is checked by the
-`release_versions` regression target.
+Xcode builds its configuration, release-version and metadata helpers from the
+`build-scripts` workspace package. That package has no HTTP, TLS or native C
+build dependencies; the larger `scripts` package depends on it for shared
+version logic. Both the Xcode phase and standalone capability validator use
+ordinary Cargo without selecting another SDK or overriding Rust compilers or
+compiler wrappers. Keep build-only dependencies in this package so checking
+configuration cannot pull in the operational tooling's network stack.
+
+The package split follows the 2026-10-16 build investigation. Previously these
+small helpers belonged to `scripts`, so selecting one binary still compiled the
+package's operational HTTP/TLS dependencies. Earlier SDK and cache-wrapper
+workarounds did not remove that dependency coupling. Command-local Homebrew
+`RUSTC` overrides then mixed compiler distributions with rustup `RUSTDOC` during
+telemetry doctests; those overrides are not part of the supported workflow.
+The separate `check-cfg` rejection in the earlier Xcode log did not identify its
+compiler, so it is not evidence for changing the user's Rust installation.
+The regression tests now check the real package dependency tree and preservation
+of the caller's compiler environment, rather than substituting Cargo with a C
+header-compilation probe and treating that as Rust-toolchain evidence.
 
 The physical-device workflows use paid capabilities by default:
 
@@ -379,7 +392,7 @@ xcodegen generate
 
 Xcode's `Prepare Build Metadata` phase runs with user script sandboxing enabled.
 It declares its repository inputs with recursive directory access, builds the Rust
-helpers with the macOS SDK even for iOS destinations, and runs the release and
+helpers from the isolated `build-scripts` package even for iOS destinations, and runs the release and
 capability validators. The metadata helper reads the platform's `App/Info.plist`
 or `App/Info-macOS.plist` template and Git HEAD, then writes `Bleat-Info.plist` in
 the target's intermediate directory. Cargo build products live in that same
@@ -475,11 +488,10 @@ fallback metadata must still agree with the release date. Device build and
 signed-capability verification are implemented in `scripts/src/device_build.rs`;
 `scripts/build-device.sh` is its thin CLI entry point.
 
-Xcode's Rust build preparation and standalone capability validator launch
-Cargo through `xcrun --sdk macosx` so
-native host dependencies use macOS headers even during iPhone and Simulator
-builds. This selection is scoped to Cargo; the application retains its target
-SDK. `mise run iphone` requires no caller-supplied SDK or compiler flags.
+Xcode's Rust build preparation and standalone capability validator use the
+isolated `build-scripts` package with ordinary Cargo. Neither launcher overrides
+the compiler, compiler wrappers or SDK. `mise run iphone` requires no
+caller-supplied SDK or compiler flags.
 
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.

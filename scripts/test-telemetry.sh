@@ -4,7 +4,8 @@ set -euo pipefail
 readonly project_name="bleat-telemetry-test-$$"
 readonly compose_file="bleat-api/compose.yml"
 readonly port_base="$((20000 + RANDOM % 19990))"
-readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
+artifact_root="$(cargo run --quiet --locked --package scripts --bin runner-readiness -- artifact-directory --root TestSupport/ServerHarness/artifacts/telemetry)"
+readonly artifact_root
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
 readonly swift_report_root="${PWD}/.build/swiftpm-test-results/${project_name}"
 readonly database_password="test-${project_name}-${RANDOM}"
@@ -105,8 +106,8 @@ mise run "api:test"
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   up --detach --build --wait api
 
-curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
-curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
+cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
+cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-collector validate --config=/etc/otelcol/config.yaml
@@ -139,11 +140,7 @@ docker compose --project-name "${project_name}" --file "${compose_file}" \
 for health_port in \
   "${BLEAT_TELEMETRY_COLLECTOR_HEALTH_TEST_PORT}" \
   "${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_HEALTH_TEST_PORT}"; do
-  for _ in {1..30}; do
-    curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null && break
-    sleep 1
-  done
-  curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null
+  cargo run --quiet --locked --package scripts --bin runner-readiness -- http --wait-seconds 30 --url "http://127.0.0.1:${health_port}/" >/dev/null
 done
 
 readonly capture_container="$(docker compose --project-name "${project_name}" \
@@ -200,7 +197,7 @@ BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \
 # Receiver success proves only admission. Require bounded retry and queue exhaustion.
 outage_metrics=""
 for _ in {1..30}; do
-  outage_metrics="$(curl --silent --fail \
+  outage_metrics="$(cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url \
     "http://127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_METRICS_TEST_PORT}/metrics")"
   if awk '
     /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { send_failed = 1 }

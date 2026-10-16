@@ -1,6 +1,42 @@
 import Foundation
 import XCTest
 
+@testable import Bleat
+
+@MainActor
+func assertEventually(
+    _ description: String,
+    timeout: Duration,
+    observed: @MainActor () async -> String,
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    condition: @MainActor () async -> Bool
+) async {
+    let clock = ContinuousClock()
+    let startedAt = clock.now
+    let deadline = startedAt.advanced(by: timeout)
+    while clock.now < deadline, !Task.isCancelled {
+        if await condition() {
+            return
+        }
+        do {
+            try await Task.sleep(for: .milliseconds(20))
+        } catch {
+            break
+        }
+    }
+    if await condition() {
+        return
+    }
+    let elapsed = startedAt.duration(to: clock.now)
+    XCTFail(
+        "Timed out waiting for \(description) after \(elapsed); "
+            + "budget was \(timeout); observed: \(await observed())",
+        file: file,
+        line: line
+    )
+}
+
 actor AsyncGate {
     private(set) var entryExpectation = XCTestExpectation(
         description: "async gate entered")
@@ -106,3 +142,26 @@ actor AsyncGate {
         }
     }
 #endif
+
+@MainActor
+final class AppModelOperationEventProbe {
+    private var pending: [(AppModelOperationEvent, XCTestExpectation)] = []
+
+    func expectation(
+        for event: AppModelOperationEvent
+    ) -> XCTestExpectation {
+        let expectation = XCTestExpectation(
+            description: "AppModel operation event: \(event)"
+        )
+        pending.append((event, expectation))
+        return expectation
+    }
+
+    func record(_ event: AppModelOperationEvent) {
+        guard let index = pending.firstIndex(where: { $0.0 == event }) else {
+            return
+        }
+        let (_, expectation) = pending.remove(at: index)
+        expectation.fulfill()
+    }
+}

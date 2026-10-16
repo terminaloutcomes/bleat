@@ -1351,13 +1351,16 @@ final class AppModelTests: XCTestCase {
 
         await playback.start(detail: fixture.detail, account: account)
         playback.pause()
-        for _ in 0..<100
-        where !tracer.spans.contains(where: {
-            $0.operation == .playbackProgressSync
-                && $0.outcome != nil
-        }) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await assertEventually(
+            "typed playback progress sync telemetry",
+            timeout: .seconds(30),
+            observed: { "\(tracer.spans)" },
+            condition: {
+                tracer.spans.contains {
+                    $0.operation == .playbackProgressSync
+                        && $0.outcome != nil
+                }
+            })
 
         XCTAssertEqual(
             tracer.spans.filter {
@@ -1410,10 +1413,15 @@ final class AppModelTests: XCTestCase {
                 ],
                 interval: interval, error: URLError(.cannotFindHost))
         }.value
-        for _ in 0..<100 {
-            if tracer.spans.count == 3 { break }
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        await assertEventually(
+            "all three network-only download metric spans",
+            timeout: .seconds(5),
+            observed: {
+                "span count=\(tracer.spans.count); spans=\(tracer.spans)"
+            },
+            condition: {
+                tracer.spans.count == 3
+            })
         XCTAssertEqual(
             tracer.spans.compactMap(\.httpCall).filter {
                 $0.result == .response(statusCode: 302)
@@ -1839,14 +1847,17 @@ final class AppModelTests: XCTestCase {
             task: task,
             didCompleteWithError: URLError(.cancelled)
         )
-        let callbackProcessed = await waitUntil(timeout: .seconds(30)) {
-            model.taskCompletionProcessingSequenceForTesting
-                > callbackBaseline
-        }
-        XCTAssertTrue(
-            callbackProcessed,
-            "Completed-track URLSession callback did not finish processing"
-        )
+        await assertEventually(
+            "completed-track URLSession delegate callback processing",
+            timeout: .seconds(30),
+            observed: {
+                "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "baseline=\(callbackBaseline); state=\(String(describing: model.records.first?.manifest.state))"
+            },
+            condition: {
+                model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+            })
 
         XCTAssertEqual(model.records.first?.manifest.state, .complete)
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
@@ -3369,11 +3380,22 @@ final class AppModelTests: XCTestCase {
         await waitForTranscriptionTaskStateSaveAttempts(2, in: service)
         XCTAssertNil(coordinator.cacheFailure(for: bookKey))
 
+        let saveSequence = coordinator
+            .terminalPersistenceProcessingSequenceForTesting
         await firstSaveGate.release()
         await waitForTranscriptionTaskStateSaveCompletions(2, in: service)
-        for _ in 0..<20 {
-            await Task.yield()
-        }
+        await assertEventually(
+            "retired terminal-save result processing",
+            timeout: .seconds(5),
+            observed: {
+                "sequence=\(coordinator.terminalPersistenceProcessingSequenceForTesting); "
+                    + "terminal task=\(String(describing: coordinator.terminalState(for: bookKey)?.taskID)); "
+                    + "cache failure=\(String(describing: coordinator.cacheFailure(for: bookKey)))"
+            },
+            condition: {
+                coordinator.terminalPersistenceProcessingSequenceForTesting
+                    > saveSequence
+            })
 
         XCTAssertEqual(
             coordinator.terminalState(for: bookKey)?.taskID,
@@ -3550,9 +3572,16 @@ final class AppModelTests: XCTestCase {
                 appModel: appModel
             )
         }
-        for _ in 0..<10 {
-            await Task.yield()
-        }
+        await assertEventually(
+            "transcript deletion entering its gated state",
+            timeout: .seconds(3),
+            observed: {
+                "deletion state=\(coordinator.deletionState(for: bookKey)); "
+                    + "requests=\(await service.transcriptDeletionRequests())"
+            },
+            condition: {
+                coordinator.deletionState(for: bookKey) == .deleting
+            })
         let requestsWhileSaveBlocked =
             await service.transcriptDeletionRequests()
         XCTAssertTrue(requestsWhileSaveBlocked.isEmpty)
@@ -4286,6 +4315,8 @@ final class AppModelTests: XCTestCase {
             transcription: coordinator
         )
         await downloads.start(accounts: [account])
+        let cleanupSequence =
+            downloads.automaticCleanupEvaluationSequenceForTesting
         coordinator.start(
             chapters: [chapter],
             detail: detail,
@@ -4296,9 +4327,17 @@ final class AppModelTests: XCTestCase {
         await gate.waitUntilEntered()
 
         downloads.setAutomaticCleanupPolicy(.afterBook)
-        for _ in 0..<20 {
-            await Task.yield()
-        }
+        await assertEventually(
+            "cleanup policy evaluation while transcription is active",
+            timeout: .seconds(5),
+            observed: {
+                "sequence=\(downloads.automaticCleanupEvaluationSequenceForTesting); "
+                    + "records=\(downloads.records.count)"
+            },
+            condition: {
+                downloads.automaticCleanupEvaluationSequenceForTesting
+                    > cleanupSequence
+            })
         XCTAssertNotNil(
             downloads.record(
                 accountID: account.id,
@@ -4320,21 +4359,18 @@ final class AppModelTests: XCTestCase {
             )
         )
         XCTAssertEqual(terminalState?.outcome, .succeeded)
-        let cleanupDeadline = ContinuousClock.now.advanced(
-            by: .seconds(30)
-        )
-        while downloads.record(
-            accountID: account.id,
-            itemID: detail.id
-        ) != nil, ContinuousClock.now < cleanupDeadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertNil(
-            downloads.record(
-                accountID: account.id,
-                itemID: detail.id
-            )
-        )
+        await assertEventually(
+            "automatic cache cleanup after transcription releases its pin",
+            timeout: .seconds(30),
+            observed: {
+                "record=\(String(describing: downloads.record(accountID: account.id, itemID: detail.id)?.manifest.state))"
+            },
+            condition: {
+                downloads.record(
+                    accountID: account.id,
+                    itemID: detail.id
+                ) == nil
+            })
     }
 
     func testCloudKitCapabilityRequiresEnabledEntitledBuild() {
@@ -5869,17 +5905,18 @@ final class AppModelTests: XCTestCase {
         await model.continueDownload(record)
         XCTAssertEqual(
             model.presentedFailure, .localContextUnavailable(.accountMissing))
-        var diagnosticEvents: [DiagnosticEvent] = []
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        repeat {
-            diagnosticEvents = await diagnostics.events()
-            if diagnosticEvents.contains(where: {
-                $0.failureCode == .downloadAccountContextMissing
-            }) {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        } while ContinuousClock.now < deadline
+        await assertEventually(
+            "missing-account resume diagnostic",
+            timeout: .seconds(2),
+            observed: { "\(await diagnostics.events())" },
+            condition: {
+                await diagnostics.events().contains {
+                    $0.operation == .resumeDownload
+                        && $0.failureCode == .downloadAccountContextMissing
+                        && $0.stage == .contextValidation
+                }
+            })
+        let diagnosticEvents = await diagnostics.events()
         XCTAssertTrue(
             diagnosticEvents.contains {
                 $0.operation == .resumeDownload
@@ -5946,10 +5983,17 @@ final class AppModelTests: XCTestCase {
                 validator: nil
             ).encode()
             task.resume()
-            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-            while model.failure == nil && ContinuousClock.now < deadline {
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            await assertEventually(
+                "typed missing-account callback result",
+                timeout: .seconds(5),
+                observed: {
+                    "failure=\(String(describing: model.failure)); "
+                        + "presented=\(String(describing: model.presentedFailure))"
+                },
+                condition: {
+                    model.presentedFailure
+                        == .localContextUnavailable(.accountMissing)
+                })
             XCTAssertEqual(
                 model.presentedFailure,
                 .localContextUnavailable(.accountMissing))
@@ -6525,8 +6569,8 @@ final class AppModelTests: XCTestCase {
                 currentTime: 0, chapters: [], fileRanges: []
             ))
         XCTAssertNil(model.records.first?.manifest.bookFinishedAt)
+        XCTAssertEqual(model.deferredAutomaticCacheCleanupCountForTesting, 0)
         model.releaseAutomaticCachePin(pin)
-        try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(model.records.count, 1)
         let persisted = try await storage.records()
         XCTAssertNil(persisted.first?.manifest.bookFinishedAt)
@@ -6575,7 +6619,19 @@ final class AppModelTests: XCTestCase {
                     accountID: account.id, itemID: cache.detail.id,
                     finishedAt: finishedAt)
             }
-            try await Task.sleep(for: .milliseconds(50))
+            await assertEventually(
+                "local completion queued behind automatic work",
+                timeout: .seconds(3),
+                observed: {
+                    "waiters=\(model.pendingDownloadOperationWaiterCountForTesting(accountID: account.id, itemID: cache.detail.id)); "
+                        + "finishedAt=\(String(describing: model.records.first?.manifest.bookFinishedAt))"
+                },
+                condition: {
+                    model.pendingDownloadOperationWaiterCountForTesting(
+                        accountID: account.id,
+                        itemID: cache.detail.id
+                    ) == 1
+                })
             XCTAssertEqual(
                 model.records.first?.manifest.bookFinishedAt, originalDate)
             await gate.release()
@@ -7039,7 +7095,11 @@ final class AppModelTests: XCTestCase {
         )
         let service = TestAppService(
             activeAccount: .success(account),
-            downloadPlan: .failure(.downloadPlan(.unexpectedStatus(404))),
+            downloadPlan: .failure(
+                .downloadPlan(
+                    .authenticatedRequest(.requestTransportFailed)
+                )
+            ),
             authorizedDownloadRequest: .success(request)
         )
         let telemetry = RecordingRemoteTelemetryDownloadLogger()
@@ -7061,7 +7121,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(
             model.isWaitingForNetwork(try XCTUnwrap(model.records.first))
         )
-        model.updateNetworkPathState(.unknown)
         let identity = try DownloadTaskIdentity(
             downloadID: DownloadID(rawValue: "active-transfer"),
             accountID: account.id,
@@ -7090,32 +7149,47 @@ final class AppModelTests: XCTestCase {
             totalBytesWritten: 2,
             totalBytesExpectedToWrite: range.length
         )
-        for _ in 0..<100 {
-            guard let record = model.records.first else { break }
-            if model.displayedDownloadedByteLength(for: record) == 7 {
-                break
-            }
-            await Task.yield()
-        }
+        await assertEventually(
+            "transient download byte progress",
+            timeout: .seconds(3),
+            observed: {
+                let displayedByteLength =
+                    model.records.first.map {
+                        model.displayedDownloadedByteLength(for: $0)
+                    } ?? -1
+                return "displayed bytes=\(displayedByteLength)"
+            },
+            condition: {
+                guard let record = model.records.first else { return false }
+                return model.displayedDownloadedByteLength(for: record) == 7
+            })
         let activeRecord = try XCTUnwrap(model.records.first)
         XCTAssertEqual(
             model.displayedDownloadedByteLength(for: activeRecord),
             7
         )
 
+        let callbackBaseline = model.taskCompletionProcessingSequenceForTesting
         model.urlSession(
             session,
             task: task,
             didCompleteWithError: URLError(.notConnectedToInternet)
         )
-        for _ in 0..<100 {
-            if model.pendingRecoveryDownloadIDsForTesting.contains(
-                identity.downloadID
-            ) {
-                break
-            }
-            await Task.yield()
-        }
+        await assertEventually(
+            "offline transport callback records deferred recovery",
+            timeout: .seconds(30),
+            observed: {
+                "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "pending=\(model.pendingRecoveryDownloadIDsForTesting); "
+                    + "failure=\(String(describing: model.failure))"
+            },
+            condition: {
+                model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+                    && model.pendingRecoveryDownloadIDsForTesting.contains(
+                        identity.downloadID
+                    )
+            })
 
         let waitingRecord = try XCTUnwrap(model.records.first)
         XCTAssertEqual(waitingRecord.manifest.state, .downloading)
@@ -7140,22 +7214,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(descriptorsWhileWaiting.isEmpty)
 
         await service.setDownloadPlan(.success(plan))
+        model.updateNetworkPathState(
+            AppNetworkPathState(
+                availability: .satisfied,
+                isConstrained: false,
+                isExpensive: false
+            )
+        )
         await model.recoverAfterNetworkChange(for: [account])
 
         var resumedDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
         // The callback's concurrency-queue drain may already own recovery.
         // Wait for that recovery to finish and register its replacement task.
-        while clock.now < deadline,
-            !model.pendingRecoveryDownloadIDsForTesting.isEmpty
-                || resumedDescriptors.isEmpty
-        {
-            try await Task.sleep(for: .milliseconds(10))
-            resumedDescriptors =
-                await model.scheduledTransferDescriptorsForTesting()
-        }
+        await assertEventually(
+            "network recovery to register one replacement task",
+            timeout: .seconds(30),
+            observed: {
+                "pending=\(model.pendingRecoveryDownloadIDsForTesting); "
+                    + "descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+            },
+            condition: {
+                resumedDescriptors =
+                    await model.scheduledTransferDescriptorsForTesting()
+                return model.pendingRecoveryDownloadIDsForTesting.isEmpty
+                    && !resumedDescriptors.isEmpty
+            })
+        resumedDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
         XCTAssertEqual(resumedDescriptors.count, 1)
         XCTAssertEqual(resumedDescriptors.first?.identity.trackIndex, 1)
@@ -7387,8 +7473,20 @@ final class AppModelTests: XCTestCase {
                 isExpensive: false
             )
         )
+        let callbackBaseline = model.taskCompletionProcessingSequenceForTesting
         await retryGate.release()
-        for _ in 0..<100 { await Task.yield() }
+        await assertEventually(
+            "cancelled retry operation after network loss",
+            timeout: .seconds(30),
+            observed: {
+                "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "pending=\(model.pendingRecoveryDownloadIDsForTesting); "
+                    + "descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+            },
+            condition: {
+                model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+            })
 
         let scheduledDescriptors =
             await model.scheduledTransferDescriptorsForTesting()
@@ -7520,16 +7618,25 @@ final class AppModelTests: XCTestCase {
             await model.scheduledTransferDescriptorsForTesting()
         XCTAssertTrue(earlyDescriptors.isEmpty)
 
+        let callbackBaseline = model.taskCompletionProcessingSequenceForTesting
         await retryDelayGate.release()
         var replacementDescriptors: [DownloadChunkTaskDescription] = []
-        for _ in 0..<100 {
-            replacementDescriptors =
-                await model.scheduledTransferDescriptorsForTesting()
-            if replacementDescriptors.count == 1 {
-                break
-            }
-            await Task.yield()
-        }
+        await assertEventually(
+            "retry-after replacement task registration",
+            timeout: .seconds(30),
+            observed: {
+                "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+            },
+            condition: {
+                replacementDescriptors =
+                    await model.scheduledTransferDescriptorsForTesting()
+                return model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+                    && replacementDescriptors.count == 1
+            })
+        replacementDescriptors =
+            await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(replacementDescriptors.count, 1)
         XCTAssertEqual(replacementDescriptors.first?.range.start, 5)
         let replacementRequests =
@@ -7897,6 +8004,11 @@ final class AppModelTests: XCTestCase {
         let pauseTask = Task { @MainActor in
             await model.pause(record)
         }
+        addTeardownBlock {
+            await gate.release()
+            await pauseTask.value
+            await model.removeAll()
+        }
         await gate.waitUntilEntered()
 
         let callbackConfiguration = URLSessionConfiguration.ephemeral
@@ -7910,15 +8022,25 @@ final class AppModelTests: XCTestCase {
         )
         let callbackTask = callbackSession.downloadTask(with: request)
         callbackTask.taskDescription = try descriptor.encode()
-        callbackTask.resume()
-        for _ in 0..<200 {
-            if callbackTask.state == .completed,
-                model.records.first?.manifest.state == .failed
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+        let callbackBaseline = model.taskCompletionProcessingSequenceForTesting
+        addTeardownBlock {
+            await gate.release()
+            await pauseTask.value
+            callbackSession.invalidateAndCancel()
+            await model.removeAll()
         }
+        callbackTask.resume()
+        await assertEventually(
+            "terminal URLSession callback processing during pause",
+            timeout: .seconds(10),
+            observed: {
+                "task=\(callbackTask.state); sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "manifest=\(String(describing: model.records.first?.manifest.state))"
+            },
+            condition: {
+                model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+            })
 
         XCTAssertTrue(
             model.pausedDownloadIDs.contains(record.manifest.downloadID))
@@ -8001,16 +8123,18 @@ final class AppModelTests: XCTestCase {
             model.presentedFailure, .storedEntryInvalid(.missingInode))
         XCTAssertEqual(
             try Data(contentsOf: layout.destinationURL(for: identity)), bytes)
-        var events: [DiagnosticEvent] = []
-        for _ in 0..<100 {
-            events = await diagnostics.events()
-            if events.contains(where: {
-                $0.failureCode == .downloadEntryMissingInode
-            }) {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await assertEventually(
+            "quarantined legacy track diagnostic",
+            timeout: .seconds(5),
+            observed: { "\(await diagnostics.events())" },
+            condition: {
+                await diagnostics.events().contains {
+                    $0.operation == .restoreDownloads
+                        && $0.failureCode == .downloadEntryMissingInode
+                        && $0.stage == .downloadEntryReconciliation
+                }
+            })
+        let events = await diagnostics.events()
         XCTAssertTrue(
             events.contains(where: {
                 $0.operation == .restoreDownloads
@@ -8119,7 +8243,17 @@ final class AppModelTests: XCTestCase {
         let record = try XCTUnwrap(model.records.first)
 
         await model.pause(record)
-        try await Task.sleep(for: .milliseconds(100))
+        await assertEventually(
+            "typed pause storage failure",
+            timeout: .seconds(5),
+            observed: {
+                "failure=\(String(describing: model.failure)); "
+                    + "manifest=\(String(describing: model.records.first?.manifest.state)); "
+                    + "paused=\(model.pausedDownloadIDs)"
+            },
+            condition: {
+                model.failure == .storageUnavailable
+            })
 
         XCTAssertEqual(model.failure, .storageUnavailable)
         XCTAssertEqual(model.records.first?.manifest.state, .failed)
@@ -8679,15 +8813,22 @@ final class AppModelTests: XCTestCase {
         )
         let lateTask = lateSession.downloadTask(with: lateRequest)
         lateTask.taskDescription = try oldDescriptor.encode()
-        lateTask.resume()
-        for _ in 0..<200 {
-            let descriptors =
-                await model.scheduledTransferDescriptorsForTesting()
-            if lateTask.state == .completed, descriptors.count == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+        let callbackBaseline = model.taskCompletionProcessingSequenceForTesting
+        addTeardownBlock {
+            lateSession.invalidateAndCancel()
         }
+        lateTask.resume()
+        await assertEventually(
+            "retired cancelled-download callback processing",
+            timeout: .seconds(10),
+            observed: {
+                "task=\(lateTask.state); sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+                    + "descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+            },
+            condition: {
+                model.taskCompletionProcessingSequenceForTesting
+                    > callbackBaseline
+            })
 
         XCTAssertNil(model.failure)
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
@@ -8768,6 +8909,11 @@ final class AppModelTests: XCTestCase {
             await model.repair(cancelledRecord, account: account)
         }
         await repairGate.waitUntilEntered()
+        addTeardownBlock {
+            await repairGate.release()
+            await repairTask.value
+            await model.removeAll()
+        }
 
         let lateConfiguration = URLSessionConfiguration.ephemeral
         lateConfiguration.protocolClasses = [
@@ -9255,23 +9401,31 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(stalledDescriptors.isEmpty)
 
         await service.setDownloadPlan(.success(plan))
-        for _ in 0..<100 {
-            if await service.networkPathObserverCount() == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await assertEventually(
+            "network path observer registration",
+            timeout: .seconds(3),
+            observed: {
+                "observer count=\(await service.networkPathObserverCount())"
+            },
+            condition: {
+                await service.networkPathObserverCount() == 1
+            })
         await service.emitNetworkPathUpdate()
 
-        var descriptors: [DownloadChunkTaskDescription] = []
-        for _ in 0..<500 {
-            descriptors = await model.downloads
-                .scheduledTransferDescriptorsForTesting()
-            if descriptors.count == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await assertEventually(
+            "recovered interrupted download task",
+            timeout: .seconds(5),
+            observed: {
+                let descriptors = await model.downloads
+                    .scheduledTransferDescriptorsForTesting()
+                return "descriptors=\(descriptors)"
+            },
+            condition: {
+                await model.downloads
+                    .scheduledTransferDescriptorsForTesting().count == 1
+            })
+        let descriptors = await model.downloads
+            .scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
         let descriptor = try XCTUnwrap(descriptors.first)
         XCTAssertEqual(descriptor.range.start, 5)
@@ -9896,6 +10050,14 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.cellular-confirmation-queue.\(UUID().uuidString)"
         )
+        addTeardownBlock {
+            await MainActor.run {
+                if let pending = model.pendingCellularDownload {
+                    model.cancelCellularDownload(id: pending.id)
+                }
+            }
+            _ = await model.removeAllForLocalDataReset()
+        }
         model.setNetworkPolicy(.allowCellular)
 
         await model.download(detail: first, account: account)
@@ -9923,17 +10085,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requestsBeforeConfirmation.count, 2)
         model.cancelCellularDownload(
             id: model.pendingCellularDownload?.id ?? UUID())
-        await Task.yield()
+        await assertEventually(
+            "second cellular confirmation after cancelling the first",
+            timeout: .seconds(2),
+            observed: {
+                "pending=\(String(describing: model.pendingCellularDownload?.detail.id))"
+            },
+            condition: {
+                model.pendingCellularDownload?.detail.id == second.id
+            })
         XCTAssertEqual(model.pendingCellularDownload?.detail.id, second.id)
 
         await model.download(detail: first, account: account)
         let resetSucceeded = await model.removeAllForLocalDataReset()
         XCTAssertTrue(resetSucceeded)
-        await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
         model.cancelCellularDownload(
             id: model.pendingCellularDownload?.id ?? UUID())
-        await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
 
         await model.download(detail: first, account: account)
@@ -9941,10 +10109,19 @@ final class AppModelTests: XCTestCase {
             await model.confirmCellularDownload(
                 id: model.pendingCellularDownload?.id ?? UUID())
         }
-        await Task.yield()
+        await assertEventually(
+            "cellular confirmation admission before duplicate download trigger",
+            timeout: .seconds(2),
+            observed: {
+                "pending=\(String(describing: model.pendingCellularDownload?.detail.id)); "
+                    + "records=\(model.records.count)"
+            },
+            condition: {
+                model.pendingCellularDownload == nil
+                    && model.records.count == 1
+            })
         await model.download(detail: first, account: account)
         await confirmation.value
-        await Task.yield()
         XCTAssertNil(model.pendingCellularDownload)
         _ = await model.removeAllForLocalDataReset()
     }
@@ -10003,6 +10180,10 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.download-single-flight.\(UUID().uuidString)"
         )
+        addTeardownBlock {
+            await gate.release()
+            _ = await model.removeAllForLocalDataReset()
+        }
         model.setNetworkPolicy(.allowCellular)
 
         let first = Task {
@@ -10025,8 +10206,21 @@ final class AppModelTests: XCTestCase {
             await model.download(detail: detail, account: account)
         }
         await teardownGate.waitUntilEntered()
+        addTeardownBlock {
+            await teardownGate.release()
+            await inFlight.value
+            _ = await model.removeAllForLocalDataReset()
+        }
         let reset = Task { await model.removeAllForLocalDataReset() }
-        await Task.yield()
+        await assertEventually(
+            "local reset admission before competing download",
+            timeout: .seconds(2),
+            observed: {
+                "resetting=\(model.isResettingLocalDownloadsForTesting)"
+            },
+            condition: {
+                model.isResettingLocalDownloadsForTesting
+            })
         let otherDetail = fixtureBookDetail(
             item: fixtureBook(
                 id: "blocked-during-reset",
@@ -11229,6 +11423,18 @@ final class AppModelTests: XCTestCase {
                 accountID: fixture.accountID,
                 account: nil
             )
+            await assertEventually(
+                "downloaded AVPlayer readiness before services reset",
+                timeout: .seconds(5),
+                observed: { self.playbackDiagnostic(playback) },
+                condition: {
+                    playback.state == .playing
+                        && playback.runtimeSnapshotForTesting.itemStatus
+                            == .readyToPlay
+                        && playback.runtimeSnapshotForTesting.timeControlStatus
+                            == .playing
+                        && playback.runtimeSnapshotForTesting.playerRate > 0
+                })
             XCTAssertTrue(playback.isPlaybackRequested)
             XCTAssertTrue(
                 playback.state == .buffering || playback.state == .playing
@@ -11236,19 +11442,45 @@ final class AppModelTests: XCTestCase {
             playback.setRate(1.35)
             if !shouldPlay {
                 playback.pause()
-                XCTAssertEqual(playback.state, .paused)
+                await assertEventually(
+                    "paused player state before services reset",
+                    timeout: .seconds(3),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: {
+                        playback.state == .paused
+                            && playback.runtimeSnapshotForTesting.playerRate
+                                == 0
+                    })
             }
 
             await playback.handleMediaServicesReset()
 
             XCTAssertEqual(playback.isPlaybackRequested, shouldPlay)
             if shouldPlay {
-                XCTAssertTrue(
-                    playback.state == .buffering
-                        || playback.state == .playing
-                )
+                await assertEventually(
+                    "playing AVPlayer after services reset",
+                    timeout: .seconds(5),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: {
+                        playback.state == .playing
+                            && playback.runtimeSnapshotForTesting.itemStatus
+                                == .readyToPlay
+                            && playback.runtimeSnapshotForTesting
+                                .timeControlStatus == .playing
+                            && playback.runtimeSnapshotForTesting.playerRate > 0
+                    })
             } else {
-                XCTAssertEqual(playback.state, .paused)
+                await assertEventually(
+                    "paused AVPlayer after services reset",
+                    timeout: .seconds(5),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: {
+                        playback.state == .paused
+                            && playback.runtimeSnapshotForTesting.itemStatus
+                                == .readyToPlay
+                            && playback.runtimeSnapshotForTesting.playerRate
+                                == 0
+                    })
             }
             XCTAssertEqual(playback.rate, 1.35, accuracy: 0.001)
             XCTAssertEqual(activation.callCount, 2)
@@ -11275,19 +11507,47 @@ final class AppModelTests: XCTestCase {
                 accountID: fixture.accountID,
                 account: nil
             )
+            await assertEventually(
+                "downloaded AVPlayer readiness before natural completion",
+                timeout: .seconds(5),
+                observed: { self.playbackDiagnostic(playback) },
+                condition: {
+                    playback.state == .playing
+                        && playback.runtimeSnapshotForTesting.itemStatus
+                            == .readyToPlay
+                        && playback.runtimeSnapshotForTesting.timeControlStatus
+                            == .playing
+                        && playback.runtimeSnapshotForTesting.playerRate > 0
+                })
             XCTAssertTrue(playback.hasActiveBook)
             XCTAssertTrue(playback.showsMiniPlayer)
             XCTAssertNotNil(publisher.nowPlayingInfo)
             if pausesBeforeCompletion {
                 playback.setResumeRewind(.off)
                 playback.pause()
-                XCTAssertEqual(playback.state, .paused)
+                await assertEventually(
+                    "paused player before natural completion resumes",
+                    timeout: .seconds(3),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: {
+                        playback.state == .paused
+                            && playback.runtimeSnapshotForTesting.playerRate
+                                == 0
+                    })
             }
+            let playbackStartedAt = ContinuousClock.now
             playback.play()
-            for _ in 0..<200 {
-                if playback.state == .ended { break }
-                try await Task.sleep(for: .milliseconds(50))
-            }
+            await assertEventually(
+                "natural end of downloaded playback",
+                timeout: .seconds(10),
+                observed: {
+                    self.playbackDiagnostic(playback)
+                        + ", elapsed=\(playbackStartedAt.duration(to: ContinuousClock.now))"
+                },
+                condition: {
+                    playback.state == .ended
+                        && playback.currentTime >= playback.duration - 0.1
+                })
             XCTAssertEqual(playback.state, .ended)
             XCTAssertEqual(playback.currentTime, playback.duration)
             XCTAssertFalse(playback.canReusePreparedPlayback)
@@ -11328,12 +11588,35 @@ final class AppModelTests: XCTestCase {
         )
         await playback.start(detail: fixture.detail, account: account)
         playback.play()
-        for _ in 0..<200 {
-            if await service.playbackCloseSessionIDs().contains(sessionID) {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        await assertEventually(
+            "streamed AVPlayer readiness before natural completion",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: {
+                playback.state == .playing
+                    && playback.runtimeSnapshotForTesting.itemStatus
+                        == .readyToPlay
+                    && playback.runtimeSnapshotForTesting.timeControlStatus
+                        == .playing
+                    && playback.runtimeSnapshotForTesting.playerRate > 0
+            })
+        let playbackStartedAt = ContinuousClock.now
+        await assertEventually(
+            "streamed natural completion and session close",
+            timeout: .seconds(10),
+            observed: {
+                self.playbackDiagnostic(playback)
+                    + ", elapsed=\(playbackStartedAt.duration(to: ContinuousClock.now)); "
+                    + "closed=\(await service.playbackCloseSessionIDs())"
+            },
+            condition: {
+                guard playback.state == .ended,
+                    playback.currentTime >= playback.duration - 0.1
+                else { return false }
+                return await service.playbackCloseSessionIDs().contains(
+                    sessionID
+                )
+            })
         XCTAssertEqual(playback.state, .ended)
         XCTAssertEqual(playback.currentTime, playback.duration)
         XCTAssertFalse(playback.showsMiniPlayer)
@@ -11374,26 +11657,50 @@ final class AppModelTests: XCTestCase {
         )
         await playback.start(detail: fixture.detail, account: account)
         playback.play()
+        await assertEventually(
+            "streamed AVPlayer readiness before gated completion sync",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: {
+                playback.state == .playing
+                    && playback.runtimeSnapshotForTesting.itemStatus
+                        == .readyToPlay
+                    && playback.runtimeSnapshotForTesting.timeControlStatus
+                        == .playing
+                    && playback.runtimeSnapshotForTesting.playerRate > 0
+            })
         playback.pause()
         let syncStarted = await syncGate.waitUntilEntered(timeout: .seconds(2))
         XCTAssertTrue(syncStarted)
         playback.play()
-        for _ in 0..<200 {
-            if playback.state == .ended { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        let playbackStartedAt = ContinuousClock.now
+        await assertEventually(
+            "natural playback end while final sync is gated",
+            timeout: .seconds(10),
+            observed: {
+                self.playbackDiagnostic(playback)
+                    + ", elapsed=\(playbackStartedAt.duration(to: ContinuousClock.now))"
+            },
+            condition: {
+                playback.state == .ended
+                    && playback.currentTime >= playback.duration - 0.1
+            })
         XCTAssertEqual(playback.state, .ended)
         let closedWhileSyncing = await service.playbackCloseSessionIDs()
         let positionsWhileSyncing = await service.playbackSyncPositions()
         XCTAssertTrue(closedWhileSyncing.isEmpty)
         XCTAssertEqual(positionsWhileSyncing.count, 1)
         await syncGate.release()
-        for _ in 0..<200 {
-            if await service.playbackCloseSessionIDs().contains(sessionID) {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        await assertEventually(
+            "session close after final playback sync is released",
+            timeout: .seconds(10),
+            observed: {
+                self.playbackDiagnostic(playback)
+                    + ", closed=\(await service.playbackCloseSessionIDs())"
+            },
+            condition: {
+                await service.playbackCloseSessionIDs().contains(sessionID)
+            })
         let positions = await service.playbackSyncPositions()
         let closed = await service.playbackCloseSessionIDs()
         XCTAssertEqual(positions.count, 2)
@@ -11431,15 +11738,35 @@ final class AppModelTests: XCTestCase {
         for (index, sessionID) in sessionIDs.enumerated() {
             let syncedBeforeStart = await service.playbackSyncSessionIDs()
             await playback.start(detail: fixture.detail, account: account)
+            playback.play()
+            await assertEventually(
+                "AVPlayer readiness before restart natural completion",
+                timeout: .seconds(5),
+                observed: { self.playbackDiagnostic(playback) },
+                condition: {
+                    playback.state == .playing
+                        && playback.runtimeSnapshotForTesting.itemStatus
+                            == .readyToPlay
+                        && playback.runtimeSnapshotForTesting.timeControlStatus
+                            == .playing
+                        && playback.runtimeSnapshotForTesting.playerRate > 0
+                })
             let syncedAfterStart = await service.playbackSyncSessionIDs()
             XCTAssertEqual(syncedAfterStart, syncedBeforeStart)
-            playback.play()
-            for _ in 0..<200 {
-                if await service.playbackCloseSessionIDs().count == index + 1 {
-                    break
-                }
-                try await Task.sleep(for: .milliseconds(50))
-            }
+            let playbackStartedAt = ContinuousClock.now
+            await assertEventually(
+                "session \(sessionID) natural completion",
+                timeout: .seconds(10),
+                observed: {
+                    self.playbackDiagnostic(playback)
+                        + ", elapsed=\(playbackStartedAt.duration(to: ContinuousClock.now)); "
+                        + "closed=\(await service.playbackCloseSessionIDs())"
+                },
+                condition: {
+                    guard playback.state == .ended else { return false }
+                    return await service.playbackCloseSessionIDs().count
+                        == index + 1
+                })
             XCTAssertEqual(playback.state, .ended)
             let closed = await service.playbackCloseSessionIDs()
             XCTAssertEqual(closed.last, PlaybackSessionID(rawValue: sessionID))
@@ -11734,20 +12061,53 @@ final class AppModelTests: XCTestCase {
             accountID: fixture.accountID,
             account: nil
         )
+        await assertEventually(
+            "AVPlayer readiness before audio-file boundary reset",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: {
+                playback.state == .playing
+                    && playback.runtimeSnapshotForTesting.itemStatus
+                        == .readyToPlay
+                    && playback.runtimeSnapshotForTesting.timeControlStatus
+                        == .playing
+                    && playback.runtimeSnapshotForTesting.playerRate > 0
+            })
         let boundary = try XCTUnwrap(
             playback.audioFiles.last?.startOffset
         )
         await playback.seek(to: boundary)
-        XCTAssertEqual(playback.currentAudioFileIndex, 1)
+        await assertEventually(
+            "seek completion at next audio-file boundary",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: {
+                playback.currentAudioFileIndex == 1
+                    && abs(playback.currentTime - boundary) <= 0.1
+            })
 
+        let positionBeforeReset = playback.currentTime
         await playback.handleMediaServicesReset()
 
         XCTAssertTrue(playback.isPlaybackRequested)
-        XCTAssertTrue(
-            playback.state == .buffering || playback.state == .playing
+        XCTAssertEqual(
+            playback.currentTime,
+            positionBeforeReset,
+            accuracy: 0.1
         )
+        await assertEventually(
+            "AVPlayer readiness after audio-file boundary reset",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: {
+                playback.state == .playing
+                    && playback.runtimeSnapshotForTesting.itemStatus
+                        == .readyToPlay
+                    && playback.runtimeSnapshotForTesting.timeControlStatus
+                        == .playing
+                    && playback.runtimeSnapshotForTesting.playerRate > 0
+            })
         XCTAssertEqual(playback.currentAudioFileIndex, 1)
-        XCTAssertEqual(playback.currentTime, boundary, accuracy: 0.1)
     }
 
     func testSeekToAudioFileMovesToRequestedTrack() async throws {
@@ -12074,17 +12434,9 @@ final class AppModelTests: XCTestCase {
     func testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch()
         async throws
     {
-        let storageKey = "bleat.localPlaybackSessions.v1"
-        let defaults = UserDefaults.standard
-        let existing = defaults.data(forKey: storageKey)
-        defaults.removeObject(forKey: storageKey)
-        defer {
-            if let existing {
-                defaults.set(existing, forKey: storageKey)
-            } else {
-                defaults.removeObject(forKey: storageKey)
-            }
-        }
+        let suiteName = "NetworkPathRetry.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatReconnectSync-\(UUID().uuidString)",
@@ -12107,21 +12459,30 @@ final class AppModelTests: XCTestCase {
                 .localPlaybackSession(.requestFailed)
             )
         )
+        let operations = AppModelOperationEventProbe()
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("local-session-network-retry")
+                backgroundSessionIdentifier("local-session-network-retry"),
+            operationObserver: { operations.record($0) },
+            localSessionStore: store
         )
 
+        let initialSyncStarted = operations.expectation(
+            for: .localSessionSyncStarted(account.id))
+        let initialSyncCompleted = operations.expectation(
+            for: .localSessionSyncCompleted(account.id))
+        let networkObserverStarted = operations.expectation(
+            for: .networkPathObserverStarted)
         await model.start()
         XCTAssertEqual(model.phase, .signedIn)
-        for _ in 0..<100 {
-            if await service.localSessionSyncRequests().count == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(
+            of: [
+                initialSyncStarted, initialSyncCompleted,
+                networkObserverStarted,
+            ],
+            timeout: 30)
         let initialRequests = await service.localSessionSyncRequests()
         XCTAssertEqual(initialRequests.count, 1)
 
@@ -12135,21 +12496,18 @@ final class AppModelTests: XCTestCase {
                 )
             ])
         )
-        for _ in 0..<100 {
-            if await service.networkPathObserverCount() == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
         let observerCount = await service.networkPathObserverCount()
         XCTAssertEqual(observerCount, 1)
+        let networkUpdateApplied = operations.expectation(
+            for: .networkPathApplied)
+        let retryStarted = operations.expectation(
+            for: .localSessionSyncStarted(account.id))
+        let retryCompleted = operations.expectation(
+            for: .localSessionSyncCompleted(account.id))
         await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            if try store.pending(accountID: account.id).isEmpty {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(
+            of: [networkUpdateApplied, retryStarted, retryCompleted],
+            timeout: 30)
 
         XCTAssertTrue(try store.pending(accountID: account.id).isEmpty)
         let finalRequests = await service.localSessionSyncRequests()
@@ -12159,17 +12517,9 @@ final class AppModelTests: XCTestCase {
     func testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery()
         async throws
     {
-        let storageKey = "bleat.localPlaybackSessions.v1"
-        let defaults = UserDefaults.standard
-        let existing = defaults.data(forKey: storageKey)
-        defaults.removeObject(forKey: storageKey)
-        defer {
-            if let existing {
-                defaults.set(existing, forKey: storageKey)
-            } else {
-                defaults.removeObject(forKey: storageKey)
-            }
-        }
+        let suiteName = "NetworkPathDuplicatePaths.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let account = try fixtureAccount()
         let session = try localSession(
             id: "69bcba68-3e70-457e-bf07-d9a85f93d366", itemID: "path-quality")
@@ -12178,27 +12528,41 @@ final class AppModelTests: XCTestCase {
         let service = TestAppService(
             activeAccount: .success(account),
             localSessionSync: .failure(.localPlaybackSession(.requestFailed)))
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) },
+            localSessionStore: store
+        )
+        let initialSyncStarted = operations.expectation(
+            for: .localSessionSyncStarted(account.id))
+        let initialSyncCompleted = operations.expectation(
+            for: .localSessionSyncCompleted(account.id))
+        let networkObserverStarted = operations.expectation(
+            for: .networkPathObserverStarted)
         await model.start()
-        for _ in 0..<100 {
-            if await service.localSessionSyncRequests().count == 1,
-                await service.networkPathObserverCount() == 1
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(
+            of: [
+                initialSyncStarted, initialSyncCompleted,
+                networkObserverStarted,
+            ],
+            timeout: 30)
         let launchSyncs = await service.localSessionSyncRequests().count
         XCTAssertEqual(launchSyncs, 1)
+        let initialPathApplied = operations.expectation(
+            for: .networkPathApplied)
+        let retryStarted = operations.expectation(
+            for: .localSessionSyncStarted(account.id))
+        let retryCompleted = operations.expectation(
+            for: .localSessionSyncCompleted(account.id))
         await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            if await service.hasLiveUpdatesSubscriber() { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        for _ in 0..<100 {
-            if await service.localSessionSyncRequests().count >= 2 { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(
+            of: [initialPathApplied, retryStarted, retryCompleted], timeout: 30)
+        await assertEventually(
+            "live update subscriber after network recovery",
+            timeout: .seconds(3),
+            observed: { String(await service.hasLiveUpdatesSubscriber()) },
+            condition: { await service.hasLiveUpdatesSubscriber() })
         let baselineSyncs = await service.localSessionSyncRequests().count
         XCTAssertEqual(baselineSyncs, 2)
         let baselineAccounts = await service.accountRefreshRequestCount()
@@ -12211,15 +12575,14 @@ final class AppModelTests: XCTestCase {
                     isExpensive: false,
                     linkQuality: index < 50 ? .moderate : .good))
         }
+        let minimalPath = AppNetworkPathState(
+            availability: .satisfied, isConstrained: false,
+            isExpensive: false, linkQuality: .minimal)
+        let minimalPathApplied = operations.expectation(
+            for: .networkPathStateApplied(minimalPath))
         await service.emitNetworkPathUpdate(
-            AppNetworkPathState(
-                availability: .satisfied, isConstrained: false,
-                isExpensive: false,
-                linkQuality: .minimal))
-        for _ in 0..<100 {
-            if model.networkPathState.linkQuality == .minimal { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+            minimalPath)
+        await fulfillment(of: [minimalPathApplied], timeout: 30)
         XCTAssertEqual(model.networkPathState.linkQuality, .minimal)
         let finalAccounts = await service.accountRefreshRequestCount()
         let finalLibraries = await service.libraryRequestCount()
@@ -12331,28 +12694,32 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             libraries: .success([fixtureLibrary()])
         )
+        let operations = AppModelOperationEventProbe()
         let model = AppModel(
             service: service,
-            remoteTelemetryTracer: tracer
+            remoteTelemetryTracer: tracer,
+            operationObserver: { operations.record($0) }
         )
+        defer { model.setLiveUpdatesActive(false) }
+        let observerStarted = operations.expectation(
+            for: .networkPathObserverStarted)
         await model.start()
-        for _ in 0..<100 {
-            if await service.networkPathObserverCount() == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: [observerStarted], timeout: 30)
+        let pathApplied = operations.expectation(for: .networkPathApplied)
         await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            if await service.hasLiveUpdatesSubscriber() {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: [pathApplied], timeout: 30)
+        await assertEventually(
+            "live update subscriber before connection events",
+            timeout: .seconds(3),
+            observed: { String(await service.hasLiveUpdatesSubscriber()) },
+            condition: { await service.hasLiveUpdatesSubscriber() })
         let baseline = tracer.spans.count
         let localAttemptID = UUID()
         let primaryAttemptID = UUID()
 
+        let attemptsConsumed = (0..<4).map { _ in
+            operations.expectation(for: .liveUpdateConsumed)
+        }
         await service.emitLiveUpdate(
             .connectionAttempt(
                 AudiobookshelfLiveConnectionAttempt(
@@ -12394,15 +12761,7 @@ final class AppModelTests: XCTestCase {
                     phase: .authenticated
                 )
             ))
-        for _ in 0..<100 {
-            let attempts = Array(tracer.spans.dropFirst(baseline))
-            if attempts.count == 2,
-                attempts.allSatisfy({ $0.outcome != nil })
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: attemptsConsumed, timeout: 30)
 
         XCTAssertEqual(
             Array(tracer.spans.dropFirst(baseline)),
@@ -12429,6 +12788,8 @@ final class AppModelTests: XCTestCase {
         )
 
         let pendingAttemptID = UUID()
+        let pendingAttemptConsumed = operations.expectation(
+            for: .liveUpdateConsumed)
         await service.emitLiveUpdate(
             .connectionAttempt(
                 AudiobookshelfLiveConnectionAttempt(
@@ -12438,19 +12799,9 @@ final class AppModelTests: XCTestCase {
                     phase: .started
                 )
             ))
-        for _ in 0..<100 {
-            if tracer.spans.count == baseline + 3 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: [pendingAttemptConsumed], timeout: 30)
+        XCTAssertEqual(tracer.spans.count, baseline + 3)
         model.setLiveUpdatesActive(true)
-        for _ in 0..<100 {
-            if tracer.spans.last?.outcome == .cancelled {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
 
         XCTAssertEqual(tracer.spans.last?.outcome, .cancelled)
     }
@@ -12469,28 +12820,26 @@ final class AppModelTests: XCTestCase {
             firstPage: .success(fixturePage(libraryID: library.id)),
             homeShelves: .success(fixtureShelves(libraryID: library.id))
         )
-        let model = AppModel(service: service)
-        await model.start()
-        for _ in 0..<100 {
-            if await service.networkPathObserverCount() == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
-        await service.emitNetworkPathUpdate(
-            AppNetworkPathState(
-                availability: .satisfied,
-                isConstrained: true,
-                isExpensive: false
-            )
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
         )
-        for _ in 0..<100 {
-            if model.liveUpdateConnectionState == .suspendedForLowDataMode {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        defer { model.setLiveUpdatesActive(false) }
+        let observerStarted = operations.expectation(
+            for: .networkPathObserverStarted)
+        await model.start()
+        await fulfillment(of: [observerStarted], timeout: 30)
+
+        let constrainedPath = AppNetworkPathState(
+            availability: .satisfied,
+            isConstrained: true,
+            isExpensive: false
+        )
+        let constrainedApplied = operations.expectation(
+            for: .networkPathStateApplied(constrainedPath))
+        await service.emitNetworkPathUpdate(constrainedPath)
+        await fulfillment(of: [constrainedApplied], timeout: 30)
 
         XCTAssertEqual(model.phase, .signedIn)
         XCTAssertEqual(model.account?.id, account.id)
@@ -12504,36 +12853,36 @@ final class AppModelTests: XCTestCase {
         var hasSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertFalse(hasSubscriber)
 
-        await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            lifecycle = await service.liveUpdatesLifecycleCounts()
-            if lifecycle.starts == 1,
-                await service.hasLiveUpdatesSubscriber()
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let availablePath = AppNetworkPathState(
+            availability: .satisfied,
+            isConstrained: false,
+            isExpensive: false
+        )
+        let availableApplied = operations.expectation(
+            for: .networkPathStateApplied(availablePath))
+        await service.emitNetworkPathUpdate(availablePath)
+        await fulfillment(of: [availableApplied], timeout: 30)
+        await assertEventually(
+            "live update subscription after leaving constrained path",
+            timeout: .seconds(3),
+            observed: {
+                String(await service.liveUpdatesLifecycleCounts().starts)
+            }, condition: { await service.hasLiveUpdatesSubscriber() })
         lifecycle = await service.liveUpdatesLifecycleCounts()
         XCTAssertEqual(lifecycle.starts, 1)
         XCTAssertEqual(lifecycle.stops, 0)
         hasSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertTrue(hasSubscriber)
 
-        await service.emitNetworkPathUpdate()
-        await service.emitNetworkPathUpdate(
-            AppNetworkPathState(
-                availability: .satisfied,
-                isConstrained: false,
-                isExpensive: true
-            )
+        let expensivePath = AppNetworkPathState(
+            availability: .satisfied,
+            isConstrained: false,
+            isExpensive: true
         )
-        for _ in 0..<100 {
-            if model.networkPathState.isExpensive {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let expensiveApplied = operations.expectation(
+            for: .networkPathStateApplied(expensivePath))
+        await service.emitNetworkPathUpdate(expensivePath)
+        await fulfillment(of: [expensiveApplied], timeout: 30)
         lifecycle = await service.liveUpdatesLifecycleCounts()
         XCTAssertEqual(lifecycle.starts, 1)
         XCTAssertEqual(lifecycle.stops, 0)
@@ -12555,22 +12904,12 @@ final class AppModelTests: XCTestCase {
         let playbackState = model.playback.state
         let playbackChapter = model.playback.currentChapterIndex
 
+        let constrainedAgain = operations.expectation(
+            for: .networkPathStateApplied(constrainedPath))
         await service.emitNetworkPathUpdate(
-            AppNetworkPathState(
-                availability: .satisfied,
-                isConstrained: true,
-                isExpensive: false
-            )
+            constrainedPath
         )
-        for _ in 0..<100 {
-            lifecycle = await service.liveUpdatesLifecycleCounts()
-            if lifecycle.stops == 1,
-                !(await service.hasLiveUpdatesSubscriber())
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: [constrainedAgain], timeout: 30)
         lifecycle = await service.liveUpdatesLifecycleCounts()
         XCTAssertEqual(lifecycle.starts, 1)
         XCTAssertEqual(lifecycle.stops, 1)
@@ -12583,19 +12922,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.currentChapterIndex, playbackChapter)
         XCTAssertFalse(model.playback.isPlaybackRequested)
 
-        await service.emitNetworkPathUpdate(
-            AppNetworkPathState(
-                availability: .unavailable,
-                isConstrained: false,
-                isExpensive: false
-            )
+        let unavailablePath = AppNetworkPathState(
+            availability: .unavailable,
+            isConstrained: false,
+            isExpensive: false
         )
-        for _ in 0..<100 {
-            if model.liveUpdateConnectionState == .disconnected {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let unavailableApplied = operations.expectation(
+            for: .networkPathStateApplied(unavailablePath))
+        await service.emitNetworkPathUpdate(unavailablePath)
+        await fulfillment(of: [unavailableApplied], timeout: 30)
         XCTAssertEqual(model.liveUpdateConnectionState, .disconnected)
         lifecycle = await service.liveUpdatesLifecycleCounts()
         XCTAssertEqual(lifecycle.starts, 1)
@@ -12610,16 +12945,17 @@ final class AppModelTests: XCTestCase {
         )
 
         let catchUpBaseline = await service.libraryRequestCount()
-        await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            lifecycle = await service.liveUpdatesLifecycleCounts()
-            if lifecycle.starts == 2,
-                await service.libraryRequestCount() > catchUpBaseline
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let recoveredPathState = AppNetworkPathState(
+            availability: .satisfied,
+            isConstrained: false,
+            isExpensive: false
+        )
+        let recoveredPath = operations.expectation(
+            for: .networkPathStateApplied(recoveredPathState))
+        let catchUpCompleted = operations.expectation(
+            for: .liveRefreshCompleted)
+        await service.emitNetworkPathUpdate(recoveredPathState)
+        await fulfillment(of: [recoveredPath, catchUpCompleted], timeout: 30)
         lifecycle = await service.liveUpdatesLifecycleCounts()
         XCTAssertEqual(lifecycle.starts, 2)
         XCTAssertEqual(lifecycle.stops, 1)
@@ -12631,17 +12967,9 @@ final class AppModelTests: XCTestCase {
     }
 
     func testPendingLocalSessionUploadDoesNotBlockLaunch() async throws {
-        let storageKey = "bleat.localPlaybackSessions.v1"
-        let defaults = UserDefaults.standard
-        let existing = defaults.data(forKey: storageKey)
-        defaults.removeObject(forKey: storageKey)
-        defer {
-            if let existing {
-                defaults.set(existing, forKey: storageKey)
-            } else {
-                defaults.removeObject(forKey: storageKey)
-            }
-        }
+        let suiteName = "PendingLocalSessionUpload.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatHungLocalSessionSync-\(UUID().uuidString)",
@@ -12663,16 +12991,21 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             localSessionSyncGate: syncGate
         )
+        let operations = AppModelOperationEventProbe()
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("local-session-upload")
+                backgroundSessionIdentifier("local-session-upload"),
+            operationObserver: { operations.record($0) },
+            localSessionStore: store
         )
         let launchFinished = expectation(
             description: "Launch does not await local session upload"
         )
-        Task { @MainActor in
+        let uploadStarted = operations.expectation(
+            for: .localSessionSyncStarted(account.id))
+        let launchTask = Task { @MainActor in
             await model.start()
             launchFinished.fulfill()
         }
@@ -12680,14 +13013,8 @@ final class AppModelTests: XCTestCase {
         await fulfillment(of: [launchFinished], timeout: 2)
         XCTAssertEqual(model.phase, .signedIn)
 
-        let uploadStarted = expectation(
-            description: "Background local session upload starts"
-        )
-        Task {
-            await syncGate.waitUntilEntered()
-            uploadStarted.fulfill()
-        }
         await fulfillment(of: [uploadStarted], timeout: 2)
+        await syncGate.waitUntilEntered()
 
         XCTAssertEqual(
             try store.pending(accountID: account.id).map(\.id),
@@ -12695,7 +13022,11 @@ final class AppModelTests: XCTestCase {
         )
         let requests = await service.localSessionSyncRequests()
         XCTAssertEqual(requests.count, 1)
+        let uploadCompleted = operations.expectation(
+            for: .localSessionSyncCompleted(account.id))
         await syncGate.release()
+        await fulfillment(of: [uploadCompleted], timeout: 30)
+        await launchTask.value
     }
 
     func testStartWithoutSavedAccountShowsLogin() async {
@@ -12844,7 +13175,7 @@ final class AppModelTests: XCTestCase {
             await model.cancelPrivateCloudSynchronization()
             cancellationFinished = true
         }
-        try await Task.sleep(for: .milliseconds(30))
+        await service.waitForPrivateCloudDrainRequests(2)
         XCTAssertFalse(cancellationFinished)
 
         await drainGate.release()
@@ -13566,8 +13897,13 @@ final class AppModelTests: XCTestCase {
             firstPage: .success(page), homeShelves: .success([shelf]),
             search: .success([item, other])
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.search(query: "Book")
         let baseline = await service.liveRefreshRequestCounts()
         await service.setBookProgress(
@@ -13575,11 +13911,12 @@ final class AppModelTests: XCTestCase {
                 userID: account.user.id, itemID: item.id, isFinished: true
             ))
 
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         for _ in 0..<3 {
             await service.emitLiveUpdate(
                 liveProgress(item.id, isFinished: true))
         }
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
 
         XCTAssertTrue(model.isBookFinished(item.id))
         XCTAssertFalse(model.isBookFinished(other.id))
@@ -13612,24 +13949,32 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account), libraries: .success([library]),
             firstPage: .success(page), bookDetail: .success(detail)
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(item)
         await service.setBookProgress(progress)
         let baseline = await service.liveRefreshRequestCounts()
 
+        let unrelatedRefreshFinished =
+            operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(
             liveProgress(LibraryItemID(rawValue: "other")))
-        try await Task.sleep(for: .milliseconds(350))
+        await fulfillment(of: [unrelatedRefreshFinished], timeout: 30)
         let unrelatedRequests = await service.liveRefreshRequestCounts()
         var unrelatedExpected = baseline
         unrelatedExpected.progress += 1
         XCTAssertEqual(unrelatedRequests, unrelatedExpected)
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         for _ in 0..<3 {
             await service.emitLiveUpdate(
                 liveProgress(item.id, isFinished: true))
         }
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
 
         XCTAssertEqual(
             model.bookDetail, .loaded(detail.replacingProgress(with: progress)))
@@ -13651,20 +13996,28 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account), libraries: .success([library]),
             firstPage: .success(fixturePage(libraryID: library.id))
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         model.setLiveUpdatesActive(false)
         await model.start()
+        let networkUpdateApplied = operations.expectation(
+            for: .networkPathApplied)
         try await waitForLiveNetworkObserver(service)
         let baseline = await service.liveRefreshRequestCounts()
         await service.emitNetworkPathUpdate()
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [networkUpdateApplied], timeout: 30)
         let backgroundRequests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(backgroundRequests, baseline)
         let backgroundSubscriber = await service.hasLiveUpdatesSubscriber()
         XCTAssertFalse(backgroundSubscriber)
 
+        let recoveryFinished = operations.expectation(
+            for: .liveRefreshCompleted)
         model.setLiveUpdatesActive(true)
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [recoveryFinished], timeout: 30)
         let foregroundRequests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(foregroundRequests.libraries, baseline.libraries + 1)
         XCTAssertEqual(foregroundRequests.allProgress, baseline.allProgress + 1)
@@ -13680,19 +14033,24 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account), libraries: .success([library]),
             firstPage: .success(fixturePage(libraryID: library.id))
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         let baseline = await service.liveRefreshRequestCounts()
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
+        let updateConsumed = operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
         // A marker on the same stream confirms that the event was consumed.
+        let markerConsumed = operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(.connection(.authenticated))
-        for _ in 0..<100 where model.liveUpdateConnectionState != .authenticated
-        {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        await fulfillment(of: [updateConsumed, markerConsumed], timeout: 30)
         XCTAssertEqual(model.liveUpdateConnectionState, .authenticated)
         model.setLiveUpdatesActive(false)
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, baseline)
     }
@@ -13704,16 +14062,22 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account), libraries: .success([library]),
             firstPage: .success(fixturePage(libraryID: library.id))
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         let gate = AsyncGate()
         await service.setAllBookProgressGate(gate)
         let baseline = await service.liveRefreshRequestCounts()
         await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
         await gate.waitUntilEntered()
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         model.setLiveUpdatesActive(false)
         await gate.release()
-        try await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         var expected = baseline
         expected.allProgress += 1
         let requests = await service.liveRefreshRequestCounts()
@@ -13734,19 +14098,25 @@ final class AppModelTests: XCTestCase {
             firstPage: .success(fixturePage(libraryID: library.id)),
             bookDetail: .success(detail), bookProgressGate: gate
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(item)
         await service.setBookProgress(
             fixtureProgress(
                 userID: account.user.id, itemID: item.id, isFinished: true
             ))
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id, isFinished: true))
         await gate.waitUntilEntered()
         await service.queueBookDetails([.success(otherDetail)], gates: [])
         await model.loadBookDetail(other)
         await gate.release()
-        try await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         XCTAssertEqual(model.bookDetail, .loaded(otherDetail))
         model.setLiveUpdatesActive(false)
     }
@@ -13760,18 +14130,25 @@ final class AppModelTests: XCTestCase {
             firstPage: .success(fixturePage(libraryID: library.id)),
             bookDetail: .success(fixtureBookDetail(item: item))
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(item)
         let gate = AsyncGate()
         await service.setAllBookProgressGate(gate)
         let baseline = await service.liveRefreshRequestCounts()
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(.event(.libraryChanged(library.id)))
         await gate.waitUntilEntered()
+        let progressConsumed = operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(300))
+        await fulfillment(of: [progressConsumed], timeout: 30)
         await gate.release()
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests.libraries, baseline.libraries + 1)
         XCTAssertEqual(requests.pages, baseline.pages + 1)
@@ -13800,13 +14177,20 @@ final class AppModelTests: XCTestCase {
                 )
             ])
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         let baseline = await service.liveRefreshRequestCounts()
         let progress = fixtureBookProgress(progress: 0.25, isFinished: false)
         await service.setBookProgress(progress)
+        let firstRefreshFinished =
+            operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [firstRefreshFinished], timeout: 30)
         guard case .loaded(let shelves) = model.homeShelves else {
             return XCTFail("Expected shelves")
         }
@@ -13823,8 +14207,10 @@ final class AppModelTests: XCTestCase {
                 lastUpdateMilliseconds: 2, startedAtMilliseconds: 1,
                 finishedAtMilliseconds: nil
             ))
+        let secondRefreshFinished =
+            operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [secondRefreshFinished], timeout: 30)
         guard case .loaded(let hiddenShelves) = model.homeShelves else {
             return XCTFail("Expected shelves")
         }
@@ -13851,37 +14237,37 @@ final class AppModelTests: XCTestCase {
         )
         await service.setRefreshedBookDetail(.success(detail))
         let diagnostics = AppDiagnosticRecorderSpy()
-        let model = AppModel(service: service, diagnostics: diagnostics)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            diagnostics: diagnostics,
+            operationObserver: { operations.record($0) }
+        )
         defer { model.setLiveUpdatesActive(false) }
+        let observerStarted = operations.expectation(
+            for: .networkPathObserverStarted)
         await model.start()
+        await fulfillment(of: [observerStarted], timeout: 30)
         let initialHomeCompletions = await diagnostics.events().filter {
             $0.operation == .loadHome && $0.name == .operationCompleted
         }.count
-        try await waitForLiveNetworkObserver(service)
+        let initialRefreshFinished = operations.expectation(
+            for: .liveRefreshCompleted)
         await service.emitNetworkPathUpdate()
-        let recovered = await waitUntil(timeout: .seconds(10)) {
-            let homeCompletions = await diagnostics.events().filter {
-                $0.operation == .loadHome && $0.name == .operationCompleted
-            }.count
-            let subscribed = await service.hasLiveUpdatesSubscriber()
-            return homeCompletions > initialHomeCompletions && subscribed
-        }
-        guard recovered else {
-            return XCTFail("Initial network recovery did not complete")
-        }
+        await fulfillment(of: [initialRefreshFinished], timeout: 30)
+        let subscribed = await service.hasLiveUpdatesSubscriber()
+        XCTAssertTrue(subscribed)
+        let homeCompletions = await diagnostics.events().filter {
+            $0.operation == .loadHome && $0.name == .operationCompleted
+        }.count
+        XCTAssertGreaterThan(homeCompletions, initialHomeCompletions)
         let baseline = await service.liveRefreshRequestCounts()
         await service.setBookProgress(
             fixtureBookProgress(progress: 0.25, isFinished: false))
+        let refreshFinished = operations.expectation(
+            for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        let updated = await waitUntil(timeout: .seconds(10)) {
-            guard case .loaded(let shelves) = model.homeShelves else {
-                return false
-            }
-            return shelves.first?.id == "continue-listening"
-                && shelves.first?.items == [detail.summary]
-        }
-        XCTAssertTrue(
-            updated, "Live progress did not create Continue Listening")
+        await fulfillment(of: [refreshFinished], timeout: 30)
         guard case .loaded(let shelves) = model.homeShelves else {
             return XCTFail("Expected shelves")
         }
@@ -13905,16 +14291,23 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account), libraries: .success([library]),
             firstPage: .success(page)
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.setLibraryProgressFilter(.notStarted)
         let baseline = await service.liveRefreshRequestCounts()
         let empty = LibraryItemsPage(items: [], total: 0, page: 0, limit: 50)
         await service.setFirstPage(.success(empty))
         await service.setBookProgress(
             fixtureBookProgress(progress: 0.25, isFinished: false))
+        let firstRefreshFinished =
+            operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [firstRefreshFinished], timeout: 30)
         XCTAssertEqual(model.books, .loaded(empty))
         var expected = baseline
         expected.progress += 1
@@ -13923,8 +14316,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requests, expected)
         await service.setBookProgress(
             fixtureBookProgress(progress: 0.5, isFinished: false))
+        let secondRefreshFinished =
+            operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [secondRefreshFinished], timeout: 30)
         expected.progress += 1
         let advancedRequests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(advancedRequests, expected)
@@ -13943,11 +14338,17 @@ final class AppModelTests: XCTestCase {
             firstPage: .success(fixturePage(libraryID: library.id)),
             bookDetail: .success(detail)
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(item)
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(item.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         XCTAssertEqual(
             model.bookDetail, .loaded(detail.replacingProgress(with: nil)))
         model.setLiveUpdatesActive(false)
@@ -13967,8 +14368,13 @@ final class AppModelTests: XCTestCase {
                         detail: fixture.detail, audioURL: fixture.audioURL))
             ]
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(fixture.detail.summary)
         await model.playback.start(
             detail: fixture.detail, account: account, initialTime: 0.25)
@@ -13976,19 +14382,23 @@ final class AppModelTests: XCTestCase {
             model.playback.isPrepared(
                 accountID: account.id, itemID: fixture.detail.id))
         let baseline = await service.liveRefreshRequestCounts()
+        let firstUpdateConsumed =
+            operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(
             liveProgress(
                 fixture.detail.id,
                 sessionID: PlaybackSessionID(rawValue: "playback-start-session")
             ))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [firstUpdateConsumed], timeout: 30)
         guard case .loaded(let localShelves) = model.homeShelves else {
             return XCTFail("Expected local playback shelf")
         }
         XCTAssertEqual(localShelves.first?.items.map(\.id), [fixture.detail.id])
         model.playback.pause()
+        let secondUpdateConsumed =
+            operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(liveProgress(fixture.detail.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [secondUpdateConsumed], timeout: 30)
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, baseline)
         model.setLiveUpdatesActive(false)
@@ -14008,8 +14418,13 @@ final class AppModelTests: XCTestCase {
             libraries: .success([fixtureLibrary()]),
             bookDetail: .success(fixture.detail)
         )
-        let model = AppModel(service: service)
-        try await startLiveRefreshTest(model, service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(fixture.detail.summary)
         await model.playback.startDownloaded(
             detail: fixture.detail, trackURLs: [fixture.audioURL],
@@ -14017,8 +14432,9 @@ final class AppModelTests: XCTestCase {
         )
         model.playback.pause()
         let baseline = await service.liveRefreshRequestCounts()
+        let refreshFinished = operations.expectation(for: .liveRefreshCompleted)
         await service.emitLiveUpdate(liveProgress(fixture.detail.id))
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [refreshFinished], timeout: 30)
         var expected = baseline
         expected.progress += 1
         let requests = await service.liveRefreshRequestCounts()
@@ -14148,19 +14564,37 @@ final class AppModelTests: XCTestCase {
     }
 
     private func startLiveRefreshTest(
-        _ model: AppModel, service: TestAppService
+        _ model: AppModel,
+        service: TestAppService,
+        operations: AppModelOperationEventProbe? = nil
     ) async throws {
+        let observerStarted = operations?.expectation(
+            for: .networkPathObserverStarted)
         await model.start()
-        try await waitForLiveNetworkObserver(service)
-        await service.emitNetworkPathUpdate()
-        for _ in 0..<100 {
-            if await service.hasLiveUpdatesSubscriber() { break }
-            try await Task.sleep(for: .milliseconds(5))
+        if let observerStarted {
+            await fulfillment(of: [observerStarted], timeout: 30)
+        } else {
+            try await waitForLiveNetworkObserver(service)
         }
-        let subscribed = await service.hasLiveUpdatesSubscriber()
-        XCTAssertTrue(subscribed)
-        // Let the initial path-recovery catch-up finish before counting events.
-        try await Task.sleep(for: .milliseconds(400))
+        let initialRefreshFinished = operations?.expectation(
+            for: .liveRefreshCompleted)
+        await service.emitNetworkPathUpdate()
+        if initialRefreshFinished == nil {
+            let subscribed = await waitUntil(timeout: .seconds(3)) {
+                await service.hasLiveUpdatesSubscriber()
+            }
+            XCTAssertTrue(subscribed)
+        }
+        if let initialRefreshFinished {
+            await fulfillment(of: [initialRefreshFinished], timeout: 30)
+            let subscribed = await waitUntil(timeout: .seconds(3)) {
+                await service.hasLiveUpdatesSubscriber()
+            }
+            XCTAssertTrue(subscribed)
+        } else {
+            // Legacy caller has no lifecycle probe installed.
+            try await Task.sleep(for: .milliseconds(400))
+        }
     }
 
     func testLiveProgressUpdatesFinishedStateImmediately() async throws {
@@ -14173,22 +14607,13 @@ final class AppModelTests: XCTestCase {
             libraries: .success([fixtureLibrary()]),
             bookDetail: .success(fixture.detail)
         )
-        let model = AppModel(service: service)
-        await model.start()
-        for _ in 0..<100 {
-            if await service.networkPathObserverCount() > 0 {
-                break
-            }
-            await Task.yield()
-        }
-        await service.emitNetworkPathUpdate()
-        for _ in 0..<100 where !(await service.hasLiveUpdatesSubscriber()) {
-            await Task.yield()
-        }
-        let hasSubscriber = await service.hasLiveUpdatesSubscriber()
-        XCTAssertTrue(hasSubscriber)
-
-        try await Task.sleep(for: .milliseconds(400))
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
         await model.loadBookDetail(
             fixtureBook(
                 id: itemID.rawValue, title: fixture.detail.title,
@@ -14210,12 +14635,16 @@ final class AppModelTests: XCTestCase {
         let playbackChapter = model.playback.currentChapterIndex
 
         let baseline = await service.liveRefreshRequestCounts()
+        let progressConsumed = operations.expectation(
+            for: .liveUpdateConsumed)
         await service.emitLiveUpdate(liveProgress(itemID))
-        try await Task.sleep(for: .milliseconds(50))
+        await fulfillment(of: [progressConsumed], timeout: 30)
         guard case .loaded(let localShelves) = model.homeShelves else {
             return XCTFail("Expected local playback shelf")
         }
         XCTAssertEqual(localShelves.first?.items.map(\.id), [itemID])
+        let finishedConsumed = operations.expectation(
+            for: .liveUpdateConsumed)
         await service.emitLiveUpdate(
             .event(
                 .playbackProgress(
@@ -14231,11 +14660,7 @@ final class AppModelTests: XCTestCase {
                 )
             )
         )
-        for _ in 0..<100 where !model.isBookFinished(itemID) {
-            await Task.yield()
-        }
-
-        try await Task.sleep(for: .milliseconds(400))
+        await fulfillment(of: [finishedConsumed], timeout: 30)
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, baseline)
         XCTAssertTrue(model.isBookFinished(itemID))
@@ -16790,7 +17215,11 @@ final class AppModelTests: XCTestCase {
                 )
             }
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         let destination = SeriesDestination(
             libraryID: library.id,
@@ -16911,7 +17340,11 @@ final class AppModelTests: XCTestCase {
                 )
             }
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         let destination = SeriesDestination(
             libraryID: library.id,
@@ -16920,11 +17353,16 @@ final class AppModelTests: XCTestCase {
         )
         await model.loadSeries(destination)
 
+        let firstPageAdmission = operations.expectation(
+            for: .coordinatedPageRequested(account.id, library.id, 1))
         let loadMore = Task { await model.loadNextSeriesPage() }
+        await fulfillment(of: [firstPageAdmission], timeout: 30)
         await pageGate.waitUntilEntered()
         guard case .loaded(let startingPage) = model.seriesBooks else {
             return XCTFail("Expected the first series page")
         }
+        let coalescedPageAdmission = operations.expectation(
+            for: .coordinatedPageRequested(account.id, library.id, 1))
         let preparation = Task {
             await model.loadAllSeriesBooks(
                 destination,
@@ -16932,8 +17370,7 @@ final class AppModelTests: XCTestCase {
                 startingAt: startingPage
             )
         }
-
-        await Task.yield()
+        await fulfillment(of: [coalescedPageAdmission], timeout: 30)
         let selectionsWhilePending = await service.pageSelections()
         XCTAssertEqual(
             selectionsWhilePending.filter { $0.page == 1 }.count,
@@ -17028,7 +17465,11 @@ final class AppModelTests: XCTestCase {
                 return .failure(.libraryRepository(.noCachedValue))
             }
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         let firstDestination = SeriesDestination(
             libraryID: library.id,
@@ -17069,8 +17510,10 @@ final class AppModelTests: XCTestCase {
             model.pendingSeriesDownload?.destination == secondDestination
         }
         XCTAssertTrue(secondWasPresented)
+        let firstPreparationCompleted = operations.expectation(
+            for: .seriesPreparationCompleted(firstSeriesID))
         await firstGate.release()
-        await Task.yield()
+        await fulfillment(of: [firstPreparationCompleted], timeout: 30)
         XCTAssertEqual(
             model.pendingSeriesDownload?.destination,
             secondDestination
@@ -17174,7 +17617,11 @@ final class AppModelTests: XCTestCase {
             [.success(detail), .success(detail)],
             gates: [firstDetailGate, secondDetailGate]
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         let firstDestination = SeriesDestination(
             libraryID: library.id,
@@ -17212,8 +17659,10 @@ final class AppModelTests: XCTestCase {
             model.pendingSeriesDownload?.destination == secondDestination
         }
         XCTAssertTrue(secondWasPresented)
+        let secondSubmissionWaiting = operations.expectation(
+            for: .seriesSubmissionWaiting(account.id, secondSeriesID))
         model.confirmPendingSeriesDownload()
-        await Task.yield()
+        await fulfillment(of: [secondSubmissionWaiting], timeout: 30)
         let requestsBeforeRelease = await service.bookDetailRequests()
         XCTAssertEqual(requestsBeforeRelease.count, 1)
 
@@ -18531,7 +18980,11 @@ final class AppModelTests: XCTestCase {
             ],
             playbackCloseGate: closeGate
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         let initial = await model.startPlayback(
             detail: detail,
@@ -18542,14 +18995,12 @@ final class AppModelTests: XCTestCase {
 
         let retry = Task { await model.retryFailedPlayback() }
         await closeGate.waitUntilEntered()
+        let deletionStarted = operations.expectation(
+            for: .bookDeletionStarted(account.id, detail.id))
         let deletion = Task {
             await model.deleteBook(detail, mode: .libraryRecordOnly)
         }
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(5))
-        while model.bookDeletionState != .deleting, clock.now < deadline {
-            await Task.yield()
-        }
+        await fulfillment(of: [deletionStarted], timeout: 30)
         XCTAssertEqual(model.bookDeletionState, .deleting)
         let competingStart = await model.startPlayback(
             detail: detail,
@@ -19081,15 +19532,25 @@ final class AppModelTests: XCTestCase {
                 newReconciliationGate,
             ]
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.loadBookDetail(item)
 
+        let olderReconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
         await oldReconciliationGate.waitUntilEntered()
+        let newerReconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(false, detail: finishedDetail)
         await oldReconciliationGate.release()
-        try? await Task.sleep(for: .milliseconds(100))
+        await fulfillment(
+            of: [olderReconciliationCompleted, newerReconciliationCompleted],
+            timeout: 30)
 
         XCTAssertFalse(model.isBookFinished(item.id))
         guard case .loaded(let reconciled) = model.bookDetail else {
@@ -19115,15 +19576,21 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail),
             homeShelvesRefreshGate: homeRefreshGate
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.search(query: "Old")
 
+        let reconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
         await homeRefreshGate.waitUntilEntered()
         await model.search(query: "New")
         await homeRefreshGate.release()
-        try? await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [reconciliationCompleted], timeout: 30)
 
         let searchQueries = await service.searchRequests().map(\.query)
         XCTAssertEqual(model.searchQuery, "New")
@@ -19155,34 +19622,34 @@ final class AppModelTests: XCTestCase {
             Array(repeating: .success(detail), count: 5),
             gates: detailGates
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.loadBookDetail(item)
+        let firstReconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
-        var firstReconciliationFinished = false
-        for _ in 0..<50 {
-            if await service.bookDetailRequests().count >= 3 {
-                firstReconciliationFinished = true
-                break
-            }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        XCTAssertTrue(firstReconciliationFinished)
-        try? await Task.sleep(for: .milliseconds(20))
+        await fulfillment(of: [firstReconciliationCompleted], timeout: 30)
 
         let userSearch = Task { await model.search(query: "User") }
         await searchGate.waitUntilEntered()
+        let secondReconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(false, detail: detail)
         await detailGates[4].waitUntilEntered()
         await searchGate.release()
         await userSearch.value
+        await detailGates[4].release()
+        await fulfillment(of: [secondReconciliationCompleted], timeout: 30)
 
         XCTAssertEqual(model.searchQuery, "User")
         guard case .loaded = model.searchResults else {
             await detailGates[4].release()
             return XCTFail("Expected the user search to finish")
         }
-        await detailGates[4].release()
     }
 
     func testCancelledReconciliationSearchPreservesLoadedResults()
@@ -19207,7 +19674,11 @@ final class AppModelTests: XCTestCase {
             [.success([item]), .success([item])],
             gates: [initialSearchGate, reconciliationSearchGate]
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.search(query: "User")
         guard case .loaded(let initialResults) = model.searchResults else {
@@ -19219,9 +19690,11 @@ final class AppModelTests: XCTestCase {
         await service.setProgressUpdate(
             .failure(.progress(.unexpectedStatus(403)))
         )
+        let reconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(false, detail: detail)
         await reconciliationSearchGate.release()
-        try? await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [reconciliationCompleted], timeout: 30)
 
         XCTAssertEqual(model.searchQuery, "User")
         XCTAssertEqual(model.searchResults, .loaded(initialResults))
@@ -19330,7 +19803,11 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail),
             homeShelvesRefreshGate: refreshGate
         )
-        let model = AppModel(service: service)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await service.setFirstPage(
             .failure(.libraryRepository(.remote(.unexpectedStatus(503))))
@@ -19339,11 +19816,13 @@ final class AppModelTests: XCTestCase {
             .failure(.libraryRepository(.remote(.unexpectedStatus(503))))
         )
 
+        let reconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
         XCTAssertTrue(model.isBookFinished(detail.id))
         XCTAssertNil(model.bookProgressFailure)
         await refreshGate.release()
-        try? await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [reconciliationCompleted], timeout: 30)
         XCTAssertTrue(model.isBookFinished(detail.id))
         XCTAssertNil(model.bookProgressFailure)
     }
@@ -19361,23 +19840,23 @@ final class AppModelTests: XCTestCase {
             bookDetail: .success(detail)
         )
         let diagnostics = AppDiagnosticRecorderSpy()
-        let model = AppModel(service: service, diagnostics: diagnostics)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            diagnostics: diagnostics,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.loadBookDetail(item)
         await service.setRefreshedBookDetail(
             .failure(.bookDetail(.remote(.unexpectedStatus(503))))
         )
 
+        let reconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
-
-        var events = await diagnostics.events()
-        for _ in 0..<100
-        where !events.contains(where: {
-            $0.name == .operationFailed && $0.operation == .loadBook
-        }) {
-            try? await Task.sleep(for: .milliseconds(10))
-            events = await diagnostics.events()
-        }
+        await fulfillment(of: [reconciliationCompleted], timeout: 30)
+        let events = await diagnostics.events()
         let refreshRequestCount =
             await service.refreshedBookDetailRequests().count
         XCTAssertEqual(refreshRequestCount, 1)
@@ -19524,7 +20003,12 @@ final class AppModelTests: XCTestCase {
             gates: []
         )
         let diagnostics = AppDiagnosticRecorderSpy()
-        let model = AppModel(service: service, diagnostics: diagnostics)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            diagnostics: diagnostics,
+            operationObserver: { operations.record($0) }
+        )
         await model.start()
         await model.loadBookDetail(item)
         await model.search(query: "Test")
@@ -19536,16 +20020,11 @@ final class AppModelTests: XCTestCase {
             )
         )
 
+        let reconciliationCompleted = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, item.id))
         await model.setFinished(true, detail: detail)
-
-        var events = await diagnostics.events()
-        for _ in 0..<100
-        where !events.contains(where: {
-            $0.name == .operationFailed && $0.operation == .search
-        }) {
-            try? await Task.sleep(for: .milliseconds(10))
-            events = await diagnostics.events()
-        }
+        await fulfillment(of: [reconciliationCompleted], timeout: 30)
+        let events = await diagnostics.events()
         XCTAssertTrue(
             events.contains {
                 $0.name == .operationFailed
@@ -23058,7 +23537,16 @@ final class AppModelTests: XCTestCase {
                     (try cellularActions(first))[0])
                 (try cellularActions(first))[1].handler(
                     (try cellularActions(first))[1])
-                await Task.yield()
+                await assertEventually(
+                    "late cellular callbacks finish without changing queued request",
+                    timeout: .seconds(2),
+                    observed: {
+                        "pending=\(String(describing: model.downloads.pendingCellularDownload?.detail.id)); "
+                            + "records=\(model.downloads.records.count)"
+                    },
+                    condition: {
+                        model.downloads.pendingCellularDownload?.id == second.id
+                    })
                 await model.downloads.confirmCellularDownload(id: request.id)
                 model.downloads.cancelCellularDownload(id: request.id)
                 XCTAssertEqual(
@@ -23180,7 +23668,15 @@ final class AppModelTests: XCTestCase {
                 completion(.succeeded)
                 (try cellularActions(old))[1].handler(
                     (try cellularActions(old))[1])
-                await Task.yield()
+                await assertEventually(
+                    "late presentation callback leaves replacement visible",
+                    timeout: .seconds(2),
+                    observed: {
+                        "replacementVisible=\(presenter.presented === replacement)"
+                    },
+                    condition: {
+                        presenter.presented === replacement
+                    })
                 XCTAssertTrue(presenter.presented === replacement)
                 XCTAssertEqual(
                     model.downloads.pendingCellularDownload?.id, request.id)
@@ -23257,7 +23753,17 @@ final class AppModelTests: XCTestCase {
                     (try cellularActions(alert))[0])
                 (try cellularActions(alert))[1].handler(
                     (try cellularActions(alert))[1])
-                await Task.yield()
+                await assertEventually(
+                    "late account-removed actions are rejected",
+                    timeout: .seconds(2),
+                    observed: {
+                        "pending=\(String(describing: model.downloads.pendingCellularDownload?.detail.id)); "
+                            + "records=\(model.downloads.records.count)"
+                    },
+                    condition: {
+                        model.downloads.pendingCellularDownload == nil
+                            && model.downloads.records.isEmpty
+                    })
                 XCTAssertNil(model.downloads.pendingCellularDownload)
                 XCTAssertTrue(model.downloads.records.isEmpty)
             }
@@ -23321,15 +23827,18 @@ final class AppModelTests: XCTestCase {
                 XCTAssertNotNil(search.tabImage)
                 let opened = expectation(
                     description: "Search tab opens keyboard")
+                opened.assertForOverFulfill = true
                 enabledRoot.select(search)
                 enabled.tabBarTemplate(enabledRoot, didSelect: search)
-                Task { @MainActor in
-                    for _ in 0..<10 where presenter.pushed.isEmpty {
-                        await Task.yield()
-                    }
-                    opened.fulfill()
-                }
-                await fulfillment(of: [opened], timeout: 2)
+                await assertEventually(
+                    "CarPlay search tab pushes search template",
+                    timeout: .seconds(2),
+                    observed: {
+                        "pushed=\(presenter.pushed.map { String(describing: type(of: $0)) })"
+                    },
+                    condition: {
+                        presenter.pushed.last is CPSearchTemplate
+                    })
                 XCTAssertTrue(presenter.pushed.last is CPSearchTemplate)
             } else {
                 XCTAssertEqual(enabledRoot.templates.count, 3)
@@ -23520,7 +24029,13 @@ final class AppModelTests: XCTestCase {
             state.capacity = 0
             controller.updateLimits(keyboardAvailable: true)
             controller.searchTemplateSearchButtonPressed(controller.template)
-            for _ in 0..<10 where pushed.isEmpty { await Task.yield() }
+            await assertEventually(
+                "zero-capacity search navigation pushes its list",
+                timeout: .seconds(2),
+                observed: { "pushedCount=\(pushed.count)" },
+                condition: {
+                    !pushed.isEmpty
+                })
             let list = try XCTUnwrap(pushed.last as? CPListTemplate)
             XCTAssertTrue(list.sections.isEmpty)
             state.capacity = 2
@@ -23579,13 +24094,15 @@ final class AppModelTests: XCTestCase {
                 })
             await fulfillment(of: [selected], timeout: 2)
             await gate.release()
-            let settled = expectation(description: "Late response settles")
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                settled.fulfill()
-            }
-            await fulfillment(of: [settled], timeout: 2)
-            XCTAssertTrue(list.sections.isEmpty)
+            await assertEventually(
+                "late author response remains suppressed after navigation pop",
+                timeout: .seconds(2),
+                observed: {
+                    "sections=\(list.sections.count); pageRequests=\(await service.pageRequests().count)"
+                },
+                condition: {
+                    list.sections.isEmpty
+                })
             controller.invalidate()
         }
 
@@ -23837,14 +24354,16 @@ final class AppModelTests: XCTestCase {
             ) { completed.fulfill() }
             await fulfillment(of: [completed], timeout: 2)
             let list = try XCTUnwrap(pushed.last as? CPListTemplate)
-            for _ in 0..<100 {
-                if list.sections.first?.items.first?.text
-                    == "No title or author matches"
-                {
-                    break
-                }
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            await assertEventually(
+                "retry response renders explicit no-match row",
+                timeout: .seconds(2),
+                observed: {
+                    "firstRow=\(String(describing: list.sections.first?.items.first?.text))"
+                },
+                condition: {
+                    list.sections.first?.items.first?.text
+                        == "No title or author matches"
+                })
             XCTAssertEqual(
                 list.sections.first?.items.first?.text,
                 "No title or author matches")
@@ -23969,16 +24488,24 @@ final class AppModelTests: XCTestCase {
                 XCTAssertTrue(entered)
                 controller.invalidate()
                 await fulfillment(of: [completed], timeout: 2)
-                for _ in 0..<100 {
-                    if model.playbackStartTarget == nil { break }
-                    try await Task.sleep(for: .milliseconds(10))
-                }
+                await assertEventually(
+                    "invalidated CarPlay selection clears playback start target",
+                    timeout: .seconds(2),
+                    observed: {
+                        "target=\(String(describing: model.playbackStartTarget))"
+                    },
+                    condition: {
+                        model.playbackStartTarget == nil
+                    })
                 XCTAssertNil(model.playbackStartTarget)
                 await gate.release()
-                for _ in 0..<100 {
-                    if outcome != nil { break }
-                    try await Task.sleep(for: .milliseconds(10))
-                }
+                await assertEventually(
+                    "invalidated CarPlay playback request finishes as superseded",
+                    timeout: .seconds(2),
+                    observed: { "outcome=\(String(describing: outcome))" },
+                    condition: {
+                        outcome == .superseded
+                    })
                 XCTAssertEqual(outcome, .superseded)
                 XCTAssertFalse(model.playback.isPlaybackRequested)
                 let opened = await service.playbackOpenRequests()
@@ -24322,12 +24849,15 @@ final class AppModelTests: XCTestCase {
                 home.sections.first?.items.first as? CPListItem
             )
             await waitForCoverRequests(fetcher, count: 1)
-            for _ in 0..<100 {
-                if item.image?.size == CGSize(width: 2, height: 2) {
-                    break
-                }
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            await assertEventually(
+                "initial CarPlay artwork is installed",
+                timeout: .seconds(2),
+                observed: {
+                    "imageSize=\(String(describing: item.image?.size))"
+                },
+                condition: {
+                    item.image?.size == CGSize(width: 2, height: 2)
+                })
             XCTAssertEqual(
                 item.image?.size,
                 CGSize(width: 2, height: 2)
@@ -26176,6 +26706,11 @@ final class AppModelTests: XCTestCase {
         }
         guard !Task.isCancelled else { return false }
         return await condition()
+    }
+
+    private func playbackDiagnostic(_ playback: PlaybackModel) -> String {
+        "state=\(playback.state), requested=\(playback.isPlaybackRequested), "
+            + "snapshot=\(playback.runtimeSnapshotForTesting)"
     }
 
     private static func fulfill(

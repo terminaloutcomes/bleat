@@ -3597,7 +3597,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "A lost transition can suspend before release forever; bound and diagnose each gate.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
@@ -3636,7 +3643,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "Unbounded fake readiness signals can hang on regression; bound them.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh",
@@ -3675,7 +3689,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "Any missing transition blocks the suite indefinitely; add bounded event contracts.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
@@ -8983,6 +9004,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "Cancellation is checked around each cache read and cleanup is bounded without an unbounded timeout-path join. The uncooperative in-flight framework/cache call risk remains open."
       }
     },
     {
@@ -11217,6 +11245,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       }
     },
     {
@@ -11263,6 +11298,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       }
     },
     {
@@ -11309,6 +11351,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       }
     },
     {
@@ -11355,6 +11404,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       }
     },
     {
@@ -11401,6 +11457,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       }
     },
     {
@@ -12156,6 +12219,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
       }
     },
     {
@@ -13890,6 +13960,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
       }
     },
     {
@@ -13936,6 +14013,13 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
       }
     },
     {
@@ -17549,7 +17633,14 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Use async bounded started/finished signals rather than blocking DispatchSemaphore waits in the async test; preserve cancellation observation.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "timing_followup": {
+        "date": "2026-10-16",
+        "baseline": "4c9d1c3",
+        "status": "source_updated_focused_and_signed_execution_recorded",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
+        "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalStopsNewSpansAndPurgesRetainedData",

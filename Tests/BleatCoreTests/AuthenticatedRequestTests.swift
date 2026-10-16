@@ -199,7 +199,13 @@ final class AuthenticatedRequestTests {
                 server: server
             )
         }
-        await transport.waitUntilRefreshStarted()
+        let refreshStarted = await transport.waitUntilRefreshStarted()
+        #expect(refreshStarted)
+        guard refreshStarted else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            return
+        }
 
         let taskB = Task { () -> HTTPResponse in
             try await coordinator.sendAuthenticated(
@@ -209,10 +215,24 @@ final class AuthenticatedRequestTests {
                 server: server
             )
         }
-        await transport.waitUntilInitialSendBlocked()
+        let initialSendBlocked = await transport.waitUntilInitialSendBlocked()
+        #expect(initialSendBlocked)
+        guard initialSendBlocked else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
 
         await transport.releaseRefresh()
-        await transport.waitUntilMidSaved()
+        let midTokensSaved = await transport.waitUntilMidSaved()
+        #expect(midTokensSaved)
+        guard midTokensSaved else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
         await transport.releaseInitialSend()
         await transport.releaseMidSave()
 
@@ -271,7 +291,13 @@ final class AuthenticatedRequestTests {
                 server: server
             )
         }
-        await transport.waitUntilRefreshStarted()
+        let refreshStarted = await transport.waitUntilRefreshStarted()
+        #expect(refreshStarted)
+        guard refreshStarted else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            return
+        }
 
         let taskB = Task { () -> String in
             try await coordinator.recoverAccessToken(
@@ -281,7 +307,14 @@ final class AuthenticatedRequestTests {
             )
         }
         await transport.releaseRefresh()
-        await transport.waitUntilMidSaved()
+        let midTokensSaved = await transport.waitUntilMidSaved()
+        #expect(midTokensSaved)
+        guard midTokensSaved else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
         await transport.releaseMidSave()
 
         await assertThrowsErrorAsync(try await taskA.value) { error in
@@ -349,7 +382,13 @@ final class AuthenticatedRequestTests {
                 server: server
             )
         }
-        await transport.waitUntilRefreshStarted()
+        let refreshStarted = await transport.waitUntilRefreshStarted()
+        #expect(refreshStarted)
+        guard refreshStarted else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            return
+        }
 
         let taskB = Task { () -> HTTPResponse in
             try await coordinator.sendAuthenticated(
@@ -359,10 +398,24 @@ final class AuthenticatedRequestTests {
                 server: server
             )
         }
-        await transport.waitUntilInitialSendBlocked()
+        let initialSendBlocked = await transport.waitUntilInitialSendBlocked()
+        #expect(initialSendBlocked)
+        guard initialSendBlocked else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
 
         await transport.releaseRefresh()
-        await transport.waitUntilMidSaved()
+        let midTokensSaved = await transport.waitUntilMidSaved()
+        #expect(midTokensSaved)
+        guard midTokensSaved else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
         await transport.releaseInitialSend()
         await transport.releaseMidSave()
 
@@ -2045,12 +2098,15 @@ private actor GatedMidFlightRefreshTransport: HTTPTransport {
     private var oldAccessSends = 0
     private var refreshStarted = false
     private var midSaved = false
-    private var refreshStartedWaiters: [CheckedContinuation<Void, Never>] = []
-    private var midSavedWaiters: [CheckedContinuation<Void, Never>] = []
-    private var initialSendWaiters: [CheckedContinuation<Void, Never>] = []
+    private let refreshStartedSignal = AuthTelemetryTestSignal()
+    private let midSavedSignal = AuthTelemetryTestSignal()
+    private let initialSendSignal = AuthTelemetryTestSignal()
     private var refreshGate: CheckedContinuation<Void, Never>?
     private var midSaveGate: CheckedContinuation<HTTPResponse, Never>?
     private var initialSendGate: CheckedContinuation<Void, Never>?
+    private var refreshReleased = false
+    private var midSaveReleased = false
+    private var initialSendReleased = false
 
     init(
         store: RequestCredentialStore,
@@ -2073,23 +2129,23 @@ private actor GatedMidFlightRefreshTransport: HTTPTransport {
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests += 1
             refreshStarted = true
-            let startedWaiters = refreshStartedWaiters
-            refreshStartedWaiters.removeAll()
-            for waiter in startedWaiters {
-                waiter.resume()
-            }
+            await refreshStartedSignal.signal()
             await withCheckedContinuation { continuation in
-                refreshGate = continuation
+                if refreshReleased {
+                    continuation.resume()
+                } else {
+                    refreshGate = continuation
+                }
             }
             try await store.save(midTokens, for: accountID)
             midSaved = true
-            let savedWaiters = midSavedWaiters
-            midSavedWaiters.removeAll()
-            for waiter in savedWaiters {
-                waiter.resume()
-            }
+            await midSavedSignal.signal()
             return await withCheckedContinuation { continuation in
-                midSaveGate = continuation
+                if midSaveReleased {
+                    continuation.resume(returning: midSaveResponse)
+                } else {
+                    midSaveGate = continuation
+                }
             }
         }
         switch request.value(forHTTPHeaderField: "Authorization") {
@@ -2098,13 +2154,13 @@ private actor GatedMidFlightRefreshTransport: HTTPTransport {
             if oldAccessSends == 1 {
                 return .init(data: Data(), statusCode: 401)
             }
+            await initialSendSignal.signal()
             await withCheckedContinuation { continuation in
-                let waiters = initialSendWaiters
-                initialSendWaiters.removeAll()
-                for waiter in waiters {
-                    waiter.resume()
+                if initialSendReleased {
+                    continuation.resume()
+                } else {
+                    initialSendGate = continuation
                 }
-                initialSendGate = continuation
             }
             return .init(data: Data(), statusCode: 401)
         case "Bearer \(midTokens.accessToken)":
@@ -2118,57 +2174,79 @@ private actor GatedMidFlightRefreshTransport: HTTPTransport {
         }
     }
 
-    func waitUntilRefreshStarted() async {
+    func waitUntilRefreshStarted(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
         if refreshStarted {
-            return
+            return true
         }
-        await withCheckedContinuation { continuation in
-            refreshStartedWaiters.append(continuation)
-        }
+        return await requireAuthTelemetrySignal(
+            refreshStartedSignal,
+            stage: "authenticated refresh transport entry",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 
-    func waitUntilMidSaved() async {
+    func waitUntilMidSaved(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
         if midSaved {
-            return
+            return true
         }
-        await withCheckedContinuation { continuation in
-            midSavedWaiters.append(continuation)
-        }
+        return await requireAuthTelemetrySignal(
+            midSavedSignal,
+            stage: "mid-refresh credentials saved",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 
-    func waitUntilInitialSendBlocked() async {
-        if initialSendGate != nil {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            initialSendWaiters.append(continuation)
-        }
+    func waitUntilInitialSendBlocked(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            initialSendSignal,
+            stage: "initial authenticated request transport entry",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 
     func releaseRefresh() {
+        refreshReleased = true
         refreshGate?.resume()
         refreshGate = nil
     }
 
     func releaseMidSave() {
-        let response: HTTPResponse
+        midSaveReleased = true
+        midSaveGate?.resume(returning: midSaveResponse)
+        midSaveGate = nil
+    }
+
+    private var midSaveResponse: HTTPResponse {
         if refreshSucceeds {
-            response = .json(
+            return .json(
                 AuthenticatedRequestTests.authenticationJSON(
                     accessToken: finalTokens.accessToken,
                     refreshToken: finalTokens.refreshToken
                 )
             )
-        } else {
-            response = .init(data: Data(), statusCode: 401)
         }
-        midSaveGate?.resume(returning: response)
-        midSaveGate = nil
+        return .init(data: Data(), statusCode: 401)
     }
 
     func releaseInitialSend() {
+        initialSendReleased = true
         initialSendGate?.resume()
         initialSendGate = nil
+    }
+
+    func releaseAllGates() async {
+        releaseRefresh()
+        releaseMidSave()
+        releaseInitialSend()
     }
 
     func counts() -> (

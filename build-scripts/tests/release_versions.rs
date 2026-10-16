@@ -1,7 +1,7 @@
 use std::process::Command;
 
+use build_scripts::release_versions::{self, VersionError};
 use chrono::{TimeZone, Utc};
-use scripts::release_versions::{self, VersionError};
 
 #[test]
 fn generates_and_validates_build_numbers() {
@@ -103,5 +103,5 @@ fn command_line_resolvers_use_environment_without_shells() {
     assert_eq!(failure.status.code(), Some(65));
 }
 #[cfg(target_os = "macos")]
-#[path = "release_versions/xcode_host_sdk.rs"]
-mod xcode_host_sdk;
+#[path = "release_versions/build_dependencies.rs"]
+mod build_dependencies;

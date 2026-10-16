@@ -519,3 +519,161 @@ confirmed all 598 passed with zero skips. Results are
 `.build/timing-app-suite.log`. This repeats the changed app cases in their owning
 suite after the earlier 22 focused executions. The final checkpoint includes
 no UI fixture or UI test changes.
+
+## Follow-on timing batch (2026-10-16)
+
+This batch follows `4c9d1c3`. Core fakes retain release-before-entry requests,
+OpenID browser setup stops after failed readiness instead of indexing an empty
+session array, and staged authentication and telemetry withdrawal use bounded
+async observations. Logout refresh-race tasks retain cancellation handles and
+observe completion before joining. The cache workload checks cancellation
+between reads; its existing P2 remains open because an in-flight framework read
+may ignore cancellation and outlive the five-second cleanup watchdog.
+
+Application changes add typed operation notifications for live-event consumption,
+refresh/reconciliation completion, series admission and session uploads. Download,
+transcription, network and CarPlay cases use asserted state or callback-processing
+conditions. Real-player scenarios include readiness, playback rate and position
+diagnostics. The historical audit snapshot is unchanged; follow-on annotations
+record source remediation separately from execution evidence.
+
+Runner changes replace the deep-link seed delay with an observation of the
+persisted scenario and cleared receipt, retain a redacted driver log, bound
+telemetry HTTP requests including response bodies, and allocate separate telemetry
+artifact directories per run. The JWT integration test explicitly checks refresh
+eligibility; its remaining 1.1-second delay crosses the issuer's whole-second
+claim boundary, rather than waiting for an asynchronous operation to complete.
+
+Initial focused core execution passed 151 tests across six suites, with zero
+failures or skips (`.build/core-timing-focused.xml`). A cache/logout rerun passed
+15 tests across two suites (`.build/core-timing-final.xml`). A final failure-only
+cancellation-handle edit followed those runs; the owning signed run is separate
+evidence. The upstream OpenTelemetry watchOS minimum-version deprecation and
+expected read-only SwiftData fixture diagnostics remain recorded. No failed
+compilation or incomplete run counts as executed coverage.
+
+The subsequent signed owning gate passed all 561 identities with zero skips
+(`.build/timing-followon-signed-host.log`, XML in `.build/host-results/`).
+The Rust scripts library passed all 50 tests, followed by seven passing readiness
+regressions (`.build/timing-runner-final.log` and
+`.build/timing-runner-focused-final.log`). The earlier 48-test run predates the
+last two readiness regressions and is retained at `.build/timing-runner-all.log`.
+Documentation references passed after the source annotations were updated.
+
+The first simulator follow-on build caught malformed diagnostic string
+interpolations. The corrected build caught a teardown actor-isolation error,
+two initializer argument-order errors and a missing fake network-path argument.
+Both attempts executed zero tests; logs and result bundles are retained under
+`.build/timing-ui-event-driven.*` and `.build/timing-ui-event-driven-fixed.*`.
+
+A third simulator build retained at `.build/timing-ui-final-source.*` caught an
+incomplete network-state fixture initializer. After supplying explicit path
+fields, `.build/timing-ui-compiled.xcresult` ran all four changed UI identities
+twice: eight passes, zero failures or skips. The menu cases observe the existing
+playback slider changing while the overlay remains open; the download cases
+observe two requested progress callbacks and explicit fixture completion.
+The simulator console also reports Apple launch-measurement failures, duplicate
+`UIAccessibilityLoaderWebShared` definitions in Apple accessibility bundles, and
+Xcode debugger-version lookup diagnostics. These system diagnostics remain
+unresolved; the eight executions completed without an application crash.
+
+The telemetry runner initially failed its Rust doctest phase because Homebrew
+`rustc` and rustup `rustdoc` were mixed. Its log and redacted, per-run failure
+artifacts are retained. Repeating with matching Homebrew `RUSTC` and `RUSTDOC`
+passed (`.build/timing-telemetry-runner-corrected.log`): four Python artifact
+checks; 76 Swift Testing host cases; three XCTest configuration cases; 75 Rust
+library tests, nine PostgreSQL, twelve HTTP and one OTLP integration tests; and
+six exact live telemetry XCTest identities. Empty Rust binary/doctest targets
+are not counted as coverage. The workflow's disposable-container, volume and
+raw-capture cleanup checks completed successfully.
+
+The first focused app run selected 71 annotated identities and reported four
+failed cases (eight assertions). The failures exposed test setup/order problems:
+startup catch-up was not drained before a missing-item live update; the isolated
+session store was not injected into `AppModel`; playback advanced before an
+exact reset-position assertion; and download recovery was allowed before the
+offline assertion. The fixes preserve each semantic assertion by observing the
+right lifecycle or holding the intended path state. The original run remains
+`.build/timing-app-followon-focused.xcresult` and its console log; it is not a
+passing repetition sequence.
+
+Three independent full merge-diff reviews of this follow-on batch found no P0/P1
+issues. Their retained P2 findings are:
+
+- `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift`: an uncooperative
+  detached cache read can outlive its bounded cancellation cleanup.
+- `Tests/BleatAppTests/AppModelTests.swift`,
+  `testLiveProgressEchoDoesNotRefreshStreamedPlayback` and
+  `testLiveProgressUpdatesFinishedStateImmediately`: observing event consumption
+  alone does not drain a mistakenly scheduled 250 ms refresh debounce before
+  the negative request-count assertion. Those negative assertions remain an
+  evidence gap even if the tests pass.
+- `scripts/src/runner_readiness.rs`, `redact_driver_log`: bare `Bearer` credential
+  lines without an `Authorization` label are not covered by the current
+  redaction patterns. Driver-log retention is not a complete credential scrubber.
+
+These P2 findings remain open under the review-and-ship publication policy;
+passing executions do not close them. The third review covered the runtime corrections, including isolated-store
+injection, refresh completion, reset-position ordering and offline retry state.
+
+The failed app run's post-test `simctl diagnose` collector was stopped after four
+minutes; all 71 test cases had already completed. Its partial diagnostics remain
+in the result bundle. This limits diagnostic collection, not test execution.
+
+The supported deep-link workflow passed with matching Homebrew Rust tools and a
+separate derived-data directory. The seed check observed the persisted scenario
+and cleared receipt before termination; route outcomes and the malformed-route
+observation window completed; exact verification found one passed driver identity
+and zero skips. Its bundle is
+`.build/deep-link-results-379ca373-9df5-4ca4-bc25-12c777c2cf08.xcresult`, with a
+retained redacted `.log` companion and `.build/timing-deep-link-runner.log`.
+That retained log contains no bare Bearer marker; this execution does not close
+the general redaction-pattern P2. The workflow removed its disposable Simulator
+and raw driver log on exit. The malformed-route check observes a bounded
+10-second window and does not claim that no later event is possible.
+
+The first corrected four-case run executed eight repetitions: the isolated-session
+and playback-reset cases passed twice each, while the missing-item and transport
+cases still failed twice each (ten assertions total). The missing-item setup
+registered its observer expectation after startup; that expectation now precedes
+startup. Transport callback recovery remained unresolved in this attempt.
+Evidence is retained in `.build/timing-app-corrected.xcresult` and its log.
+
+## Build-helper dependency isolation (2026-10-16)
+
+The Xcode metadata phase now builds `build-scripts`, which owns configuration
+validation, release versions, build-number resolvers and plist generation.
+The operational `scripts` package depends on this small package; the reverse
+dependency is forbidden. Normal/build dependency-tree checks reject the HTTP,
+TLS, async runtime and native compiler stacks previously pulled into the phase.
+Both launch paths preserve the caller's compiler and SDK environment.
+Historical audit paths for moved Rust tests refer to the original audit snapshot;
+the current tests are under `build-scripts/tests/`, with upload/device integration
+coverage retained under `scripts/tests/`.
+
+The ordinary shell build and the actual Xcode `build-for-testing` command passed
+without `RUSTC`, `RUSTDOC`, SDK-selection or wrapper-clearing overrides. The Xcode
+log is `.build/build-scripts-xcode.log`; this proves compilation, not app test
+execution. The initial consumer check found a stale package-local binary
+reference; the CLI regression moved with its binary, while all three remaining
+consumer tests passed. The original failure and corrected results remain in
+`.build/build-scripts-consumers.log`.
+
+Final package verification passed 26 tests with zero failures or skips;
+`cargo check --locked --package scripts --all-targets`, formatting, release
+metadata and documentation checks also passed. Xcode emitted its existing
+AppIntents metadata-extraction warning (no framework dependency). The extraction
+review found the already-reproduced stale CLI test reference and one stale SDK
+documentation paragraph; both were corrected to complete the requested move
+and accurate documentation.
+
+The earlier owning UI run completed independently of the package extraction:
+100 cases passed, the external-URL driver opt-in case skipped, and
+`testTranscriptCurrentPositionWaitsForCacheLoad` failed. Exact-result verification
+rejected the run (`.build/timing-ui-owning.xcresult` and companion log). This
+remains an unresolved timing-batch gate; the successful helper build does not
+resolve it.
+
+A further extraction review caught release-workflow path filters still naming
+the moved resolver sources; those filters now follow the new package. The final
+independent extraction review reported no findings.

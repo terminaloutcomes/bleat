@@ -289,11 +289,13 @@ final class LibraryCachePerformanceTests {
         let readsTask = Task.detached {
             do {
                 for (index, request) in requests.enumerated() {
+                    try Task.checkCancellation()
                     _ = try await cache.page(
                         request: request,
                         libraryID: libraryID,
                         accountID: accountID
                     )
+                    try Task.checkCancellation()
                     if index == 0 {
                         await probe.markStarted()
                     }
@@ -318,6 +320,8 @@ final class LibraryCachePerformanceTests {
         )
         guard readsStarted else {
             if startWait.reached {
+                // `markFinished` is emitted only by the worker's terminal
+                // path, so this join follows an observed completion event.
                 try await readsTask.value
                 Issue.record(
                     "Read workload finished before its first cache page completed"
@@ -331,6 +335,11 @@ final class LibraryCachePerformanceTests {
                 cancellationWait.reached,
                 "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
             )
+            if cancellationWait.reached {
+                try await readsTask.value
+            }
+            // A framework call that ignores cancellation can outlive this
+            // bounded wait, so do not join the detached worker on timeout.
             return
         }
 
@@ -362,6 +371,10 @@ final class LibraryCachePerformanceTests {
                 cancellationWait.reached,
                 "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
             )
+            if cancellationWait.reached {
+                try await readsTask.value
+            }
+            // Report an uncooperative read instead of masking it with a join.
             return
         }
         try await readsTask.value

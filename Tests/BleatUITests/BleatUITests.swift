@@ -1855,13 +1855,14 @@ final class BleatUITests: XCTestCase {
             "Progress kept the actions menu busy until the download finished")
         let edit = app.buttons["Edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 3))
-        // Keep the menu open across multiple progress callbacks before selecting.
-        let menuInterval = expectation(
-            description: "Progress while menu is open")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            menuInterval.fulfill()
-        }
-        wait(for: [menuInterval], timeout: 3)
+        // Native menu actions expose their title, not a custom accessibility value.
+        let advance = app.buttons["Advance Download (0)"]
+        XCTAssertTrue(advance.waitForExistence(timeout: 3))
+        XCTAssertTrue(advance.isHittable)
+        advance.tap()
+        XCTAssertTrue(
+            app.buttons["Advance Download (2)"].waitForExistence(timeout: 10),
+            "Expected two download progress callbacks while Edit remained open")
         XCTAssertTrue(
             edit.exists, "Download progress dismissed the actions menu")
         guard edit.exists else { return }
@@ -1872,16 +1873,21 @@ final class BleatUITests: XCTestCase {
         title.tap()
         title.typeText(" draft")
         let draft = title.value as? String
-        XCTAssertLessThan(
-            Date().timeIntervalSince(menuStarted), 30,
-            "The draft must be entered while download updates are still running"
+        let completion = app.buttons["testing.download.complete"]
+        XCTAssertTrue(completion.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            completion.label, "Download: running",
+            "Enter the draft while the download is active")
+        XCTAssertTrue(completion.isHittable)
+        completion.tap()
+        let completed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                completion.label == "Download: completed"
+            }, object: nil)
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [completed], timeout: 10), .completed,
+            "The completed fixture must restore its downloaded record before the draft assertion"
         )
-        let completionInterval = expectation(
-            description: "Download completes while editing")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 42) {
-            completionInterval.fulfill()
-        }
-        wait(for: [completionInterval], timeout: 45)
         XCTAssertTrue(title.exists, "Download progress dismissed the editor")
         XCTAssertEqual(title.value as? String, draft)
         app.buttons["Cancel"].tap()
@@ -3391,6 +3397,32 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    private func waitForPlaybackTimeUpdate(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let position = app.sliders["player.position"]
+        XCTAssertTrue(
+            position.exists,
+            "Playback position must remain observable while the menu is open",
+            file: file, line: line)
+        let initial = try XCTUnwrap(
+            position.value as? String, file: file, line: line)
+        let updated = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                guard position.exists, let value = position.value as? String
+                else { return false }
+                return !value.isEmpty && value != initial
+            }, object: nil)
+        await fulfillment(of: [updated], timeout: 10)
+        XCTAssertNotEqual(
+            position.value as? String, initial,
+            "Expected an actual playback-time update while the menu remained open; initial=\(initial), observed=\(String(describing: position.value))",
+            file: file, line: line)
+    }
+
+    @MainActor
     func testPlaybackRateMenuRemainsStableAcrossTimeUpdates() async throws {
         let app = launch(scenario: "--ui-testing-playback")
 
@@ -3418,7 +3450,7 @@ final class BleatUITests: XCTestCase {
         let increasedRate = app.collectionViews.buttons["1.25×"].firstMatch
         XCTAssertTrue(increasedRate.waitForExistence(timeout: 3))
 
-        try await Task.sleep(for: .seconds(2))
+        try await waitForPlaybackTimeUpdate(in: app)
 
         XCTAssertTrue(increasedRate.exists)
         XCTAssertTrue(increasedRate.isHittable)
@@ -3454,7 +3486,7 @@ final class BleatUITests: XCTestCase {
         chapters.tap()
         let chapter = app.buttons["player.chapter.0"]
         XCTAssertTrue(chapter.waitForExistence(timeout: 3))
-        try await Task.sleep(for: .seconds(2))
+        try await waitForPlaybackTimeUpdate(in: app)
         XCTAssertTrue(chapter.exists)
         XCTAssertTrue(chapter.isHittable)
         chapter.tap()
@@ -3464,7 +3496,7 @@ final class BleatUITests: XCTestCase {
         sleepTimer.tap()
         let fiveMinutes = app.collectionViews.buttons["5 minutes"].firstMatch
         XCTAssertTrue(fiveMinutes.waitForExistence(timeout: 3))
-        try await Task.sleep(for: .seconds(2))
+        try await waitForPlaybackTimeUpdate(in: app)
         XCTAssertTrue(fiveMinutes.exists)
         XCTAssertTrue(fiveMinutes.isHittable)
         fiveMinutes.tap()
@@ -3484,7 +3516,7 @@ final class BleatUITests: XCTestCase {
         bookmarks.tap()
         let addBookmark = app.collectionViews.buttons["Add Bookmark"].firstMatch
         XCTAssertTrue(addBookmark.waitForExistence(timeout: 3))
-        try await Task.sleep(for: .seconds(2))
+        try await waitForPlaybackTimeUpdate(in: app)
         XCTAssertTrue(addBookmark.exists)
         XCTAssertTrue(addBookmark.isHittable)
     }

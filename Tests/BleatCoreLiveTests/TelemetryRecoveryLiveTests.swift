@@ -219,6 +219,15 @@
             let firstToken = try await provider.currentToken()
             let enrollmentBeforeRefresh = await store.enrollment()
             let saveCountBeforeRefresh = await store.saveCount
+            let availability = await provider.cachedTokenAvailability()
+            XCTAssertEqual(availability, .expiring)
+            // The disposable issuer uses whole-second iat/exp claims and no jti
+            // (bleat-api/src/telemetry_auth.rs). The 1,000-second refresh window
+            // already makes this token refreshable; this delay is solely to cross
+            // an issuer timestamp boundary before checking token identity below.
+            // A full second plus 100 ms avoids the clock's quantization boundary;
+            // scheduler delay only increases that separation. This is intentional
+            // real-clock JWT integration coverage, not a task-completion wait.
             try await Task.sleep(for: .milliseconds(1_100))
 
             tracer.beginSpan(

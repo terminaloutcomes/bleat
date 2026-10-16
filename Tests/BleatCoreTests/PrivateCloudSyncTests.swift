@@ -2394,6 +2394,7 @@ private actor CloudKitCancellationProbe {
     private(set) var inheritedDelegateContext = false
     private let holdCompletion: Bool
     private var completionWaiter: CheckedContinuation<Void, Never>?
+    private var completionReleased = false
     private let entryNotifications = BoundedTestCounter()
 
     init(holdCompletion: Bool = false) {
@@ -2405,7 +2406,13 @@ private actor CloudKitCancellationProbe {
         inheritedDelegateContext = CloudKitDelegateTestContext.isInsideDelegate
         await entryNotifications.increment()
         if holdCompletion {
-            await withCheckedContinuation { completionWaiter = $0 }
+            await withCheckedContinuation { continuation in
+                if completionReleased {
+                    continuation.resume()
+                } else {
+                    completionWaiter = continuation
+                }
+            }
         }
     }
 
@@ -2414,6 +2421,7 @@ private actor CloudKitCancellationProbe {
     }
 
     func release() {
+        completionReleased = true
         completionWaiter?.resume()
         completionWaiter = nil
     }
