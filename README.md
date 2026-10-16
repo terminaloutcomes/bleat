@@ -1,5 +1,8 @@
 # Bleat
 
+<a href="https://apps.apple.com/app/id6802494228"><img src="site/static/Download_on_the_App_Store_Badge_US-UK_RGB_blk_092917.svg" alt="Download on the App Store" height="48"></a>
+<a href="https://buymeacoffee.com/yaleman"><img src="site/static/bmc-button.svg" alt="Buy me a coffee" height="48"></a>
+
 Bleat is a native [Audiobookshelf](https://www.audiobookshelf.org/) client for
 iPhone and iPad running iOS 26 or newer, with a shared native macOS 26 target.
 
@@ -32,6 +35,3 @@ Use the `BleatMac` scheme for the native Mac target.
 - [Requirements and evidence](docs/requirements-traceability.md)
 - [Audiobookshelf compatibility](docs/audiobookshelf-compatibility.md)
 - [Website development](docs/website.md)
-
-The [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
-records the original release work; GitHub issues track ongoing work.

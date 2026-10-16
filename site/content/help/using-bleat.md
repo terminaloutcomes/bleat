@@ -25,7 +25,7 @@ series, collection, or narrator, filtering finished status, and sorting.
 Pull down to refresh. Open a book for its description, chapters, progress,
 bookmarks, and available actions. Server permissions control editing and deletion.
 
-Tap Play to start or resume. The mini-player opens the full player, where you
+Tapping the mini-player opens the full player, where you
 can seek, choose chapters, change speed, and set a sleep timer. Now Playing and
 CarPlay provide system playback controls; available CarPlay search depends on
 the operating system. Opening downloaded books from Home opens their details.
@@ -41,19 +41,19 @@ its account-owned downloads and history.
 
 ## Synchronization and statistics
 
-Private iCloud synchronization is enabled by default on supported builds and
+Private iCloud synchronization is enabled by default and
 can be turned off in Settings. Turning it off keeps local data; the confirmation
 also offers deletion of the private cloud copy. Conflicting account or preference
 changes require your choice before application.
 
-Open Listening Statistics from Home to compare accounts and date ranges, view
+Open "Listening Statistics" from Home to compare accounts and date ranges, view
 listening history, and import or export an account's archive. Coverage labels
 explain stale, local-only, or uncertain totals. Reset affects Bleat's selected
 local history; later imports can restore sessions still held by the server.
 
 ## Transcripts and troubleshooting
 
-Book chapters can be transcribed on device when Apple's language support is
+Book chapters can be transcribed on-device when Apple's language support is
 available. Transcript position controls and search results navigate the text
 and can seek playback. Transcription may require downloading a language asset.
 

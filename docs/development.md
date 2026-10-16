@@ -160,7 +160,7 @@ project-relative production paths, and requires executed lines in both libraries
 The XML report is `.build/host-results/tests.xml`. Coveralls receives the host
 report under `swift-host`, alongside existing `swift-smoke` and `rust-full` flags.
 
-See the [Swift Testing evaluation](swift-testing-evaluation.md) for migration,
+See the [Swift Testing evaluation](historical/swift-testing-evaluation.md) for migration,
 diagnostic evidence, and validation limitations. Test the report verifier with
 `python3 -m unittest discover -s TestSupport/HostTests`.
 

@@ -140,8 +140,9 @@ references, and links to chapters missing from mdBook navigation. Diagnostics id
 It does not access the network or rewrite files. Generated output, dependency
 checkouts, and disposable artifacts are excluded.
 
-`docs/SUMMARY.md` contains only mdBook page links in the supported list hierarchy.
-Put overview prose, evidence status, and historical labels on the linked pages.
+`docs/SUMMARY.md` contains mdBook part headings and page links in the supported
+list hierarchy. Keep historical records in `docs/historical/`. Put overview
+prose and evidence status on the linked pages.
 Explicit heading IDs and duplicate headings are supported by the checker.
 Non-Markdown target anchors and external URLs require the appropriate renderer
 or human review. Render with `mdbook build --dest-dir .build/mdbook` and review

@@ -19,9 +19,7 @@ Use these documents for their specific purposes:
 - `docs/development.md` documents supported developer workflows.
 - `docs/requirements-traceability.md` maps requirements to implementation and
   test evidence.
-- GitHub issues and milestones record remaining release work. The
-  [First Release milestone](https://github.com/terminaloutcomes/bleat/milestone/1)
-  records the original version 1.0 delivery work; open issues track ongoing work.
+- GitHub issues track ongoing implementation and evidence work.
 
 Keep these sources aligned when a change affects their subject matter. Do not
 describe a proposed or partially implemented behavior as complete.

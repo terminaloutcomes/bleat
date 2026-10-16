@@ -1,20 +1,33 @@
+# Summary
+
+# Development
+
 - [Contributor setup and validation](contributing.md)
 - [Development workflows](development.md)
   - [Detailed developer tools](developer-tools.md)
   - [App Store analytics](appstore-analytics.md)
   - [Website development](website.md)
+
+# Architecture
+
 - [Architecture and feature ownership](architecture.md)
-  - [Product and technical specification](audiobookshelf-ios-app-spec.md)
-  - [Application behavior reference](app-behavior.md)
-  - [Listening records and local CloudKit storage](design/cloud-sync-storage.md)
-  - [Requirements traceability](requirements-traceability.md)
-  - [Audiobookshelf compatibility](audiobookshelf-compatibility.md)
-  - [Logging and telemetry](architecture-logging.md)
-  - [Telemetry authentication](telemetry-authentication.md)
-  - [App Attest security review](security/app-attest-review.md)
-- [Statistics validation](statistics-validation.md)
+- [Product and technical specification](audiobookshelf-ios-app-spec.md)
+- [Application behavior reference](app-behavior.md)
+- [Listening records and local CloudKit storage](design/cloud-sync-storage.md)
+- [Requirements traceability](requirements-traceability.md)
+- [Audiobookshelf compatibility](audiobookshelf-compatibility.md)
+- [Logging and telemetry](architecture-logging.md)
+- [Telemetry authentication](telemetry-authentication.md)
+- [App Attest security review](security/app-attest-review.md)
+
+# Operations
+
 - [Telemetry JWKS revocation](operations/jwks-revocation.md)
 - [API backend scaling](operations/bleat-api-scaling.md)
+
+# Release Evidence
+
+- [Statistics validation](statistics-validation.md)
 - [CarPlay release evidence](release-evidence/carplay.md)
 - [Performance baseline](release-evidence/performance-baseline.md)
 - [Telemetry security evidence](release-evidence/telemetry-release-security.md)
@@ -25,11 +38,7 @@
 - [Telemetry App Store privacy](release-evidence/telemetry-app-store-privacy.md)
 - [Callback and cancellation audit](release-evidence/callback-cancellation-audit.md)
 - [Transcript Reduce Motion audit](transcript-reduce-motion-audit.md)
-- [Host Swift Testing migration evaluation](swift-testing-evaluation.md)
-- [Historical designs and plans](historical-records.md)
-  - [API design](superpowers/specs/2026-08-16-bleat-api-issue-64-design.md)
-  - [API implementation plan](superpowers/plans/2026-08-16-bleat-api-issue-64.md)
-  - [Download storage evidence design](superpowers/specs/2026-08-31-download-storage-evidence-design.md)
-  - [Download storage evidence plan](superpowers/plans/2026-08-31-download-storage-evidence.md)
-  - [Transcript navigation design](superpowers/specs/2026-08-31-transcript-current-position-design.md)
-  - [Transcript navigation plan](superpowers/plans/2026-08-31-transcript-current-position.md)
+
+# Historical
+
+- [Host Swift Testing migration evaluation](historical/swift-testing-evaluation.md)

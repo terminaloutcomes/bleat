@@ -172,7 +172,7 @@ checks do not establish application behavior or refresh historical release evide
 
 ## Host test runner diagnostic evidence
 
-The [Swift Testing evaluation](swift-testing-evaluation.md) records conversion
+The [Swift Testing evaluation](historical/swift-testing-evaluation.md) records conversion
 of all 470 core host tests, four asynchronous-cleanup regression tests, the
 explicit Swift Testing runner, and diagnostic evidence. `scripts/test-host.sh`
 requires a provisioned signed local host, rejects all local skips, verifies

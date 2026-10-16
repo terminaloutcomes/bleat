@@ -177,13 +177,13 @@ fn does_not_modify_repository_or_follow_escaping_paths() {
 }
 
 #[test]
-fn summary_rejects_headings_and_reports_missing_page_targets() {
+fn summary_accepts_part_headings_and_reports_missing_page_targets() {
     let root = fixture(&[("docs/SUMMARY.md", "# Overview\n- [Absent](absent.md)\n")]);
     let result = check(root.path()).expect("check");
     assert!(
-        result
+        !result
             .iter()
-            .any(|d| d.kind == DiagnosticKind::InvalidNavigation && d.line == 1)
+            .any(|d| d.kind == DiagnosticKind::InvalidNavigation)
     );
     assert!(
         result
@@ -241,5 +241,18 @@ fn book_links_to_unlisted_chapters_fail_before_rendering() {
         "docs/SUMMARY.md",
         "- [Guide](guide.md)\n  - [Hidden](hidden.md)\n",
     );
+    assert!(check(root.path()).expect("check").is_empty());
+}
+
+#[test]
+fn summary_accepts_title_part_headings_and_nested_page_links() {
+    let root = fixture(&[
+        (
+            "docs/SUMMARY.md",
+            "# Summary\n\n# Development\n\n- [Guide](guide.md)\n  - [More](guide.md#more)\n\n# Architecture\n\n- [Architecture](architecture.md)\n",
+        ),
+        ("docs/guide.md", "# More\n"),
+        ("docs/architecture.md", "# Architecture\n"),
+    ]);
     assert!(check(root.path()).expect("check").is_empty());
 }

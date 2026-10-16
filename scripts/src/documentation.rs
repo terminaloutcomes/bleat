@@ -112,9 +112,6 @@ fn document(text: String, navigation: bool) -> Document {
     for (event, range) in parser.into_offset_iter() {
         match event {
             Event::Start(Tag::Heading { id, .. }) => {
-                if navigation {
-                    invalid_navigation.push(line(&text, base + range.start));
-                }
                 heading = Some((String::new(), id.map(|s| s.to_string())))
             }
             Event::End(TagEnd::Heading(_)) => {
@@ -322,7 +319,7 @@ pub fn check(root: &Path) -> Result<Vec<Diagnostic>, CheckError> {
             report(
                 *number,
                 DiagnosticKind::InvalidNavigation,
-                "mdBook navigation must contain page links only".into(),
+                "mdBook navigation must contain part headings and page links".into(),
             );
         }
         for (target, number) in &doc.unresolved {
