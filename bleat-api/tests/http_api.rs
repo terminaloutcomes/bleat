@@ -29,6 +29,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, str::FromStr};
+use tokio::fs;
 use tower::ServiceExt;
 use url::Url;
 use uuid::Uuid;
@@ -102,7 +103,9 @@ async fn production_router(postgres: &TestPostgres) -> axum::Router {
         .private_key_to_der()
         .expect("production test signer should export");
     let path = std::env::temp_dir().join(format!("bleat-production-jwt-{}.der", Uuid::new_v4()));
-    std::fs::write(&path, key.as_slice()).expect("production test key should be written");
+    fs::write(&path, key.as_slice())
+        .await
+        .expect("production test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
     let mut arguments = test_arguments(postgres);
     arguments.deployment_mode = DeploymentMode::Production;
@@ -115,7 +118,9 @@ async fn production_router(postgres: &TestPostgres) -> axum::Router {
     let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
         .expect("test configuration should validate");
     let result = router(&config, database(postgres).await).expect("production router should build");
-    std::fs::remove_file(path).expect("production test key should be removed");
+    fs::remove_file(path)
+        .await
+        .expect("production test key should be removed");
     result
 }
 
@@ -123,7 +128,9 @@ async fn production_router(postgres: &TestPostgres) -> axum::Router {
 async fn production_router_preserves_the_signing_configuration_failure() {
     let postgres = TestPostgres::start().await;
     let path = std::env::temp_dir().join(format!("bleat-invalid-jwt-{}.der", Uuid::new_v4()));
-    std::fs::write(&path, b"not-a-signing-key").expect("invalid test key should be written");
+    fs::write(&path, b"not-a-signing-key")
+        .await
+        .expect("invalid test key should be written");
     let path_argument = path.to_string_lossy().into_owned();
     let mut arguments = test_arguments(&postgres);
     arguments.deployment_mode = DeploymentMode::Production;
@@ -137,7 +144,9 @@ async fn production_router_preserves_the_signing_configuration_failure() {
         .expect("test configuration should validate");
     let error = router(&config, database(&postgres).await)
         .expect_err("invalid signing material should prevent router construction");
-    std::fs::remove_file(path).expect("invalid test key should be removed");
+    fs::remove_file(path)
+        .await
+        .expect("invalid test key should be removed");
 
     assert_eq!(
         error,
