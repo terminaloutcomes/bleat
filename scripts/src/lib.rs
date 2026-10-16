@@ -18,6 +18,7 @@ pub mod ci_cache_keys;
 pub mod ci_smoke;
 pub mod deploy_device;
 pub mod device_build;
+pub mod documentation;
 pub mod error;
 pub mod listening_repair;
 pub mod live_fixtures;

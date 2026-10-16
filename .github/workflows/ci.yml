@@ -185,6 +185,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install zsh for coverage scripts
         run: sudo apt-get install -y zsh
+      - name: Check documentation references
+        run: mise run docs:check
       - name: Rust validation and checking
         run: mise run 'rust:check'
       - name: Full Rust coverage including container integration tests
