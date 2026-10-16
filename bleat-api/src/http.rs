@@ -803,13 +803,11 @@ mod tests {
     struct Activity {
         active: AtomicUsize,
         maximum: AtomicUsize,
-        started: tokio::sync::Notify,
     }
 
     async fn slow(State(activity): State<Arc<Activity>>) -> StatusCode {
         let active = activity.active.fetch_add(1, Ordering::SeqCst) + 1;
         activity.maximum.fetch_max(active, Ordering::SeqCst);
-        activity.started.notify_one();
         tokio::time::sleep(std::time::Duration::from_millis(40)).await;
         activity.active.fetch_sub(1, Ordering::SeqCst);
         StatusCode::NO_CONTENT
@@ -970,42 +968,86 @@ mod tests {
     #[tokio::test]
     async fn health_remains_available_while_protected_capacity_is_exhausted() {
         let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
-        let activity = Arc::new(Activity::default());
-        let router = limited_router(std::time::Duration::from_secs(1), 1, Arc::clone(&activity));
-        let slow_router = router.clone();
-        let started = activity.started.notified();
-        let slow_request = tokio::spawn(async move {
-            slow_router
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let permits = Arc::new(tokio::sync::Semaphore::new(1));
+        let protected = Router::new().route(
+            "/slow",
+            get({
+                let entered = Arc::clone(&entered);
+                let release = Arc::clone(&release);
+                move || {
+                    let entered = Arc::clone(&entered);
+                    let release = Arc::clone(&release);
+                    async move {
+                        entered.notify_one();
+                        release.notified().await;
+                        StatusCode::NO_CONTENT
+                    }
+                }
+            }),
+        );
+        let router = Router::new()
+            .route("/healthz", get(health))
+            .merge(apply_limits(
+                protected,
+                RequestLimits {
+                    timeout: std::time::Duration::from_secs(1),
+                },
+                GlobalConcurrencyLimitLayer::with_semaphore(Arc::clone(&permits)),
+                1_024,
+            ))
+            .layer(middleware::from_fn_with_state(
+                TrustedProxyConfig::new(Vec::new(), Vec::new(), false)
+                    .expect("empty trusted proxy configuration should validate"),
+                instrument_request,
+            ));
+        let slow_request = router.clone().oneshot(
+            Request::get("/slow")
+                .body(Body::empty())
+                .expect("valid protected request"),
+        );
+        let health_probe = async {
+            entered.notified().await;
+            let capacity_before = permits.available_permits();
+            let response = router
                 .oneshot(
-                    Request::get("/slow")
+                    Request::get("/healthz")
                         .body(Body::empty())
-                        .expect("valid request"),
+                        .expect("valid health request"),
                 )
-                .await
-                .expect("slow route should respond")
-        });
-        // `slow` itself completes in 40 ms and the router deadline is 1 s;
-        // this readiness bound matches that request deadline with headroom.
-        tokio::time::timeout(std::time::Duration::from_secs(1), started)
+                .await;
+            let capacity_after = permits.available_permits();
+            // Release before assertions so failures cannot strand the handler.
+            release.notify_one();
+            (response, capacity_before, capacity_after)
+        };
+        // Dropping the joined futures on timeout cancels both operations; no
+        // detached request survives failure. The deadline is a failure budget.
+        let (slow_response, (health_response, capacity_before, capacity_after)) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                tokio::join!(slow_request, health_probe)
+            })
             .await
-            .expect("slow handler should enter before the request timeout");
+            .expect("held request and health probe should finish within five seconds");
 
-        let health_response = router
-            .oneshot(
-                Request::get("/healthz")
-                    .body(Body::empty())
-                    .expect("valid request"),
-            )
-            .await
-            .expect("health route should respond");
-
-        assert_eq!(health_response.status(), StatusCode::OK);
+        assert_eq!(capacity_before, 0, "protected request must own capacity");
         assert_eq!(
-            slow_request
-                .await
-                .expect("slow task should finish")
-                .status(),
+            capacity_after, 0,
+            "capacity must remain held through health response"
+        );
+        assert_eq!(
+            health_response.expect("health response").status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            slow_response.expect("released protected response").status(),
             StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            permits.available_permits(),
+            1,
+            "completed request must release capacity"
         );
     }
 }

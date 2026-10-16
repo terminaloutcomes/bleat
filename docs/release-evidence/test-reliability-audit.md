@@ -56,10 +56,10 @@ execution or remove opt-in prerequisites.
 | --- | ---: | ---: | ---: | ---: |
 | App JSON | 509 | 4 | 80 | 593 |
 | Core/transcription JSON | 508 | 2 | 52 | 562 |
-| UI/live/tooling JSON | 368 | 10 | 9 | 387 |
+| UI/live/tooling JSON | 368 | 11 | 8 | 387 |
 | Gate cases below | 5 | 5 (including four added regressions) | 0 | 10 |
 
-The 141 follow-up decisions remain explicitly open. A fixed decision records a concrete change; it does not erase shared-helper
+The 140 follow-up decisions remain explicitly open. A fixed decision records a concrete change; it does not erase shared-helper
 or configuration evidence gaps. A keep decision means the inspected scenario
 can remain, not that every real-system configuration was run.
 
@@ -359,8 +359,10 @@ review, including the final fixture revert and awaited gate cleanup, reports
 
 - **P2**, `bleat-api/src/http.rs`,
   `health_remains_available_while_protected_capacity_is_exhausted`: a notification
-  proves entry but the 40 ms handler can finish before the probe. Retained as
-  tooling follow-up 6; not fixed under the review-and-ship lower-priority rule.
+  proved entry but the 40 ms handler could finish before the probe. Initially
+  retained as tooling follow-up 6; subsequently fixed on explicit user request
+  with a gated handler and before/after semaphore assertions. This later local
+  fix is separate from the seven historical independent review cycles.
 - **P2**, `bleat-api/tests/http_api.rs`, interim signing-key fixtures: synchronous
   `TempDir` setup/drop inside async tests violated the explicit concurrency rule.
   Reverted the fixture change and its dependency; the pre-existing filesystem
@@ -381,3 +383,24 @@ classified as resolved by the independent review.
 
 Changed-file Swift format lint, `cargo fmt --check`, `git diff --check` and
 `mise run docs:check` completed successfully.
+
+## Follow-up 6 remediation
+
+The health-capacity test now holds its protected request through the health
+response and verifies both saturation and cleanup. The handler uses a release
+notification instead of elapsed time; joined request futures provide structured
+cancellation under a five-second failure budget. The existing route deadline
+remains and early expiry fails the postconditions.
+
+Validation of the local follow-up on 2026-10-16:
+
+- `cargo test --locked --package bleat-api --lib http::tests::health_remains_available_while_protected_capacity_is_exhausted -- --exact`: one passed, 74 filtered.
+- `cargo test --locked --package bleat-api --lib`: all 75 passed, zero failed/ignored; the fixed test ran again in its owning suite.
+- `cargo fmt --all -- --check` passed.
+
+The first focused attempt failed at the five-second budget because the revised
+fixture omitted request-ID instrumentation required by admission middleware,
+so its handler never entered. Restoring the same middleware used by the original
+fixture resolved that setup defect; this failed attempt is retained separately
+from the subsequent passing focused and suite runs. These are in-process Rust
+unit tests, not new live-server or device evidence.

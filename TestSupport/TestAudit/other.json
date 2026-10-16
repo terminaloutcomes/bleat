@@ -3549,14 +3549,14 @@
       "purpose": "Health remains available while protected capacity is exhausted.",
       "review": {
         "status": "reviewed",
-        "decision": "followup",
-        "reason": "Notify only proves the slow handler entered; the handler completes in 40ms and the test sends `/healthz` after receiving that notification, so it may not probe while protected capacity is actually occupied. Hold the handler with a gate until after the bounded health response, then release it in cleanup; see follow-up document."
+        "decision": "fixed",
+        "reason": "User-authorized follow-up 6 fix: hold the protected handler on an explicit Notify gate until the health response, verify the shared semaphore has zero permits before and after that response, release before assertions, and join both request futures within a five-second cancellation budget."
       },
       "profile": "rust_deterministic",
       "enablement": "Default `bleat-api` Rust library test target; no Docker/database/service prerequisite.",
-      "action_postconditions": "Asserts the body-specific contract: Health remains available while protected capacity is exhausted; failure and success outcomes are checked as typed values or explicit structural fields.",
-      "setup_dependencies": "In-process Axum router, ephemeral loopback TcpListener for actual peer metadata, and bounded local request handlers.",
-      "synchronization_timeout": "Notify-based entry wait is bounded at 1s to match router deadline; slow handler itself completes in 40ms. Health request is awaited after entry, so no guarantee it is serviced while the protected request still owns capacity; a gated handler and bounded cleanup are required."
+      "action_postconditions": "Wait for protected handler entry; observe zero permits before and after the successful health response; explicitly release the handler; require its successful completion and restoration of the sole permit.",
+      "setup_dependencies": "Fresh in-process Axum router, one shared semaphore permit, and test-owned entry/release notifications; no external service.",
+      "synchronization_timeout": "The handler releases only on the explicit gate. A five-second outer timeout drops both joined futures on failure without leaving a detached task. The existing one-second protected route timeout remains; an early timeout fails the held-capacity and protected-response assertions rather than producing a false pass."
     },
     {
       "id": "bleat-api-unit::global_capacity_is_shared_across_authentication_routes_and_router_clones",
