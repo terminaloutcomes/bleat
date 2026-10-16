@@ -6,7 +6,9 @@
 
     @testable import BleatCore
 
-    final class AuthenticatedOtlpSpanExporterLiveTests: XCTestCase {
+    final class AuthenticatedOtlpSpanExporterLiveTests:
+        SwiftPMObservedLiveTestCase
+    {
         func testExportsWithRealJWTOverOTLPHTTP() async throws {
             let environment = ProcessInfo.processInfo.environment
             let authenticationBaseURL =

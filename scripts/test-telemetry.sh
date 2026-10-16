@@ -6,6 +6,7 @@ readonly compose_file="bleat-api/compose.yml"
 readonly port_base="$((20000 + RANDOM % 19990))"
 readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
+readonly swift_report_root="${PWD}/.build/swiftpm-test-results/${project_name}"
 readonly database_password="test-${project_name}-${RANDOM}"
 readonly captured_data_prohibited_pattern='authorization|bearer|telemetry:write|installation|reader@example\.com|books\.example|secret audiobook|refresh-token|private/var|transcript words|search phrase|session/opaque'
 test_succeeded=0
@@ -90,9 +91,14 @@ for test_suite in \
   TelemetryAuthenticationTests \
   AuthenticatedOtlpSpanExporterTests \
   RemoteTelemetryTests; do
-  swift test --disable-xctest --no-parallel --filter "${test_suite}"
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/${test_suite}.xml" -- swift test \
+    --disable-xctest --no-parallel --filter "${test_suite}"
 done
-swift test --filter TelemetryLiveTestConfigurationTests
+cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+  --report "${swift_report_root}/TelemetryLiveTestConfigurationTests.xml" -- swift test \
+  --no-parallel \
+  --filter TelemetryLiveTestConfigurationTests
 
 mise run "api:test"
 
@@ -162,22 +168,34 @@ fi
 # points at production in local development; reusing it here causes the
 # production verifier to reject the development envelope with HTTP 401.
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
-  swift test --filter TelemetryAuthenticationLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/TelemetryAuthenticationLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter TelemetryAuthenticationLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
-  swift test --filter AuthenticatedOtlpSpanExporterLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/AuthenticatedOtlpSpanExporterLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter AuthenticatedOtlpSpanExporterLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT}" \
-  swift test --filter OpenTelemetryCollectorLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/OpenTelemetryCollectorLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter OpenTelemetryCollectorLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_CONTROL_COMMAND="${PWD}/scripts/control-telemetry-test-service.sh" \
 BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \
-  swift test --filter TelemetryRecoveryLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/TelemetryRecoveryLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter TelemetryRecoveryLiveTests
 
 # Receiver success proves only admission. Require bounded retry and queue exhaustion.
 outage_metrics=""

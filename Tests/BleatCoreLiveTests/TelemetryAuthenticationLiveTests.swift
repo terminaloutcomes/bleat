@@ -5,7 +5,7 @@
 
     @testable import BleatCore
 
-    final class TelemetryAuthenticationLiveTests: XCTestCase {
+    final class TelemetryAuthenticationLiveTests: SwiftPMObservedLiveTestCase {
         func testSwiftDevelopmentAttesterObtainsVerifiableJWT() async throws {
             let baseURL = try requireTelemetryAuthenticationTestBaseURL()
             let store = LiveTelemetryEnrollmentStore()

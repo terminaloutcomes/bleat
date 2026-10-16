@@ -21,7 +21,7 @@ import XCTest
 ///
 /// Skipped unless `BLEAT_LARGE_LIBRARY_COUNT` is set, so
 /// `./scripts/test-live.sh` does not pay the cost on every run.
-final class LibraryRepositoryLiveTests: XCTestCase {
+final class LibraryRepositoryLiveTests: SwiftPMObservedLiveTestCase {
     func testPagedLoadAndCacheFallbackOfLargeLibrary()
         async throws
     {

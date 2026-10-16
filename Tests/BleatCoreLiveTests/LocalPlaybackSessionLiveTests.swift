@@ -3,7 +3,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class LocalPlaybackSessionLiveTests: XCTestCase {
+final class LocalPlaybackSessionLiveTests: SwiftPMObservedLiveTestCase {
     func testPinnedRootAndPrefixImportOneIdempotentLocalSession()
         async throws
     {

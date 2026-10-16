@@ -6,7 +6,7 @@
 
     @testable import BleatCore
 
-    final class TelemetryRecoveryLiveTests: XCTestCase {
+    final class TelemetryRecoveryLiveTests: SwiftPMObservedLiveTestCase {
         func
             testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment()
             async throws

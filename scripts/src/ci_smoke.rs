@@ -1,7 +1,7 @@
 //! iOS app and smoke validation with Simulator startup concurrent with compilation.
 
+use crate::test_results::{discover_expected, verify_result_bundle};
 use std::error::Error;
-use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
@@ -10,7 +10,6 @@ use std::time::Instant;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
-const RESULT: &str = ".build/ci-smoke/results.xcresult";
 const DERIVED: &str = ".build/ci-smoke/derived";
 const APP_TESTS: &str = "BleatAppTests";
 const STARTUP: &str = "BleatUITests/BleatUITests/testLaunchingScreenDescribesStartupWork";
@@ -122,18 +121,11 @@ fn boot_simulator(id: String, state: String) -> Result<()> {
     Ok(())
 }
 
-fn remove_previous_result() -> Result<()> {
-    let path = Path::new(RESULT);
-    if path.is_dir() {
-        fs::remove_dir_all(path)?;
-    } else if path.exists() {
-        fs::remove_file(path)?;
-    }
-    Ok(())
-}
-
 pub fn run() -> Result<()> {
-    remove_previous_result()?;
+    let run_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_millis());
+    let result = format!(".build/ci-smoke/{}-{run_id}.xcresult", std::process::id());
 
     ensure_success(
         Command::new("xcodebuild").arg("-version").status()?,
@@ -196,6 +188,11 @@ pub fn run() -> Result<()> {
     let boot_id = simulator_id.clone();
     let boot_worker = thread::spawn(move || boot_simulator(boot_id, simulator_state));
     let build_started = Instant::now();
+    let test_selectors = [
+        format!("-only-testing:{APP_TESTS}"),
+        format!("-only-testing:{STARTUP}"),
+        format!("-only-testing:{SIGNED_IN}"),
+    ];
     let build_status = xcodebuild()
         .args([
             "-enableCodeCoverage",
@@ -204,11 +201,9 @@ pub fn run() -> Result<()> {
             "NO",
             "-destination",
             &resolved_destination,
-            &format!("-only-testing:{APP_TESTS}"),
-            &format!("-only-testing:{STARTUP}"),
-            &format!("-only-testing:{SIGNED_IN}"),
             "build-for-testing",
         ])
+        .args(&test_selectors)
         .status();
     let build_seconds = build_started.elapsed().as_secs();
     let boot_result = boot_worker
@@ -218,6 +213,35 @@ pub fn run() -> Result<()> {
     ensure_success(build_status, "Build for testing")?;
     println!("Build for testing completed in {build_seconds}s");
     boot_result?;
+
+    // Derive the expected case set from the exact products and test selection
+    // just built. This catches disabled, missing, and unexpectedly added tests.
+    let discovery = checked_output(
+        xcodebuild().args([
+            "-destination",
+            &resolved_destination,
+            "-enumerate-tests",
+            "-test-enumeration-style",
+            "flat",
+            "-test-enumeration-format",
+            "json",
+            "-test-enumeration-output-path",
+            "-",
+            "test-without-building",
+        ]),
+        "Enumerate smoke tests",
+    )?;
+    let discovery_text = String::from_utf8(discovery)?;
+    std::fs::write(
+        Path::new(&result).with_extension("discovery.json"),
+        &discovery_text,
+    )?;
+    let only = [
+        APP_TESTS.to_owned(),
+        STARTUP.to_owned(),
+        SIGNED_IN.to_owned(),
+    ];
+    let expected = discover_expected(&discovery_text, &only, &[], 1)?;
 
     // Resolve the app path from the build settings used above, then verify
     // both test targets from the result bundle even if xcodebuild fails.
@@ -235,50 +259,33 @@ pub fn run() -> Result<()> {
             "NO",
             "-destination",
             &resolved_destination,
-            &format!("-only-testing:{APP_TESTS}"),
-            &format!("-only-testing:{STARTUP}"),
-            &format!("-only-testing:{SIGNED_IN}"),
             "-resultBundlePath",
-            RESULT,
+            &result,
             "test-without-building",
         ])
-        .status()?;
-    let summary = checked_output(
-        Command::new("xcrun").args([
-            "xcresulttool",
-            "get",
-            "test-results",
-            "summary",
-            "--path",
-            RESULT,
-            "--format",
-            "json",
-        ]),
-        "Read smoke result summary",
-    )?;
-    print!("{}", String::from_utf8_lossy(&summary));
-    let tests = checked_output(
-        Command::new("xcrun").args([
-            "xcresulttool",
-            "get",
-            "test-results",
-            "tests",
-            "--path",
-            RESULT,
-            "--format",
-            "json",
-        ]),
-        "Read smoke test results",
-    )?;
-    let verification = jq(
-        &tests,
-        &[
-            "-e",
-            "[.. | objects | select(.nodeType == \"Test Case\")] as $tests | ($tests | length) > 2 and all($tests[]; .result == \"Passed\") and any(.. | objects; .name == \"BleatAppTests\") and ([\"testLaunchingScreenDescribesStartupWork()\", \"testMiniPlayerIsAbsentBeforePlayback()\"] - [$tests[].name] | length) == 0",
-        ],
-    )?;
-    println!("{verification}");
-    ensure_success(test_status, "iOS tests")
+        .args(&test_selectors)
+        .status();
+    let result_verification =
+        verify_result_bundle(Path::new(&result), &expected, &[]).map(|report| {
+            println!(
+                "Smoke results: {} passed, {} skipped",
+                report.passed, report.skipped
+            )
+        });
+    match (test_status, result_verification) {
+        (Ok(status), Ok(())) => ensure_success(status, "iOS tests"),
+        (Ok(status), Err(error)) => Err(format!(
+            "iOS tests exited with {status}; result verification failed: {error}"
+        )
+        .into()),
+        (Err(error), Ok(())) => {
+            Err(format!("iOS tests could not start: {error}; result verification passed").into())
+        }
+        (Err(error), Err(verification)) => Err(format!(
+            "iOS tests could not start: {error}; result verification failed: {verification}"
+        )
+        .into()),
+    }
 }
 
 #[cfg(test)]

@@ -2,28 +2,7 @@
 
 set -euo pipefail
 
-BUILD_VERBOSE="${BUILD_VERBOSE:-false}"
-BUILD_VERBOSE_FLAG="-quiet"
-if [[ "${BUILD_VERBOSE}" == "true" ]]; then
-  BUILD_VERBOSE_FLAG=""
-fi
-
-: "${BLEAT_DEVELOPMENT_TEAM:?Set BLEAT_DEVELOPMENT_TEAM to the Apple team ID}"
-readonly bleat_bundle_id="${BLEAT_BUNDLE_ID:?Set BLEAT_BUNDLE_ID to the bundle identifier for the app}"
-
-xcodebuild \
-  -project Bleat.xcodeproj \
-  -scheme BleatMac \
-  ${BUILD_VERBOSE_FLAG} \
-  -configuration Debug \
-  -destination 'platform=macOS' \
-  -derivedDataPath .build/macos-signed \
-  -allowProvisioningUpdates \
-  DEVELOPMENT_TEAM="${BLEAT_DEVELOPMENT_TEAM}" \
-  CODE_SIGN_STYLE=Automatic \
-  PRODUCT_BUNDLE_IDENTIFIER="${bleat_bundle_id}" \
-  BUILD_WITHOUT_PAID_DEVELOPER="${BUILD_WITHOUT_PAID_DEVELOPER:-NO}" \
-  BLEAT_APP_ATTEST_MODE="${BLEAT_APP_ATTEST_MODE:-enabled}" \
-  BLEAT_CARPLAY_MODE="${BLEAT_CARPLAY_MODE:-disabled}" \
-  BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
-  test
+readonly bleat_script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly bleat_repository_root="$(cd -- "${bleat_script_dir}/.." && pwd)"
+cd "${bleat_repository_root}"
+exec cargo run --quiet --locked --package scripts --bin xcode-test-runner -- macos

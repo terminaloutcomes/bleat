@@ -3,7 +3,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class ProgressSyncLiveTests: XCTestCase {
+final class ProgressSyncLiveTests: SwiftPMObservedLiveTestCase {
     func testPinnedRootAndPrefixProgressContracts() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],

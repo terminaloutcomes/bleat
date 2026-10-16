@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-final class TelemetryLiveTestConfigurationTests: XCTestCase {
+final class TelemetryLiveTestConfigurationTests: SwiftPMObservedLiveTestCase {
     func testProductionAuthenticationURLDoesNotEnableLiveTests() throws {
         let url = try telemetryAuthenticationTestBaseURL(
             environment: [

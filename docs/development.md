@@ -126,6 +126,33 @@ journeys. Signed host tests require the configured development team. Run an
 individual stage with `mise run test:local`, `mise run test:live`, or
 `mise run test:app-live`.
 
+Xcode runners verify exact target/suite/function identities and outcomes using
+`scripts/src/test_results.rs`. Broad selections first enumerate the built test
+products; focused journey runners declare their expected cases explicitly.
+Missing, duplicate, unexpected, failed, unknown, and unapproved skipped results
+fail the gate, as do result-summary failures or runtime warnings. An entirely
+skipped selection never counts as successful validation. Result bundles and
+discovery artifacts are retained for inspection.
+
+Live and telemetry SwiftPM runners use `scripts/src/swift_test_results.rs` to
+discover XCTest and Swift Testing separately, then compare fresh structured
+reports with the exact filtered selection. Reports and sibling selection JSON
+files live under `.build/swiftpm-test-results/`. Unsupported command options
+are rejected rather than allowing discovery and execution to use different
+configurations. The ordinary Audiobookshelf live lane names the optional
+OIDC, large-library, and telemetry cases allowed to skip without their separate
+fixtures; the telemetry lane permits no skips.
+
+Live XCTest classes inherit `SwiftPMObservedLiveTestCase`, which records native
+XCTest outcomes when the runner enables reporting. SwiftPM's serial XCTest lane
+does not emit XCTest XML on the tested toolchain, and its parallel XML reporter
+can encode skipped cases as passing. The native observer's JSON is authoritative
+for XCTest; Swift Testing uses its own XML report. Missing observer records fail
+the gate, so new live XCTest classes must participate in this reporting lifecycle.
+
+See [runner verification evidence](release-evidence/test-runner-verification.md)
+for the implementation scope, regression checks, and remaining execution gaps.
+
 Run the host test suite with code coverage:
 
 ```sh

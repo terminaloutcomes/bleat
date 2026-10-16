@@ -25,3 +25,6 @@ pub mod live_fixtures;
 pub mod release_version_check;
 pub mod release_versions;
 pub mod site_news;
+pub mod swift_test_results;
+pub mod test_results;
+pub mod xcode_test_runner;

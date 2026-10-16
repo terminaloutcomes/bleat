@@ -25,6 +25,7 @@ bleat_data_container=""
 bleat_driver_data_container=""
 bleat_driver_pid=""
 bleat_driver_log="${TMPDIR:-/tmp}/bleat-deep-links-${bleat_run_id}.log"
+readonly bleat_driver_result="${bleat_repository_root}/.build/deep-link-results-${bleat_run_id}.xcresult"
 
 bleat_cleanup() {
     local exit_code=$?
@@ -211,6 +212,7 @@ xcodebuild \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG EXTERNAL_URL_DRIVER' \
     -parallel-testing-enabled NO \
+    -resultBundlePath "${bleat_driver_result}" \
     -only-testing:BleatUITests/BleatUITests/testAcceptsExternalURLConfirmationFromHost \
     test >"${bleat_driver_log}" 2>&1 &
 bleat_driver_pid="$!"
@@ -263,6 +265,9 @@ bleat_wait_for_unchanged_receipt "${bleat_last_receipt}"
 bleat_finish_driver
 wait "${bleat_driver_pid}"
 bleat_driver_pid=""
+cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+    --bin verify-test-results -- --result-bundle "${bleat_driver_result}" \
+    --expected BleatUITests/BleatUITests/testAcceptsExternalURLConfirmationFromHost
 
 xcrun simctl launch \
     --terminate-running-process \

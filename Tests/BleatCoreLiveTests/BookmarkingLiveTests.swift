@@ -3,7 +3,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class BookmarkingLiveTests: XCTestCase {
+final class BookmarkingLiveTests: SwiftPMObservedLiveTestCase {
     func testPinnedRootAndPrefixBookmarkCRUD() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],

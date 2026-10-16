@@ -30,6 +30,12 @@ do not emit XCTest-style test identities. Repetition evidence is separate.
 
 ## Runner selection and result verification
 
+The table below records the original audit findings. The
+[runner verification batch](test-runner-verification.md) implements the exact
+identity and outcome checks identified here; that record distinguishes automated
+regression checks from full live, macOS, and device execution evidence. Other
+findings in this document remain open.
+
 | Runner/helper | Reviewed contract and decision |
 | --- | --- |
 | `scripts/test-host.sh`, `TestSupport/HostTests/reports.py` | Keep: selects actual built products; removes owned stale reports; compares exact identity multiplicities with the host inventory; rejects failures and unexpected skips. Only named unsigned Keychain exclusion is allowed. Signed runner verifies profile and entitlement identity. Coverage must contain executed lines in both libraries. |
@@ -56,17 +62,15 @@ do not emit XCTest-style test identities. Repetition evidence is separate.
 
 Owner for these items: Bleat maintainers handling
 [issue #362](https://github.com/terminaloutcomes/bleat/issues/362). These findings
-remain open; documenting them does not repair or validate the affected path.
+remain open except where an implementation and validation record is linked.
 
 ### Exact result verification
 
-Move changed result-checking logic into the existing Rust scripts package.
-Compare decoded result identities, multiplicity and typed outcomes with the
-runner's explicit expected selection and allowed skips. Add fixtures for empty,
-all-skipped, missing, duplicate, wrong-target, unknown-outcome and failed results.
-Apply it to the runners marked follow-up above. Risk until resolved: a successful
-command can be incorrectly reported as complete coverage. Retain each original
-failure and result bundle during migration.
+Implemented in the [runner verification batch](test-runner-verification.md):
+decoded identities, multiplicity, typed outcomes, and explicit skip policies are
+checked by the Rust scripts package. Results and discovery evidence are retained.
+The historical LLDB prototype trace lane remains diagnostic-only and is explicitly
+excluded from this completion claim.
 
 ### Failure specificity and diagnostics
 

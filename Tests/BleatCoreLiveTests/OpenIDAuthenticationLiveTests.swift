@@ -4,7 +4,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class OpenIDAuthenticationLiveTests: XCTestCase {
+final class OpenIDAuthenticationLiveTests: SwiftPMObservedLiveTestCase {
     @MainActor
     func testKeycloakOIDCLoginCompletesForRootAndPrefixServers() async throws {
         let environment = ProcessInfo.processInfo.environment

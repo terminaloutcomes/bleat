@@ -90,7 +90,9 @@ jobs:
         if: always()
         with:
           name: ios-smoke-results
-          path: .build/ci-smoke/results.xcresult
+          path: |
+            .build/ci-smoke/*.xcresult
+            .build/ci-smoke/*.discovery.json
           retention-days: 7
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation

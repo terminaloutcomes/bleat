@@ -1,0 +1,33 @@
+{
+  "testNodes": [
+    {
+      "children": [
+        {
+          "duration": "0.0019s",
+          "durationInSeconds": 0.001873016357421875,
+          "name": "Repetition 1",
+          "nodeIdentifier": "1",
+          "nodeIdentifierURL": "test://com.apple.xcode/Bleat/BleatAppTests/AppModelTests/testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection",
+          "nodeType": "Repetition",
+          "result": "Passed"
+        },
+        {
+          "duration": "0.00057s",
+          "durationInSeconds": 0.0005700588226318359,
+          "name": "Repetition 2",
+          "nodeIdentifier": "2",
+          "nodeIdentifierURL": "test://com.apple.xcode/Bleat/BleatAppTests/AppModelTests/testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection",
+          "nodeType": "Repetition",
+          "result": "Passed"
+        }
+      ],
+      "duration": "0.0012s",
+      "durationInSeconds": 0.0012215375900268555,
+      "name": "testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection()",
+      "nodeIdentifier": "AppModelTests/testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection()",
+      "nodeIdentifierURL": "test://com.apple.xcode/Bleat/BleatAppTests/AppModelTests/testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection",
+      "nodeType": "Test Case",
+      "result": "Passed"
+    }
+  ]
+}

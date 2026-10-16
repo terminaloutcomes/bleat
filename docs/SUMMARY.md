@@ -30,6 +30,7 @@
 
 - [Test reliability audit progress](release-evidence/test-reliability-audit.md)
   - [Runner and shell-case review](release-evidence/test-reliability-runners.md)
+  - [Runner verification batch](release-evidence/test-runner-verification.md)
   - [App test follow-ups](release-evidence/test-reliability-app-followups.md)
   - [Core test follow-ups](release-evidence/test-reliability-core-followups.md)
   - [UI, live and tooling follow-ups](release-evidence/test-reliability-other-followups.md)
