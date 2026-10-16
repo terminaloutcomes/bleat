@@ -337,10 +337,13 @@
                     purpose: ProcessInfo.processInfo.arguments.contains(
                         "--ui-testing-automatic-context-download"
                     ) ? .automaticCache : .manual,
-                    completedAutomaticWindowOnly:
-                        ProcessInfo.processInfo.arguments.contains(
+                    state: ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-paused-download"
+                    )
+                        ? .paused
+                        : ProcessInfo.processInfo.arguments.contains(
                             "--ui-testing-complete-automatic-window"
-                        )
+                        ) ? .completedAutomaticWindow : .complete
                 )
                 : Self.makeDownloadFixtureRoot()
         }
@@ -1856,10 +1859,16 @@
                 "BleatUITestDownloads-\(UUID().uuidString)", isDirectory: true)
         }
 
+        private enum DownloadFixtureState {
+            case complete
+            case completedAutomaticWindow
+            case paused
+        }
+
         private static func makeDownloadFixture(
             itemID: LibraryItemID,
             purpose: DownloadPurpose,
-            completedAutomaticWindowOnly: Bool
+            state: DownloadFixtureState
         ) throws -> URL {
             let root = makeDownloadFixtureRoot()
             let layout = try DownloadStorageLayout(rootURL: root)
@@ -1888,8 +1897,7 @@
             let plan = DownloadPlan(
                 itemID: itemID,
                 tracks:
-                    completedAutomaticWindowOnly
-                    ? [track, remainingTrack] : [track]
+                    state == .complete ? [track] : [track, remainingTrack]
             )
             var manifest = try DownloadManifest(
                 downloadID: DownloadID(rawValue: "ui-downloaded-download"),
@@ -1904,8 +1912,16 @@
                 observedByteLength: Int64(audio.count),
                 placement: .finalized
             )
-            if !completedAutomaticWindowOnly {
+            switch state {
+            case .complete:
                 try manifest.finish()
+            case .completedAutomaticWindow:
+                break
+            case .paused:
+                try manifest.markPaused(
+                    trackIndex: remainingTrack.index,
+                    observedByteLength: 0
+                )
             }
             let record = DownloadedBookRecord(
                 manifest: manifest,

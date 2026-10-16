@@ -1038,6 +1038,66 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testBookDetailDownloadStatusWrapsAtLargestDynamicType() {
+        assertBookDetailDownloadStatusFits(
+            contentSize: .accessibilityExtraExtraExtraLarge
+        )
+    }
+
+    @MainActor
+    func testBookDetailDownloadStatusFitsAtDefaultDynamicType() {
+        assertBookDetailDownloadStatusFits(contentSize: .large)
+    }
+
+    @MainActor
+    private func assertBookDetailDownloadStatusFits(
+        contentSize: UIContentSizeCategory
+    ) {
+        let app = launch(
+            scenario: "--ui-testing-context-download-removal",
+            additionalArguments: [
+                "--ui-testing-paused-download",
+                "-UIPreferredContentSizeCategoryName",
+                contentSize.rawValue,
+            ]
+        )
+        let book = app.descendants(matching: .any)["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 10))
+        book.tap()
+        let detail = app.descendants(matching: .any)["book.detail"]
+        let status = app.descendants(matching: .any)[
+            "book.detail.downloadStatus"
+        ]
+        let stop = app.buttons["book.detail.download.stop"]
+        for _ in 0..<20 {
+            if status.exists, stop.isHittable,
+                app.frame.contains(status.frame)
+            {
+                break
+            }
+            detail.swipeUp()
+        }
+        XCTAssertTrue(status.exists)
+        XCTAssertTrue(status.label.contains("Paused"))
+        XCTAssertTrue(status.label.contains("80/160 KB"))
+        XCTAssertTrue(app.frame.contains(status.frame))
+        XCTAssertTrue(stop.isHittable)
+        XCTAssertTrue(app.frame.contains(stop.frame))
+        XCTAssertLessThanOrEqual(status.frame.maxX, stop.frame.minX)
+        let progress = app.progressIndicators["book.detail.downloadProgress"]
+        XCTAssertTrue(progress.exists)
+        XCTAssertGreaterThanOrEqual(
+            status.frame.minX, progress.frame.minX - 0.5)
+        XCTAssertLessThanOrEqual(status.frame.maxX, progress.frame.maxX + 0.5)
+        XCTAssertLessThanOrEqual(status.frame.maxY, progress.frame.minY)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Book detail download - \(contentSize.rawValue)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testBookDetailHidesDownloadForCachedBook() {
         let app = launch(
             scenario: "--ui-testing-context-download-removal",
