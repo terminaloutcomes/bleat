@@ -74,7 +74,7 @@ enum BookmarkState: Equatable, Sendable {
 
 enum PlaybackSleepTimer: Equatable, Sendable {
     case duration(ContinuousClock.Instant)
-    case endOfChapter(Double)
+    case endOfChapter(PlaybackChapter)
 }
 
 enum PlaybackMediaServicesResetIntent: Equatable, Sendable {
@@ -413,6 +413,7 @@ final class PlaybackModel {
     private var currentItemObservers: [NSObjectProtocol] = []
     private var audioSessionObservers: [NSObjectProtocol] = []
     private var offsetsByItem: [ObjectIdentifier: Double] = [:]
+    private var seekingPlayerID: ObjectIdentifier?
     private var activeAccount: ServerAccount?
     private var localAccountID: AccountID?
     private var preparingAccountID: AccountID?
@@ -624,7 +625,7 @@ final class PlaybackModel {
     }
 
     var canSetEndOfChapterSleepTimer: Bool {
-        currentChapterEnd != nil
+        currentSleepChapter != nil
     }
 
     var chapters: [PlaybackChapter] {
@@ -1230,6 +1231,7 @@ final class PlaybackModel {
         }
         let target =
             useLocalPosition ? conflict.localTime : conflict.serverTime
+        rearmChapterSleepTimer(at: target)
         state = .preparing
         do {
             try await rebuildQueue(at: target)
@@ -1740,12 +1742,12 @@ final class PlaybackModel {
     }
 
     func setSleepTimerToEndOfChapter() {
-        guard let chapterEnd = currentChapterEnd else {
+        guard let chapter = currentSleepChapter else {
             return
         }
         sleepTask?.cancel()
         sleepTask = nil
-        sleepTimer = .endOfChapter(chapterEnd)
+        sleepTimer = .endOfChapter(chapter)
     }
 
     func setRate(_ newRate: Float) {
@@ -1849,6 +1851,7 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
+        state = .preparing
         if preparation.sessionID != nil {
             await syncProgress()
         } else {
@@ -1862,6 +1865,7 @@ final class PlaybackModel {
             return
         }
         let target = min(max(requestedTime, 0), preparation.duration)
+        rearmChapterSleepTimer(at: target)
         if continuation == .remainPaused {
             pausedAt = nil
         }
@@ -2123,6 +2127,11 @@ final class PlaybackModel {
         }
 
         let queue = AVQueuePlayer(items: items)
+        let queueID = ObjectIdentifier(queue)
+        seekingPlayerID = queueID
+        defer {
+            if seekingPlayerID == queueID { seekingPlayerID = nil }
+        }
         player = queue
         updateTimePitchAlgorithm()
         installObservers(
@@ -2479,6 +2488,10 @@ final class PlaybackModel {
     }
 
     private func refreshCurrentTime() {
+        // Queue construction can report track start before the pending seek settles.
+        guard seekingPlayerID == nil, !awaitingCachedContinuation else {
+            return
+        }
         updateAutomaticDownloadBandwidth()
         guard let player,
             let currentItem = player.currentItem,
@@ -2514,12 +2527,15 @@ final class PlaybackModel {
                 } ?? false)
         )
         notifyAutomaticDownloadProgress()
-        if case .endOfChapter(let chapterEnd) = sleepTimer,
-            currentTime >= chapterEnd
+        if case .endOfChapter(let chapter) = sleepTimer,
+            currentTime >= chapter.end
         {
             sleepTimer = nil
             pause()
             return
+        }
+        if currentChapter?.id != previousChapterID {
+            rearmChapterSleepTimer(at: currentTime)
         }
         if abs(currentTime - lastPersistedTime) >= 5 {
             persistPosition()
@@ -3305,6 +3321,7 @@ final class PlaybackModel {
                     try await rebuildQueue(at: continuationTime)
                     automaticCachePinReleaser?(window.pin)
                     guard generation == operationGeneration else { return }
+                    awaitingCachedContinuation = false
                     let shouldResume =
                         cachedContinuationOperation?.resumePlayback
                         ?? continuationOperation.resumePlayback
@@ -3403,7 +3420,7 @@ final class PlaybackModel {
             }
             return
         }
-        awaitingCachedContinuation = false
+        awaitingCachedContinuation = true
         cachedContinuationTimeoutTask?.cancel()
         cachedContinuationTimeoutTask = nil
         persistPosition()
@@ -3417,6 +3434,7 @@ final class PlaybackModel {
         do {
             try await rebuildQueue(at: currentTime)
             guard generation == operationGeneration else { return }
+            awaitingCachedContinuation = false
             releaseAutomaticCachedPlaybackWindow()
             cachedStreamingPreparation = nil
             let shouldResume =
@@ -3725,7 +3743,7 @@ final class PlaybackModel {
         }
     }
 
-    private var currentChapterEnd: Double? {
+    private var currentSleepChapter: PlaybackChapter? {
         guard let preparation else {
             return nil
         }
@@ -3734,6 +3752,15 @@ final class PlaybackModel {
             currentTime: currentTime,
             duration: duration
         )
+    }
+
+    private func rearmChapterSleepTimer(at time: Double) {
+        guard case .endOfChapter = sleepTimer else { return }
+        sleepTimer = PlaybackChapterSleepDecision.target(
+            chapters: chapters,
+            currentTime: time,
+            duration: duration
+        ).map(PlaybackSleepTimer.endOfChapter)
     }
 
     private func resumePlayback(afterRewindingTo target: Double) async {

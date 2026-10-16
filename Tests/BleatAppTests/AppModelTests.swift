@@ -10566,7 +10566,7 @@ final class AppModelTests: XCTestCase {
                 currentTime: 75,
                 duration: 130
             ),
-            130
+            chapters[1]
         )
         XCTAssertNil(
             PlaybackChapterSleepDecision.target(
@@ -10575,6 +10575,107 @@ final class AppModelTests: XCTestCase {
                 duration: 130
             )
         )
+    }
+
+    func testEndOfChapterSleepRearmsAfterForwardSeek() async throws {
+        try await assertChapterSleepAfterSeek(
+            from: 0.5, to: 4.5, chapterIndex: 2)
+    }
+
+    func testEndOfChapterSleepRearmsAfterBackwardSeek() async throws {
+        try await assertChapterSleepAfterSeek(
+            from: 4.5, to: 0.5, chapterIndex: 0)
+    }
+
+    func testEndOfChapterSleepRearmsAtExactChapterStart() async throws {
+        try await assertChapterSleepAfterSeek(
+            from: 0.5, to: 2, chapterIndex: 1)
+    }
+
+    func testChapterSeekPreservesDurationAndCancelledSleepTimers() async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let playback = fixture.model(activation: TestAudioSessionActivation())
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil
+        )
+        playback.pause()
+        playback.setSleepTimer(minutes: 5)
+        let durationTimer = playback.sleepTimer
+        await playback.seek(to: 0.5)
+        XCTAssertEqual(playback.sleepTimer, durationTimer)
+        playback.setSleepTimer(minutes: nil)
+        await playback.seek(to: 0.25)
+        XCTAssertNil(playback.sleepTimer)
+        await playback.stop()
+    }
+
+    func testEndOfChapterSleepRearmsWhilePaused() async throws {
+        try await assertChapterSleepAfterSeek(
+            from: 4.5, to: 0.5, chapterIndex: 0, seekWhilePlaying: false)
+    }
+
+    func testEndOfChapterSleepExpiresOnNaturalChapterChange() async throws {
+        try await assertChapterSleepAfterSeek(
+            from: 0.5, to: 0.5, chapterIndex: 0)
+    }
+
+    private func assertChapterSleepAfterSeek(
+        from initialTime: Double,
+        to target: Double,
+        chapterIndex: Int,
+        seekWhilePlaying: Bool = true
+    ) async throws {
+        let chapters = [
+            PlaybackChapter(id: 10, start: 0, end: 2, title: "One"),
+            PlaybackChapter(id: 20, start: 2, end: 4, title: "Two"),
+            PlaybackChapter(id: 30, start: 4, end: 6, title: "Three"),
+            PlaybackChapter(id: 40, start: 6, end: 8, title: "Four"),
+        ]
+        let fixture = try playbackRecoveryFixture(
+            audioSeconds: 8, chapters: chapters)
+        defer { fixture.cleanUp() }
+        let playback = fixture.model(activation: TestAudioSessionActivation())
+        await playback.startDownloaded(
+            detail: fixture.detail,
+            trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID,
+            account: nil,
+            initialTime: initialTime
+        )
+        playback.pause()
+        playback.setSleepTimerToEndOfChapter()
+        XCTAssertEqual(
+            playback.sleepTimer,
+            .endOfChapter(chapters[initialTime < 2 ? 0 : 2]))
+
+        if seekWhilePlaying { playback.play() }
+        if initialTime != target {
+            await playback.seek(to: target)
+        }
+
+        XCTAssertEqual(
+            playback.sleepTimer, .endOfChapter(chapters[chapterIndex]))
+        XCTAssertEqual(playback.isPlaybackRequested, seekWhilePlaying)
+        if !seekWhilePlaying {
+            XCTAssertEqual(playback.state, .paused)
+            playback.play()
+        }
+        let deadline = ContinuousClock().now.advanced(by: .seconds(8))
+        while playback.sleepTimer != nil, ContinuousClock().now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertNil(playback.sleepTimer)
+        XCTAssertFalse(playback.isPlaybackRequested)
+        XCTAssertEqual(playback.state, .paused)
+        XCTAssertGreaterThanOrEqual(
+            playback.currentTime, chapters[chapterIndex].end)
+        XCTAssertLessThan(playback.currentTime, chapters[chapterIndex].end + 1)
+        await playback.stop()
     }
 
     func testSleepTimerPresentationShowsRemainingDurationAndChapterEnd() {
@@ -10614,7 +10715,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(finalMinute.accessibilityValue, "1 minute remaining")
 
         let chapterEnd = PlaybackSleepTimerPresentation(
-            timer: .endOfChapter(130),
+            timer: .endOfChapter(
+                PlaybackChapter(id: 2, start: 60, end: 130, title: "Two")
+            ),
             now: now
         )
         XCTAssertEqual(chapterEnd.badge, "End")
@@ -20182,7 +20285,11 @@ final class AppModelTests: XCTestCase {
         )
         let account = try fixtureAccount()
         let summary = fixturePage(libraryID: fixtureLibrary().id).items[0]
-        let detail = fixtureBookDetail(item: summary)
+        let chapters = [
+            PlaybackChapter(id: 10, start: 0, end: 1, title: "Cached"),
+            PlaybackChapter(id: 20, start: 1, end: 2, title: "Streaming"),
+        ]
+        let detail = fixtureBookDetail(item: summary, chapters: chapters)
         try await prepareCompleteDownload(
             root: root,
             account: account,
@@ -20225,6 +20332,7 @@ final class AppModelTests: XCTestCase {
             position: .absoluteTime(0.25)
         )
         XCTAssertEqual(outcome, .started(source: .downloaded))
+        model.playback.pause()
         await preparationGate.waitUntilEntered()
         let preparationCompleted = expectation(
             description: "Streaming continuation prepared before cached seek"
@@ -20237,7 +20345,12 @@ final class AppModelTests: XCTestCase {
         await preparationGate.release()
         await fulfillment(of: [preparationCompleted], timeout: 2)
 
+        model.playback.setSleepTimerToEndOfChapter()
+        XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[0]))
+        model.playback.play()
         await model.playback.seek(to: 1.25)
+        XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[1]))
+        XCTAssertTrue(model.playback.isPlaybackRequested)
 
         let didContinue = await waitUntil(timeout: .seconds(2)) {
             model.playback.coverLoadPolicy == .allowNetwork
@@ -25973,7 +26086,10 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    private func playbackRecoveryFixture() throws -> PlaybackRecoveryFixture {
+    private func playbackRecoveryFixture(
+        audioSeconds: Int = 1,
+        chapters: [PlaybackChapter] = []
+    ) throws -> PlaybackRecoveryFixture {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatPlaybackRecovery-\(UUID().uuidString)",
@@ -26001,7 +26117,9 @@ final class AppModelTests: XCTestCase {
             )
         )
         buffer.frameLength = 8_000
-        try audioFile.write(from: buffer)
+        for _ in 0..<audioSeconds {
+            try audioFile.write(from: buffer)
+        }
 
         let defaultsSuite = "PlaybackRecoveryTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(
@@ -26014,7 +26132,7 @@ final class AppModelTests: XCTestCase {
             defaults: defaults,
             audioURL: audioURL,
             accountID: AccountID(rawValue: "recovery-account"),
-            detail: fixtureBookDetail(item: item),
+            detail: fixtureBookDetail(item: item, chapters: chapters),
             service: TestAppService(activeAccount: .success(nil))
         )
     }

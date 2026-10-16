@@ -94,7 +94,7 @@ enum PlaybackChapterSleepDecision {
         chapters: [PlaybackChapter],
         currentTime: Double,
         duration: Double
-    ) -> Double? {
+    ) -> PlaybackChapter? {
         guard currentTime.isFinite,
             duration.isFinite,
             currentTime >= 0,
@@ -106,7 +106,7 @@ enum PlaybackChapterSleepDecision {
             $0.start <= currentTime
                 && currentTime < $0.end
                 && $0.end <= duration
-        }?.end
+        }
     }
 }
 
