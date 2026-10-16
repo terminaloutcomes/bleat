@@ -390,15 +390,26 @@ final class NetworkPathTests: XCTestCase {
 
     private func waitForAvailability(
         _ expected: ServerEndpointLocalAvailability,
-        router: ServerEndpointRouter, account: ServerAccount
+        router: ServerEndpointRouter,
+        account: ServerAccount,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async throws {
-        for _ in 0..<100 {
+        let clock = ContinuousClock()
+        let startedAt = clock.now
+        let deadline = startedAt.advanced(by: .seconds(1))
+        while clock.now < deadline {
             if await router.localAvailability(for: account.server) == expected {
                 return
             }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTFail("Endpoint probe did not finish")
+        let actual = await router.localAvailability(for: account.server)
+        XCTFail(
+            "Expected endpoint availability \(expected), observed \(String(describing: actual)) after \(startedAt.duration(to: clock.now)); timeout was 1 second.",
+            file: file,
+            line: line
+        )
     }
 
     func testNetworkDiagnosticsContainOnlyTypedReasonAndStage() throws {

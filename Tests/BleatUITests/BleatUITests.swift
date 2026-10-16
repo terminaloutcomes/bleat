@@ -1281,9 +1281,18 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(pendingDownload.waitForExistence(timeout: 3))
         XCTAssertFalse(pendingDownload.isEnabled)
         app.buttons["Mark Unplayed"].tap()
-        try await Task.sleep(for: .seconds(9))
-
         tabButton("Downloads", in: app).tap()
+        let completePreparation = app.buttons[
+            "testing.download.completePreparation"]
+        XCTAssertTrue(completePreparation.waitForExistence(timeout: 3))
+        completePreparation.tap()
+        // The fixture has no media server; observe metadata preparation only.
+        XCTAssertTrue(
+            app.progressIndicators.matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@", "downloads.progress.")
+            ).firstMatch.waitForExistence(timeout: 20),
+            "Context download did not create its record before removal")
         let removeAll = app.buttons["downloads.removeAll"]
         XCTAssertTrue(removeAll.waitForExistence(timeout: 3))
         removeAll.tap()
@@ -1420,7 +1429,19 @@ final class BleatUITests: XCTestCase {
         XCTAssertFalse(download.isEnabled)
         XCTAssertFalse(remove.exists)
         app.buttons["Mark Unplayed"].tap()
-        try await Task.sleep(for: .seconds(9))
+        tabButton("Downloads", in: app).tap()
+        let completePreparation = app.buttons[
+            "testing.download.completePreparation"]
+        XCTAssertTrue(completePreparation.waitForExistence(timeout: 3))
+        completePreparation.tap()
+        // The prior cached record was removed above. A new row proves that
+        // the replacement request finished metadata preparation.
+        XCTAssertTrue(
+            app.progressIndicators.matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@", "downloads.progress.")
+            ).firstMatch.waitForExistence(timeout: 20),
+            "Replacement context download did not create its record")
     }
 
     @MainActor
@@ -3077,6 +3098,14 @@ final class BleatUITests: XCTestCase {
 
         var miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
+        let playbackStarted = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label == %@", "Pause The Test Audiobook"),
+            object: play
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackStarted], timeout: 3), .completed
+        )
         app.buttons["player.mini.open"].swipeDown(velocity: .fast)
         XCTAssertTrue(miniToggle.waitForNonExistence(timeout: 10))
 
@@ -3130,12 +3159,27 @@ final class BleatUITests: XCTestCase {
 
         let completeSync = app.buttons["testing.playback.completeSync"]
         XCTAssertTrue(completeSync.waitForExistence(timeout: 3))
+        XCTAssertTrue(completeSync.isHittable)
 
         // Resume and pause while stop awaits progress synchronization. Pause
         // supersedes the pending stop, leaving an active book to restore.
-        XCTAssertEqual(play.label, "Start The Test Audiobook")
+        let playbackStopped = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label == %@", "Start The Test Audiobook"),
+            object: play
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackStopped], timeout: 3), .completed
+        )
         play.tap()
-        XCTAssertEqual(play.label, "Pause The Test Audiobook")
+        let playbackResumed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label == %@", "Pause The Test Audiobook"),
+            object: play
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [playbackResumed], timeout: 3), .completed
+        )
         XCTAssertFalse(miniToggle.exists)
         play.tap()
         completeSync.tap()
@@ -3330,6 +3374,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertEqual(selectedChapterRowCount(in: app), 1)
 
         let previousChapter = app.buttons["player.chapter.17"]
+        XCTAssertTrue(previousChapter.waitForExistence(timeout: 3))
         XCTAssertTrue(previousChapter.isHittable)
         previousChapter.tap()
         XCTAssertTrue(
@@ -4366,7 +4411,9 @@ final class BleatUITests: XCTestCase {
         app: XCUIApplication,
         identifier: String,
         direction: ScrollDirection,
-        maxAttempts: Int = 20
+        maxAttempts: Int = 20,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         let element = app.descendants(matching: .any)[identifier]
         for _ in 0..<maxAttempts {
@@ -4379,6 +4426,11 @@ final class BleatUITests: XCTestCase {
                 app.swipeDown()
             }
         }
+        XCTFail(
+            "Could not scroll to hittable element \(identifier) after \(maxAttempts) attempts",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
@@ -4386,7 +4438,9 @@ final class BleatUITests: XCTestCase {
         _ element: XCUIElement,
         of obstacles: [XCUIElement],
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         for _ in 0..<12 {
             let visibleObstacles = obstacles.filter { $0.exists }
@@ -4400,7 +4454,11 @@ final class BleatUITests: XCTestCase {
             }
             container.swipeUp()
         }
-        XCTFail("Could not scroll search result clear of search chrome")
+        XCTFail(
+            "Could not scroll search result clear of search chrome",
+            file: file,
+            line: line
+        )
     }
 }
 

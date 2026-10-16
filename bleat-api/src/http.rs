@@ -803,11 +803,13 @@ mod tests {
     struct Activity {
         active: AtomicUsize,
         maximum: AtomicUsize,
+        started: tokio::sync::Notify,
     }
 
     async fn slow(State(activity): State<Arc<Activity>>) -> StatusCode {
         let active = activity.active.fetch_add(1, Ordering::SeqCst) + 1;
         activity.maximum.fetch_max(active, Ordering::SeqCst);
+        activity.started.notify_one();
         tokio::time::sleep(std::time::Duration::from_millis(40)).await;
         activity.active.fetch_sub(1, Ordering::SeqCst);
         StatusCode::NO_CONTENT
@@ -840,7 +842,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_connection_metadata_contains_the_actual_socket_peer() {
-        use std::io::{Read, Write};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
@@ -861,23 +863,32 @@ mod tests {
             .await
         });
 
-        let (client_address, response) = tokio::task::spawn_blocking(move || {
-            let mut stream =
-                std::net::TcpStream::connect(server_address).expect("test client should connect");
-            let client_address = stream
-                .local_addr()
-                .expect("test client address should resolve");
-            stream
-                .write_all(b"GET /peer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-                .expect("test request should write");
-            let mut response = String::new();
-            stream
-                .read_to_string(&mut response)
-                .expect("test response should read");
-            (client_address, response)
-        })
-        .await
-        .expect("blocking client task should finish");
+        let (client_address, response) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+                let mut stream = tokio::net::TcpStream::connect(server_address)
+                    .await
+                    .expect("test client should connect");
+                let client_address = stream
+                    .local_addr()
+                    .expect("test client address should resolve");
+                stream
+                    .write_all(
+                        b"GET /peer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .expect("test request should write");
+                let mut response = Vec::new();
+                stream
+                    .read_to_end(&mut response)
+                    .await
+                    .expect("test response should read");
+                (
+                    client_address,
+                    String::from_utf8(response).expect("HTTP response is UTF-8"),
+                )
+            })
+            .await
+            .expect("test socket exchange should finish within five seconds");
 
         shutdown_sender
             .send(())
@@ -962,6 +973,7 @@ mod tests {
         let activity = Arc::new(Activity::default());
         let router = limited_router(std::time::Duration::from_secs(1), 1, Arc::clone(&activity));
         let slow_router = router.clone();
+        let started = activity.started.notified();
         let slow_request = tokio::spawn(async move {
             slow_router
                 .oneshot(
@@ -972,9 +984,11 @@ mod tests {
                 .await
                 .expect("slow route should respond")
         });
-        while activity.active.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        // `slow` itself completes in 40 ms and the router deadline is 1 s;
+        // this readiness bound matches that request deadline with headroom.
+        tokio::time::timeout(std::time::Duration::from_secs(1), started)
+            .await
+            .expect("slow handler should enter before the request timeout");
 
         let health_response = router
             .oneshot(

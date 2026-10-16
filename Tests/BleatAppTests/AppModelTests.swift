@@ -2665,9 +2665,13 @@ final class AppModelTests: XCTestCase {
         }
         let key = ChapterTranscriptionBookKey(
             accountID: account.id, itemID: detail.id)
-        for _ in 0..<100 where coordinator.deletionState(for: key) != .deleting
-        { await Task.yield() }
-        XCTAssertEqual(coordinator.deletionState(for: key), .deleting)
+        let enteredDeletingState = await waitUntil(timeout: .seconds(2)) {
+            coordinator.deletionState(for: key) == .deleting
+        }
+        XCTAssertTrue(
+            enteredDeletingState,
+            "Transcript deletion did not enter .deleting within 2 seconds."
+        )
         await gate.release()
         let deleted = await deletion.value
         XCTAssertTrue(deleted)
@@ -4749,7 +4753,7 @@ final class AppModelTests: XCTestCase {
             .seekImmediately(
                 initialTime + ScrubberSeekDecision.confirmationThreshold - 0.01)
         )
-        // at it, confirm
+        // at the forward threshold, confirm
         XCTAssertEqual(
             ScrubberSeekDecision.decide(
                 origin: initialTime,
@@ -4789,13 +4793,13 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             ScrubberSeekDecision.decide(
                 origin: initialTime,
-                target: initialTime + ScrubberSeekDecision.confirmationThreshold
+                target: initialTime - ScrubberSeekDecision.confirmationThreshold
             ),
             .confirm(
                 PendingScrubberSeek(
                     origin: initialTime,
                     target: initialTime
-                        + ScrubberSeekDecision.confirmationThreshold)
+                        - ScrubberSeekDecision.confirmationThreshold)
             )
         )
         // going backwards and just over the threshold, confirm
@@ -25888,7 +25892,9 @@ final class AppModelTests: XCTestCase {
 
     private func waitForTranscriptionTerminalState(
         in coordinator: ChapterTranscriptionModel,
-        bookKey: ChapterTranscriptionBookKey
+        bookKey: ChapterTranscriptionBookKey,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async -> CachedChapterTranscriptionTaskState? {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(30))
@@ -25898,13 +25904,21 @@ final class AppModelTests: XCTestCase {
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        return coordinator.terminalState(for: bookKey)
+        let terminalState = coordinator.terminalState(for: bookKey)
+        XCTFail(
+            "No transcription terminal state for \(bookKey) within 30 seconds; observed \(String(describing: terminalState)).",
+            file: file,
+            line: line
+        )
+        return terminalState
     }
 
     private func waitForDifferentTranscriptionTerminalState(
         than taskID: UUID?,
         in coordinator: ChapterTranscriptionModel,
-        bookKey: ChapterTranscriptionBookKey
+        bookKey: ChapterTranscriptionBookKey,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async -> CachedChapterTranscriptionTaskState? {
         for _ in 0..<100 {
             if let terminalState = coordinator.terminalState(for: bookKey),
@@ -25914,13 +25928,21 @@ final class AppModelTests: XCTestCase {
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        return coordinator.terminalState(for: bookKey)
+        let terminalState = coordinator.terminalState(for: bookKey)
+        XCTFail(
+            "Transcription task for \(bookKey) did not change from \(String(describing: taskID)) within 1 second; observed \(String(describing: terminalState?.taskID)).",
+            file: file,
+            line: line
+        )
+        return terminalState
     }
 
     private func waitForTranscriptionCacheFailure(
         _ failure: ChapterTranscriptCacheViewFailure,
         in coordinator: ChapterTranscriptionModel,
-        bookKey: ChapterTranscriptionBookKey
+        bookKey: ChapterTranscriptionBookKey,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async {
         for _ in 0..<100 {
             if coordinator.cacheFailure(for: bookKey) == failure {
@@ -25928,11 +25950,18 @@ final class AppModelTests: XCTestCase {
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
+        XCTFail(
+            "Transcription cache failure did not become \(failure) for \(bookKey) within 1 second; observed \(String(describing: coordinator.cacheFailure(for: bookKey))).",
+            file: file,
+            line: line
+        )
     }
 
     private func waitForTranscriptionTaskStateSaveAttempts(
         _ count: Int,
-        in service: TestAppService
+        in service: TestAppService,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async {
         for _ in 0..<100 {
             if await service.transcriptionTaskStateSaveAttemptCount() >= count {
@@ -25940,11 +25969,19 @@ final class AppModelTests: XCTestCase {
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
+        let actual = await service.transcriptionTaskStateSaveAttemptCount()
+        XCTFail(
+            "Expected at least \(count) transcription task-state save attempts within 1 second; observed \(actual).",
+            file: file,
+            line: line
+        )
     }
 
     private func waitForTranscriptionTaskStateSaveCompletions(
         _ count: Int,
-        in service: TestAppService
+        in service: TestAppService,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async {
         for _ in 0..<100 {
             if await service.transcriptionTaskStateSaveCompletionCount()
@@ -25954,6 +25991,12 @@ final class AppModelTests: XCTestCase {
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
+        let actual = await service.transcriptionTaskStateSaveCompletionCount()
+        XCTFail(
+            "Expected at least \(count) transcription task-state save completions within 1 second; observed \(actual).",
+            file: file,
+            line: line
+        )
     }
 
     private func fixtureBookProgress(
@@ -26097,11 +26140,17 @@ final class AppModelTests: XCTestCase {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
         while clock.now < deadline {
+            guard !Task.isCancelled else { return false }
             if await condition() {
                 return true
             }
-            try? await Task.sleep(for: .milliseconds(20))
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return false
+            }
         }
+        guard !Task.isCancelled else { return false }
         return await condition()
     }
 
@@ -26273,7 +26322,9 @@ private func nowPlayingSnapshot(
 
 private func waitForCoverRequests(
     _ fetcher: TestBookCoverFetcher,
-    count: Int
+    count: Int,
+    file: StaticString = #filePath,
+    line: UInt = #line
 ) async {
     for _ in 0..<100 {
         if await fetcher.requestCount >= count {
@@ -26281,11 +26332,19 @@ private func waitForCoverRequests(
         }
         try? await Task.sleep(for: .milliseconds(10))
     }
+    let actual = await fetcher.requestCount
+    XCTFail(
+        "Expected at least \(count) cover requests within 1 second; observed \(actual).",
+        file: file,
+        line: line
+    )
 }
 
 @MainActor
 private func waitForNowPlayingArtwork(
-    in publisher: TestNowPlayingInfoPublisher
+    in publisher: TestNowPlayingInfoPublisher,
+    file: StaticString = #filePath,
+    line: UInt = #line
 ) async -> MPMediaItemArtwork? {
     for _ in 0..<100 {
         if let artwork =
@@ -26297,6 +26356,11 @@ private func waitForNowPlayingArtwork(
         }
         try? await Task.sleep(for: .milliseconds(10))
     }
+    XCTFail(
+        "Now Playing artwork was not published within 1 second.",
+        file: file,
+        line: line
+    )
     return nil
 }
 

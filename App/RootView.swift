@@ -175,6 +175,15 @@ struct RootView: View {
                     }
                     .accessibilityIdentifier("testing.playback.completeSync")
                 }
+                if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-slow-context-download"
+                ), UITestContextDownloadGate.shared.isWaiting {
+                    Button("Complete Download Preparation") {
+                        UITestContextDownloadGate.shared.release()
+                    }
+                    .accessibilityIdentifier(
+                        "testing.download.completePreparation")
+                }
             }
         #endif
         .task {

@@ -281,7 +281,9 @@ final class BleatVoiceOverUITests: XCTestCase {
     private func scrollUntilHittable(
         _ element: XCUIElement,
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         XCTAssertTrue(container.waitForExistence(timeout: 5))
         for _ in 0..<30 {
@@ -292,6 +294,10 @@ final class BleatVoiceOverUITests: XCTestCase {
             }
             container.swipeUp()
         }
-        XCTFail("Could not reach \(element)")
+        XCTFail(
+            "Could not reach \(element)",
+            file: file,
+            line: line
+        )
     }
 }

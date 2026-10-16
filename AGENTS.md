@@ -295,6 +295,8 @@ resolution, and temporary directories outside the repository.
 
 Use `docs/development.md` as the canonical reference for supported test and
 validation commands.
+Follow [test reliability rules](docs/test-reliability.md) for test setup,
+semantic postconditions, bounded synchronization, diagnostics, and audit evidence.
 
 Put tests in test targets, not production entry points. Add focused tests with
 each implementation change and use versioned saved fixtures for response

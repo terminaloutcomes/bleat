@@ -366,7 +366,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     }
 
     @MainActor
-    private func waitForLoadingIndicatorsToDisappear(in app: XCUIApplication) {
+    private func waitForLoadingIndicatorsToDisappear(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
             let visible = (0..<app.activityIndicators.count).contains { index in
@@ -378,7 +382,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
-        XCTFail("Timed out waiting for visible loading indicators to disappear")
+        XCTFail(
+            "Timed out waiting for visible loading indicators to disappear",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
@@ -386,7 +394,9 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         _ element: XCUIElement,
         in app: XCUIApplication,
         up: Bool = true,
-        below navigationBar: XCUIElement? = nil
+        below navigationBar: XCUIElement? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         for _ in 0..<20 {
             let elementExists = element.waitForExistence(timeout: 0.5)
@@ -407,7 +417,11 @@ final class BleatReleaseScreenshotTests: XCTestCase {
                 app.swipeDown()
             }
         }
-        XCTFail("Expected element was not visible: \(element)")
+        XCTFail(
+            "Expected element was not visible: \(element)",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
@@ -415,7 +429,9 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         _ element: XCUIElement,
         in container: XCUIElement,
         app: XCUIApplication,
-        scrollsTowardTopWhenMissing: Bool = true
+        scrollsTowardTopWhenMissing: Bool = true,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         XCTAssertTrue(
             container.waitForExistence(timeout: 5),
@@ -454,7 +470,10 @@ final class BleatReleaseScreenshotTests: XCTestCase {
             start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTFail(
-            "Could not scroll to hittable element \(element) in \(container)")
+            "Could not scroll to hittable element \(element) in \(container)",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor

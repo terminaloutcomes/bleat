@@ -7,18 +7,11 @@ actor AsyncGate {
     var hasEntered: Bool { entered }
     private var entered = false
     private var released = false
-    private var enteredContinuations: [CheckedContinuation<Void, Never>] = []
     private var releaseContinuations: [CheckedContinuation<Void, Never>] = []
 
     func enterAndWait() async {
         if !entered { entryExpectation.fulfill() }
         entered = true
-        let continuations = enteredContinuations
-        enteredContinuations.removeAll()
-        for continuation in continuations {
-            continuation.resume()
-        }
-
         guard !released else {
             return
         }
@@ -27,20 +20,28 @@ actor AsyncGate {
         }
     }
 
-    func waitUntilEntered() async {
-        guard !entered else {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            enteredContinuations.append(continuation)
-        }
+    func waitUntilEntered(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        // This is a failure budget, not a delay used to establish completion.
+        // The state remains observable for multiple callers after entry.
+        let entered = await waitUntilEntered(timeout: .seconds(30))
+        XCTAssertTrue(
+            entered,
+            "Async gate did not enter within 30 seconds (or wait was cancelled)",
+            file: file, line: line)
     }
 
     func waitUntilEntered(timeout: Duration) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !entered, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+        while !entered, clock.now < deadline, !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return false
+            }
         }
         return entered
     }

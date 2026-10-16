@@ -262,7 +262,9 @@ final class BleatDynamicTypeUITests: XCTestCase {
     private func scrollUntilHittable(
         _ element: XCUIElement,
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         XCTAssertTrue(
             container.waitForExistence(timeout: 5),
@@ -304,7 +306,9 @@ final class BleatDynamicTypeUITests: XCTestCase {
         let targetFrame =
             element.exists ? String(describing: element.frame) : "missing"
         XCTFail(
-            "Could not scroll to hittable element \(element) with frame \(targetFrame) in \(container) with frame \(container.frame)"
+            "Could not scroll to hittable element \(element) with frame \(targetFrame) in \(container) with frame \(container.frame)",
+            file: file,
+            line: line
         )
     }
 }

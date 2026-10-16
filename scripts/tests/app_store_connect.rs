@@ -1,8 +1,5 @@
 use scripts::app_store_connect::*;
-use std::{
-    fs,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fs;
 
 #[test]
 fn validates_release_identifiers() {
@@ -43,14 +40,8 @@ fn preserves_typed_marketing_version_failures() {
 
 #[test]
 fn public_export_options_omit_internal_only_restriction() {
-    let path = std::env::temp_dir().join(format!(
-        "bleat-app-store-options-{}-{}.plist",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("test clock must be after Unix epoch")
-            .as_nanos()
-    ));
+    let directory = tempfile::tempdir().expect("temporary export options directory");
+    let path = directory.path().join("export-options.plist");
     write_export_options(
         &path,
         ExportDestination::Upload,
@@ -59,7 +50,6 @@ fn public_export_options_omit_internal_only_restriction() {
     )
     .expect("export options should serialize");
     let value = plist::Value::from_file(&path).expect("export options should decode");
-    fs::remove_file(&path).expect("temporary export options should be removable");
     let dictionary = value
         .as_dictionary()
         .expect("export options should be a dictionary");
@@ -79,17 +69,10 @@ fn public_export_options_omit_internal_only_restriction() {
 
 #[test]
 fn computes_standard_sha256_checksum() {
-    let path = std::env::temp_dir().join(format!(
-        "bleat-app-store-checksum-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("test clock must be after Unix epoch")
-            .as_nanos()
-    ));
+    let directory = tempfile::tempdir().expect("temporary checksum directory");
+    let path = directory.path().join("checksum-fixture");
     fs::write(&path, b"abc").expect("checksum fixture should be writable");
     let checksum = sha256(&path).expect("checksum should succeed");
-    fs::remove_file(&path).expect("checksum fixture should be removable");
     assert_eq!(
         checksum,
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"

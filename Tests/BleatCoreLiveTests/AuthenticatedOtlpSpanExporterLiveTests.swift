@@ -42,10 +42,10 @@
                 ),
                 timeout: 10
             )
+            addTeardownBlock { await exporter.shutdown() }
 
             let result = await exporter.export(spans: [span()])
             XCTAssertEqual(result, SpanExporterResultCode.success)
-            await exporter.shutdown()
         }
 
         private func span() -> SpanData {

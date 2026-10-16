@@ -6,6 +6,8 @@ CoreSimulator, SwiftPM caches, Docker, local ports, and network resources.
 
 Start with [contributor setup and validation selection](contributing.md).
 See [detailed developer tools](developer-tools.md) for additional command examples.
+Follow the [test reliability rules](test-reliability.md) when writing or auditing
+tests, shared fixtures, synchronization helpers, and result verification.
 
 `mise run check` changes source: its dependencies format Swift and Rust.
 API/Rust validation tasks also run Rust formatting. Review the resulting diff.
