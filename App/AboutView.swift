@@ -101,10 +101,17 @@ struct AboutView: View {
 
             Section("App") {
                 LabeledContent("Version", value: metadata.version)
-                LabeledContent("Compiled", value: metadata.formattedCompileDate)
-                    .monospacedDigit()
-                LabeledContent("Developer", value: metadata.developerName)
-                LabeledContent("Bundle ID", value: metadata.bundleIdentifier)
+            }
+
+            Section {
+                if let url = URL(string: websiteURL) {
+                    Link("Website", destination: url)
+                        .accessibilityIdentifier("settings.about.website")
+                    Link(
+                        "News", destination: url.appendingPathComponent("news")
+                    )
+                    .accessibilityIdentifier("settings.about.news")
+                }
             }
         }
         .accessibilityIdentifier("settings.about.details")

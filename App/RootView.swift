@@ -1437,6 +1437,10 @@ private struct DiagnosticsView: View {
                     "Version",
                     value: metadata.version
                 )
+                LabeledContent("Compiled", value: metadata.formattedCompileDate)
+                    .monospacedDigit()
+                LabeledContent("Developer", value: metadata.developerName)
+                LabeledContent("Bundle ID", value: metadata.bundleIdentifier)
                 LabeledContent(
                     "Git Commit",
                     value: metadata.gitCommit

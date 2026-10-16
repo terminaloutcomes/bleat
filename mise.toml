@@ -99,14 +99,18 @@ run = [
   "pnpm --dir site run build:css",
 ]
 
+[tasks."site-news"]
+description = "Generate website news from CHANGELOG.md"
+run = "cargo run --quiet --locked --package scripts --bin generate-site-news"
+
 [tasks."site-check"]
 description = "Validate the Zola website"
-depends = ["site-css"]
+depends = ["site-css", "site-news"]
 run = "zola --root site check"
 
 [tasks."site-build"]
 description = "Build the production website"
-depends = ["site-css"]
+depends = ["site-css", "site-news"]
 run = [
   "cp LICENSE.md site/content/license.txt",
   "zola --root site build --output-dir site/public --force",
