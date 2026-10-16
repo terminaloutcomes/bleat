@@ -9011,6 +9011,10 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "Cancellation is checked around each cache read and cleanup is bounded without an unbounded timeout-path join. The uncooperative in-flight framework/cache call risk remains open."
+      },
+      "p2_resolution": {
+        "status": "resolved",
+        "evidence": "Process-isolated workload with readiness handshake, deadline kill and awaited termination; structural single-identity child result verification. Focused unsigned1/1, focused signed1/1, owning signed LibraryCachePerformanceTests4/4, no skips. .build/p2-cache-suite-signed.xml."
       }
     },
     {

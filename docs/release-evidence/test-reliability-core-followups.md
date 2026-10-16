@@ -70,8 +70,11 @@ made after these focused runs. The subsequent signed owning gate verified all 56
 zero skips, including that final edit (`.build/timing-followon-signed-host.log`,
 XML in `.build/host-results/`).
 
-`LibraryCachePerformanceTests.testCacheReadsDoNotBlockTheMainActor` remains an
-open P2. Cleanup now cancels and conditionally joins the worker within a
-bounded wait, but an uncooperative cache/framework call can still outlive that
-wait. The row remains open until the limitation is resolved or explicitly
-accepted with evidence. Other unrelated follow-up rows remain unchanged.
+`LibraryCachePerformanceTests.testCacheReadsDoNotBlockTheMainActor` now resolves
+the worker-lifetime P2 with process isolation. The parent observes child
+readiness, enforces a deadline, kills and observes termination before returning,
+and structurally verifies one matching successful child test. An intentional
+non-completing child exercises the kill/reap path before the real workload.
+The child owns and joins its read task; an uncooperative synchronous read is
+bounded by the parent process watchdog. Focused unsigned and signed executions
+passed with zero skips. Other unrelated follow-up rows remain unchanged.

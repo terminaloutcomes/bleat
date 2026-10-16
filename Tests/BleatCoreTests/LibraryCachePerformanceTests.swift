@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import QuartzCore
 import SwiftData
@@ -266,6 +267,75 @@ final class LibraryCachePerformanceTests {
     /// cache reads run concurrently.
     @Test
     func testCacheReadsDoNotBlockTheMainActor() async throws {
+        switch CacheHeartbeatChildMode(
+            rawValue: ProcessInfo.processInfo.environment[
+                "BLEAT_CACHE_HEARTBEAT_CHILD"] ?? ""
+        ) {
+        case .hang?:
+            // The parent must kill and reap a process whose async test never
+            // completes. This exercises the watchdog cleanup path directly.
+            writeCacheChildReadyMarker(mode: .hang)
+            let (stream, continuation) = AsyncStream<Void>.makeStream()
+            defer { continuation.finish() }
+            var iterator = stream.makeAsyncIterator()
+            _ = await iterator.next()
+            return
+        case .workload?:
+            writeCacheChildReadyMarker(mode: .workload)
+            try await Self.runCacheReadHeartbeatWorkload()
+            print("cache-read-child=workload-complete")
+            return
+        case nil:
+            break
+        }
+
+        let hangingChild = try await runCacheHeartbeatChild(
+            mode: .hang,
+            timeout: .seconds(1)
+        )
+        #expect(
+            hangingChild.didTimeOut,
+            "test child should time out and be terminated; child output: \(hangingChild.output)"
+        )
+        #expect(
+            hangingChild.ready,
+            "hanging child did not enter its controlled suspension before timeout; output: \(hangingChild.output)"
+        )
+        guard hangingChild.didTimeOut else { return }
+
+        let workloadChild = try await runCacheHeartbeatChild(
+            mode: .workload,
+            timeout: .seconds(60)
+        )
+        #expect(
+            !workloadChild.didTimeOut,
+            "cache workload child exceeded 60s and was terminated; output: \(workloadChild.output)"
+        )
+        #expect(
+            workloadChild.exitStatus == 0,
+            "cache workload child failed with exit status \(String(describing: workloadChild.exitStatus)); output: \(workloadChild.output)"
+        )
+        #expect(
+            workloadChild.ready,
+            "workload child did not enter the selected test; output: \(workloadChild.output)"
+        )
+        #expect(
+            workloadChild.executedTests == 1,
+            "expected exactly one child test execution, got \(String(describing: workloadChild.executedTests)); report: \(workloadChild.report)"
+        )
+        #expect(
+            workloadChild.testNames == [
+                "testCacheReadsDoNotBlockTheMainActor()"
+            ],
+            "child xUnit report did not contain the selected test identity; report: \(workloadChild.report)"
+        )
+        #expect(
+            workloadChild.output.contains("cache-read-child=workload-complete"),
+            "selected test did not report workload completion; output: \(workloadChild.output)"
+        )
+    }
+
+    private static func runCacheReadHeartbeatWorkload() async throws {
         let (_, cache) = try LibraryCachePerformanceFixture.memory()
         let accountID = AccountID(rawValue: "perf-account")
         let libraryID = LibraryID(rawValue: "perf-library")
@@ -286,7 +356,10 @@ final class LibraryCachePerformanceTests {
         }
 
         let probe = ReadsCompletionProbe()
-        let readsTask = Task.detached {
+        // The task handle stays owned here and is always awaited. If a cache
+        // read ignores cancellation indefinitely, the parent test process
+        // enforces the hard deadline and kills/reaps this entire child.
+        let readsTask = Task {
             do {
                 for (index, request) in requests.enumerated() {
                     try Task.checkCancellation()
@@ -307,84 +380,47 @@ final class LibraryCachePerformanceTests {
             }
         }
 
-        // Wait for the read workload to actually start before counting
-        // heartbeat ticks. Otherwise the first main-actor hop could occur
-        // before any decode is underway, and `ticks > 0` would not prove
-        // the main actor stays responsive while decoding happens.
         let startWait = await probe.waitForStarted(timeout: .seconds(30))
         let readsActuallyStarted = await probe.isStarted()
         let readsStarted = startWait.reached && readsActuallyStarted
         #expect(
             readsStarted,
-            "detached read workload did not start before heartbeat measurement; elapsed \(startWait.elapsed), limit \(startWait.timeout)"
+            "cache read workload did not start before heartbeat measurement; elapsed \(startWait.elapsed), limit \(startWait.timeout)"
         )
         guard readsStarted else {
-            if startWait.reached {
-                // `markFinished` is emitted only by the worker's terminal
-                // path, so this join follows an observed completion event.
-                try await readsTask.value
-                Issue.record(
-                    "Read workload finished before its first cache page completed"
-                )
-                return
-            }
             readsTask.cancel()
-            let cancellationWait = await probe.waitForFinished(
-                timeout: .seconds(5))
-            #expect(
-                cancellationWait.reached,
-                "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
-            )
-            if cancellationWait.reached {
-                try await readsTask.value
-            }
-            // A framework call that ignores cancellation can outlive this
-            // bounded wait, so do not join the detached worker on timeout.
+            try await readsTask.value
+            Issue.record(
+                "Read workload finished before its first cache page completed")
             return
         }
 
         var mainActorTicks = 0
         let deadline = Date().addingTimeInterval(30)
         while Date() < deadline {
-            // Check that the read workload is still underway BEFORE hopping
-            // to the main actor and counting a tick. Otherwise the workload
-            // could finish before the first check and `ticks > 0` would not
-            // prove any overlapping main-actor progress.
             if await probe.isFinished() { break }
-            // Hop to the main actor and back. If cache work were running on
-            // the main actor, this hop could not complete and ticks would
-            // not advance.
             _ = await MainActor.run { true }
             mainActorTicks &+= 1
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .milliseconds(10))
         }
         let completionWait = await probe.waitForFinished(timeout: .seconds(5))
         #expect(
             completionWait.reached,
-            "detached read workload did not complete; elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            "cache read workload did not complete; elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
         )
-        guard completionWait.reached else {
+        if !completionWait.reached {
             readsTask.cancel()
-            let cancellationWait = await probe.waitForFinished(
-                timeout: .seconds(5))
-            #expect(
-                cancellationWait.reached,
-                "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
-            )
-            if cancellationWait.reached {
-                try await readsTask.value
-            }
-            // Report an uncooperative read instead of masking it with a join.
-            return
         }
+        // Awaiting the owned task is intentional: cooperative cancellation
+        // joins it; the outer process watchdog handles a truly stuck read.
         try await readsTask.value
 
         #expect(
-            mainActorTicks > 0,
-            "main-actor heartbeat must advance while cache reads are underway")
-        print(
-            "perf-summary cache.read.mainActorHeartbeatTicks=\(mainActorTicks)"
+            completionWait.reached && mainActorTicks > 0,
+            "main-actor heartbeat must advance while cache reads are underway; ticks=\(mainActorTicks)"
         )
+        print(
+            "perf-summary cache.read.mainActorHeartbeatTicks=\(mainActorTicks)")
     }
 
     // MARK: On-disk storage size
@@ -447,12 +483,304 @@ final class LibraryCachePerformanceTests {
     }
 }
 
+private struct CacheHeartbeatChildResult {
+    let didTimeOut: Bool
+    let ready: Bool
+    let exitStatus: Int32?
+    let executedTests: Int?
+    let testNames: [String]?
+    let output: String
+    let report: String?
+}
+
+private enum CacheHeartbeatChildMode: String {
+    case hang
+    case workload
+}
+
+private enum CacheHeartbeatChildEvent: Sendable {
+    case exited(Int32)
+    case timedOut
+}
+
+private actor CacheHeartbeatChildOutput {
+    private var bytes = Data()
+    private var ready = false
+    private var exitStatus: Int32?
+    private let readyNotifications = BoundedTestCounter()
+    private let readyMarker = Data("cache-child-ready:".utf8)
+
+    func append(_ byte: UInt8) async {
+        bytes.append(byte)
+        guard !ready, bytes.range(of: readyMarker) != nil else {
+            return
+        }
+        ready = true
+        await readyNotifications.increment()
+    }
+
+    func recordExit(_ status: Int32) async {
+        exitStatus = status
+        await readyNotifications.increment()
+    }
+
+    func waitUntilReadyOrExit(timeout: Duration) async -> BoundedTestWaitResult
+    {
+        if ready || exitStatus != nil {
+            return BoundedTestWaitResult(
+                reached: ready,
+                elapsed: .zero,
+                timeout: timeout
+            )
+        }
+        let result = await readyNotifications.wait(
+            untilAtLeast: 1,
+            timeout: timeout
+        )
+        return BoundedTestWaitResult(
+            reached: ready,
+            elapsed: result.elapsed,
+            timeout: timeout
+        )
+    }
+
+    func snapshot() -> (ready: Bool, output: String) {
+        (ready, String(decoding: bytes, as: UTF8.self))
+    }
+}
+
+private final class CacheHeartbeatXUnitParser: NSObject, XMLParserDelegate {
+    private(set) var testNames: [String] = []
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
+        guard elementName == "testcase", let name = attributeDict["name"] else {
+            return
+        }
+        testNames.append(name)
+    }
+}
+
+/// Runs one selected test identity in a child process so a synchronous,
+/// cancellation-insensitive SwiftData read cannot strand an async test task.
+/// The parent observes process termination asynchronously and kills/reaps the
+/// child at the deadline; no blocking wait or detached cache worker remains.
+private func runCacheHeartbeatChild(
+    mode: CacheHeartbeatChildMode,
+    timeout: Duration
+) async throws -> CacheHeartbeatChildResult {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    let childReportDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("bleat-cache-child-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(
+        at: childReportDirectory,
+        withIntermediateDirectories: true
+    )
+    let childReportURL = childReportDirectory.appendingPathComponent(
+        "child.xunit.xml")
+
+    if let bundleIndex = CommandLine.arguments.firstIndex(
+        of: "--test-bundle-path"),
+        CommandLine.arguments.indices.contains(bundleIndex + 1)
+    {
+        // The signed host lane invokes a provisioned SwiftPM helper. It needs
+        // the test bundle and testing-library arguments on every child run.
+        process.arguments = [
+            "--test-bundle-path",
+            CommandLine.arguments[bundleIndex + 1],
+            "--testing-library",
+            "swift-testing",
+            "--no-parallel",
+            "--filter",
+            "testCacheReadsDoNotBlockTheMainActor",
+            "--xunit-output",
+            childReportURL.path,
+        ]
+    } else {
+        // Unsigned SwiftPM host tests execute the test binary directly.
+        process.arguments = [
+            "--filter",
+            "testCacheReadsDoNotBlockTheMainActor",
+            "--no-parallel",
+            "--xunit-output",
+            childReportURL.path,
+        ]
+    }
+
+    var environment = ProcessInfo.processInfo.environment
+    environment["BLEAT_CACHE_HEARTBEAT_CHILD"] = mode.rawValue
+    if environment["LLVM_PROFILE_FILE"]?.contains("%p") != true {
+        // Preserve per-process child coverage without colliding with a parent
+        // profile when the host lane did not already provide a PID template.
+        environment["LLVM_PROFILE_FILE"] =
+            childReportDirectory
+            .appendingPathComponent("coverage-%p.profraw").path
+    }
+    process.environment = environment
+
+    let outputPipe = Pipe()
+    process.standardOutput = outputPipe
+    process.standardError = outputPipe
+    let outputProbe = CacheHeartbeatChildOutput()
+    let terminationEvents = AsyncStream<Int32> { continuation in
+        process.terminationHandler = { terminatedProcess in
+            continuation.yield(terminatedProcess.terminationStatus)
+            continuation.finish()
+        }
+    }
+    try process.run()
+    let processID = process.processIdentifier
+    let terminationTask = Task {
+        let event = await waitForCacheHeartbeatTermination(terminationEvents)
+        if case .exited(let status) = event {
+            await outputProbe.recordExit(status)
+        }
+        return event
+    }
+    do {
+        try outputPipe.fileHandleForWriting.close()
+    } catch {
+        if process.isRunning {
+            _ = Darwin.kill(processID, SIGKILL)
+        }
+        _ = await terminationTask.value
+        throw error
+    }
+
+    // Drain output while the child runs; a pipe that is not consumed can fill
+    // and block the test process before the timeout handler gets a chance.
+    let outputReader = Task {
+        do {
+            for try await byte in outputPipe.fileHandleForReading.bytes {
+                await outputProbe.append(byte)
+            }
+        } catch {
+            Issue.record("Could not read cache child output: \(error)")
+        }
+    }
+    let readyWait = await outputProbe.waitUntilReadyOrExit(
+        timeout: .seconds(15)
+    )
+    let initialOutput = await outputProbe.snapshot()
+    let ready = readyWait.reached && initialOutput.ready
+
+    let event: CacheHeartbeatChildEvent
+    if ready {
+        event = await waitForCacheHeartbeatChild(
+            terminationTask,
+            process: process,
+            timeout: timeout
+        )
+    } else {
+        // A broken test filter or runner setup must also have bounded cleanup.
+        let stillRunning = process.isRunning
+        if stillRunning {
+            _ = Darwin.kill(processID, SIGKILL)
+        }
+        let terminalEvent = await terminationTask.value
+        event = stillRunning ? .timedOut : terminalEvent
+    }
+
+    await outputReader.value
+    let outputSnapshot = await outputProbe.snapshot()
+    let report = try? String(contentsOf: childReportURL, encoding: .utf8)
+    let testNames = report.flatMap { reportText -> [String]? in
+        let delegate = CacheHeartbeatXUnitParser()
+        let parser = XMLParser(data: Data(reportText.utf8))
+        parser.delegate = delegate
+        guard parser.parse() else { return nil }
+        return delegate.testNames
+    }
+    let executedTests = testNames?.count
+    do {
+        try FileManager.default.removeItem(at: childReportDirectory)
+    } catch {
+        Issue.record("Could not remove child test report directory: \(error)")
+    }
+
+    switch event {
+    case .exited(let status):
+        return CacheHeartbeatChildResult(
+            didTimeOut: false,
+            ready: ready,
+            exitStatus: status,
+            executedTests: executedTests,
+            testNames: testNames,
+            output: outputSnapshot.output,
+            report: report
+        )
+    case .timedOut:
+        return CacheHeartbeatChildResult(
+            didTimeOut: true,
+            ready: ready,
+            exitStatus: nil,
+            executedTests: executedTests,
+            testNames: testNames,
+            output: outputSnapshot.output,
+            report: report
+        )
+    }
+}
+
+private func waitForCacheHeartbeatChild(
+    _ terminationTask: Task<CacheHeartbeatChildEvent, Never>,
+    process: Process,
+    timeout: Duration
+) async -> CacheHeartbeatChildEvent {
+    await withTaskGroup(of: CacheHeartbeatChildEvent.self) { group in
+        group.addTask {
+            await terminationTask.value
+        }
+        group.addTask {
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return .exited(-1)
+            }
+            return .timedOut
+        }
+        let firstEvent = await group.next() ?? .timedOut
+        switch firstEvent {
+        case .exited:
+            group.cancelAll()
+            return firstEvent
+        case .timedOut:
+            if process.isRunning {
+                _ = Darwin.kill(process.processIdentifier, SIGKILL)
+            }
+            // The retained observer proves OS termination and reap.
+            _ = await terminationTask.value
+            _ = await group.next()
+            return .timedOut
+        }
+    }
+}
+
+private func waitForCacheHeartbeatTermination(
+    _ terminationEvents: AsyncStream<Int32>
+) async -> CacheHeartbeatChildEvent {
+    var iterator = terminationEvents.makeAsyncIterator()
+    return .exited(await iterator.next() ?? -1)
+}
+
+private func writeCacheChildReadyMarker(mode: CacheHeartbeatChildMode) {
+    FileHandle.standardOutput.write(
+        Data("cache-child-ready:\(mode.rawValue)\n".utf8)
+    )
+}
+
 // MARK: - Completion probe
 
 /// Lightweight flag actor used to synchronize the off-main regression test
 /// on the read workload actually starting and completing. The `started`
 /// flag is set after the first `cache.page(...)` call returns inside the
-/// detached task, so the heartbeat loop can prove main-actor progress
+/// owned task, so the heartbeat loop can prove main-actor progress
 /// while decode work is genuinely underway rather than before it begins.
 actor ReadsCompletionProbe {
     private var started = false

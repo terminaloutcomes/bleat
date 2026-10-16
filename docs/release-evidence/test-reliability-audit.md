@@ -712,3 +712,44 @@ all 598 discovered identities with zero skips in
 `.build/post-extraction-app-owning.xcresult`. Neither command used compiler
 overrides. The later explicit cache gate has its separate three-run evidence
 above; a full UI suite has not been rerun after that gate change.
+
+## Requested P2 remediation (2026-10-16)
+
+The live-refresh negative assertions now observe scheduling synchronously,
+before the debounce starts, and compare that count after update consumption.
+The two focused identities passed three repetitions each with zero skips in
+`.build/p2-live-refresh.xcresult`; the owning app suite verified all 598
+identities passing with zero skips in `.build/p2-app-owning.xcresult`. Existing
+AVFoundation fixture diagnostics remain in the focused log.
+
+Driver-log redaction now removes whole lines containing unlabeled Bearer
+credentials, including mixed-case schemes and tab separators. Focused coverage
+passed eight readiness tests, and the owning Rust library passed all 51 tests
+(`.build/p2-redaction.log`, `.build/p2-rust-owning.log`).
+
+The cache-child harness initially failed its own checks: its first invocation
+selected no child test, and a later invocation exposed a mismatched readiness
+marker and an intentionally suspended checked continuation that emitted a leak
+warning. Those attempts are not passing cache evidence. The fixture was
+corrected to use a retained async-stream gate and structural child-result
+verification, with explicit termination observation.
+
+The final cache test uses process isolation with a retained termination observer.
+The parent never returns while the child is still running: it joins a completed
+workload or kills and reaps the timed-out process. Startup has its own bounded
+readiness check; output drains asynchronously; XML verifies one matching child
+test. The intentional hang uses a retained async-stream continuation. Focused
+unsigned and signed runs each passed one parent test, which also verifies the
+controlled timeout path and one successful workload child. Logs are
+`.build/p2-cache-unsigned-final.log` and `.build/p2-cache-signed.log`; the signed
+report is `.build/p2-cache-signed.xml`. Earlier compilation failures from an
+unnecessary FoundationXML import and missing `try` on pipe closure are retained
+in the preceding unsigned attempt logs.
+
+All three requested P2 findings are now addressed in source. Independent review
+of the combined fixes reported no findings. No compiler overrides were used.
+
+The final signed owning `LibraryCachePerformanceTests` suite passed all four
+identities with zero failures or skips (`.build/p2-cache-suite-signed.xml` and
+companion log). Swift strict-format lint, Rust formatting and documentation
+references were checked after the fixes.

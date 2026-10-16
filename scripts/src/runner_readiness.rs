@@ -217,7 +217,7 @@ async fn wait_for_seed(path: &std::path::Path, budget: Duration) -> Result<(), R
 
 fn redact_driver_log(text: &str) -> Result<String, regex::Error> {
     let sensitive = regex::Regex::new(
-        r"(?i)(authorization|password|cookie|access.?token|refresh.?token|eyJ[A-Za-z0-9_-]+\.)",
+        r"(?i)(authorization|password|cookie|access.?token|refresh.?token|\bbearer[ \t]+\S+|eyJ[A-Za-z0-9_-]+\.)",
     )?;
     let paths = regex::Regex::new(r#"/(?:Users|private|tmp|var|Volumes)/[^\s\"'<>]+"#)?;
     let urls = regex::Regex::new(r#"[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>]+"#)?;
@@ -376,6 +376,16 @@ mod tests {
         assert_eq!(
             output,
             "error [LOCAL_PATH] [URL]\n[REDACTED_SENSITIVE_LINE]\nSimulator [ID]\nTest Case passed\n"
+        );
+    }
+
+    #[test]
+    fn driver_log_redacts_bare_bearer_credentials() {
+        let input = "Bearer opaque-secret\nbEaReR\topaque-secret_2+/==\r\ntransport: Bearer third-secret\nBearer\nTest Case passed\n";
+        let output = redact_driver_log(input).expect("redact bare credentials");
+        assert_eq!(
+            output,
+            "[REDACTED_SENSITIVE_LINE]\n[REDACTED_SENSITIVE_LINE]\n[REDACTED_SENSITIVE_LINE]\nBearer\nTest Case passed\n"
         );
     }
 

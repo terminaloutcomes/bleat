@@ -562,6 +562,7 @@ private struct CoordinatedLibraryPageKey: Hashable, Sendable {
 
 enum AppModelOperationEvent: Equatable, Sendable {
     case liveUpdateConsumed
+    case liveRefreshScheduled
     case liveRefreshStarted
     case liveRefreshCompleted
     case networkPathObserverStarted
@@ -7561,6 +7562,7 @@ final class AppModel {
         else {
             return
         }
+        operationObserver?(.liveRefreshScheduled)
         pendingLiveLibraryRefresh =
             pendingLiveLibraryRefresh || libraryChanged
         pendingLiveItemIDs.formUnion(itemIDs)

@@ -14382,6 +14382,8 @@ final class AppModelTests: XCTestCase {
             model.playback.isPrepared(
                 accountID: account.id, itemID: fixture.detail.id))
         let baseline = await service.liveRefreshRequestCounts()
+        let scheduledRefreshBaseline = operations.count(
+            of: .liveRefreshScheduled)
         let firstUpdateConsumed =
             operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(
@@ -14390,6 +14392,10 @@ final class AppModelTests: XCTestCase {
                 sessionID: PlaybackSessionID(rawValue: "playback-start-session")
             ))
         await fulfillment(of: [firstUpdateConsumed], timeout: 30)
+        XCTAssertEqual(
+            operations.count(of: .liveRefreshScheduled),
+            scheduledRefreshBaseline
+        )
         guard case .loaded(let localShelves) = model.homeShelves else {
             return XCTFail("Expected local playback shelf")
         }
@@ -14399,6 +14405,10 @@ final class AppModelTests: XCTestCase {
             operations.expectation(for: .liveUpdateConsumed)
         await service.emitLiveUpdate(liveProgress(fixture.detail.id))
         await fulfillment(of: [secondUpdateConsumed], timeout: 30)
+        XCTAssertEqual(
+            operations.count(of: .liveRefreshScheduled),
+            scheduledRefreshBaseline
+        )
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, baseline)
         model.setLiveUpdatesActive(false)
@@ -14635,10 +14645,16 @@ final class AppModelTests: XCTestCase {
         let playbackChapter = model.playback.currentChapterIndex
 
         let baseline = await service.liveRefreshRequestCounts()
+        let scheduledRefreshBaseline = operations.count(
+            of: .liveRefreshScheduled)
         let progressConsumed = operations.expectation(
             for: .liveUpdateConsumed)
         await service.emitLiveUpdate(liveProgress(itemID))
         await fulfillment(of: [progressConsumed], timeout: 30)
+        XCTAssertEqual(
+            operations.count(of: .liveRefreshScheduled),
+            scheduledRefreshBaseline
+        )
         guard case .loaded(let localShelves) = model.homeShelves else {
             return XCTFail("Expected local playback shelf")
         }
@@ -14661,6 +14677,10 @@ final class AppModelTests: XCTestCase {
             )
         )
         await fulfillment(of: [finishedConsumed], timeout: 30)
+        XCTAssertEqual(
+            operations.count(of: .liveRefreshScheduled),
+            scheduledRefreshBaseline
+        )
         let requests = await service.liveRefreshRequestCounts()
         XCTAssertEqual(requests, baseline)
         XCTAssertTrue(model.isBookFinished(itemID))

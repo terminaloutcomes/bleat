@@ -22060,6 +22060,10 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "p2_resolution": {
+        "status": "resolved",
+        "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
       }
     },
     {
@@ -22550,6 +22554,10 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "p2_resolution": {
+        "status": "resolved",
+        "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
       }
     },
     {

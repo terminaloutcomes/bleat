@@ -146,6 +146,7 @@ actor AsyncGate {
 @MainActor
 final class AppModelOperationEventProbe {
     private var pending: [(AppModelOperationEvent, XCTestExpectation)] = []
+    private(set) var recordedEvents: [AppModelOperationEvent] = []
 
     func expectation(
         for event: AppModelOperationEvent
@@ -158,10 +159,15 @@ final class AppModelOperationEventProbe {
     }
 
     func record(_ event: AppModelOperationEvent) {
+        recordedEvents.append(event)
         guard let index = pending.firstIndex(where: { $0.0 == event }) else {
             return
         }
         let (_, expectation) = pending.remove(at: index)
         expectation.fulfill()
+    }
+
+    func count(of event: AppModelOperationEvent) -> Int {
+        recordedEvents.filter { $0 == event }.count
     }
 }

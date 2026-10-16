@@ -89,13 +89,16 @@ the changed selectors and helper review.
 The post-extraction owning app run verified all 598 identities passing with zero
 skips (`.build/post-extraction-app-owning.xcresult`), including all 71 annotated
 cases. Four corrected app cases also passed twice each in the focused run
-(`.build/post-extraction-focused.xcresult`). Existing follow-up rows and the
-negative-assertion P2 below remain open; passing execution does not resolve them.
+(`.build/post-extraction-focused.xcresult`). Unrelated follow-up rows remain open; the negative-assertion P2 is resolved
+by the scheduling-boundary change below.
 
-The follow-on review retains a P2 in the negative request-count assertions of
+The negative request-count P2 in
 `testLiveProgressEchoDoesNotRefreshStreamedPlayback` and
-`testLiveProgressUpdatesFinishedStateImmediately`: `.liveUpdateConsumed` does
-not prove that no debounced refresh was scheduled. A deterministic refresh drain
-or clock boundary is still needed before claiming those assertions catch late
-requests. This is separate from their observed event consumption and final
-model-state checks.
+`testLiveProgressUpdatesFinishedStateImmediately` is now resolved: the tests
+snapshot a synchronous `liveRefreshScheduled` event count and assert it remains
+unchanged after each `liveUpdateConsumed` event. Scheduling is observed before
+the 250 ms debounce, so an erroneous refresh cannot hide behind that delay.
+The existing request and model-state assertions remain. Both tests passed three
+repetitions each (six exact outcomes, zero skips), and the owning app suite
+passed all 598 identities with zero skips (`.build/p2-live-refresh.xcresult`,
+`.build/p2-app-owning.xcresult`).
