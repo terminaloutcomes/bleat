@@ -610,6 +610,11 @@
             for account: ServerAccount
         ) async throws(AppServiceError) -> [LibrarySummary] {
             libraryRequests += 1
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-typed-library-failure"
+            ) {
+                throw .libraryRepository(.remote(.unexpectedStatus(403)))
+            }
             if scenario == .emptyLibraryRefreshFailure {
                 guard libraryRequests == 1 else {
                     throw .libraryRepository(.remote(.unexpectedStatus(503)))
@@ -629,6 +634,11 @@
             for account: ServerAccount, libraryID: LibraryID,
             kind: LibraryCategoryKind
         ) async throws(AppServiceError) -> [LibraryCategory] {
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-typed-category-failure"
+            ) {
+                throw .libraryRepository(.remote(.unexpectedStatus(403)))
+            }
             let ids = try Self.fixtureIDs()
             let id: String
             let name: String
@@ -806,6 +816,12 @@
         ) async throws(AppServiceError) -> [LibraryBookShelf] {
             let ids = try Self.fixtureIDs()
             homeShelfRequests += 1
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-typed-home-failure"
+            ) {
+                throw .libraryRepository(
+                    .remote(.authentication(.retriedRequestUnauthorized)))
+            }
             if scenario == .homeLoading
                 || scenario == .homeDownloadLoading
             {
@@ -929,6 +945,11 @@
             libraryID: LibraryID,
             query: String
         ) async throws(AppServiceError) -> LibrarySearchResults {
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-typed-search-failure"
+            ) {
+                throw .libraryRepository(.remote(.unexpectedStatus(429)))
+            }
             if scenario == .largeLibrary {
                 let trimmed = query.trimmingCharacters(
                     in: .whitespacesAndNewlines
@@ -987,6 +1008,11 @@
             itemID: LibraryItemID
         ) async throws(AppServiceError) -> LibraryBookDetail {
             bookDetailRequests += 1
+            if ProcessInfo.processInfo.arguments.contains(
+                "--ui-testing-typed-detail-failure"
+            ) {
+                throw .bookDetail(.remote(.unexpectedStatus(429)))
+            }
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-book-detail-timeout"
             ), bookDetailRequests == 1 {

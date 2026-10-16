@@ -62,6 +62,7 @@ struct MetadataEditorView: View {
                 }
                 if let failure = editFailure {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("metadata.error")
@@ -82,6 +83,7 @@ struct MetadataEditorView: View {
                 }
                 if case .failed(let failure) = model.bookDeletionState {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("book.delete.error")

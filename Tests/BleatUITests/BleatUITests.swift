@@ -1391,6 +1391,101 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testTypedHomeFailureWithoutDownloads() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-typed-home-failure"])
+        XCTAssertTrue(
+            app.staticTexts["Sign in again"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "Your saved sign-in is no longer accepted by the server."
+            ].exists)
+    }
+
+    @MainActor
+    func testTypedHomeFailureKeepsDownloads() {
+        let app = launch(
+            scenario: "--ui-testing-home-download-unavailable",
+            additionalArguments: ["--ui-testing-typed-home-failure"])
+        XCTAssertTrue(
+            app.staticTexts["Sign in again"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "Your saved sign-in is no longer accepted by the server."
+            ].exists)
+        XCTAssertTrue(app.staticTexts["The Downloaded Audiobook"].exists)
+    }
+
+    @MainActor
+    func testTypedLibraryFailure() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-typed-library-failure"])
+        tabButton("Library", in: app).tap()
+        XCTAssertTrue(
+            app.staticTexts["Access denied"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "This account is not allowed to perform that action."
+            ].exists)
+    }
+
+    @MainActor
+    func testTypedCategoryFailureKeepsRetry() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-typed-category-failure"])
+        tabButton("Library", in: app).tap()
+        let modes = app.buttons["library.browseMode"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 5))
+        modes.tap()
+        app.buttons["By Author"].tap()
+        XCTAssertTrue(
+            app.staticTexts["Access denied"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "This account is not allowed to perform that action."
+            ].exists)
+        XCTAssertTrue(app.buttons["library.categories.retry"].exists)
+    }
+
+    @MainActor
+    func testTypedSearchFailure() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-typed-search-failure"])
+        tabButton("Search", in: app).tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Test")
+        XCTAssertTrue(
+            app.staticTexts["Too many requests"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "The Audiobookshelf server asked Bleat to try again later."
+            ].exists)
+    }
+
+    @MainActor
+    func testTypedBookDetailFailureKeepsRetry() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-typed-detail-failure"])
+        let book = app.buttons["home.book.ui-book"]
+        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        book.tap()
+        XCTAssertTrue(
+            app.staticTexts["Too many requests"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts[
+                "The Audiobookshelf server asked Bleat to try again later."
+            ].exists)
+        XCTAssertTrue(app.buttons["Try Again"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testDownloadErrorBannerDismissesWithoutRemovingBook() {
         let app = launch(
             scenario: "--ui-testing-context-download-removal-failure"
@@ -1403,6 +1498,10 @@ final class BleatUITests: XCTestCase {
 
         let banner = app.descendants(matching: .any)["downloads.error"]
         XCTAssertTrue(banner.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Download storage unavailable"].exists)
+        XCTAssertTrue(
+            app.staticTexts["Bleat could not access downloaded media storage."]
+                .exists)
         XCTAssertTrue(book.exists)
         let dismiss = app.buttons["downloads.error.dismiss"]
         XCTAssertTrue(dismiss.waitForExistence(timeout: 3))
@@ -2770,6 +2869,10 @@ final class BleatUITests: XCTestCase {
         )
         XCTAssertTrue(existingShelf.exists)
         XCTAssertTrue(app.staticTexts["The Test Audiobook"].exists)
+        XCTAssertTrue(app.staticTexts["Server unavailable"].exists)
+        XCTAssertTrue(
+            app.staticTexts["Bleat could not reach the Audiobookshelf server."]
+                .exists)
     }
 
     @MainActor

@@ -11,6 +11,7 @@ struct LibraryCategoryContent: View {
                 ProgressView().accessibilityIdentifier(
                     "library.categories.loading")
             case .failed(let failure):
+                Label(failure.title, systemImage: failure.systemImage)
                 Text(failure.message)
                 Button("Retry") { Task { await model.reloadBooks() } }
                     .accessibilityIdentifier("library.categories.retry")
