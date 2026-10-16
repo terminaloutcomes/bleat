@@ -66,3 +66,12 @@ per-record execution overrides link to the exact run record in
 subsequently passed all 598 identities twice (1,196 executions) on an isolated
 Simulator after the retained installation-interrupted attempt. Simulator, signed-host, and device evidence remains distinct
 where those suites require it.
+
+## Timing batch status
+
+The table above retains the original source-review findings. The subsequent
+[timing and synchronization batch](test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16)
+records partial remediation and its execution evidence. Per-test `timing_batch`
+annotations in the linked audit JSON identify updated test bodies; unchanged
+findings remain open. Do not interpret the original table as a description of
+those updated implementations or as evidence that the whole backlog is closed.

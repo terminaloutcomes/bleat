@@ -711,6 +711,7 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
     private var activeDownstreamTask: Task<Void, Never>?
     private var persistenceTail: Task<Bool, Never>?
     private var cancellationGeneration: UInt64 = 0
+    private let onPersistenceWait: @Sendable () -> Void
 
     init(
         storageURL: URL,
@@ -720,13 +721,15 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
         storageQueue: DispatchQueue = DispatchQueue(
             label: "app.bleat.remote-telemetry.storage",
             qos: .userInitiated
-        )
+        ),
+        onPersistenceWait: @escaping @Sendable () -> Void = {}
     ) throws {
         self.storageURL = storageURL
         self.downstream = downstream
         self.policy = policy
         self.now = now
         self.storageQueue = storageQueue
+        self.onPersistenceWait = onPersistenceWait
         try prepareStorage()
         storageQueue.sync {
             pruneAndEnforceBounds()
@@ -795,11 +798,7 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
         let timeout = max(explicitTimeout ?? 30, 0)
         let deadline = Date().addingTimeInterval(timeout)
         if let persistence = stateLock.withLock({ persistenceTail }),
-            await awaitTask(
-                persistence,
-                until: deadline,
-                timeoutResult: false
-            ) == false
+            await awaitPersistence(persistence, until: deadline) == false
         {
             return .failure
         }
@@ -821,6 +820,18 @@ final class BoundedPersistentSpanExporter: SpanExporter, @unchecked Sendable {
             downstream.cancelActiveExports()
         }
         return completed ? .success : .failure
+    }
+
+    private func awaitPersistence(
+        _ persistence: Task<Bool, Never>,
+        until deadline: Date
+    ) async -> Bool {
+        onPersistenceWait()
+        return await awaitTask(
+            persistence,
+            until: deadline,
+            timeoutResult: false
+        )
     }
 
     @available(*, deprecated, message: "Use async shutdown(explicitTimeout:)")
@@ -1285,6 +1296,11 @@ final class QueuedRemoteTelemetryLogExporter:
     private var acceptsExports = true
     private var isShutdown = false
     private var shutdownTask: Task<Void, Never>?
+    private var shutdownJoinCount = 0
+
+    var shutdownJoinCountForTesting: Int {
+        lock.withLock { shutdownJoinCount }
+    }
 
     init(downstream: any RemoteTelemetryDownstreamLogExporter) {
         self.downstream = downstream
@@ -1412,6 +1428,7 @@ final class QueuedRemoteTelemetryLogExporter:
         explicitTimeout: TimeInterval?
     ) -> Task<Void, Never> {
         lock.withLock {
+            shutdownJoinCount += 1
             if let shutdownTask { return shutdownTask }
             isShutdown = true
             acceptsExports = false

@@ -17,15 +17,22 @@ final class OpenIDAuthenticationTests {
             (nil, OpenIDTestError.invalidBrowserRequest, .failed),
         ]
         for (providerURL, error, expectedError) in inputs {
-            let result = await withCheckedContinuation { continuation in
-                // Construct the exact native adapter on the main actor, then
-                // invoke it from a detached task as the framework may do.
-                let callback = SystemOpenIDCompletionMapper.callback {
-                    url, error in
-                    continuation.resume(returning: (url, error))
-                }
-                Task.detached { callback(providerURL, error) }
+            let completion = AuthTelemetryTestCompletion<
+                (URL?, OpenIDBrowserError?)
+            >()
+            // Construct the exact native adapter on the main actor, then
+            // invoke it from a detached task as the framework may do.
+            let callback = SystemOpenIDCompletionMapper.callback {
+                url, error in
+                Task { await completion.complete((url, error)) }
             }
+            Task.detached { callback(providerURL, error) }
+            guard
+                let result = await requireAuthTelemetryCompletion(
+                    completion,
+                    stage: "native browser callback completion"
+                )
+            else { continue }
             #expect(result.0 == providerURL)
             #expect(result.1 == expectedError)
         }
@@ -214,7 +221,7 @@ final class OpenIDAuthenticationTests {
             at: authorizationURL,
             callbackScheme: "com.example.bleat"
         )
-        await factory.waitUntilSessionStarts()
+        #expect(await factory.waitUntilSessionStarts())
 
         do {
             _ = try await browser.authenticate(
@@ -735,7 +742,7 @@ final class OpenIDAuthenticationTests {
             callbackURL: Self.callbackURL,
             browser: browser
         )
-        await gate.waitUntilEntered()
+        #expect(await gate.waitUntilEntered())
 
         await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
@@ -1087,6 +1094,7 @@ private final class OpenIDWebSessionFactory:
 {
     let behavior: OpenIDWebSessionBehavior
     private(set) var sessions: [OpenIDWebSession] = []
+    private let sessionStarted = AuthTelemetryTestSignal()
 
     init(behavior: OpenIDWebSessionBehavior) {
         self.behavior = behavior
@@ -1102,16 +1110,21 @@ private final class OpenIDWebSessionFactory:
             authorizationURL: url,
             callbackScheme: callbackScheme,
             behavior: behavior,
+            sessionStarted: sessionStarted,
             completion: completion
         )
         sessions.append(session)
         return session
     }
 
-    func waitUntilSessionStarts() async {
-        while sessions.first?.didStart != true {
-            await Task.yield()
-        }
+    func waitUntilSessionStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            sessionStarted,
+            stage: "OpenID web session start",
+            sourceLocation: sourceLocation
+        )
     }
 }
 
@@ -1125,23 +1138,28 @@ private final class OpenIDWebSession: OpenIDWebAuthenticationSession {
     let callbackScheme: String
     private let behavior: OpenIDWebSessionBehavior
     private let completion: @Sendable (URL?, OpenIDBrowserError?) -> Void
+    private let sessionStarted: AuthTelemetryTestSignal
     private(set) var didStart = false
 
     init(
         authorizationURL: URL,
         callbackScheme: String,
         behavior: OpenIDWebSessionBehavior,
+        sessionStarted: AuthTelemetryTestSignal,
         completion:
             @escaping @Sendable (URL?, OpenIDBrowserError?) -> Void
     ) {
         self.authorizationURL = authorizationURL
         self.callbackScheme = callbackScheme
         self.behavior = behavior
+        self.sessionStarted = sessionStarted
         self.completion = completion
     }
 
     func start() -> Bool {
         didStart = true
+        let sessionStarted = self.sessionStarted
+        Task { await sessionStarted.signal() }
         switch behavior {
         case .complete(let callbackURL, let error):
             completion(callbackURL, error)
@@ -1262,25 +1280,24 @@ private struct SuspendingOpenIDBrowser: OpenIDBrowserSession {
 
 private actor OpenIDBrowserGate {
     private var entered = false
-    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let entrySignal = AuthTelemetryTestSignal()
     private var resolution: Result<URL, OpenIDBrowserError>?
     private var resolutionWaiter: CheckedContinuation<URL, any Error>?
 
     func enter() {
         entered = true
-        for waiter in entryWaiters {
-            waiter.resume()
-        }
-        entryWaiters.removeAll()
+        Task { await entrySignal.signal() }
     }
 
-    func waitUntilEntered() async {
-        guard !entered else {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            entryWaiters.append(continuation)
-        }
+    func waitUntilEntered(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if entered { return true }
+        return await requireAuthTelemetrySignal(
+            entrySignal,
+            stage: "OpenID browser gate entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func waitForResolution() async throws -> URL {

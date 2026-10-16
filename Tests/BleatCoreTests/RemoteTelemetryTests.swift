@@ -1254,11 +1254,15 @@ final class RemoteTelemetryTests {
             label: "app.bleat.remote-telemetry.storage.test"
         )
         let persistenceGate = DispatchSemaphore(value: 0)
+        let flushWaitStarted = AuthTelemetryTestSignal()
         let exporter = try BoundedPersistentSpanExporter(
             storageURL: directory,
             downstream: RecordingSpanExporter(result: .failure),
             policy: .default,
-            storageQueue: storageQueue
+            storageQueue: storageQueue,
+            onPersistenceWait: {
+                Task { await flushWaitStarted.signal() }
+            }
         )
         storageQueue.async { persistenceGate.wait() }
         defer {
@@ -1278,7 +1282,11 @@ final class RemoteTelemetryTests {
             completion.complete()
             return result
         }
-        try await Task.sleep(for: .milliseconds(50))
+        #expect(
+            await requireAuthTelemetrySignal(
+                flushWaitStarted,
+                stage: "async flush waiting for queued persistence"
+            ))
         #expect(!(completion.isComplete))
         #expect(batchFiles(in: directory).isEmpty)
 
@@ -1303,12 +1311,21 @@ final class RemoteTelemetryTests {
             await exporter.shutdown(explicitTimeout: 2)
             firstCompletion.complete()
         }
-        await downstream.waitUntilShutdownStarts()
+        #expect(
+            await requireAuthTelemetrySignal(
+                downstream.shutdownStartedSignal,
+                stage: "downstream log shutdown entry"
+            ))
         let second = Task {
             await exporter.shutdown(explicitTimeout: 2)
             secondCompletion.complete()
         }
-        try? await Task.sleep(for: .milliseconds(50))
+        #expect(
+            await requireAuthTelemetryCondition(
+                stage: "second caller joining shared log shutdown"
+            ) {
+                exporter.shutdownJoinCountForTesting == 2
+            })
 
         #expect(!(firstCompletion.isComplete))
         #expect(!(secondCompletion.isComplete))
@@ -1599,7 +1616,7 @@ private final class GatedShutdownLogExporter:
     RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
 {
     private let lock = NSLock()
-    private let shutdownStarted = TestAsyncSignal()
+    nonisolated let shutdownStartedSignal = AuthTelemetryTestSignal()
     private let shutdownCompletion = TestAsyncSignal()
     private var shutdowns = 0
 
@@ -1627,17 +1644,13 @@ private final class GatedShutdownLogExporter:
 
     func shutdown(explicitTimeout: TimeInterval?) async {
         lock.withLock { shutdowns += 1 }
-        shutdownStarted.complete()
+        await shutdownStartedSignal.signal()
         await shutdownCompletion.wait()
     }
 
     func cancelActiveExports() {}
 
     func disable() {}
-
-    func waitUntilShutdownStarts() async {
-        await shutdownStarted.wait()
-    }
 
     func completeShutdown() {
         shutdownCompletion.complete()

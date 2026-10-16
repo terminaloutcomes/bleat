@@ -404,3 +404,118 @@ so its handler never entered. Restoring the same middleware used by the original
 fixture resolved that setup defect; this failed attempt is retained separately
 from the subsequent passing focused and suite runs. These are in-process Rust
 unit tests, not new live-server or device evidence.
+
+## Timing and synchronization batch (2026-10-16)
+
+This batch follows runner-verification commit `09908d5`. It replaces guessed
+scheduler turns and unbounded fixture-entry waits in selected core tests with
+bounded signals, explicit caller-arrival barriers, and observed completion.
+Private CloudKit callback deadline tests advance an injected clock; production
+uses `ContinuousClock` and asynchronous sleeping. Statistics tests check the UTC
+reporting calendar without changing the process-wide default time zone.
+
+Application coverage in this batch is limited to cancelled selection resume,
+late completed-download callbacks, and retired Now Playing command callbacks.
+Their negative assertions now wait for the actual owning operation to finish.
+The edit-during-download UI changes were attempted but excluded from this
+checkpoint after the failures documented below. Their original follow-ups remain open.
+
+This is a partial remediation batch. Historical review decisions and counts
+above remain the original audit snapshot. The per-test `timing_batch` annotations
+record later source changes without erasing unrelated findings. Remaining work
+includes app live-update/reconciliation/playback synchronization, UI playback
+menu tick evidence, live JWT expiry timing, deep-link readiness, telemetry runner
+request deadlines, and core waits not converted here. The cache-read watchdog
+now reports timeout, but an uncooperative detached read can still outlive the
+test after cancellation; that cleanup gap remains open.
+
+### Completed host checks
+
+- `BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel
+  --xunit-output .build/timing-state.xml --filter
+  'HTTPTransportTests|LibrarySearchCoordinatorTests|PrivateCloudSyncTests|PrivateCloudPersistenceTests|StatisticsExplorationTests|LibraryCachePerformanceTests'`:
+  114 tests passed, zero failures or skips.
+- `BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel
+  --filter 'TelemetryAuthenticationTests|OpenIDAuthenticationTests|LogoutTests|AuthenticatedRequestTests|AuthenticatedOtlpSpanExporterTests|RemoteTelemetryTests'
+  --xunit-output .build/timing-auth.xml`: 130 tests passed, zero failures or skips.
+- `mise exec -- ./scripts/test-host.sh` (with the Homebrew Rust compiler selected through `RUSTC`):
+  all 561 signed host identities passed, zero failures or skips; exact inventory
+  verified. XML and coverage are under `.build/host-results/` and
+  `.build/coverage/swift-host/`; console log `.build/timing-signed-host.log`.
+  This owning-suite run repeats the affected core cases after their focused runs.
+
+The dependency build emits the upstream OpenTelemetry watchOS minimum-version
+deprecation. SwiftData permission diagnostics belong to deliberately read-only
+store/save-failure fixtures that passed. Initial compilation attempts caught a
+missing `await`, initializer argument order, and an actor-owned iterator access;
+these were corrected before the successful runs. Two redundant-await warnings
+were removed before the auth and signed-host runs. No failed compile is counted
+as executed coverage.
+
+### Simulator attempts and review
+
+The initial focused build rejected an unsupported generic XCTest `value` wait;
+that now uses a bounded predicate. A second build caught the missing telemetry
+`await` noted above. Neither attempt executed tests. Their result bundles and
+logs remain `.build/timing-focused.*` and
+`.build/timing-focused-corrected.*`.
+
+The first completed focused run used two repetitions and retained
+`.build/timing-focused-final.xcresult`: 11 app identities passed twice (22
+executions), while both edit-download UI identities failed twice (four failures).
+The failures measured a 60-second menu interaction: continuous accessibility
+value changes prevented XCTest from observing UI idleness. A subsequent attempted fixture requested exactly two progress callbacks through
+a non-dismissing test menu command, with editor-controlled completion. That
+attempt also failed because the native menu did not expose the progress
+accessibility value (`-1` sentinel at the initial observation). All UI fixture
+and UI test edits were excluded from this checkpoint; their unfinished patch
+is retained locally at `.build/timing-ui-unfinished.patch`. Neither attempt is
+counted as successful UI coverage. The run's result
+summary reports no runtime warnings; the console also emits Xcode debugger
+version lookup diagnostics, which are retained with the log.
+
+One full independent review cycle found no P0/P1 findings. Its P2 finding remains
+open: the detached cache-read task may survive the timeout cleanup branch if
+cancellation is not observed. An earlier partial review also noted stale audit
+wording; the subsequent batch annotations and explicit historical-snapshot
+wording distinguish original findings from current changes.
+
+The second full independent review also found no P0/P1 findings and retained
+four P2 findings, which remain open under the review-and-ship publication policy:
+
+- `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift`: cancellation followed
+  by a failed cleanup watchdog can leave the detached workload alive.
+- `Tests/BleatCoreTests/PrivateCloudSyncTests.swift`, `CloudKitCancellationProbe`:
+  entry is signaled before the release continuation is installed. A release in
+  that suspension window can be lost. The changed logout transport fakes have
+  the same signal-before-continuation ordering.
+- `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift`: a failed bounded session
+  start expectation continues into `sessions[0]`, which can trap if no session
+  exists.
+- `Tests/BleatCoreTests/LogoutTests.swift`: a failed bounded transport-entry
+  expectation can continue into a no-op release and an unbounded task join.
+
+Passing executions do not close these adverse-scheduling and failure-path gaps.
+
+The excluded controlled-progress attempt is retained at
+`.build/timing-ui-controlled.xcresult` and `.build/timing-ui-controlled.log`:
+both UI identities failed both repetitions (four failures), with no runtime
+warnings in the result summary. After all test cases had completed, its
+post-test `simctl diagnose` collection was stopped after three minutes so Xcode
+could finalize the result bundle; partial diagnostics remain in that bundle.
+
+A third complete read-only review checked the final checkpoint after removing
+all UI edits. It confirmed no P0/P1 findings and the same four open P2s.
+Changed Swift sources pass strict `swift-format` lint; documentation references
+and `git diff --check` pass. No live-server, app-live, physical-device, archive,
+or broad UI-suite evidence is claimed for this checkpoint.
+
+Final owning app-suite validation used `mise exec -- ./scripts/xctest.sh -d
+'platform=iOS Simulator,id=<disposable-simulator>' -t BleatAppTests -r
+.build/timing-app-suite.xcresult` (Homebrew Rust selected through `RUSTC`).
+Built-product discovery found exactly 598 identities, and result verification
+confirmed all 598 passed with zero skips. Results are
+`.build/timing-app-suite.xcresult`, its `.discovery.json` companion, and
+`.build/timing-app-suite.log`. This repeats the changed app cases in their owning
+suite after the earlier 22 focused executions. The final checkpoint includes
+no UI fixture or UI test changes.

@@ -32,7 +32,15 @@ final class PrivateCloudSyncTests {
         let run = try await lifecycle.begin()
         let probe = CloudKitCancellationProbe(holdCompletion: true)
         await run.requestCancellation { await probe.cancel() }
-        await probe.waitForEntry()
+        let entryWait = await probe.waitForEntry()
+        #expect(
+            entryWait.reached,
+            "CloudKit cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
+        )
+        guard entryWait.reached else {
+            await probe.release()
+            return
+        }
         let completion = Task {
             await run.waitForCancellation()
             await lifecycle.finish(run)
@@ -59,7 +67,15 @@ final class PrivateCloudSyncTests {
             .withValue(true) {
                 await run.beginCallback { await probe.cancel() }
             }
-        await probe.waitForEntry()
+        let entryWait = await probe.waitForEntry()
+        #expect(
+            entryWait.reached,
+            "watchdog cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
+        )
+        guard entryWait.reached else {
+            await run.endCallback(callbackID)
+            return
+        }
         await run.endCallback(callbackID)
         await run.waitForCancellation()
         let inheritedDelegateContext = await probe.inheritedDelegateContext
@@ -118,16 +134,42 @@ final class PrivateCloudSyncTests {
     func testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain()
         async throws
     {
+        let clock = ControlledDeadlineClock()
         let lifecycle = PrivateCloudSyncLifecycle()
         await lifecycle.setForeground(false)
-        let run = try await lifecycle.begin(deadline: .milliseconds(30))
+        let run = try await lifecycle.begin(
+            deadline: .milliseconds(30),
+            currentInstant: { clock.now() },
+            sleep: { try await clock.sleep(for: $0) }
+        )
         let callback = await run.beginCallback {}
-        try await Task.sleep(for: .milliseconds(50))
+        let firstWatchdogWait = await clock.waitForSleepCount(1)
+        #expect(
+            firstWatchdogWait.reached,
+            "background watchdog did not register within \(firstWatchdogWait.timeout); elapsed \(firstWatchdogWait.elapsed)"
+        )
+        guard firstWatchdogWait.reached else {
+            await run.endCallback(callback)
+            await lifecycle.finish(run)
+            return
+        }
+        clock.advance(by: .seconds(5))
+        let resumedWatchdogWait = await clock.waitForSleepCount(2)
+        #expect(
+            resumedWatchdogWait.reached,
+            "background watchdog did not resume after clock advance within \(resumedWatchdogWait.timeout); elapsed \(resumedWatchdogWait.elapsed)"
+        )
+        guard resumedWatchdogWait.reached else {
+            await run.endCallback(callback)
+            await lifecycle.finish(run)
+            return
+        }
         let expiredInBackground = await run.checkDeadline(for: callback)
         #expect(!(expiredInBackground))
+        #expect(await run.failure() == nil)
 
         await lifecycle.setForeground(true)
-        try await Task.sleep(for: .milliseconds(50))
+        clock.advance(by: .milliseconds(30))
         let expiredInForeground = await run.checkDeadline(for: callback)
         #expect(expiredInForeground)
         let result = await run.waitForResult()
@@ -153,18 +195,39 @@ final class PrivateCloudSyncTests {
 
     @Test
     func testFetchedCallbackProgressResetsNoProgressDeadline() async throws {
-        let run = PrivateCloudSyncRun(deadline: .seconds(1))
+        let clock = ControlledDeadlineClock()
+        let run = PrivateCloudSyncRun(
+            deadline: .seconds(1),
+            currentInstant: { clock.now() },
+            sleep: { try await clock.sleep(for: $0) }
+        )
         let callback = await run.beginCallback {}
-        try await Task.sleep(for: .milliseconds(600))
+        let firstWatchdogWait = await clock.waitForSleepCount(1)
+        #expect(
+            firstWatchdogWait.reached,
+            "initial watchdog did not register within \(firstWatchdogWait.timeout); elapsed \(firstWatchdogWait.elapsed)"
+        )
+        guard firstWatchdogWait.reached else {
+            await run.endCallback(callback)
+            return
+        }
+        clock.advance(by: .milliseconds(600))
         try await run.checkCallback(callback)
-        try await Task.sleep(for: .milliseconds(600))
+        clock.advance(by: .milliseconds(600))
+        let resetWatchdogWait = await clock.waitForSleepCount(2)
+        #expect(
+            resetWatchdogWait.reached,
+            "watchdog did not observe the reset deadline within \(resetWatchdogWait.timeout); elapsed \(resetWatchdogWait.elapsed)"
+        )
+        guard resetWatchdogWait.reached else {
+            await run.endCallback(callback)
+            return
+        }
         let expiredAfterProgress = await run.checkDeadline(for: callback)
         #expect(!(expiredAfterProgress))
         let failureAfterProgress = await run.failure()
         #expect(failureAfterProgress == nil)
-        try await Task.sleep(for: .milliseconds(600))
-        // The watchdog can record the timeout before this manual check. Verify
-        // the recorded outcome, not which caller first noticed expiration.
+        clock.advance(by: .milliseconds(400))
         _ = await run.checkDeadline(for: callback)
         let failure = await run.failure()
         #expect(
@@ -2330,8 +2393,8 @@ private actor CloudKitCancellationProbe {
     private(set) var calls = 0
     private(set) var inheritedDelegateContext = false
     private let holdCompletion: Bool
-    private var entryWaiter: CheckedContinuation<Void, Never>?
     private var completionWaiter: CheckedContinuation<Void, Never>?
+    private let entryNotifications = BoundedTestCounter()
 
     init(holdCompletion: Bool = false) {
         self.holdCompletion = holdCompletion
@@ -2340,16 +2403,14 @@ private actor CloudKitCancellationProbe {
     func cancel() async {
         calls += 1
         inheritedDelegateContext = CloudKitDelegateTestContext.isInsideDelegate
-        entryWaiter?.resume()
-        entryWaiter = nil
+        await entryNotifications.increment()
         if holdCompletion {
             await withCheckedContinuation { completionWaiter = $0 }
         }
     }
 
-    func waitForEntry() async {
-        if calls > 0 { return }
-        await withCheckedContinuation { entryWaiter = $0 }
+    func waitForEntry() async -> BoundedTestWaitResult {
+        await entryNotifications.wait(untilAtLeast: 1)
     }
 
     func release() {

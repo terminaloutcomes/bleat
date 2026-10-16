@@ -245,7 +245,7 @@ final class LogoutTests {
                 server: server
             )
         }
-        await transport.waitUntilLogoutStarts()
+        #expect(await transport.waitUntilLogoutStarts())
 
         await assertThrowsErrorAsync(
             try await coordinator.logout(
@@ -296,7 +296,7 @@ final class LogoutTests {
                 password: "password"
             )
         }
-        await transport.waitUntilLoginStarts()
+        #expect(await transport.waitUntilLoginStarts())
 
         await assertThrowsErrorAsync(
             try await coordinator.logout(
@@ -356,7 +356,7 @@ final class LogoutTests {
                 server: server
             )
         }
-        await transport.waitUntilRefreshStarts()
+        #expect(await transport.waitUntilRefreshStarts())
 
         let logout = Task {
             try await coordinator.logout(
@@ -364,16 +364,12 @@ final class LogoutTests {
                 server: server
             )
         }
-        for _ in 0..<1_000 {
-            if await coordinator.isSigningOut(accountID: accountID) {
-                break
-            }
-            await Task.yield()
-        }
-        let logoutStarted = await coordinator.isSigningOut(
-            accountID: accountID
-        )
-        #expect(logoutStarted)
+        #expect(
+            await requireAuthTelemetryCondition(
+                stage: "logout signing-out state"
+            ) {
+                await coordinator.isSigningOut(accountID: accountID)
+            })
         await transport.completeRefresh()
 
         let logoutResult = try await logout.value
@@ -424,14 +420,14 @@ final class LogoutTests {
                 server: server
             )
         }
-        await transport.waitUntilInitialRequestStarts()
+        #expect(await transport.waitUntilInitialRequestStarts())
         let logout = Task {
             try await coordinator.logout(
                 accountID: accountID,
                 server: server
             )
         }
-        await transport.waitUntilLogoutStarts()
+        #expect(await transport.waitUntilLogoutStarts())
         await transport.rejectInitialRequest()
 
         await assertThrowsErrorAsync(
@@ -480,7 +476,7 @@ final class LogoutTests {
                 server: server
             )
         }
-        await transport.waitUntilInitialRequestStarts()
+        #expect(await transport.waitUntilInitialRequestStarts())
 
         let logout = Task {
             try await coordinator.logout(
@@ -488,7 +484,7 @@ final class LogoutTests {
                 server: server
             )
         }
-        await transport.waitUntilLogoutStarts()
+        #expect(await transport.waitUntilLogoutStarts())
         await transport.completeLogout()
         let logoutResult = try await logout.value
         await transport.completeInitial(statusCode: 200)
@@ -652,30 +648,28 @@ private actor LogoutScriptedTransport: HTTPTransport {
 
 private actor BlockingLogoutTransport: HTTPTransport {
     private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var started = false
 
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
         started = true
-        let waiters = startWaiters
-        startWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
+        await logoutStartedSignal.signal()
         return await withCheckedContinuation { continuation in
             logoutContinuation = continuation
         }
     }
 
-    func waitUntilLogoutStarts() async {
-        if started {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+    func waitUntilLogoutStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if started { return true }
+        return await requireAuthTelemetrySignal(
+            logoutStartedSignal,
+            stage: "logout transport entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func completeLogout() {
@@ -688,30 +682,28 @@ private actor BlockingLogoutTransport: HTTPTransport {
 
 private actor BlockingLoginTransport: HTTPTransport {
     private var loginContinuation: CheckedContinuation<HTTPResponse, Never>?
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let loginStartedSignal = AuthTelemetryTestSignal()
     private var started = false
 
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
         started = true
-        let waiters = startWaiters
-        startWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
+        await loginStartedSignal.signal()
         return await withCheckedContinuation { continuation in
             loginContinuation = continuation
         }
     }
 
-    func waitUntilLoginStarts() async {
-        if started {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+    func waitUntilLoginStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if started { return true }
+        return await requireAuthTelemetrySignal(
+            loginStartedSignal,
+            stage: "login transport entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func rejectLogin() {
@@ -724,7 +716,7 @@ private actor BlockingLoginTransport: HTTPTransport {
 
 private actor RefreshRaceTransport: HTTPTransport {
     private var refreshContinuation: CheckedContinuation<HTTPResponse, Never>?
-    private var refreshStartWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let refreshStartedSignal = AuthTelemetryTestSignal()
     private var refreshStarted = false
     private var refreshRequests = 0
     private var logoutRequests = 0
@@ -737,11 +729,7 @@ private actor RefreshRaceTransport: HTTPTransport {
         if request.url?.path.hasSuffix("/auth/refresh") == true {
             refreshRequests += 1
             refreshStarted = true
-            let waiters = refreshStartWaiters
-            refreshStartWaiters.removeAll()
-            for waiter in waiters {
-                waiter.resume()
-            }
+            await refreshStartedSignal.signal()
 
             return await withCheckedContinuation { continuation in
                 refreshContinuation = continuation
@@ -762,13 +750,15 @@ private actor RefreshRaceTransport: HTTPTransport {
         return .init(data: Data(), statusCode: 401)
     }
 
-    func waitUntilRefreshStarts() async {
-        if refreshStarted {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            refreshStartWaiters.append(continuation)
-        }
+    func waitUntilRefreshStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if refreshStarted { return true }
+        return await requireAuthTelemetrySignal(
+            refreshStartedSignal,
+            stage: "refresh transport entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func completeRefresh() {
@@ -800,8 +790,8 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     private var initialRequestContinuation:
         CheckedContinuation<HTTPResponse, Never>?
     private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
-    private var initialStartWaiters: [CheckedContinuation<Void, Never>] = []
-    private var logoutStartWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let initialStartedSignal = AuthTelemetryTestSignal()
+    nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var initialStarted = false
     private var logoutStarted = false
     private var refreshRequests = 0
@@ -812,11 +802,7 @@ private actor InitialRequestRaceTransport: HTTPTransport {
         let request = tracedRequest.request
         if request.url?.path.hasSuffix("/logout") == true {
             logoutStarted = true
-            let waiters = logoutStartWaiters
-            logoutStartWaiters.removeAll()
-            for waiter in waiters {
-                waiter.resume()
-            }
+            await logoutStartedSignal.signal()
             return await withCheckedContinuation { continuation in
                 logoutContinuation = continuation
             }
@@ -827,32 +813,32 @@ private actor InitialRequestRaceTransport: HTTPTransport {
         }
 
         initialStarted = true
-        let waiters = initialStartWaiters
-        initialStartWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
+        await initialStartedSignal.signal()
         return await withCheckedContinuation { continuation in
             initialRequestContinuation = continuation
         }
     }
 
-    func waitUntilInitialRequestStarts() async {
-        if initialStarted {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            initialStartWaiters.append(continuation)
-        }
+    func waitUntilInitialRequestStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if initialStarted { return true }
+        return await requireAuthTelemetrySignal(
+            initialStartedSignal,
+            stage: "initial request transport entry",
+            sourceLocation: sourceLocation
+        )
     }
 
-    func waitUntilLogoutStarts() async {
-        if logoutStarted {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            logoutStartWaiters.append(continuation)
-        }
+    func waitUntilLogoutStarts(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if logoutStarted { return true }
+        return await requireAuthTelemetrySignal(
+            logoutStartedSignal,
+            stage: "logout transport entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func rejectInitialRequest() {

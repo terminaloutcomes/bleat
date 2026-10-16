@@ -6820,7 +6820,7 @@
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-      "name": "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges",
+      "name": "dailyBucketsAndCachedRangesUseUTCReportingCalendar",
       "line": 503,
       "language": "swift"
     },

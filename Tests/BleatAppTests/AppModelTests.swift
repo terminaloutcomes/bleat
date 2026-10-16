@@ -485,6 +485,8 @@ final class AppModelTests: XCTestCase {
                 bookDetail: .success(detail), bookDetailGate: gate)
             let model = AppModel(service: service, playbackPositionStore: store)
             await model.start()
+            let completionBaseline =
+                model.selectionResumeCompletionSequenceForTesting
             XCTAssertEqual(model.requestSelectionResume(), .accepted)
             await gate.waitUntilEntered()
             if stop {
@@ -493,8 +495,14 @@ final class AppModelTests: XCTestCase {
                 model.playback.pause()
             }
             await gate.release()
-            // Drain the original resolver and verify it never opens a playback session.
-            for _ in 0..<100 { await Task.yield() }
+            let resumeCompleted = await waitUntil(timeout: .seconds(30)) {
+                model.selectionResumeCompletionSequenceForTesting
+                    > completionBaseline
+            }
+            XCTAssertTrue(
+                resumeCompleted,
+                "Cancelled selection resume did not complete"
+            )
             let requests = await service.playbackOpenRequests()
             XCTAssertTrue(requests.isEmpty)
             XCTAssertFalse(model.playback.isPlaybackRequested)
@@ -535,11 +543,20 @@ final class AppModelTests: XCTestCase {
                     backgroundSessionIdentifier("cancel-preparation"),
                 diagnostics: diagnostics, playbackPositionStore: store)
             await model.start()
+            let completionBaseline =
+                model.selectionResumeCompletionSequenceForTesting
             XCTAssertEqual(model.requestSelectionResume(), .accepted)
             await gate.waitUntilEntered()
             await model.playback.stop()
             await gate.release()
-            for _ in 0..<100 { await Task.yield() }
+            let resumeCompleted = await waitUntil(timeout: .seconds(30)) {
+                model.selectionResumeCompletionSequenceForTesting
+                    > completionBaseline
+            }
+            XCTAssertTrue(
+                resumeCompleted,
+                "Cancelled preparation resume did not complete"
+            )
             XCTAssertFalse(model.playback.isPlaybackRequested)
             XCTAssertEqual(model.playback.state, .idle)
             XCTAssertNil(try store.lastPlaying())
@@ -1805,7 +1822,9 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.completed-track-late-failure.\(UUID().uuidString)"
         )
         await model.start(accounts: [account])
+        addTeardownBlock { @MainActor in await model.removeAll() }
         let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
         let task = session.downloadTask(with: request)
         task.taskDescription = try DownloadChunkTaskDescription(
             identity: identity,
@@ -1813,14 +1832,21 @@ final class AppModelTests: XCTestCase {
             validator: nil
         ).encode()
 
+        let callbackBaseline =
+            model.taskCompletionProcessingSequenceForTesting
         model.urlSession(
             session,
             task: task,
             didCompleteWithError: URLError(.cancelled)
         )
-        for _ in 0..<20 {
-            await Task.yield()
+        let callbackProcessed = await waitUntil(timeout: .seconds(30)) {
+            model.taskCompletionProcessingSequenceForTesting
+                > callbackBaseline
         }
+        XCTAssertTrue(
+            callbackProcessed,
+            "Completed-track URLSession callback did not finish processing"
+        )
 
         XCTAssertEqual(model.records.first?.manifest.state, .complete)
         XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
@@ -1828,8 +1854,6 @@ final class AppModelTests: XCTestCase {
         let requestedIdentities =
             await service.authorizedDownloadRequestIdentities()
         XCTAssertTrue(requestedIdentities.isEmpty)
-        session.invalidateAndCancel()
-        await model.removeAll()
     }
 
     func testCompletionDuringRequestAuthorizationLeavesNoTransferTask()

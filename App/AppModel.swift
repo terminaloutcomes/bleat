@@ -2147,6 +2147,8 @@ final class AppModel {
     private var bootstrapTask: Task<Void, Never>?
     private var selectionResumeTask: Task<Void, Never>?
     private var selectionResumeGeneration: UInt64 = 0
+    @ObservationIgnored
+    private(set) var selectionResumeCompletionSequenceForTesting = 0
     var selectionResumeFailure: AppFailure?
 
     func dismissSelectionResumeFailure() {
@@ -5430,14 +5432,15 @@ final class AppModel {
         let generation = selectionResumeGeneration
         selectionResumeTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await start()
-            guard !Task.isCancelled, generation == selectionResumeGeneration
-            else { return }
             defer {
+                selectionResumeCompletionSequenceForTesting += 1
                 if generation == selectionResumeGeneration {
                     selectionResumeTask = nil
                 }
             }
+            await start()
+            guard !Task.isCancelled, generation == selectionResumeGeneration
+            else { return }
             guard phase == .signedIn,
                 let record = try? playbackPositionStore.lastPlaying(),
                 let account, record.accountID == account.id

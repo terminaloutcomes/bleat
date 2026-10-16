@@ -153,9 +153,11 @@ final class TelemetryAuthenticationTests {
         )
         await provider.setEnabled(true)
         let acquisition = Task { try await provider.currentToken() }
-        while await transport.tokenCount == 0 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetrySignal(
+                transport.tokenEntrySignal,
+                stage: "telemetry token transport entry"
+            ))
 
         let availability = await provider.cachedTokenAvailability()
         #expect(availability == .acquiring)
@@ -346,17 +348,21 @@ final class TelemetryAuthenticationTests {
         await provider.setEnabled(true)
 
         let waiter = Task { try await provider.currentToken() }
-        while await transport.tokenCount == 0 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetrySignal(
+                transport.tokenEntrySignal,
+                stage: "telemetry token transport entry"
+            ))
         waiter.cancel()
 
         await assertThrowsTelemetryError(.cancelled) {
             try await waiter.value
         }
-        while await transport.tokenCancellationCount == 0 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetrySignal(
+                transport.tokenCancellationSignal,
+                stage: "telemetry token transport cancellation"
+            ))
         let cancellationCount = await transport.tokenCancellationCount
         #expect(cancellationCount == 1)
     }
@@ -379,13 +385,18 @@ final class TelemetryAuthenticationTests {
         await provider.setEnabled(true)
 
         let cancelledWaiter = Task { try await provider.currentToken() }
-        while await transport.tokenCount == 0 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetrySignal(
+                transport.tokenEntrySignal,
+                stage: "first telemetry token transport entry"
+            ))
         let survivingWaiter = Task { try await provider.currentToken() }
-        for _ in 0..<100 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetryCondition(
+                stage: "second telemetry refresh waiter registration"
+            ) {
+                await provider.refreshWaiterCountForTesting == 2
+            })
         cancelledWaiter.cancel()
 
         await assertThrowsTelemetryError(.cancelled) {
@@ -535,9 +546,11 @@ final class TelemetryAuthenticationTests {
         )
         await provider.setEnabled(true)
         let refresh = Task { try await provider.currentToken() }
-        while await transport.tokenChallengeCount == 0 {
-            await Task.yield()
-        }
+        #expect(
+            await requireAuthTelemetrySignal(
+                transport.tokenChallengeSignal,
+                stage: "telemetry token challenge"
+            ))
         await provider.setEnabled(false)
 
         do {
@@ -783,6 +796,9 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     )!
 
     private let clock: TestClock
+    nonisolated let tokenEntrySignal = AuthTelemetryTestSignal()
+    nonisolated let tokenChallengeSignal = AuthTelemetryTestSignal()
+    nonisolated let tokenCancellationSignal = AuthTelemetryTestSignal()
     private let tokenLifetimes: [TimeInterval]
     private let tokenDelay: Duration?
     private let enrollmentFailure: TelemetryAuthenticationTransportError?
@@ -849,6 +865,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         -> TelemetryChallenge
     {
         tokenChallengeCount += 1
+        await tokenChallengeSignal.signal()
         if let tokenChallengeFailure { throw tokenChallengeFailure }
         return challenge(value: "token-challenge")
     }
@@ -861,11 +878,13 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         -> TelemetryBearerToken
     {
         tokenCount += 1
+        await tokenEntrySignal.signal()
         if let tokenDelay {
             do {
                 try await Task.sleep(for: tokenDelay)
             } catch {
                 tokenCancellationCount += 1
+                await tokenCancellationSignal.signal()
                 throw .cancelled
             }
         }

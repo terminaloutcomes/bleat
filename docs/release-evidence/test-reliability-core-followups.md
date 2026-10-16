@@ -37,8 +37,17 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::fixture` | Retain and remove the unique UserDefaults suite names created by each fixture during test cleanup. | The suites isolate test state, but are never explicitly removed; repeated runs can leave inaccessible test domains behind. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences`, `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` | The file-backed fixture cleanup also uses best-effort `try?`; use checked cleanup reporting after closing the read-only ModelContainer. | A failed temporary store removal can silently leave a large persistent test database and invalidate the cleanup claim. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`, `boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`, `observationHistoryAndPresentationAreAccountScoped` | Replace awaited AsyncStream iterator reads with bounded, source-located update/termination waits that assert the expected revision or close event. | If repository publication or termination regresses, `iterator.next()` suspends indefinitely instead of reporting which update was missing. |
-| `Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges` | Avoid changing process-global `NSTimeZone.default` while unrelated test suites may run concurrently; inject a calendar/time-zone or otherwise serialize the global mutation across all tests. | `.serialized` only orders this suite; other suites can observe the temporary Brisbane/Los Angeles process setting and become order-sensitive. |
+| `Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar` | Avoid changing process-global `NSTimeZone.default` while unrelated test suites may run concurrently; inject a calendar/time-zone or otherwise serialize the global mutation across all tests. | `.serialized` only orders this suite; other suites can observe the temporary Brisbane/Los Angeles process setting and become order-sensitive. |
 
 The PrivateCloudSync deadline cases cover intentional elapsed-time contracts and typed callback/drain outcomes; the follow-up above addresses their scheduler-sensitive timing window without removing the real deadline behavior. `LiveUpdatesTests.testRetiredStreamTerminationCannotStopReplacement` uses a two-second task-group timeout as a bounded failure path for stream delivery and asserts the received typed event.
 
 The opt-in `StatisticsExplorationTests.stored250000SlicesArchiveResetAndCachedRelaunch` is guarded by `BLEAT_STATISTICS_PERFORMANCE`; it intentionally measures real elapsed import and main-actor heartbeat behavior over 250,000 records. Its 10 ms sleep is the sampling interval, not a completion signal. It was not executed in this audit.
+
+## Timing batch status
+
+The table above retains the original source-review findings. The subsequent
+[timing and synchronization batch](test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16)
+records partial remediation and its execution evidence. Per-test `timing_batch`
+annotations in the linked audit JSON identify updated test bodies; unchanged
+findings remain open. Do not interpret the original table as a description of
+those updated implementations or as evidence that the whole backlog is closed.

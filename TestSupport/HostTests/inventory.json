@@ -544,7 +544,7 @@
     "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
     "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
     "rangeResetDiscardsGrowingSegmentAfterCheckpoint(second:)",
-    "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()",
+    "dailyBucketsAndCachedRangesUseUTCReportingCalendar()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
     "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"

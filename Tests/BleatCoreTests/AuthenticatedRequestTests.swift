@@ -45,6 +45,13 @@ final class AuthenticatedRequestTests {
                 }
             }
 
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.allUnauthorizedRequestsArrived,
+                    stage: "20 initial unauthorized requests"
+                ))
+            await transport.releaseUnauthorizedRequests()
+
             var responses: [HTTPResponse] = []
             for try await response in group {
                 responses.append(response)
@@ -124,6 +131,13 @@ final class AuthenticatedRequestTests {
                     }
                 }
             }
+
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.allUnauthorizedRequestsArrived,
+                    stage: "20 initial unauthorized requests"
+                ))
+            await transport.releaseUnauthorizedRequests()
 
             var errors: [AuthenticatedRequestError?] = []
             for await error in group {
@@ -414,6 +428,12 @@ final class AuthenticatedRequestTests {
                     )
                 }
             }
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.allUnauthorizedRequestsArrived,
+                    stage: "20 saved-login unauthorized requests"
+                ))
+            await transport.releaseUnauthorizedRequests()
             var responses: [HTTPResponse] = []
             for try await response in group {
                 responses.append(response)
@@ -1865,8 +1885,10 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     private var newAccessRequests = 0
     private var refreshRequests: [URLRequest] = []
     private var correlations: [UUID] = []
+    nonisolated let allUnauthorizedRequestsArrived = AuthTelemetryTestSignal()
     private var unauthorizedWaiters:
         [CheckedContinuation<HTTPResponse, Never>] = []
+    private var unauthorizedRequestsReleased = false
 
     init(
         unauthorizedRequestCount: Int,
@@ -1897,21 +1919,11 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
             oldAccessRequests += 1
             return await withCheckedContinuation { continuation in
                 unauthorizedWaiters.append(continuation)
-                guard
-                    unauthorizedWaiters.count
-                        == unauthorizedRequestCount
-                else {
-                    return
-                }
-                let waiters = unauthorizedWaiters
-                unauthorizedWaiters.removeAll()
-                for waiter in waiters {
-                    waiter.resume(
-                        returning: .init(
-                            data: Data(),
-                            statusCode: 401
-                        )
-                    )
+                if unauthorizedRequestsReleased {
+                    continuation.resume(returning: Self.unauthorizedResponse)
+                } else if unauthorizedWaiters.count == unauthorizedRequestCount
+                {
+                    Task { await allUnauthorizedRequestsArrived.signal() }
                 }
             }
         case "Bearer \(newTokens.accessToken)":
@@ -1941,6 +1953,19 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     func requestCorrelations() -> [UUID] {
         correlations
     }
+
+    func releaseUnauthorizedRequests() {
+        unauthorizedRequestsReleased = true
+        let waiters = unauthorizedWaiters
+        unauthorizedWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: Self.unauthorizedResponse)
+        }
+    }
+
+    private static var unauthorizedResponse: HTTPResponse {
+        .init(data: Data(), statusCode: 401)
+    }
 }
 
 private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
@@ -1948,8 +1973,10 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
     private let accessToken: String
     private var ordinaryRequests = 0
     private var refreshRequests = 0
+    nonisolated let allUnauthorizedRequestsArrived = AuthTelemetryTestSignal()
     private var unauthorizedWaiters:
         [CheckedContinuation<HTTPResponse, Never>] = []
+    private var unauthorizedRequestsReleased = false
 
     init(
         unauthorizedRequestCount: Int,
@@ -1977,15 +2004,10 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         ordinaryRequests += 1
         return await withCheckedContinuation { continuation in
             unauthorizedWaiters.append(continuation)
-            guard unauthorizedWaiters.count == unauthorizedRequestCount else {
-                return
-            }
-            let waiters = unauthorizedWaiters
-            unauthorizedWaiters.removeAll()
-            for waiter in waiters {
-                waiter.resume(
-                    returning: .init(data: Data(), statusCode: 401)
-                )
+            if unauthorizedRequestsReleased {
+                continuation.resume(returning: Self.unauthorizedResponse)
+            } else if unauthorizedWaiters.count == unauthorizedRequestCount {
+                Task { await allUnauthorizedRequestsArrived.signal() }
             }
         }
     }
@@ -1995,6 +2017,19 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         refreshRequests: Int
     ) {
         (ordinaryRequests, refreshRequests)
+    }
+
+    func releaseUnauthorizedRequests() {
+        unauthorizedRequestsReleased = true
+        let waiters = unauthorizedWaiters
+        unauthorizedWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: Self.unauthorizedResponse)
+        }
+    }
+
+    private static var unauthorizedResponse: HTTPResponse {
+        .init(data: Data(), statusCode: 401)
     }
 }
 
@@ -2154,8 +2189,10 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
     private var loginRequests = 0
     private var authorizationRequests = 0
     private var newAccessRequests = 0
+    nonisolated let allUnauthorizedRequestsArrived = AuthTelemetryTestSignal()
     private var unauthorizedWaiters:
         [CheckedContinuation<HTTPResponse, Never>] = []
+    private var unauthorizedRequestsReleased = false
 
     init(
         unauthorizedRequestCount: Int,
@@ -2202,21 +2239,11 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
             oldAccessRequests += 1
             return await withCheckedContinuation { continuation in
                 unauthorizedWaiters.append(continuation)
-                guard
-                    unauthorizedWaiters.count
-                        == unauthorizedRequestCount
-                else {
-                    return
-                }
-                let waiters = unauthorizedWaiters
-                unauthorizedWaiters.removeAll()
-                for waiter in waiters {
-                    waiter.resume(
-                        returning: .init(
-                            data: Data(),
-                            statusCode: 401
-                        )
-                    )
+                if unauthorizedRequestsReleased {
+                    continuation.resume(returning: Self.unauthorizedResponse)
+                } else if unauthorizedWaiters.count == unauthorizedRequestCount
+                {
+                    Task { await allUnauthorizedRequestsArrived.signal() }
                 }
             }
         case "Bearer \(newTokens.accessToken)":
@@ -2241,6 +2268,19 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
             authorizationRequests,
             newAccessRequests
         )
+    }
+
+    func releaseUnauthorizedRequests() {
+        unauthorizedRequestsReleased = true
+        let waiters = unauthorizedWaiters
+        unauthorizedWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: Self.unauthorizedResponse)
+        }
+    }
+
+    private static var unauthorizedResponse: HTTPResponse {
+        .init(data: Data(), statusCode: 401)
     }
 }
 

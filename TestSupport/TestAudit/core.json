@@ -2917,7 +2917,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Bounded semaphore wait blocks async test thread; replace with async notification/continuation signal and retain explicit startup bound.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC",
@@ -2956,7 +2963,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Use async bounded started signal rather than blocking the test executor.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider",
@@ -3112,7 +3126,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Replace fixed 50ms sleep with a gate that waits for all concurrent callers to join before releasing token; otherwise slow scheduling can produce multiple refreshes.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationUnblocksTokenWaitAndShutsTransportOnce",
@@ -3151,7 +3172,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Replace blocking semaphore wait with async bounded signal; inspect whether cancellation count two means cancel called once during export and once during shutdown as intended.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion",
@@ -3190,7 +3218,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Gate entry can wait forever if shutdown fails to reach closure; add bounded diagnostic wait. The close operation itself is fully awaited.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
@@ -3229,7 +3264,14 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Use async bounded stage notifications, including gate entry; retain cancellation/replacement assertions.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
@@ -3463,7 +3505,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "Task group and count assertions exercise coalescing, but transport continuations wait forever if any request fails to arrive; wrap fake barrier with bounded notification.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRejectedRefresh",
@@ -3502,7 +3551,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "Missing request can leave task group blocked; bounded gate required.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead",
@@ -3658,7 +3714,14 @@
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
       "reason": "Count barrier can hang instead of reporting missed caller; bound it.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
+      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRejectedRefreshUsesSavedPasswordAndRetriesRequest",
@@ -8464,7 +8527,14 @@
       "classification": "AsyncStream state test; local router only.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Typed event values are checked, but unbounded iterator.next can hang on missing initial or later event.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testURLSessionTransportReturnsTypedHTTPResponse",
@@ -8906,7 +8976,14 @@
         "8": "Startup and heartbeat assertions identify the failed condition; unbounded completion has no timeout diagnostic.",
         "9": "Individual and suite repetition remain pending execution."
       },
-      "review_status": "source_reviewed"
+      "review_status": "source_reviewed",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksOnDiskStorageSize",
@@ -10027,7 +10104,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testNewQuerySupersedesPendingDebounce",
@@ -10066,7 +10150,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testAccountAndLibraryChangeCancelsInFlightSearch",
@@ -10105,7 +10196,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCallerCancellationStopsPendingDebounce",
@@ -10144,7 +10242,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
@@ -10183,7 +10288,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryFailuresRemainTyped",
@@ -10222,7 +10334,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryCancellationMapsToCoordinatorCancellation",
@@ -10261,7 +10380,14 @@
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LiveUpdatesTests.swift::testRoutingAndEndpointPreferenceChangesPreservePendingConnection",
@@ -11084,7 +11210,14 @@
       "classification": "Deterministic host logout lifecycle test with actor fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Awaited start signal has no timeout and can hang if logout never reaches transport; use bounded event helper.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here."
+      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutRejectsAnOverlappingLocalLogin",
@@ -11123,7 +11256,14 @@
       "classification": "Deterministic host logout lifecycle test with actor fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Bound fake-start signals to diagnose missing login transition.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here."
+      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
@@ -11162,7 +11302,14 @@
       "classification": "Deterministic host logout lifecycle test with actor fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Replace state polling with a coordinator sign-out transition signal and make refresh-start readiness bounded; otherwise scheduling changes can spuriously fail or hang.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here."
+      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
@@ -11201,7 +11348,14 @@
       "classification": "Deterministic host logout lifecycle test with actor fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Bound both entry notifications; retain old-request-vs-logout ordering assertions.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here."
+      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
@@ -11240,7 +11394,14 @@
       "classification": "Deterministic host logout lifecycle test with actor fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Bound stage-entry waits; no timing assumptions otherwise.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here."
+      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/MetadataEditingTests.swift::testBookDetailSummaryMapsAvailableDomainFields",
@@ -11786,7 +11947,14 @@
       "classification": "Deterministic callback-boundary test; no real identity-provider session.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Use bounded async callback signal so a broken off-actor adapter fails diagnostically instead of hanging.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserFactoryMapsProviderCompletions",
@@ -11981,7 +12149,14 @@
       "classification": "Deterministic host OpenID adapter test with local fakes.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Replace helper scheduler-yield polling with bounded started signal and assert the actual session-start transition.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testPKCEUsesRFC7636ChallengeAndSecureShapes",
@@ -12371,7 +12546,14 @@
       "classification": "Deterministic host OpenID adapter test with local fakes.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testExchangeFailuresNeverPersistAndAlwaysCleanUp",
@@ -13226,7 +13408,14 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "Replace unbounded migration checkpoint entry continuation with bounded source-located notification; preserve two-caller cancellation/coalescing and 200-row checkpoint.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedStoredStateDoesNotBecomeAnEmptyDefault",
@@ -13694,7 +13883,14 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The probe entry continuation can suspend forever if cancellation never starts; replace with bounded entry notification while retaining cancellation drain ordering.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCallbackWatchdogCancellationEscapesDelegateTaskLocals",
@@ -13733,7 +13929,14 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The probe entry continuation can suspend forever if cancellation never starts; replace with bounded entry notification while retaining cancellation drain ordering.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testEveryPrivateCloudErrorPreservesDiagnosticFailureCode",
@@ -13850,7 +14053,14 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "Wall-clock deadline assertions are intentional, but fixed 600/50ms sleeps assume scheduler availability at the boundary; retain the callback deadline behavior and replace timing probes with controlled clock/typed notifications.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackProgressResetsNoProgressDeadline",
@@ -13889,7 +14099,14 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "Wall-clock deadline assertions are intentional, but fixed 600/50ms sleeps assume scheduler availability at the boundary; retain the callback deadline behavior and replace timing probes with controlled clock/typed notifications.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackFailureOverridesSuccessfulEngineCompletion",
@@ -17162,7 +17379,14 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Add an explicit signal that flush reached the blocked persistence path before checking that it remains incomplete; retain the controlled queue release and persisted-file postcondition.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testConcurrentLogShutdownCallersAwaitSharedCompletion",
@@ -17201,7 +17425,14 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Replace TestAsyncSignal shutdown-entry wait with bounded source-located signal and prove second caller joined before release; preserve single-shutdown assertion.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundStyleFlushReturnsAtItsDeadline",
@@ -18178,7 +18409,14 @@
       "timeout_tolerance": "No duration bound on expected AsyncStream events; see follow-up.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples",
@@ -18217,7 +18455,14 @@
       "timeout_tolerance": "No duration bound on expected AsyncStream events; see follow-up.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
@@ -18295,7 +18540,14 @@
       "timeout_tolerance": "No duration bound on expected AsyncStream events; see follow-up.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::unchangedPausedSamplesDoNotPublishOrFetchAndProgressSurvivesCoalescing",
@@ -18688,7 +18940,7 @@
       "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
     },
     {
-      "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges",
+      "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
         "line": 503
@@ -18724,7 +18976,14 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
@@ -19660,7 +19919,14 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConsentEnablementIsLazyAndFirstTokenEnrolls",
@@ -19894,7 +20160,14 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOneWaiterPreservesRefreshForConcurrentWaiter",
@@ -19933,7 +20206,14 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidStoredKeyClearsEnrollmentAndRestartsOnce",
@@ -20128,7 +20408,14 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTransientFailureAppliesBoundedLazyBackoff",

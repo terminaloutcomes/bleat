@@ -287,32 +287,52 @@ final class LibraryCachePerformanceTests {
 
         let probe = ReadsCompletionProbe()
         let readsTask = Task.detached {
-            for (index, request) in requests.enumerated() {
-                _ = try await cache.page(
-                    request: request,
-                    libraryID: libraryID,
-                    accountID: accountID
-                )
-                if index == 0 {
-                    await probe.markStarted()
+            do {
+                for (index, request) in requests.enumerated() {
+                    _ = try await cache.page(
+                        request: request,
+                        libraryID: libraryID,
+                        accountID: accountID
+                    )
+                    if index == 0 {
+                        await probe.markStarted()
+                    }
                 }
+                await probe.markFinished()
+            } catch {
+                await probe.markFinished()
+                throw error
             }
-            await probe.markFinished()
         }
 
         // Wait for the read workload to actually start before counting
         // heartbeat ticks. Otherwise the first main-actor hop could occur
         // before any decode is underway, and `ticks > 0` would not prove
         // the main actor stays responsive while decoding happens.
-        let startDeadline = Date().addingTimeInterval(30)
-        while Date() < startDeadline {
-            if await probe.isStarted() { break }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        let readsStarted = await probe.isStarted()
+        let startWait = await probe.waitForStarted(timeout: .seconds(30))
+        let readsActuallyStarted = await probe.isStarted()
+        let readsStarted = startWait.reached && readsActuallyStarted
         #expect(
             readsStarted,
-            "detached read workload must start before heartbeat is measured")
+            "detached read workload did not start before heartbeat measurement; elapsed \(startWait.elapsed), limit \(startWait.timeout)"
+        )
+        guard readsStarted else {
+            if startWait.reached {
+                try await readsTask.value
+                Issue.record(
+                    "Read workload finished before its first cache page completed"
+                )
+                return
+            }
+            readsTask.cancel()
+            let cancellationWait = await probe.waitForFinished(
+                timeout: .seconds(5))
+            #expect(
+                cancellationWait.reached,
+                "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
+            )
+            return
+        }
 
         var mainActorTicks = 0
         let deadline = Date().addingTimeInterval(30)
@@ -328,6 +348,21 @@ final class LibraryCachePerformanceTests {
             _ = await MainActor.run { true }
             mainActorTicks &+= 1
             try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let completionWait = await probe.waitForFinished(timeout: .seconds(5))
+        #expect(
+            completionWait.reached,
+            "detached read workload did not complete; elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+        )
+        guard completionWait.reached else {
+            readsTask.cancel()
+            let cancellationWait = await probe.waitForFinished(
+                timeout: .seconds(5))
+            #expect(
+                cancellationWait.reached,
+                "cancelled read workload did not finish cleanup; elapsed \(cancellationWait.elapsed), limit \(cancellationWait.timeout)"
+            )
+            return
         }
         try await readsTask.value
 
@@ -409,11 +444,34 @@ final class LibraryCachePerformanceTests {
 actor ReadsCompletionProbe {
     private var started = false
     private var finished = false
+    private let startOutcomeNotifications = BoundedTestCounter()
+    private let finishedNotifications = BoundedTestCounter()
 
-    func markStarted() { started = true }
-    func markFinished() { finished = true }
+    func markStarted() async {
+        guard !started else { return }
+        started = true
+        await startOutcomeNotifications.increment()
+    }
+
+    func markFinished() async {
+        guard !finished else { return }
+        finished = true
+        if !started {
+            await startOutcomeNotifications.increment()
+        }
+        await finishedNotifications.increment()
+    }
+
     func isStarted() -> Bool { started }
     func isFinished() -> Bool { finished }
+
+    func waitForStarted(timeout: Duration) async -> BoundedTestWaitResult {
+        await startOutcomeNotifications.wait(untilAtLeast: 1, timeout: timeout)
+    }
+
+    func waitForFinished(timeout: Duration) async -> BoundedTestWaitResult {
+        await finishedNotifications.wait(untilAtLeast: 1, timeout: timeout)
+    }
 }
 
 // MARK: - File helper

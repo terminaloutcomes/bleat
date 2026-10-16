@@ -760,6 +760,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private let service: any AppServicing
+    @ObservationIgnored
+    private(set) var taskCompletionProcessingSequenceForTesting = 0
     private let diagnosticEmitter: OrderedDownloadDiagnosticEmitter
     private var diagnosticSequence = 0
     private let remoteTelemetryTracer: any RemoteTelemetryTracing
@@ -5025,6 +5027,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         task: URLSessionTask,
         error: (any Error)?
     ) async {
+        defer { taskCompletionProcessingSequenceForTesting += 1 }
         guard let description = task.taskDescription,
             let descriptor = try? DownloadChunkTaskDescription.decode(
                 description

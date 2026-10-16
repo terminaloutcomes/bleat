@@ -1761,6 +1761,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 100 Task.yield calls are not a completion contract; follow-up to expose resolver completion or cancellation acknowledgment, then assert semantic postcondition."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
@@ -1863,6 +1870,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: 100 Task.yield calls are not a completion contract; follow-up needs explicit preparation cancellation/drain signal."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
@@ -3812,6 +3826,13 @@
           "outcome": "follow_up",
           "reason": "Follow up: Twenty Task.yield calls do not prove delegate handling drained. Add explicit observable callback completion or bounded asserted condition; retain the actual callback adapter scenario."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
@@ -43146,6 +43167,13 @@
           "outcome": "follow_up",
           "reason": "Replace drain-marker ordering with an explicit completion contract for retired queued callbacks; current code can pass before callback delivery."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
@@ -43225,6 +43253,13 @@
           "outcome": "follow_up",
           "reason": "Replace drain-marker ordering with an explicit completion contract for retired queued callbacks; current code can pass before callback delivery."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
@@ -43412,6 +43447,13 @@
           "outcome": "follow_up",
           "reason": "Replace drain-marker ordering with an explicit completion contract for retired queued callbacks; current code can pass before callback delivery."
         }
+      },
+      "timing_batch": {
+        "date": "2026-10-16",
+        "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
+        "status": "source_updated_execution_recorded_separately",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
+        "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       }
     },
     {
