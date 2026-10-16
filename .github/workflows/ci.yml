@@ -63,6 +63,8 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
       - name: Build and run iOS tests
+        env:
+          TEST_RUNNER_CI: "true"
         run: |
           rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
           "$RUNNER_TEMP/bleat-ci-smoke"

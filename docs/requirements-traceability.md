@@ -218,6 +218,16 @@ passed:
   respectively, each below the 1-second responsiveness threshold. The full
   300-track test completed in 3.798 seconds.
 
+The Debug CI smoke run for #322 recorded a 1.593719-second publication
+heartbeat gap, while the same base commit's CI run recorded 0.007156 seconds.
+These wall-clock probes include Simulator scheduling delays; they cannot
+distinguish a descheduled runner from application work blocking the main actor.
+CI now forwards `CI=true` through Xcode's `TEST_RUNNER_` environment
+prefix and uses a bounded 5-second maximum gap. Local runs retain 1 second;
+stage-duration limits and repair/state assertions are unchanged. The metrics
+attachment records the selected environment and gap limit. This adjustment
+has not been exercised locally; updated CI evidence is pending.
+
 This evidence covers storage pressure, repair/corruption, automatic-cache
 scope, and high-track-count responsiveness. It does not broaden or replace the
 physical-device suspension, termination, token-refresh, and connectivity-loss
