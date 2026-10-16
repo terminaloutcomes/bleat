@@ -86,9 +86,11 @@ source-located `assertEventually` helper and an `AppModelOperationEventProbe`
 in `Tests/BleatAppTests/TestAsyncGates.swift`; the audit inventory describes
 the changed selectors and helper review.
 
-The owning app-suite build and execution are pending. These annotations record
-source changes only and make no claim that any of the 71 tests ran or passed.
-Existing follow-up rows not touched by this source diff remain open.
+The post-extraction owning app run verified all 598 identities passing with zero
+skips (`.build/post-extraction-app-owning.xcresult`), including all 71 annotated
+cases. Four corrected app cases also passed twice each in the focused run
+(`.build/post-extraction-focused.xcresult`). Existing follow-up rows and the
+negative-assertion P2 below remain open; passing execution does not resolve them.
 
 The follow-on review retains a P2 in the negative request-count assertions of
 `testLiveProgressEchoDoesNotRefreshStreamedPlayback` and

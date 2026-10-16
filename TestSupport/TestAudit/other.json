@@ -2501,9 +2501,13 @@
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
-      "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-signed-in, --ui-testing-slow-transcription-cache, --ui-testing-transcription-available, --ui-testing-transcription-cache. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by app.signedIn, The Test Audiobook, book.detail.actions, book.detail.transcription, transcription.view, transcription.goToCurrentPosition. Body-specific asserted postconditions: XCTAssertTrue( XCTAssertFalse(action.exists) XCTAssertTrue(action.waitForExistence(timeout: 7))",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 7 seconds."
+      "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-signed-in, --ui-testing-gated-transcription-cache, --ui-testing-transcription-available, --ui-testing-transcription-cache. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
+      "action_postconditions": "Observe the cache fixture waiting; assert the current-position action is absent; explicitly release the fixture; assert the action and cached chapter segment appear.",
+      "synchronization_timeout": "30-second bounded gate-entry and completion UI waits; cache completion requires explicit release and never a fixed delay. View-task cancellation removes its waiter.",
+      "timing_followup": {
+        "status": "focused_repetitions_verified",
+        "note": "The original review missed the five-second fixture race. The failed owning run checked action existence at20.31s after navigation at6.49s; cache loading could legitimately finish before the assertion. Replaced elapsed-time coordination with an explicit fixture gate. Three consecutive executions passed with exact identity verification and zero skips in .build/transcript-cache-gate.xcresult; independent review found no findings."
+      }
     },
     {
       "id": "BleatUITests::testTranscriptGoToCurrentPositionExplainsUntranscribedChapter",
@@ -4518,7 +4522,7 @@
       "profile": "rust_deterministic",
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic identifiers, plist output, and checksum bytes; filesystem work is isolated in a temporary directory.",
-      "action_postconditions": "Writes the bytes `abc` to a file in an owned temporary directory, computes SHA-256, and asserts the canonical digest `ba7816…15ad`.",
+      "action_postconditions": "Writes the bytes `abc` to a file in an owned temporary directory, computes SHA-256, and asserts the canonical digest `ba7816\u202615ad`.",
       "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
     },
     {

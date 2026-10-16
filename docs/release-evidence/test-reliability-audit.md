@@ -677,3 +677,38 @@ resolve it.
 A further extraction review caught release-workflow path filters still naming
 the moved resolver sources; those filters now follow the new package. The final
 independent extraction review reported no findings.
+
+## Transcript cache gate correction (2026-10-16)
+
+`testTranscriptCurrentPositionWaitsForCacheLoad` originally depended on a
+five-second sleep in `UITestAppService.cachedChapterTranscripts`. In the retained
+owning-run log, navigation occurred at 6.49 seconds, while accessibility queries
+delayed the negative action assertion until 20.31 seconds. The fixture could
+complete normally before that assertion; this was a test synchronization race,
+not evidence that the loaded-state UI guard was missing. The view exposes the
+action only after `hasLoadedTranscriptCache` becomes true.
+
+The fixture now waits on an explicit, cancellation-aware async gate. A debug/UI
+testing-only release button appears only while a cache request is waiting. The
+test observes that state, checks the action is absent, releases the gate, and
+checks both the action and cached chapter segment appear. Cleanup releases a
+still-visible gate, and cancellation removes an owned waiter. The prior audit's
+keep decision missed this timing dependency; its follow-up annotation corrects
+that assessment without treating the earlier passing reruns as a fix.
+
+The rebuilt test passed three consecutive executions (13.318, 13.777 and
+13.656 seconds), with exact result verification reporting three passes and zero
+skips in `.build/transcript-cache-gate.xcresult`. Strict Swift formatting passed
+and independent review found no findings. No compiler overrides were used.
+This focused rerun does not claim a new full UI-suite pass. Existing Apple
+Simulator launch-measurement/accessibility diagnostics remain in the log.
+
+## Post-extraction app verification (2026-10-16)
+
+The four corrected app cases and the unchanged cache-load UI case initially
+passed twice each: ten exact outcomes with zero skips in
+`.build/post-extraction-focused.xcresult`. The owning app target then passed
+all 598 discovered identities with zero skips in
+`.build/post-extraction-app-owning.xcresult`. Neither command used compiler
+overrides. The later explicit cache gate has its separate three-run evidence
+above; a full UI suite has not been rerun after that gate change.

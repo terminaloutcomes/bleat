@@ -4114,7 +4114,7 @@ final class BleatUITests: XCTestCase {
             additionalArguments: [
                 "--ui-testing-transcription-available",
                 "--ui-testing-transcription-cache",
-                "--ui-testing-slow-transcription-cache",
+                "--ui-testing-gated-transcription-cache",
             ]
         )
 
@@ -4130,9 +4130,19 @@ final class BleatUITests: XCTestCase {
                 timeout: 3
             )
         )
+        let release = app.buttons["testing.transcriptionCache.release"]
+        XCTAssertTrue(release.waitForExistence(timeout: 30))
+        defer {
+            if release.exists { release.tap() }
+        }
         let action = app.buttons["transcription.goToCurrentPosition"]
         XCTAssertFalse(action.exists)
-        XCTAssertTrue(action.waitForExistence(timeout: 7))
+        release.tap()
+        XCTAssertTrue(action.waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            app.buttons["transcription.segment.0.0"].waitForExistence(
+                timeout: 30)
+        )
     }
 
     @MainActor
