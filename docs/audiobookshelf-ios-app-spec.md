@@ -1343,7 +1343,7 @@ Sleep timer options:
 - end of current chapter;
 - cancel/reset.
 
-Duration timers use monotonic wall time, not book time, so speed changes do not alter their duration. End-of-chapter derives the boundary from the whole-book timeline and continues to work across track boundaries. Optionally fade audio over the final 10 seconds.
+Duration timers use monotonic wall time, not book time, so speed changes do not alter their duration. End-of-chapter retains the current chapter and derives its boundary from the whole-book timeline, including across track boundaries. Seeking or selecting a different chapter re-arms it for the destination chapter; ordinary playback reaching the armed boundary pauses instead of advancing the timer. A seek outside valid chapter bounds cancels the chapter timer. Optionally fade audio over the final 10 seconds.
 
 Resume rewind is configurable: off, 5, 10, 15, or 30 seconds after a pause longer than five minutes. It must never cross before the start of the book.
 
