@@ -488,8 +488,10 @@ struct NowPlaying: View {
 
                     if let failure = failureToPresent {
                         VStack(spacing: 12) {
-                            Text(failure.title)
-                                .font(.headline)
+                            Label(
+                                failure.title, systemImage: failure.systemImage
+                            )
+                            .font(.headline)
                             Text(failure.message)
                                 .multilineTextAlignment(.center)
                                 .accessibilityIdentifier("player.error")
@@ -803,6 +805,7 @@ struct NowPlaying: View {
                     }
 
                     if case .failed(let failure) = playback.bookmarkState {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .font(.caption)
                             .foregroundStyle(.secondary)

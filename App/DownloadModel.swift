@@ -15,6 +15,45 @@ enum DownloadModelFailure: Error, Equatable, Sendable {
     case transportUnavailable
     case requestRejected(statusCode: Int)
 
+    var title: String {
+        switch self {
+        case .storageUnavailable: "Download storage unavailable"
+        case .storedEntryInvalid: "Download needs repair"
+        case .permissionDenied: "Download access denied"
+        case .localContextUnavailable(let cause):
+            switch cause {
+            case .accountMissing: "Download account missing"
+            case .recordMissing: "Download record missing"
+            case .accountMismatch: "Download account mismatch"
+            }
+        case .preparationFailed: "Download preparation failed"
+        case .repairPlanChanged: "Download files changed"
+        case .insufficientStorage: "Not enough storage"
+        case .transferFailed: "Download transfer failed"
+        case .transportUnavailable: "Download connection lost"
+        case .requestRejected: "Download request rejected"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .storageUnavailable, .insufficientStorage:
+            "externaldrive.badge.exclamationmark"
+        case .storedEntryInvalid, .repairPlanChanged:
+            "arrow.triangle.2.circlepath"
+        case .permissionDenied: "lock"
+        case .localContextUnavailable(let cause):
+            switch cause {
+            case .accountMissing, .accountMismatch:
+                "person.crop.circle.badge.exclamationmark"
+            case .recordMissing: "doc.text.magnifyingglass"
+            }
+        case .preparationFailed, .requestRejected: "exclamationmark.triangle"
+        case .transferFailed: "arrow.down.circle"
+        case .transportUnavailable: "wifi.exclamationmark"
+        }
+    }
+
     var message: String {
         switch self {
         case .storageUnavailable:

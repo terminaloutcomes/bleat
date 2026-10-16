@@ -9241,6 +9241,92 @@ final class AppModelTests: XCTestCase {
         await model.downloads.removeAll()
     }
 
+    func testAppFailuresPreserveTypedPresentation() {
+        let cases: [(AppFailureCause, String, String)] = [
+            (
+                .authenticationRequired, "Sign in again",
+                "person.crop.circle.badge.exclamationmark"
+            ),
+            (.permissionDenied, "Access denied", "lock"),
+            (.inaccessibleLibrary, "Access denied", "lock"),
+            (.rateLimited, "Too many requests", "wifi.exclamationmark"),
+        ]
+        for (cause, title, image) in cases {
+            let failure = AppFailure(.loadLibraryPage, cause)
+            XCTAssertEqual(failure.title, title)
+            XCTAssertEqual(failure.systemImage, image)
+            #if os(iOS)
+                XCTAssertNotNil(
+                    UIImage(systemName: image),
+                    "Missing failure symbol: \(image)")
+            #endif
+            XCTAssertFalse(failure.message.isEmpty)
+        }
+    }
+
+    func testDownloadFailuresPreserveTypedPresentation() {
+        let cases: [(DownloadModelFailure, String, String)] = [
+            (
+                .storageUnavailable, "Download storage unavailable",
+                "externaldrive.badge.exclamationmark"
+            ),
+            (
+                .storedEntryInvalid(.missingInode), "Download needs repair",
+                "arrow.triangle.2.circlepath"
+            ),
+            (
+                .storedEntryInvalid(.invalidTaskIdentity),
+                "Download needs repair", "arrow.triangle.2.circlepath"
+            ),
+            (.permissionDenied, "Download access denied", "lock"),
+            (
+                .localContextUnavailable(.accountMissing),
+                "Download account missing",
+                "person.crop.circle.badge.exclamationmark"
+            ),
+            (
+                .localContextUnavailable(.recordMissing),
+                "Download record missing", "doc.text.magnifyingglass"
+            ),
+            (
+                .localContextUnavailable(.accountMismatch),
+                "Download account mismatch",
+                "person.crop.circle.badge.exclamationmark"
+            ),
+            (
+                .preparationFailed, "Download preparation failed",
+                "exclamationmark.triangle"
+            ),
+            (
+                .repairPlanChanged, "Download files changed",
+                "arrow.triangle.2.circlepath"
+            ),
+            (
+                .insufficientStorage(requiredBytes: 1000, availableBytes: 500),
+                "Not enough storage", "externaldrive.badge.exclamationmark"
+            ),
+            (.transferFailed, "Download transfer failed", "arrow.down.circle"),
+            (
+                .transportUnavailable, "Download connection lost",
+                "wifi.exclamationmark"
+            ),
+            (
+                .requestRejected(statusCode: 403), "Download request rejected",
+                "exclamationmark.triangle"
+            ),
+        ]
+        for (failure, title, image) in cases {
+            XCTAssertEqual(failure.title, title)
+            XCTAssertEqual(failure.systemImage, image)
+            #if os(iOS)
+                XCTAssertNotNil(
+                    UIImage(systemName: image),
+                    "Missing failure symbol: \(image)")
+            #endif
+            XCTAssertFalse(failure.message.isEmpty)
+        }
+    }
+
     func testDownloadFailuresHaveDistinctMessages() {
         let failures: [DownloadModelFailure] = [
             .storageUnavailable,

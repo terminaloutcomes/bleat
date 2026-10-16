@@ -837,6 +837,7 @@ private struct NativeLoginView: View {
 
                 if case .failed(let failure) = model.loginStatus {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("login.error")
@@ -880,6 +881,8 @@ private struct NativeLoginView: View {
                         if case .failed(let failure) =
                             model.cloudAccountRestoreState
                         {
+                            Label(
+                                failure.title, systemImage: failure.systemImage)
                             Text(failure.message)
                                 .foregroundStyle(.red)
                                 .accessibilityIdentifier(
@@ -1220,6 +1223,7 @@ private struct AccountEditorView: View {
 
                 if case .failed(let failure) = model.loginStatus {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                             .accessibilityIdentifier(
@@ -1277,6 +1281,7 @@ private struct AccountEditorView: View {
 
                 if case .failed(let failure) = model.accountActionStatus {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                     }
@@ -2840,18 +2845,19 @@ private struct HomeContent: View {
                 if downloadedRecords.isEmpty {
                     statusScroll {
                         ContentUnavailableView(
-                            "Home unavailable",
-                            systemImage: "wifi.exclamationmark",
+                            failure.title,
+                            systemImage: failure.systemImage,
                             description: Text(failure.message)
                         )
                         .accessibilityIdentifier("home.error")
                     }
                 } else {
                     homeScroll(shelves: []) {
-                        Label(
-                            failure.message,
-                            systemImage: "wifi.exclamationmark"
-                        )
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(
+                                failure.title, systemImage: failure.systemImage)
+                            Text(failure.message)
+                        }
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                         .accessibilityIdentifier("home.error")
@@ -3548,6 +3554,9 @@ private struct BookListContent: View {
                             .accessibilityIdentifier("books.loadingMore")
                         case .failed(let failure):
                             VStack(alignment: .leading, spacing: 8) {
+                                Label(
+                                    failure.title,
+                                    systemImage: failure.systemImage)
                                 Text(failure.message)
                                     .foregroundStyle(.secondary)
                                 Button("Try Again") {
@@ -3610,8 +3619,8 @@ private struct BookListContent: View {
 
     private func failureView(_ failure: AppFailure) -> some View {
         ContentUnavailableView(
-            "Library unavailable",
-            systemImage: "wifi.exclamationmark",
+            failure.title,
+            systemImage: failure.systemImage,
             description: Text(failure.message)
         )
     }
@@ -3624,10 +3633,10 @@ struct RefreshFailureBanner: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Label(
-                failure.message,
-                systemImage: "wifi.exclamationmark"
-            )
+            VStack(alignment: .leading, spacing: 4) {
+                Label(failure.title, systemImage: failure.systemImage)
+                Text(failure.message)
+            }
             .foregroundStyle(.secondary)
             Spacer(minLength: 8)
             if failure.allowsRetry {
@@ -3712,8 +3721,8 @@ private struct SearchView: View {
                 .accessibilityIdentifier("search.loading")
         case .failed(let failure):
             ContentUnavailableView(
-                "Search unavailable",
-                systemImage: "wifi.exclamationmark",
+                failure.title,
+                systemImage: failure.systemImage,
                 description: Text(failure.message)
             )
             .accessibilityIdentifier("search.error")
@@ -4889,8 +4898,8 @@ private struct BookDetailView: View {
             .accessibilityIdentifier("book.detail.error")
         } else {
             ContentUnavailableView(
-                "Audiobook unavailable",
-                systemImage: "wifi.exclamationmark",
+                failure.title,
+                systemImage: failure.systemImage,
                 description: Text(failure.message)
             )
             .accessibilityIdentifier("book.detail.error")
@@ -5280,6 +5289,7 @@ private struct BookDetailView: View {
                 }
             case .failed(let failure):
                 VStack(alignment: .leading, spacing: 8) {
+                    Label(failure.title, systemImage: failure.systemImage)
                     Text(failure.message)
                         .foregroundStyle(.secondary)
                     Button("Retry") {
@@ -5820,15 +5830,15 @@ private struct StatisticsView: View {
                     if let failure = model.statisticsHistoryFailure {
                         Section {
                             Label(
-                                failure.message,
-                                systemImage: failure.systemImage)
+                                failure.title, systemImage: failure.systemImage)
+                            Text(failure.message)
                         }
                     }
                     if let failure = model.statisticsArchiveFailure {
                         Section {
                             Label(
-                                failure.message,
-                                systemImage: failure.systemImage)
+                                failure.title, systemImage: failure.systemImage)
+                            Text(failure.message)
                         }
                     }
                     Section("History") {
@@ -5836,11 +5846,20 @@ private struct StatisticsView: View {
                             if selectedAccountID == nil
                                 || selectedAccountID == account.id
                             {
+                                let historyState = model.statisticsHistoryState(
+                                    for: account)
                                 LabeledContent(accountLabel(account)) {
-                                    Text(
-                                        historyLabel(
-                                            model.statisticsHistoryState(
-                                                for: account)))
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        if case .failed(let failure, _) =
+                                            historyState
+                                        {
+                                            Label(
+                                                failure.title,
+                                                systemImage: failure.systemImage
+                                            )
+                                        }
+                                        Text(historyLabel(historyState))
+                                    }
                                 }
 
                             }
@@ -6152,6 +6171,7 @@ private struct SettingsView: View {
 
                 if case .failed(let failure) = model.accountActionStatus {
                     Section {
+                        Label(failure.title, systemImage: failure.systemImage)
                         Text(failure.message)
                             .foregroundStyle(.red)
                     }
@@ -6558,6 +6578,7 @@ private struct SettingsView: View {
                 ProgressView("Resetting local data…")
             }
             if let failure = model.localDataResetFailure {
+                Label(failure.title, systemImage: failure.systemImage)
                 Text(failure.message)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("settings.resetLocalData.error")
@@ -6656,11 +6677,13 @@ private struct SettingsView: View {
             }
 
             if case .failed(let failure) = model.privateCloudState {
+                Label(failure.title, systemImage: failure.systemImage)
                 Text(failure.message)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("settings.icloud.error")
             }
             if case .stopping(let failure) = model.privateCloudState {
+                Label(failure.title, systemImage: failure.systemImage)
                 Text(failure.message)
                     .foregroundStyle(.red)
             }
@@ -6744,10 +6767,10 @@ private struct DownloadStorageView: View {
         .safeAreaInset(edge: .top) {
             if let failure = model.downloads.presentedFailure {
                 HStack {
-                    Label(
-                        failure.message,
-                        systemImage: "externaldrive.badge.exclamationmark"
-                    )
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(failure.title, systemImage: failure.systemImage)
+                        Text(failure.message)
+                    }
                     .font(.callout)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("downloads.error")
