@@ -1,6 +1,9 @@
+#[cfg(target_os = "macos")]
 use build_scripts::release_version_check::ReleaseVersionError;
 
+#[cfg(target_os = "macos")]
 const PROJECT: &str = "targets:\n  BleatApp:\n    settings:\n      base:\n        MARKETING_VERSION: \"2026.10.11\"\n        CURRENT_PROJECT_VERSION: \"20261011.0102.03\"\n";
+#[cfg(target_os = "macos")]
 const CHANGELOG: &str = "# Changelog\n\n## 2026.10.11 - 2026-10-11\n\n### Fixed\n\n- Fixed startup recovery.\n\n## 2026.10.08 - 2026-10-08\n\n- Older release.\n";
 
 #[cfg(target_os = "macos")]

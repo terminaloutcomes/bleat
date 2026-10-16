@@ -103,6 +103,8 @@ targets:
           - "$(SRCROOT)/Cargo.lock"
           - "$(SRCROOT)/.cargo"
           - "$(SRCROOT)/build-scripts"
+          - "$(SRCROOT)/bleat-api"
+          - "$(SRCROOT)/scripts"
           - "$(SRCROOT)/project.yml"
           - "$(SRCROOT)/CHANGELOG.md"
           - "$(SRCROOT)/Bleat.xcodeproj/project.pbxproj"

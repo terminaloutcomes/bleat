@@ -391,7 +391,8 @@ xcodegen generate
 ```
 
 Xcode's `Prepare Build Metadata` phase runs with user script sandboxing enabled.
-It declares its repository inputs with recursive directory access, builds the Rust
+It declares all Cargo workspace member directories as inputs because Cargo reads
+every member manifest even when selecting one package. It builds the Rust
 helpers from the isolated `build-scripts` package even for iOS destinations, and runs the release and
 capability validators. The metadata helper reads the platform's `App/Info.plist`
 or `App/Info-macOS.plist` template and Git HEAD, then writes `Bleat-Info.plist` in
@@ -404,7 +405,7 @@ plist.
 When changing build phases, validate from canonical filesystem paths: a `/tmp`
 alias can prevent sandbox rules from restricting the underlying `/private/tmp`
 checkout. Focused helper regressions run with
-`cargo test --locked -p scripts --test build_metadata --test release_version_check`;
+`cargo test --locked -p build-scripts --test build_metadata --test release_version_check`;
 `BleatAppTests/AppMetadataTests` also checks metadata in the built app bundle.
 
 ## Disposable-server validation

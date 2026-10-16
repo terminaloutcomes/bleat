@@ -243,6 +243,29 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    async fn read_request_headers(stream: &mut tokio::net::TcpStream) -> std::io::Result<Vec<u8>> {
+        const MAX_HEADER_BYTES: usize = 16 * 1024;
+        let mut request = Vec::new();
+        loop {
+            let read = stream.read_buf(&mut request).await?;
+            if read == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "connection closed before request headers completed",
+                ));
+            }
+            if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                return Ok(request);
+            }
+            if request.len() >= MAX_HEADER_BYTES {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "request headers exceeded fixture limit",
+                ));
+            }
+        }
+    }
+
     fn preferences(receipt: bool) -> Vec<u8> {
         let mut values = plist::Dictionary::new();
         values.insert(
@@ -352,8 +375,10 @@ mod tests {
                 "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nready",
             ] {
                 let (mut stream, _) = listener.accept().await.expect("accept request");
-                let mut request = [0; 4096];
-                stream.read(&mut request).await.expect("read request");
+                let request = read_request_headers(&mut stream)
+                    .await
+                    .expect("read complete request headers");
+                assert!(request.starts_with(b"GET / HTTP/1.1\r\n"));
                 stream.write_all(response.as_bytes()).await.expect("reply");
             }
         });
@@ -421,8 +446,10 @@ mod tests {
         let mut tasks = tokio::task::JoinSet::new();
         tasks.spawn(async move {
             let (mut stream, _) = listener.accept().await.expect("accept request");
-            let mut request = [0; 4096];
-            stream.read(&mut request).await.expect("read request");
+            let request = read_request_headers(&mut stream)
+                .await
+                .expect("read complete request headers");
+            assert!(request.starts_with(b"GET / HTTP/1.1\r\n"));
             stream
                 .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n")
                 .await

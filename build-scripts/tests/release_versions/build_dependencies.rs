@@ -122,3 +122,58 @@ fn build_dependency_tree_excludes_operational_and_native_tooling() {
         );
     }
 }
+
+#[test]
+fn xcode_sandbox_can_read_every_cargo_workspace_member() {
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace");
+    let project = fs::read_to_string(repository.join("project.yml")).expect("project");
+    let documents = yaml_rust::YamlLoader::load_from_str(&project).expect("project YAML");
+    let phase = documents[0]["targets"]["BleatApp"]["preBuildScripts"]
+        .as_vec()
+        .expect("phases")
+        .iter()
+        .find(|phase| phase["name"].as_str() == Some("Prepare Build Metadata"))
+        .expect("metadata phase");
+    let inputs: Vec<_> = phase["inputFiles"]
+        .as_vec()
+        .expect("input files")
+        .iter()
+        .map(|input| {
+            repository.join(
+                input
+                    .as_str()
+                    .expect("input path")
+                    .trim_start_matches("$(SRCROOT)/"),
+            )
+        })
+        .collect();
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "metadata",
+            "--locked",
+            "--offline",
+            "--no-deps",
+            "--format-version",
+            "1",
+        ])
+        .current_dir(repository)
+        .output()
+        .expect("workspace metadata");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("metadata JSON");
+    for package in metadata["packages"].as_array().expect("packages") {
+        let manifest = Path::new(package["manifest_path"].as_str().expect("manifest path"));
+        assert!(
+            inputs.iter().any(|input| manifest.starts_with(input)),
+            "Cargo must read every workspace member even when building only build-scripts: {}",
+            package["name"]
+        );
+    }
+}
