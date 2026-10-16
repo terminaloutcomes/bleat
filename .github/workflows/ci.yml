@@ -65,9 +65,7 @@ jobs:
       - name: Build and run iOS tests
         env:
           TEST_RUNNER_CI: "true"
-        run: |
-          rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
-          "$RUNNER_TEMP/bleat-ci-smoke"
+        run: cargo run --locked --package scripts --bin ci-smoke
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
