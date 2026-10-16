@@ -4411,10 +4411,7 @@ private struct BookDetailDownloadControls: View {
                                     Text(downloadBytes(record))
                                         .foregroundStyle(.secondary)
                                 }
-                                .fixedSize(
-                                    horizontal: true,
-                                    vertical: false
-                                )
+                                .fixedSize(horizontal: false, vertical: true)
                             }
                             .accessibilityElement(children: .combine)
                             .accessibilityIdentifier(

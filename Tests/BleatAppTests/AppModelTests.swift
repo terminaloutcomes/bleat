@@ -5304,6 +5304,10 @@ final class AppModelTests: XCTestCase {
         let planningThreshold = 1.0
         let reconciliationThreshold = 5.0
         let publicationThreshold = 5.0
+        // Shared CI runners can deschedule the entire Simulator. Keep a
+        // bounded smoke budget there and the stricter local responsiveness gate.
+        let isCI = ProcessInfo.processInfo.environment["CI"] == "true"
+        let mainActorGapThreshold = isCI ? 5.0 : 1.0
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatIssue151Performance-\(UUID().uuidString)",
@@ -5631,16 +5635,21 @@ final class AppModelTests: XCTestCase {
             publicationThreshold
         )
         XCTAssertGreaterThan(planning.heartbeatCount, 0)
-        XCTAssertLessThan(planning.maximumMainActorGap, 1.0)
+        XCTAssertLessThan(
+            planning.maximumMainActorGap, mainActorGapThreshold)
         XCTAssertGreaterThan(reconciliation.heartbeatCount, 0)
-        XCTAssertLessThan(reconciliation.maximumMainActorGap, 1.0)
+        XCTAssertLessThan(
+            reconciliation.maximumMainActorGap, mainActorGapThreshold)
         XCTAssertGreaterThan(publication.heartbeatCount, 0)
-        XCTAssertLessThan(publication.maximumMainActorGap, 1.0)
+        XCTAssertLessThan(
+            publication.maximumMainActorGap, mainActorGapThreshold)
 
         let summary = """
             Download performance evidence: Issue #151
             fixture.trackCount: \(trackCount)
             fixture.trackBytes: 1
+            environment.ci: \(isCI)
+            mainActor.maxGap.threshold.seconds: \(mainActorGapThreshold)
             planning.seconds: \(String(format: "%.6f", planning.elapsedSeconds))
             planning.threshold.seconds: \(planningThreshold)
             planning.mainActor.maxGap.seconds: \(String(format: "%.6f", planning.maximumMainActorGap))
