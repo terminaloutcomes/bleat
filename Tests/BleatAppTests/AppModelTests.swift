@@ -5635,12 +5635,14 @@ final class AppModelTests: XCTestCase {
             publicationThreshold
         )
         XCTAssertGreaterThan(planning.heartbeatCount, 0)
-        XCTAssertLessThan(planning.maximumMainActorGap, mainActorGapThreshold)
+        XCTAssertLessThan(
+            planning.maximumMainActorGap, mainActorGapThreshold)
         XCTAssertGreaterThan(reconciliation.heartbeatCount, 0)
         XCTAssertLessThan(
             reconciliation.maximumMainActorGap, mainActorGapThreshold)
         XCTAssertGreaterThan(publication.heartbeatCount, 0)
-        XCTAssertLessThan(publication.maximumMainActorGap, mainActorGapThreshold)
+        XCTAssertLessThan(
+            publication.maximumMainActorGap, mainActorGapThreshold)
 
         let summary = """
             Download performance evidence: Issue #151
