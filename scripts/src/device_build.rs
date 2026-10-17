@@ -219,7 +219,9 @@ pub fn run() -> Result<BuiltDeviceApp, DeviceBuildError> {
         .arg(format!("BLEAT_TELEMETRY_AUTH_BASE_URL={}", config.auth_url))
         .arg(format!("BLEAT_TELEMETRY_OTLP_ENDPOINT={}", config.otlp_url))
         .arg("build");
-    eprintln!("Building Bleat for the configured device");
+    eprintln!(
+        "Building Bleat for the configured device, this will take at least four minutes - do not poll before then."
+    );
     let status = command
         .status()
         .map_err(|source| DeviceBuildError::CommandStart {
