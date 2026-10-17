@@ -560,6 +560,24 @@ private struct CoordinatedLibraryPageKey: Hashable, Sendable {
     let request: LibraryItemsPageRequest
 }
 
+enum AppModelOperationEvent: Equatable, Sendable {
+    case liveUpdateConsumed
+    case liveRefreshScheduled
+    case liveRefreshStarted
+    case liveRefreshCompleted
+    case networkPathObserverStarted
+    case networkPathApplied
+    case networkPathStateApplied(AppNetworkPathState)
+    case coordinatedPageRequested(AccountID, LibraryID, Int)
+    case seriesPreparationCompleted(SeriesID)
+    case seriesSubmissionWaiting(AccountID, SeriesID)
+    case localSessionSyncStarted(AccountID)
+    case localSessionSyncCompleted(AccountID)
+    case bookProgressReconciliationStarted(AccountID, LibraryItemID)
+    case bookProgressReconciliationCompleted(AccountID, LibraryItemID)
+    case bookDeletionStarted(AccountID, LibraryItemID)
+}
+
 private struct CoordinatedLibraryPageTask {
     let id: UUID
     let task: Task<CoordinatedLibraryPageResult, Never>
@@ -1513,6 +1531,8 @@ final class AppModel {
         any RemoteTelemetryConsentApplying
     private let remoteTelemetryTracer: any RemoteTelemetryTracing
     private let initialLaunchStage: AppLaunchStage
+    private let operationObserver:
+        (@MainActor @Sendable (AppModelOperationEvent) -> Void)?
     private var hasStarted = false
     private var librariesGeneration: UInt64 = 0
     private(set) var libraryPageGeneration: UInt64 = 0
@@ -1888,6 +1908,9 @@ final class AppModel {
             InactiveRemoteTelemetryConsentController(),
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer(),
+        operationObserver:
+            (@MainActor @Sendable (AppModelOperationEvent) -> Void)? = nil,
+        localSessionStore: LocalPlaybackSessionStore = .shared,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore = .shared,
@@ -1925,6 +1948,7 @@ final class AppModel {
         self.remoteTelemetryConsentController =
             remoteTelemetryConsentController
         self.remoteTelemetryTracer = remoteTelemetryTracer
+        self.operationObserver = operationObserver
         self.bookProgressOperationTimeout = bookProgressOperationTimeout
         self.bookDetailOperationTimeout = bookDetailOperationTimeout
         self.bookProgressSleep = bookProgressSleep
@@ -1943,6 +1967,7 @@ final class AppModel {
             playbackPositionStore: playbackPositionStore,
             nowPlayingCoordinator: nowPlayingCoordinator,
             remoteTelemetryTracer: remoteTelemetryTracer,
+            localSessionStore: localSessionStore,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
             downloadRemovalStorageCheckpoint:
                 downloadRemovalStorageCheckpoint
@@ -2096,6 +2121,7 @@ final class AppModel {
         playbackPositionStore: PlaybackPositionStore,
         nowPlayingCoordinator: NowPlayingCoordinator?,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
+        localSessionStore: LocalPlaybackSessionStore,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging,
         downloadRemovalStorageCheckpoint:
             @escaping @MainActor @Sendable () async throws -> Void
@@ -2103,6 +2129,7 @@ final class AppModel {
         let playback = PlaybackModel(
             service: service,
             positionStore: playbackPositionStore,
+            localSessionStore: localSessionStore,
             nowPlayingCoordinator: nowPlayingCoordinator
                 ?? NowPlayingCoordinator(),
             diagnostics: diagnostics,
@@ -2147,6 +2174,8 @@ final class AppModel {
     private var bootstrapTask: Task<Void, Never>?
     private var selectionResumeTask: Task<Void, Never>?
     private var selectionResumeGeneration: UInt64 = 0
+    @ObservationIgnored
+    private(set) var selectionResumeCompletionSequenceForTesting = 0
     var selectionResumeFailure: AppFailure?
 
     func dismissSelectionResumeFailure() {
@@ -3880,6 +3909,9 @@ final class AppModel {
                 destination: destination,
                 result: result
             )
+            self.operationObserver?(
+                .seriesPreparationCompleted(destination.id)
+            )
         }
         seriesDownloadPreparationTasks[key] = task
         return true
@@ -3909,7 +3941,14 @@ final class AppModel {
         let predecessor = seriesDownloadSubmissionTails[request.account.id]
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            await predecessor?.task.value
+            if let predecessor {
+                self.operationObserver?(
+                    .seriesSubmissionWaiting(
+                        request.account.id, request.destination.id
+                    )
+                )
+                await predecessor.task.value
+            }
             if !Task.isCancelled {
                 await self.submitSeriesDownload(request)
             }
@@ -3938,6 +3977,11 @@ final class AppModel {
         libraryID: LibraryID,
         request: LibraryItemsPageRequest
     ) async -> CoordinatedLibraryPageResult {
+        operationObserver?(
+            .coordinatedPageRequested(
+                account.id, libraryID, request.page
+            )
+        )
         let key = CoordinatedLibraryPageKey(
             accountID: account.id,
             libraryID: libraryID,
@@ -4711,6 +4755,7 @@ final class AppModel {
             return
         }
         bookDeletionState = .deleting
+        operationObserver?(.bookDeletionStarted(account.id, detail.id))
 
         let deletionTarget = PlaybackStartTarget(
             accountID: account.id,
@@ -5148,19 +5193,28 @@ final class AppModel {
     ) {
         let query = searchQuery
         let task = Task { @MainActor [weak self] in
-            guard let self,
+            guard let self else { return }
+            operationObserver?(
+                .bookProgressReconciliationStarted(key.accountID, key.itemID)
+            )
+            defer {
+                operationObserver?(
+                    .bookProgressReconciliationCompleted(
+                        key.accountID, key.itemID
+                    )
+                )
+                finishBookProgressReconciliation(
+                    key: key,
+                    revision: revision
+                )
+            }
+            guard
                 isCurrentBookProgressMutation(
                     key: key,
                     contextGeneration: contextGeneration,
                     revision: revision
                 )
             else { return }
-            defer {
-                finishBookProgressReconciliation(
-                    key: key,
-                    revision: revision
-                )
-            }
             if selectedBookID == detail.id {
                 do {
                     let reconciled = try await service.refreshedBookDetail(
@@ -5430,14 +5484,15 @@ final class AppModel {
         let generation = selectionResumeGeneration
         selectionResumeTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await start()
-            guard !Task.isCancelled, generation == selectionResumeGeneration
-            else { return }
             defer {
+                selectionResumeCompletionSequenceForTesting += 1
                 if generation == selectionResumeGeneration {
                     selectionResumeTask = nil
                 }
             }
+            await start()
+            guard !Task.isCancelled, generation == selectionResumeGeneration
+            else { return }
             guard phase == .signedIn,
                 let record = try? playbackPositionStore.lastPlaying(),
                 let account, record.accountID == account.id
@@ -7201,12 +7256,15 @@ final class AppModel {
                 return
             }
             let updates = await service.networkPathUpdates()
+            operationObserver?(.networkPathObserverStarted)
             for await state in updates {
                 guard !Task.isCancelled else {
                     return
                 }
+                defer { operationObserver?(.networkPathStateApplied(state)) }
                 let previousState = networkPathState
                 networkPathState = state
+                operationObserver?(.networkPathApplied)
                 switch state.change(from: previousState) {
                 case .duplicatePath, .qualityOnly: continue
                 default: break
@@ -7280,7 +7338,9 @@ final class AppModel {
             }
             while let next = pendingLocalSessionSyncAccounts.values.first {
                 pendingLocalSessionSyncAccounts[next.id] = nil
+                operationObserver?(.localSessionSyncStarted(next.id))
                 await playback.syncPendingLocalSessions(for: next)
+                operationObserver?(.localSessionSyncCompleted(next.id))
             }
             localSessionSyncTask = nil
             if !pendingLocalSessionSyncAccounts.isEmpty {
@@ -7375,6 +7435,7 @@ final class AppModel {
                 else {
                     return
                 }
+                defer { operationObserver?(.liveUpdateConsumed) }
                 switch update {
                 case .connection(let state):
                     liveUpdateConnectionState = state
@@ -7501,6 +7562,7 @@ final class AppModel {
         else {
             return
         }
+        operationObserver?(.liveRefreshScheduled)
         pendingLiveLibraryRefresh =
             pendingLiveLibraryRefresh || libraryChanged
         pendingLiveItemIDs.formUnion(itemIDs)
@@ -7511,7 +7573,9 @@ final class AppModel {
         let generation = liveRefreshGeneration
         liveRefreshTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            operationObserver?(.liveRefreshStarted)
             defer {
+                operationObserver?(.liveRefreshCompleted)
                 if liveRefreshGeneration == generation { liveRefreshTask = nil }
             }
             repeat {

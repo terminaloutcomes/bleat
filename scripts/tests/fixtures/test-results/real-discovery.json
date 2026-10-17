@@ -1,0 +1,16 @@
+{
+  "errors": [],
+  "values": [
+    {
+      "enabledTests": [
+        {
+          "identifier": "BleatAppTests/AppModelTests/testScrubberSeekDecisionConfirmsTenMinuteJumpsInEitherDirection()"
+        },
+        {
+          "identifier": "BleatAppTests/AppModelTests/testSignedInAlertQueueSerializesAndResetsForAccountChange()"
+        }
+      ],
+      "disabledTests": []
+    }
+  ]
+}

@@ -65,9 +65,7 @@ jobs:
       - name: Build and run iOS tests
         env:
           TEST_RUNNER_CI: "true"
-        run: |
-          rustc --edition=2024 scripts/src/bin/ci-smoke.rs -o "$RUNNER_TEMP/bleat-ci-smoke"
-          "$RUNNER_TEMP/bleat-ci-smoke"
+        run: cargo run --locked --package scripts --bin ci-smoke
       - name: Generate Swift smoke coverage
         run: |
           bundle exec slather coverage
@@ -90,7 +88,9 @@ jobs:
         if: always()
         with:
           name: ios-smoke-results
-          path: .build/ci-smoke/results.xcresult
+          path: |
+            .build/ci-smoke/*.xcresult
+            .build/ci-smoke/*.discovery.json
           retention-days: 7
           if-no-files-found: warn
       - name: Seed iOS Swift packages from successful main validation

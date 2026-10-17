@@ -291,10 +291,27 @@ resolution, and temporary directories outside the repository.
   broaden the requested task scope. Preserve user-managed processes, devices,
   credentials, containers, and unrelated local state.
 
+## Waiting for commands and CI
+
+- Start a command or workflow once, then wait for completion using the execution
+  tool's blocking wait, completion notification, or native workflow wait command.
+  Do not repeatedly inspect logs or query status while it is still running.
+- If no completion-wait mechanism exists, use infrequent checks with increasing
+  intervals appropriate to the expected runtime. Do not build short sleep/poll
+  loops or repeatedly wake just to discover that nothing has changed.
+- Stay quiet while waiting. Do not send unchanged-status updates, running pass
+  counts, or messages saying that execution is still pending. Report the verified
+  final result once; interrupt only for a concrete failure needing action, required
+  user input, or an explicit user request for progress.
+- After completion, inspect the final logs and artifacts and verify the actual
+  outcome before reporting success or diagnosing a failure.
+
 ## Tests and validation
 
 Use `docs/development.md` as the canonical reference for supported test and
 validation commands.
+Follow [test reliability rules](docs/test-reliability.md) for test setup,
+semantic postconditions, bounded synchronization, diagnostics, and audit evidence.
 
 Put tests in test targets, not production entry points. Add focused tests with
 each implementation change and use versioned saved fixtures for response
@@ -379,7 +396,7 @@ Simulator test.
 
 `MARKETING_VERSION` in `project.yml` is the application version source of
 truth. Distributable builds use the UTC timestamp build number resolved by
-`scripts/src/bin/resolve-build-number.rs`; `CURRENT_PROJECT_VERSION` is only the
+`build-scripts/src/bin/resolve-build-number.rs`; `CURRENT_PROJECT_VERSION` is only the
 project fallback for ordinary builds. When changing either project setting,
 regenerate `Bleat.xcodeproj/` with `xcodegen generate`; never edit generated
 version settings directly.

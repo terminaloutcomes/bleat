@@ -4,8 +4,10 @@ set -euo pipefail
 readonly project_name="bleat-telemetry-test-$$"
 readonly compose_file="bleat-api/compose.yml"
 readonly port_base="$((20000 + RANDOM % 19990))"
-readonly artifact_root="TestSupport/ServerHarness/artifacts/telemetry"
+artifact_root="$(cargo run --quiet --locked --package scripts --bin runner-readiness -- artifact-directory --root TestSupport/ServerHarness/artifacts/telemetry)"
+readonly artifact_root
 readonly temporary_capture="$(mktemp -d /tmp/bleat-telemetry-capture.XXXXXX)"
+readonly swift_report_root="${PWD}/.build/swiftpm-test-results/${project_name}"
 readonly database_password="test-${project_name}-${RANDOM}"
 readonly captured_data_prohibited_pattern='authorization|bearer|telemetry:write|installation|reader@example\.com|books\.example|secret audiobook|refresh-token|private/var|transcript words|search phrase|session/opaque'
 test_succeeded=0
@@ -90,17 +92,22 @@ for test_suite in \
   TelemetryAuthenticationTests \
   AuthenticatedOtlpSpanExporterTests \
   RemoteTelemetryTests; do
-  swift test --disable-xctest --no-parallel --filter "${test_suite}"
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/${test_suite}.xml" -- swift test \
+    --disable-xctest --no-parallel --filter "${test_suite}"
 done
-swift test --filter TelemetryLiveTestConfigurationTests
+cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+  --report "${swift_report_root}/TelemetryLiveTestConfigurationTests.xml" -- swift test \
+  --no-parallel \
+  --filter TelemetryLiveTestConfigurationTests
 
 mise run "api:test"
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   up --detach --build --wait api
 
-curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
-curl --silent --fail "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
+cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url "http://127.0.0.1:${BLEAT_API_TEST_PORT}/healthz" >/dev/null
+cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url "http://127.0.0.1:${BLEAT_API_TEST_PORT}/readyz" >/dev/null
 
 docker compose --project-name "${project_name}" --file "${compose_file}" \
   run --rm --no-deps telemetry-collector validate --config=/etc/otelcol/config.yaml
@@ -133,11 +140,7 @@ docker compose --project-name "${project_name}" --file "${compose_file}" \
 for health_port in \
   "${BLEAT_TELEMETRY_COLLECTOR_HEALTH_TEST_PORT}" \
   "${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_HEALTH_TEST_PORT}"; do
-  for _ in {1..30}; do
-    curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null && break
-    sleep 1
-  done
-  curl --silent --fail "http://127.0.0.1:${health_port}/" >/dev/null
+  cargo run --quiet --locked --package scripts --bin runner-readiness -- http --wait-seconds 30 --url "http://127.0.0.1:${health_port}/" >/dev/null
 done
 
 readonly capture_container="$(docker compose --project-name "${project_name}" \
@@ -162,27 +165,39 @@ fi
 # points at production in local development; reusing it here causes the
 # production verifier to reject the development envelope with HTTP 401.
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
-  swift test --filter TelemetryAuthenticationLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/TelemetryAuthenticationLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter TelemetryAuthenticationLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
-  swift test --filter AuthenticatedOtlpSpanExporterLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/AuthenticatedOtlpSpanExporterLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter AuthenticatedOtlpSpanExporterLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_TEST_PORT}" \
-  swift test --filter OpenTelemetryCollectorLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/OpenTelemetryCollectorLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter OpenTelemetryCollectorLiveTests
 
 BLEAT_TELEMETRY_TEST_AUTH_BASE_URL="http://127.0.0.1:${BLEAT_API_TEST_PORT}" \
 BLEAT_TELEMETRY_COLLECTOR_TEST_PORT="${BLEAT_TELEMETRY_COLLECTOR_TEST_PORT}" \
 BLEAT_TELEMETRY_CONTROL_COMMAND="${PWD}/scripts/control-telemetry-test-service.sh" \
 BLEAT_TELEMETRY_COMPOSE_PROJECT="${project_name}" \
-  swift test --filter TelemetryRecoveryLiveTests
+  cargo run --quiet --locked --package scripts --bin swift-test-results -- \
+    --report "${swift_report_root}/TelemetryRecoveryLiveTests.xml" -- swift test \
+    --no-parallel \
+    --filter TelemetryRecoveryLiveTests
 
 # Receiver success proves only admission. Require bounded retry and queue exhaustion.
 outage_metrics=""
 for _ in {1..30}; do
-  outage_metrics="$(curl --silent --fail \
+  outage_metrics="$(cargo run --quiet --locked --package scripts --bin runner-readiness -- http --url \
     "http://127.0.0.1:${BLEAT_TELEMETRY_OUTAGE_COLLECTOR_METRICS_TEST_PORT}/metrics")"
   if awk '
     /^otelcol_exporter_send_failed_spans([{ ]|$)/ && $NF + 0 >= 1 { send_failed = 1 }

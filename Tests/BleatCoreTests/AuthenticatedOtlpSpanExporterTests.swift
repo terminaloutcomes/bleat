@@ -160,7 +160,11 @@ final class AuthenticatedOtlpSpanExporterTests {
                 explicitTimeout: 30
             )
         }
-        #expect(provider.waitUntilRequested(timeout: 2))
+        #expect(
+            await requireAuthTelemetrySignal(
+                provider.requestedSignal,
+                stage: "telemetry token request before span RPC"
+            ))
         exportTask.cancel()
 
         let result = await exportTask.value
@@ -181,7 +185,11 @@ final class AuthenticatedOtlpSpanExporterTests {
                 explicitTimeout: 30
             )
         }
-        #expect(provider.waitUntilRequested(timeout: 2))
+        #expect(
+            await requireAuthTelemetrySignal(
+                provider.requestedSignal,
+                stage: "telemetry token request before span RPC"
+            ))
         exporter.cancelActiveExports()
 
         let result = await exportTask.value
@@ -265,7 +273,10 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     @Test
     func testConcurrentExportsUseProviderSafelyAndReuseOneClient() async {
-        let provider = SingleFlightTokenProvider(token: "shared")
+        let provider = SingleFlightTokenProvider(
+            token: "shared",
+            expectedWaiters: 8
+        )
         let client = RecordingOtlpClient(
             results: Array(repeating: .success, count: 8)
         )
@@ -278,6 +289,12 @@ final class AuthenticatedOtlpSpanExporterTests {
                     await exporter.export(spans: [span]) == .success
                 }
             }
+            #expect(
+                await requireAuthTelemetrySignal(
+                    provider.allTokenWaitersArrived,
+                    stage: "eight concurrent telemetry token waiters"
+                ))
+            await provider.releaseToken()
             for await result in group {
                 #expect(result)
             }
@@ -305,7 +322,11 @@ final class AuthenticatedOtlpSpanExporterTests {
                 explicitTimeout: 30
             )
         }
-        #expect(provider.waitUntilRequested(timeout: 2))
+        #expect(
+            await requireAuthTelemetrySignal(
+                provider.requestedSignal,
+                stage: "telemetry token request before span RPC"
+            ))
         exporter.cancelActiveExports()
         let result = await exportTask.value
         #expect(result == .failure)
@@ -335,7 +356,7 @@ final class AuthenticatedOtlpSpanExporterTests {
             await transport.shutdown()
             await completion.markCompleted()
         }
-        await gate.waitUntilEntered()
+        #expect(await gate.waitUntilEntered())
         let completedBeforeRelease = await completion.isCompleted
         #expect(!(completedBeforeRelease))
 
@@ -360,7 +381,11 @@ final class AuthenticatedOtlpSpanExporterTests {
                 explicitTimeout: 30
             )
         }
-        #expect(client.waitUntilFirstRPCWillRegister(timeout: 2))
+        #expect(
+            await requireAuthTelemetrySignal(
+                client.firstRPCWillRegisterSignal,
+                stage: "first OTLP RPC registration"
+            ))
         exporter.cancelActiveExports()
         await client.allowFirstRPCToRegister()
         let result = await exportTask.value
@@ -654,28 +679,41 @@ private actor SequenceTokenProvider: TelemetryTokenProviding {
 
 private actor SingleFlightTokenProvider: TelemetryTokenProviding {
     private let token: String
+    private let expectedWaiters: Int
     private var cached: String?
-    private var refreshTask: Task<String, Never>?
     private(set) var refreshCount = 0
+    private var waiters: [CheckedContinuation<String, Never>] = []
+    private var released = false
+    nonisolated let allTokenWaitersArrived = AuthTelemetryTestSignal()
 
-    init(token: String) {
+    init(token: String, expectedWaiters: Int) {
         self.token = token
+        self.expectedWaiters = expectedWaiters
     }
 
     func currentToken() async throws(TelemetryTokenProviderError) -> String {
         if let cached { return cached }
-        if let refreshTask { return await refreshTask.value }
-        refreshCount += 1
-        let token = self.token
-        let task = Task {
-            try? await Task.sleep(for: .milliseconds(50))
-            return token
+        if refreshCount == 0 { refreshCount = 1 }
+        return await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+            if waiters.count == expectedWaiters {
+                Task { await allTokenWaitersArrived.signal() }
+            }
+            if released {
+                continuation.resume(returning: token)
+            }
         }
-        refreshTask = task
-        let value = await task.value
-        cached = value
-        refreshTask = nil
-        return value
+    }
+
+    func releaseToken() {
+        guard !released else { return }
+        released = true
+        cached = token
+        let waiting = waiters
+        waiters.removeAll()
+        for waiter in waiting {
+            waiter.resume(returning: token)
+        }
     }
 
     func invalidateToken(ifCurrent token: String) {
@@ -686,19 +724,16 @@ private actor SingleFlightTokenProvider: TelemetryTokenProviding {
 private final class SuspendedTokenProvider:
     TelemetryTokenProviding, @unchecked Sendable
 {
-    private let requested = DispatchSemaphore(value: 0)
+    nonisolated let requestedSignal = AuthTelemetryTestSignal()
 
     func currentToken() async throws(TelemetryTokenProviderError) -> String {
-        requested.signal()
+        await requestedSignal.signal()
         try? await Task.sleep(for: .seconds(30))
         throw .cancelled
     }
 
     func invalidateToken(ifCurrent token: String) async {}
 
-    func waitUntilRequested(timeout: TimeInterval) -> Bool {
-        requested.wait(timeout: .now() + timeout) == .success
-    }
 }
 
 private final class CancellationIgnoringTokenProvider:
@@ -948,7 +983,7 @@ private final class GatedRegistrationOtlpClient:
     RemoteTelemetryOtlpClient, @unchecked Sendable
 {
     private let lock = NSLock()
-    private let firstRPCWillRegister = DispatchSemaphore(value: 0)
+    nonisolated let firstRPCWillRegisterSignal = AuthTelemetryTestSignal()
     private let registrationGate = AsyncShutdownGate()
     private var attempts = 0
     private var exports = 0
@@ -966,7 +1001,7 @@ private final class GatedRegistrationOtlpClient:
             return attempts
         }
         if attempt == 1 {
-            firstRPCWillRegister.signal()
+            await firstRPCWillRegisterSignal.signal()
             await registrationGate.waitForRelease()
         }
         guard isActive() else { return .cancelled }
@@ -979,36 +1014,33 @@ private final class GatedRegistrationOtlpClient:
     func shutdown() {}
     func shutdown() async {}
 
-    func waitUntilFirstRPCWillRegister(timeout: TimeInterval) -> Bool {
-        firstRPCWillRegister.wait(timeout: .now() + timeout) == .success
-    }
-
     func allowFirstRPCToRegister() async {
         await registrationGate.release()
     }
 }
 
 private actor AsyncShutdownGate {
-    private var entered = false
     private var released = false
-    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    nonisolated let entrySignal = AuthTelemetryTestSignal()
     private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
 
     func waitForRelease() async {
-        entered = true
-        for waiter in entryWaiters { waiter.resume() }
-        entryWaiters.removeAll()
+        await entrySignal.signal()
         guard !released else { return }
         await withCheckedContinuation { continuation in
             releaseWaiters.append(continuation)
         }
     }
 
-    func waitUntilEntered() async {
-        guard !entered else { return }
-        await withCheckedContinuation { continuation in
-            entryWaiters.append(continuation)
-        }
+    func waitUntilEntered(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        if released { return true }
+        return await requireAuthTelemetrySignal(
+            entrySignal,
+            stage: "async shutdown closure entry",
+            sourceLocation: sourceLocation
+        )
     }
 
     func release() {

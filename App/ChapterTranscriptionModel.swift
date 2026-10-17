@@ -23,6 +23,8 @@ final class ChapterTranscriptionModel {
     private(set) var terminalStatesByBook:
         [ChapterTranscriptionBookKey: CachedChapterTranscriptionTaskState] =
             [:]
+    @ObservationIgnored
+    private(set) var terminalPersistenceProcessingSequenceForTesting = 0
     private var localDataPresenceByBook: [ChapterTranscriptionBookKey: Bool] =
         [:]
     private var localDataPresenceFailuresByBook:
@@ -1274,6 +1276,7 @@ final class ChapterTranscriptionModel {
         batch: ActiveChapterTranscriptionBatch,
         appModel: AppModel
     ) async {
+        defer { terminalPersistenceProcessingSequenceForTesting += 1 }
         guard isTerminalPersistenceValid(for: batch) else {
             return
         }

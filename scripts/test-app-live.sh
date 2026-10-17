@@ -25,14 +25,6 @@ bleat_media_root=""
 bleat_fault_proxy_pid=""
 bleat_harness_started=0
 
-bleat_require_result_bundle() {
-    local result_bundle="$1"
-    if [[ ! -f "${result_bundle}/Info.plist" ]]; then
-        print -u2 "Expected complete result bundle at ${result_bundle}"
-        return 1
-    fi
-    plutil -lint "${result_bundle}/Info.plist" >/dev/null
-}
 
 bleat_abort() {
     local exit_code="$1"
@@ -221,7 +213,9 @@ xcodebuild \
     -resultBundlePath "${bleat_online_result_bundle}" \
     -only-testing:BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload \
     test-without-building
-bleat_require_result_bundle "${bleat_online_result_bundle}"
+cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+    --bin verify-test-results -- --result-bundle "${bleat_online_result_bundle}" \
+    --expected BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload
 
 readonly bleat_401_evidence="${bleat_artifact_dir}/download-401-evidence.json"
 curl --fail --silent --show-error \
@@ -287,4 +281,6 @@ xcodebuild \
     -resultBundlePath "${bleat_offline_result_bundle}" \
     -only-testing:BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress \
     test-without-building
-bleat_require_result_bundle "${bleat_offline_result_bundle}"
+cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+    --bin verify-test-results -- --result-bundle "${bleat_offline_result_bundle}" \
+    --expected BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress

@@ -4,7 +4,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class AccountStoreLiveTests: XCTestCase {
+final class AccountStoreLiveTests: SwiftPMObservedLiveTestCase {
     func testPinnedRootAndPrefixNativeAccountsPersist() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],

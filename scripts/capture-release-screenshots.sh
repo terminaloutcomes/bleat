@@ -722,20 +722,10 @@ bleat_validate_test_result() {
     local device_label="$2"
     local orientation="$3"
     local appearance="$4"
-    local summary
-    summary="$(
-        xcrun xcresulttool get test-results summary \
-            --path "${result_bundle}" --compact
-    )"
-    jq --exit-status '
-        .result == "Passed"
-        and .totalTestCount == 1
-        and .passedTests == 1
-        and .failedTests == 0
-        and .skippedTests == 0
-        and .expectedFailures == 0
-    ' <<<"${summary}" >/dev/null \
-        || bleat_fail "Screenshot result for ${device_label} ${orientation} ${appearance} did not contain exactly one passing test"
+    cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+        --bin verify-test-results -- --result-bundle "${result_bundle}" \
+        --expected BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots \
+        || bleat_fail "Screenshot result for ${device_label} ${orientation} ${appearance} failed exact test verification"
     print "Verified ${device_label} ${orientation} ${appearance}: exactly one screenshot test passed"
 }
 

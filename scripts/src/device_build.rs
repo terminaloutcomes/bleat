@@ -1,4 +1,4 @@
-use crate::release_version_check::{self, ReleaseVersionError};
+use build_scripts::release_version_check::{self, ReleaseVersionError};
 use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
 use std::{
@@ -152,7 +152,7 @@ pub fn resolve_release(
     now: DateTime<Utc>,
 ) -> Result<DeviceRelease, ReleaseVersionError> {
     let version = release_version_check::validate_repository(root, requested_version)?;
-    let build = crate::release_versions::resolve_build_number(build_override, now)?;
+    let build = build_scripts::release_versions::resolve_build_number(build_override, now)?;
     release_version_check::validate_effective_build(&version, &build)?;
     Ok(DeviceRelease { version, build })
 }

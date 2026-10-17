@@ -31,6 +31,52 @@
         }
     }
 
+    @MainActor
+    @Observable
+    final class UITestContextDownloadGate {
+        static let shared = UITestContextDownloadGate()
+        private var pending: [UUID: AsyncStream<Void>.Continuation] = [:]
+        var isWaiting: Bool { !pending.isEmpty }
+
+        func wait() async {
+            let id = UUID()
+            let (events, continuation) = AsyncStream<Void>.makeStream()
+            pending[id] = continuation
+            defer { pending.removeValue(forKey: id) }
+            // Cancellation ends iteration and removes the owned continuation.
+            for await _ in events {}
+        }
+
+        func release() {
+            for continuation in pending.values {
+                continuation.finish()
+            }
+        }
+    }
+
+    @MainActor
+    @Observable
+    final class UITestTranscriptCacheGate {
+        static let shared = UITestTranscriptCacheGate()
+        private var pending: [UUID: AsyncStream<Void>.Continuation] = [:]
+        var isWaiting: Bool { !pending.isEmpty }
+
+        func wait() async {
+            let id = UUID()
+            let (events, continuation) = AsyncStream<Void>.makeStream()
+            pending[id] = continuation
+            defer { pending.removeValue(forKey: id) }
+            // View-task cancellation ends iteration and releases this waiter.
+            for await _ in events {}
+        }
+
+        func release() {
+            for continuation in pending.values {
+                continuation.finish()
+            }
+        }
+    }
+
     actor UITestLaunchGate {
         static let shared = UITestLaunchGate()
         private var continuation: AsyncStream<Void>.Continuation?
@@ -1034,7 +1080,7 @@
             if ProcessInfo.processInfo.arguments.contains(
                 "--ui-testing-slow-context-download"
             ) {
-                try? await Task.sleep(for: .seconds(8))
+                await UITestContextDownloadGate.shared.wait()
             }
             if itemID.rawValue == "ui-search-book",
                 ProcessInfo.processInfo.arguments.contains(
@@ -1150,9 +1196,9 @@
             }
             let arguments = ProcessInfo.processInfo.arguments
             if arguments.contains(
-                "--ui-testing-slow-transcription-cache"
+                "--ui-testing-gated-transcription-cache"
             ) {
-                try? await Task.sleep(for: .seconds(5))
+                await UITestTranscriptCacheGate.shared.wait()
             }
             let hasCompleteCache = arguments.contains(
                 "--ui-testing-transcription-cache"

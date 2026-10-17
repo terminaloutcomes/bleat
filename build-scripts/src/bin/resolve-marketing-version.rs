@@ -9,23 +9,24 @@
 
 use std::process::ExitCode;
 
+use build_scripts::release_versions;
 use clap::Parser;
-use scripts::release_versions;
 
 #[derive(Parser)]
 struct Arguments {
-    #[arg(long, env = "BLEAT_BUILD_NUMBER", hide = true)]
-    build_number: Option<String>,
+    build_number: String,
+    #[arg(long, env = "BLEAT_MARKETING_VERSION", hide = true)]
+    marketing_version: Option<String>,
 }
 
 fn main() -> ExitCode {
     let arguments = Arguments::parse();
-    match release_versions::resolve_build_number(
-        arguments.build_number.as_deref(),
-        chrono::Utc::now(),
+    match release_versions::resolve_marketing_version(
+        &arguments.build_number,
+        arguments.marketing_version.as_deref(),
     ) {
-        Ok(build) => {
-            println!("{build}");
+        Ok(version) => {
+            println!("{version}");
             ExitCode::SUCCESS
         }
         Err(error) => {

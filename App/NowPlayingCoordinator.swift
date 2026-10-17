@@ -205,6 +205,7 @@ final class NowPlayingCoordinator {
     private nonisolated let remoteCommandAdmission = Mutex(
         RemoteCommandAdmission())
     private var latestSnapshot: NowPlayingSnapshot?
+    private(set) var remoteCommandCallbackProcessingSequenceForTesting = 0
     private var artworkIdentity: NowPlayingArtworkIdentity?
     private var artwork: MPMediaItemArtwork?
     private var artworkTask: Task<Void, Never>?
@@ -435,7 +436,11 @@ final class NowPlayingCoordinator {
             let outcome = state.outcome(for: command)
             guard outcome == .accepted else { return outcome.mediaPlayerStatus }
             Task { @MainActor [weak self] in
-                guard let self,
+                guard let self else { return }
+                defer {
+                    remoteCommandCallbackProcessingSequenceForTesting += 1
+                }
+                guard
                     self.remoteCommandAdmission.withLock({
                         $0.generation == state.generation
                     })

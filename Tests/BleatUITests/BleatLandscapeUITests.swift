@@ -226,7 +226,9 @@ final class BleatLandscapeUITests: XCTestCase {
     private func scrollUntilHittable(
         _ element: XCUIElement,
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         XCTAssertTrue(
             container.waitForExistence(timeout: 5),
@@ -257,6 +259,9 @@ final class BleatLandscapeUITests: XCTestCase {
             start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTFail(
-            "Could not scroll to hittable element \(element) in \(container)")
+            "Could not scroll to hittable element \(element) in \(container)",
+            file: file,
+            line: line
+        )
     }
 }

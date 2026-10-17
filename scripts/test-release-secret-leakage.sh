@@ -129,25 +129,9 @@ bleat_verify_result() {
     local result_bundle="$1"
     local test_id="$2"
     local output="$3"
-    xcrun xcresulttool get test-results tests \
-        --path "${result_bundle}" --format json \
-        | jq --exit-status \
-            --arg test_id "${test_id##*/}" '
-                [.. | objects
-                    | select(.nodeType? == "Test Case")
-                    | {
-                        name: .name,
-                        result: .result,
-                        duration: (.duration // null),
-                        failureCount: ([.. | objects
-                            | select(.nodeType? == "Failure Message")
-                            ] | length)
-                    }
-                ] as $tests
-                | ($tests | length) == 1
-                    and $tests[0].result == "Passed"
-                    and ($tests[0].name | contains($test_id))
-            ' >/dev/null
+    cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+        --bin verify-test-results -- --result-bundle "${result_bundle}" \
+        --expected "${test_id}" || return $?
     xcrun xcresulttool get test-results tests \
         --path "${result_bundle}" --format json \
         | jq '[.. | objects

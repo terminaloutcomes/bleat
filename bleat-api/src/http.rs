@@ -840,7 +840,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_connection_metadata_contains_the_actual_socket_peer() {
-        use std::io::{Read, Write};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
@@ -861,23 +861,32 @@ mod tests {
             .await
         });
 
-        let (client_address, response) = tokio::task::spawn_blocking(move || {
-            let mut stream =
-                std::net::TcpStream::connect(server_address).expect("test client should connect");
-            let client_address = stream
-                .local_addr()
-                .expect("test client address should resolve");
-            stream
-                .write_all(b"GET /peer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-                .expect("test request should write");
-            let mut response = String::new();
-            stream
-                .read_to_string(&mut response)
-                .expect("test response should read");
-            (client_address, response)
-        })
-        .await
-        .expect("blocking client task should finish");
+        let (client_address, response) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+                let mut stream = tokio::net::TcpStream::connect(server_address)
+                    .await
+                    .expect("test client should connect");
+                let client_address = stream
+                    .local_addr()
+                    .expect("test client address should resolve");
+                stream
+                    .write_all(
+                        b"GET /peer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .expect("test request should write");
+                let mut response = Vec::new();
+                stream
+                    .read_to_end(&mut response)
+                    .await
+                    .expect("test response should read");
+                (
+                    client_address,
+                    String::from_utf8(response).expect("HTTP response is UTF-8"),
+                )
+            })
+            .await
+            .expect("test socket exchange should finish within five seconds");
 
         shutdown_sender
             .send(())
@@ -959,39 +968,86 @@ mod tests {
     #[tokio::test]
     async fn health_remains_available_while_protected_capacity_is_exhausted() {
         let _tracing_guard = crate::TRACING_TEST_LOCK.lock().await;
-        let activity = Arc::new(Activity::default());
-        let router = limited_router(std::time::Duration::from_secs(1), 1, Arc::clone(&activity));
-        let slow_router = router.clone();
-        let slow_request = tokio::spawn(async move {
-            slow_router
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let permits = Arc::new(tokio::sync::Semaphore::new(1));
+        let protected = Router::new().route(
+            "/slow",
+            get({
+                let entered = Arc::clone(&entered);
+                let release = Arc::clone(&release);
+                move || {
+                    let entered = Arc::clone(&entered);
+                    let release = Arc::clone(&release);
+                    async move {
+                        entered.notify_one();
+                        release.notified().await;
+                        StatusCode::NO_CONTENT
+                    }
+                }
+            }),
+        );
+        let router = Router::new()
+            .route("/healthz", get(health))
+            .merge(apply_limits(
+                protected,
+                RequestLimits {
+                    timeout: std::time::Duration::from_secs(1),
+                },
+                GlobalConcurrencyLimitLayer::with_semaphore(Arc::clone(&permits)),
+                1_024,
+            ))
+            .layer(middleware::from_fn_with_state(
+                TrustedProxyConfig::new(Vec::new(), Vec::new(), false)
+                    .expect("empty trusted proxy configuration should validate"),
+                instrument_request,
+            ));
+        let slow_request = router.clone().oneshot(
+            Request::get("/slow")
+                .body(Body::empty())
+                .expect("valid protected request"),
+        );
+        let health_probe = async {
+            entered.notified().await;
+            let capacity_before = permits.available_permits();
+            let response = router
                 .oneshot(
-                    Request::get("/slow")
+                    Request::get("/healthz")
                         .body(Body::empty())
-                        .expect("valid request"),
+                        .expect("valid health request"),
                 )
-                .await
-                .expect("slow route should respond")
-        });
-        while activity.active.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
-
-        let health_response = router
-            .oneshot(
-                Request::get("/healthz")
-                    .body(Body::empty())
-                    .expect("valid request"),
-            )
+                .await;
+            let capacity_after = permits.available_permits();
+            // Release before assertions so failures cannot strand the handler.
+            release.notify_one();
+            (response, capacity_before, capacity_after)
+        };
+        // Dropping the joined futures on timeout cancels both operations; no
+        // detached request survives failure. The deadline is a failure budget.
+        let (slow_response, (health_response, capacity_before, capacity_after)) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                tokio::join!(slow_request, health_probe)
+            })
             .await
-            .expect("health route should respond");
+            .expect("held request and health probe should finish within five seconds");
 
-        assert_eq!(health_response.status(), StatusCode::OK);
+        assert_eq!(capacity_before, 0, "protected request must own capacity");
         assert_eq!(
-            slow_request
-                .await
-                .expect("slow task should finish")
-                .status(),
+            capacity_after, 0,
+            "capacity must remain held through health response"
+        );
+        assert_eq!(
+            health_response.expect("health response").status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            slow_response.expect("released protected response").status(),
             StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            permits.available_permits(),
+            1,
+            "completed request must release capacity"
         );
     }
 }

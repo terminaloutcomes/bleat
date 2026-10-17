@@ -187,6 +187,8 @@ public actor TelemetryTokenProvider: TelemetryTokenProviding {
     private var nextRetryAt: Date?
     private var terminalFailure: TelemetryTokenProviderError?
 
+    var refreshWaiterCountForTesting: Int { refreshWaiters.count }
+
     public init(
         attester: any TelemetryAttester,
         transport: any TelemetryAuthenticationTransport,

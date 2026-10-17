@@ -1,0 +1,15 @@
+{
+  "_type": { "_name": "ActionsInvocationRecord" },
+  "actions": {
+    "_type": { "_name": "Array" },
+    "_values": [
+      {
+        "_type": { "_name": "ActionRecord" },
+        "actionResult": {
+          "_type": { "_name": "ActionResult" },
+          "issues": { "_type": { "_name": "ResultIssueSummaries" } }
+        }
+      }
+    ]
+  }
+}

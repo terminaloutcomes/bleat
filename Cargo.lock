@@ -866,6 +866,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "build-scripts"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "plist",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "url",
+ "yaml-rust",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4376,6 +4390,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4643,6 +4666,7 @@ version = "0.1.0"
 dependencies = [
  "async-compression",
  "base64 0.23.1",
+ "build-scripts",
  "bytes",
  "chrono",
  "clap",
@@ -4654,10 +4678,12 @@ dependencies = [
  "plist",
  "pulldown-cmark",
  "rand 0.10.3",
+ "regex",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
  "reqwest-tracing",
+ "roxmltree",
  "rust_decimal",
  "semver",
  "serde",
@@ -5563,7 +5589,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

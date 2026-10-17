@@ -264,7 +264,8 @@
     "testTenKBooksCacheWritePerformance()",
     "testTenKBooksCacheReadPerformance()",
     "testCacheReadsDoNotBlockTheMainActor()",
-    "testTenKBooksOnDiskStorageSize()"
+    "testTenKBooksOnDiskStorageSize()",
+    "testCacheHeartbeatChildCancellationReapsChild()"
   ],
   "BleatCoreTests.LibraryCacheTests": [
     "testEmptyLibrarySnapshotPersistsAcrossCacheActors()",
@@ -304,7 +305,9 @@
     "testCallerCancellationStopsPendingDebounce()",
     "testCancelledOperationCannotPublishWhenDependencyIgnoresIt()",
     "testRepositoryFailuresRemainTyped()",
-    "testRepositoryCancellationMapsToCoordinatorCancellation()"
+    "testRepositoryCancellationMapsToCoordinatorCancellation()",
+    "testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall()",
+    "testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall()"
   ],
   "BleatCoreTests.LiveUpdatesTests": [
     "testConnectionAttemptReportsEndpointRoleAndTypedFailure()",
@@ -544,7 +547,7 @@
     "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush()",
     "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators()",
     "rangeResetDiscardsGrowingSegmentAfterCheckpoint(second:)",
-    "dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()",
+    "dailyBucketsAndCachedRangesUseUTCReportingCalendar()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
     "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"

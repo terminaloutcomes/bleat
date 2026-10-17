@@ -766,6 +766,17 @@ struct ChapterTranscriptionView: View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 List {
+                    #if DEBUG || BLEAT_UI_TESTING
+                        if ProcessInfo.processInfo.arguments.contains(
+                            "--ui-testing-gated-transcription-cache"
+                        ), UITestTranscriptCacheGate.shared.isWaiting {
+                            Button("Release Cache Load") {
+                                UITestTranscriptCacheGate.shared.release()
+                            }
+                            .accessibilityIdentifier(
+                                "testing.transcriptionCache.release")
+                        }
+                    #endif
                     cacheFailureContent
                     if let job = model.resumableJob(for: bookKey),
                         !model.isWorking(for: bookKey)

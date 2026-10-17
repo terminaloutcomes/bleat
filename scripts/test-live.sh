@@ -16,6 +16,7 @@ export BLEAT_COMPOSE_PROJECT_NAME="bleat-live-${BLEAT_LIVE_PROFILE_ID}-${bleat_v
 readonly bleat_root_port="${BLEAT_ABS_ROOT_PORT:-13378}"
 readonly bleat_prefix_port="${BLEAT_ABS_PREFIX_PORT:-13379}"
 readonly bleat_artifact_dir="${bleat_script_dir:h}/TestSupport/ServerHarness/artifacts/${BLEAT_LIVE_PROFILE_ID}-${BLEAT_EXPECTED_SERVER_VERSION}-${bleat_run_id}"
+readonly bleat_swift_report="${bleat_script_dir:h}/.build/swiftpm-test-results/live-${bleat_run_id}.xml"
 readonly bleat_test_username="${BLEAT_TEST_USERNAME:-bleat-$(/usr/bin/uuidgen)}"
 readonly bleat_test_password="${BLEAT_TEST_PASSWORD:-$(/usr/bin/uuidgen)}"
 
@@ -48,4 +49,17 @@ export BLEAT_LIVE_PREFIX_URL="http://127.0.0.1:${bleat_prefix_port}/audiobookshe
 export BLEAT_LIVE_USERNAME="${bleat_test_username}"
 export BLEAT_LIVE_PASSWORD="${bleat_test_password}"
 
-swift test --filter "${BLEAT_LIVE_TEST_FILTER:-BleatCoreLiveTests}"
+cargo run --quiet --locked --manifest-path "${bleat_script_dir}/Cargo.toml" \
+    --package scripts --bin swift-test-results -- \
+    --allow-skip "BleatCoreLiveTests.OpenIDAuthenticationLiveTests/testKeycloakOIDCLoginCompletesForRootAndPrefixServers" \
+    --allow-skip "BleatCoreLiveTests.LibraryRepositoryLiveTests/testPagedLoadAndCacheFallbackOfLargeLibrary" \
+    --allow-skip "BleatCoreLiveTests.TelemetryAuthenticationLiveTests/testSwiftDevelopmentAttesterObtainsVerifiableJWT" \
+    --allow-skip "BleatCoreLiveTests.AuthenticatedOtlpSpanExporterLiveTests/testExportsWithRealJWTOverOTLPHTTP" \
+    --allow-skip "BleatCoreLiveTests.OpenTelemetryCollectorLiveTests/testStockCollectorValidatesBleatTokenAndBoundsIngress" \
+    --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment" \
+    --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testExistingPipelineRefreshesJWTAndDrainsQueuedSpan" \
+    --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testCollectorOutageRetainsAndDrainsAfterReconnect" \
+    --report "${bleat_swift_report}" -- swift test \
+    --package-path "${bleat_script_dir:h}" \
+    --no-parallel \
+    --filter "${BLEAT_LIVE_TEST_FILTER:-BleatCoreLiveTests}"

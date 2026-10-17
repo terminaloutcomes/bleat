@@ -91,12 +91,50 @@ struct PrivateCloudPersistenceTests {
                 PrivateCloudPersistence.encodeSystemFields(value)
         }
         defaults.set(archives, forKey: PrivateCloudPersistence.metadataKey)
-        let first = Task { try await store.prepareStorage() }
-        let second = Task { try await store.prepareStorage() }
-        await probe.waitForEntry()
+        let taskCompletions = BoundedTestCounter()
+        let first = Task {
+            do {
+                try await store.prepareStorage()
+                await taskCompletions.increment()
+            } catch {
+                await taskCompletions.increment()
+                throw error
+            }
+        }
+        let second = Task {
+            do {
+                try await store.prepareStorage()
+                await taskCompletions.increment()
+            } catch {
+                await taskCompletions.increment()
+                throw error
+            }
+        }
+        let checkpointWait = await probe.waitForEntry()
+        #expect(
+            checkpointWait.reached,
+            "migration did not reach the 200-record checkpoint within \(checkpointWait.timeout); elapsed \(checkpointWait.elapsed)"
+        )
+        guard checkpointWait.reached else {
+            await store.cancelStoragePreparation()
+            let cleanupWait = await taskCompletions.wait(
+                untilAtLeast: 2, timeout: .seconds(5))
+            #expect(
+                cleanupWait.reached,
+                "cancelled migration callers did not finish; elapsed \(cleanupWait.elapsed), limit \(cleanupWait.timeout)"
+            )
+            return
+        }
         let responsive = await MainActor.run { true }
         #expect(responsive)
         await store.cancelStoragePreparation()
+        let completionWait = await taskCompletions.wait(
+            untilAtLeast: 2, timeout: .seconds(5))
+        #expect(
+            completionWait.reached,
+            "migration callers did not observe cancellation; elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+        )
+        guard completionWait.reached else { return }
         for task in [first, second] {
             do {
                 try await task.value
@@ -394,17 +432,15 @@ struct PrivateCloudPersistenceTests {
 }
 
 private actor MigrationCancellationProbe {
-    private var entered = false
-    private var waiter: CheckedContinuation<Void, Never>?
+    private let checkpointEntries = BoundedTestCounter()
+
     func checkpoint(_ count: Int) async throws {
         #expect(count == 200)
-        entered = true
-        waiter?.resume()
-        waiter = nil
+        await checkpointEntries.increment()
         try await Task.sleep(for: .seconds(30))
     }
-    func waitForEntry() async {
-        if entered { return }
-        await withCheckedContinuation { waiter = $0 }
+
+    func waitForEntry() async -> BoundedTestWaitResult {
+        await checkpointEntries.wait(untilAtLeast: 1)
     }
 }

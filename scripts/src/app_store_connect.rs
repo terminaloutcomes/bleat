@@ -74,7 +74,7 @@ pub struct UploadResult {
 #[derive(Debug, Error)]
 pub enum UploadError {
     #[error("{0}")]
-    ReleaseVersion(#[from] crate::release_version_check::ReleaseVersionError),
+    ReleaseVersion(#[from] build_scripts::release_version_check::ReleaseVersionError),
     #[error("development team must be a ten-character uppercase Apple team identifier")]
     InvalidDevelopmentTeam,
 
@@ -238,8 +238,8 @@ pub fn run(arguments: Arguments) -> Result<UploadResult, UploadError> {
     };
     validate_build_number(&build)?;
     let version = resolve_marketing_version(&build, arguments.marketing_version.as_deref())?;
-    crate::release_version_check::validate_repository(&repository_root, Some(&version))?;
-    crate::release_version_check::validate_effective_build(&version, &build)?;
+    build_scripts::release_version_check::validate_repository(&repository_root, Some(&version))?;
+    build_scripts::release_version_check::validate_effective_build(&version, &build)?;
 
     let relative_evidence_directory =
         PathBuf::from(".build/app-store-connect").join(format!("{version}-{build}"));
@@ -428,7 +428,7 @@ pub fn validate_production_url(name: &'static str, value: &str) -> Result<(), Up
 }
 
 pub fn validate_build_number(value: &str) -> Result<(), UploadError> {
-    crate::release_versions::validate_build_number(value)
+    build_scripts::release_versions::validate_build_number(value)
         .map_err(|_| UploadError::InvalidBuildNumber)
 }
 
@@ -441,7 +441,7 @@ pub fn canonicalize(path: &Path) -> Result<PathBuf, UploadError> {
 }
 
 pub fn resolve_build_number() -> Result<String, UploadError> {
-    crate::release_versions::resolve_build_number(None, chrono::Utc::now())
+    build_scripts::release_versions::resolve_build_number(None, chrono::Utc::now())
         .map_err(|_| UploadError::InvalidBuildNumber)
 }
 
@@ -449,18 +449,18 @@ pub fn resolve_marketing_version(
     build: &str,
     override_value: Option<&str>,
 ) -> Result<String, UploadError> {
-    crate::release_versions::resolve_marketing_version(build, override_value).map_err(|error| {
+    build_scripts::release_versions::resolve_marketing_version(build, override_value).map_err(|error| {
         match error {
-            crate::release_versions::VersionError::MissingMarketingVersionForCustomBuild => {
+            build_scripts::release_versions::VersionError::MissingMarketingVersionForCustomBuild => {
                 UploadError::MissingMarketingVersionForCustomBuild
             }
-            crate::release_versions::VersionError::InvalidMarketingVersionFormat => {
+            build_scripts::release_versions::VersionError::InvalidMarketingVersionFormat => {
                 UploadError::InvalidMarketingVersionFormat
             }
-            crate::release_versions::VersionError::InvalidMarketingVersionDate => {
+            build_scripts::release_versions::VersionError::InvalidMarketingVersionDate => {
                 UploadError::InvalidMarketingVersionDate
             }
-            crate::release_versions::VersionError::InvalidBuildNumber => {
+            build_scripts::release_versions::VersionError::InvalidBuildNumber => {
                 UploadError::InvalidBuildNumber
             }
         }

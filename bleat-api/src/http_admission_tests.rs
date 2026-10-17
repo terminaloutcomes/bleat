@@ -84,6 +84,13 @@ async fn error_body(response: Response, code: &str) {
     );
 }
 
+async fn expect_handler_arrival(receiver: &mut tokio::sync::mpsc::UnboundedReceiver<()>) {
+    tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+        .await
+        .expect("handler should enter before its configured 5-second request deadline")
+        .expect("handler arrival channel should remain open");
+}
+
 #[derive(Clone)]
 struct HeldHandler {
     entered: tokio::sync::mpsc::UnboundedSender<()>,
@@ -138,7 +145,7 @@ async fn global_capacity_is_shared_across_authentication_routes_and_router_clone
             .await
             .expect("first response")
     });
-    arrivals.recv().await.expect("first handler should enter");
+    expect_handler_arrival(&mut arrivals).await;
     let second_router = router.clone();
     let second = tokio::spawn(async move {
         second_router
@@ -146,7 +153,7 @@ async fn global_capacity_is_shared_across_authentication_routes_and_router_clone
             .await
             .expect("second response")
     });
-    arrivals.recv().await.expect("second handler should enter");
+    expect_handler_arrival(&mut arrivals).await;
 
     for route in ["/v1/token/challenge", "/v1/token"] {
         let response = tokio::time::timeout(

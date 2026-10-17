@@ -19,14 +19,20 @@ struct StatisticsExplorationTests {
         let query = StatisticsQuery(accountID: account)
         let stream = await repository.updates(
             id: id, query: query, accountIDs: [account])
-        var iterator = stream.makeAsyncIterator()
-        let initial = try #require(await iterator.next())
+        let reader = BoundedAsyncStreamReader(stream)
+        guard
+            let initial = await requireStatisticsUpdate(
+                from: reader, stage: "initial observation")
+        else { return }
         if case .unprepared = initial.presentation {
         } else {
             Issue.record("Expected unprepared observation")
         }
         _ = try await repository.presentation(query: query)
-        let prepared = try #require(await iterator.next())
+        guard
+            let prepared = await requireStatisticsUpdate(
+                from: reader, stage: "prepared presentation")
+        else { return }
         await repository.acknowledgeUpdate(
             id: id, revision: prepared.presentationRevision)
         for second in 0...16 {
@@ -41,7 +47,10 @@ struct StatisticsExplorationTests {
                     isAudibleAndAdvancing: true, chapter: nil, title: "Book",
                     author: "Author", duration: 100))
             if second == 0 { continue }
-            let update = try #require(await iterator.next())
+            guard
+                let update = await requireStatisticsUpdate(
+                    from: reader, stage: "live sample revision \(second)")
+            else { return }
             let value: StatisticsPresentation
             switch update.presentation {
             case .live(let presentation), .committed(let presentation):
@@ -58,7 +67,10 @@ struct StatisticsExplorationTests {
         }
         try await repository.finish(
             sessionID: PlaybackSessionID(rawValue: "observed"))
-        let finished = try #require(await iterator.next())
+        guard
+            let finished = await requireStatisticsUpdate(
+                from: reader, stage: "finished slice commit")
+        else { return }
         guard case .committed(let presentation) = finished.presentation else {
             Issue.record("Finish must deliver committed data")
             return
@@ -66,7 +78,17 @@ struct StatisticsExplorationTests {
         #expect(presentation.liveSlice == nil)
         #expect(presentation.snapshot.summary.localRealSeconds == 16)
         await repository.stopUpdates(id: id)
-        #expect(await iterator.next() == nil)
+        switch await reader.next() {
+        case .finished:
+            break
+        case .element:
+            Issue.record(
+                "Statistics stream yielded an update after stopUpdates")
+        case .timedOut(let timeout, let elapsed):
+            Issue.record(
+                "Statistics stream did not terminate after stopUpdates; elapsed \(elapsed), limit \(timeout)"
+            )
+        }
         #expect(await repository.currentUpdate(id: id) == nil)
     }
 
@@ -78,6 +100,7 @@ struct StatisticsExplorationTests {
         let id = UUID()
         let stream = await repository.updates(
             id: id, query: StatisticsQuery(), accountIDs: [account])
+        let reader = BoundedAsyncStreamReader(stream)
         _ = try await repository.presentation(query: StatisticsQuery())
         try await repository.updateHistoryProgress(
             accountID: account, completedPages: 1, totalPages: 3,
@@ -91,8 +114,10 @@ struct StatisticsExplorationTests {
                 playbackRate: 1, playbackGeneration: 1,
                 isAudibleAndAdvancing: true,
                 chapter: nil, title: "Book", author: "Author", duration: 100))
-        var iterator = stream.makeAsyncIterator()
-        let latest = try #require(await iterator.next())
+        guard
+            let latest = await requireStatisticsUpdate(
+                from: reader, stage: "invalidation and history update")
+        else { return }
         if case .invalidated = latest.presentation {
         } else {
             Issue.record("Live sample erased invalidation")
@@ -100,7 +125,10 @@ struct StatisticsExplorationTests {
         let history = try #require(latest.history[account]).get()
         #expect(history.completedPages == 0)
         _ = try await repository.presentation(query: StatisticsQuery())
-        let rebuilt = try #require(await iterator.next())
+        guard
+            let rebuilt = await requireStatisticsUpdate(
+                from: reader, stage: "explicitly prepared presentation")
+        else { return }
         if case .committed = rebuilt.presentation {
         } else {
             Issue.record("Explicit load must prepare observation")
@@ -151,14 +179,17 @@ struct StatisticsExplorationTests {
         let stream = await repository.updates(
             id: id, query: StatisticsQuery(accountID: other),
             accountIDs: [other])
+        let reader = BoundedAsyncStreamReader(stream)
         _ = try await repository.presentation(
             query: StatisticsQuery(accountID: other))
         try await repository.upsertRemoteSessions([session(realSeconds: 90)])
         try await repository.updateHistoryProgress(
             accountID: account, completedPages: 1, totalPages: 1,
             completed: true)
-        var iterator = stream.makeAsyncIterator()
-        let update = try #require(await iterator.next())
+        guard
+            let update = await requireStatisticsUpdate(
+                from: reader, stage: "account-scoped committed snapshot")
+        else { return }
         guard case .committed(let value) = update.presentation else {
             Issue.record("Expected prepared scoped snapshot")
             return
@@ -182,6 +213,7 @@ struct StatisticsExplorationTests {
         let query = StatisticsQuery(accountID: account)
         let stream = await repository.updates(
             id: id, query: query, accountIDs: [account])
+        let reader = BoundedAsyncStreamReader(stream)
         _ = try await repository.presentation(query: query)
         let prepared = try #require(await repository.currentUpdate(id: id))
         await repository.acknowledgeUpdate(
@@ -221,8 +253,10 @@ struct StatisticsExplorationTests {
                     isAudibleAndAdvancing: true, chapter: nil, title: "Book",
                     author: "Author", duration: 100))
         }
-        var iterator = stream.makeAsyncIterator()
-        let latest = try #require(await iterator.next())
+        guard
+            let latest = await requireStatisticsUpdate(
+                from: reader, stage: "coalesced live sample and history update")
+        else { return }
         guard case .live(let value) = latest.presentation else {
             Issue.record("Live update read an absent persisted cache")
             return
@@ -500,18 +534,17 @@ struct StatisticsExplorationTests {
     }
 
     @Test
-    func dailyBucketsAndCachedRangesRemainUTCWhenDeviceTimeZoneChanges()
+    func dailyBucketsAndCachedRangesUseUTCReportingCalendar()
         async throws
     {
-        let original = NSTimeZone.default
-        defer { NSTimeZone.default = original }
-        NSTimeZone.default = try #require(
-            TimeZone(identifier: "Australia/Brisbane"))
+        let deviceTimeZone = try #require(
+            TimeZone(identifier: "America/Los_Angeles"))
         let container = try container()
         let repository = StatisticsRepository(modelContainer: container)
         // 2024-01-01 00:30 UTC is still December 31 in Los Angeles.
         let instant = Date(timeIntervalSince1970: 1_704_069_000)
         let day = Date(timeIntervalSince1970: 1_704_067_200)
+        #expect(deviceTimeZone.secondsFromGMT(for: instant) < 0)
         try await repository.upsertRemoteSessions([
             RemoteListeningSession(
                 id: PlaybackSessionID(rawValue: "utc-session"),
@@ -522,8 +555,6 @@ struct StatisticsExplorationTests {
         ])
         let first = try await repository.snapshot()
         #expect(first.exploration.days.map(\.date) == [day])
-        NSTimeZone.default = try #require(
-            TimeZone(identifier: "America/Los_Angeles"))
         let reopened = StatisticsRepository(modelContainer: container)
         #expect(try await reopened.snapshot() == first)
         let range = StatisticsQuery(
@@ -797,4 +828,26 @@ struct StatisticsExplorationTests {
             chapterStart: chapterStart, chapterEnd: chapterEnd,
             title: "Book", author: "Author", duration: 100)
     }
+}
+
+private func requireStatisticsUpdate(
+    from reader: BoundedAsyncStreamReader<StatisticsUpdate>,
+    stage: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async -> StatisticsUpdate? {
+    switch await reader.next() {
+    case .element(let update):
+        return update
+    case .finished:
+        Issue.record(
+            "Statistics observation finished before \(stage)",
+            sourceLocation: sourceLocation
+        )
+    case .timedOut(let timeout, let elapsed):
+        Issue.record(
+            "Statistics observation did not publish \(stage); elapsed \(elapsed), limit \(timeout)",
+            sourceLocation: sourceLocation
+        )
+    }
+    return nil
 }

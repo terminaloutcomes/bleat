@@ -9,18 +9,22 @@
         @Test("exports a bounded AAC chapter as a readable M4A")
         func exportsBoundedChapter() async throws {
             let sourceURL = temporaryURL(extension: "m4a")
+            var outputURL: URL?
+            defer {
+                try? FileManager.default.removeItem(at: sourceURL)
+                if let outputURL {
+                    try? FileManager.default.removeItem(at: outputURL)
+                }
+            }
             try writeSilence(to: sourceURL, durationSeconds: 1)
-            let outputURL = try await AudioChapterSliceExporter.export(
+            outputURL = try await AudioChapterSliceExporter.export(
                 sourceURL: sourceURL,
                 startSeconds: 0.25,
                 durationSeconds: 0.5
             )
-            defer {
-                try? FileManager.default.removeItem(at: sourceURL)
-                try? FileManager.default.removeItem(at: outputURL)
-            }
 
-            let outputFile = try AVAudioFile(forReading: outputURL)
+            let exportedURL = try #require(outputURL)
+            let outputFile = try AVAudioFile(forReading: exportedURL)
             let duration =
                 Double(outputFile.length)
                 / outputFile.processingFormat.sampleRate
@@ -29,7 +33,7 @@
 
             let input = try SpeechChapterTranscriber.inputMetadata(
                 audioFile: outputFile,
-                fileURL: outputURL
+                fileURL: exportedURL
             )
             #expect(input.durationMilliseconds > 450)
             #expect(input.durationMilliseconds < 550)
@@ -43,24 +47,28 @@
         @Test("transcodes an MP3 chapter into a readable M4A")
         func exportsMP3Chapter() async throws {
             let sourceURL = temporaryURL(extension: "mp3")
+            var outputURL: URL?
+            defer {
+                try? FileManager.default.removeItem(at: sourceURL)
+                if let outputURL {
+                    try? FileManager.default.removeItem(at: outputURL)
+                }
+            }
             let fixture = try #require(
                 Data(base64Encoded: Self.silentMP3Fixture)
             )
             try fixture.write(to: sourceURL)
-            let outputURL = try await AudioChapterSliceExporter.export(
+            outputURL = try await AudioChapterSliceExporter.export(
                 sourceURL: sourceURL,
                 startSeconds: 0,
                 durationSeconds: 0.2
             )
-            defer {
-                try? FileManager.default.removeItem(at: sourceURL)
-                try? FileManager.default.removeItem(at: outputURL)
-            }
 
-            let outputFile = try AVAudioFile(forReading: outputURL)
+            let exportedURL = try #require(outputURL)
+            let outputFile = try AVAudioFile(forReading: exportedURL)
             let input = try SpeechChapterTranscriber.inputMetadata(
                 audioFile: outputFile,
-                fileURL: outputURL
+                fileURL: exportedURL
             )
             #expect(input.durationMilliseconds > 100)
             #expect(input.durationMilliseconds < 400)

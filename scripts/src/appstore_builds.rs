@@ -122,7 +122,7 @@ struct PageLinks {
 }
 
 fn build_components(value: &str) -> Option<[u64; 3]> {
-    crate::release_versions::validate_build_number(value).ok()?;
+    build_scripts::release_versions::validate_build_number(value).ok()?;
     let mut components = [0; 3];
     for (value, component) in value.split('.').zip(components.iter_mut()) {
         *component = value.parse().ok()?;

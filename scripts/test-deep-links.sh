@@ -25,6 +25,8 @@ bleat_data_container=""
 bleat_driver_data_container=""
 bleat_driver_pid=""
 bleat_driver_log="${TMPDIR:-/tmp}/bleat-deep-links-${bleat_run_id}.log"
+readonly bleat_retained_driver_log="${bleat_repository_root}/.build/deep-link-results-${bleat_run_id}.log"
+readonly bleat_driver_result="${bleat_repository_root}/.build/deep-link-results-${bleat_run_id}.xcresult"
 
 bleat_cleanup() {
     local exit_code=$?
@@ -41,6 +43,11 @@ bleat_cleanup() {
     fi
     if (( bleat_remove_derived_data )); then
         rm -rf "${bleat_derived_data}"
+    fi
+    if [[ -f "${bleat_driver_log}" ]]; then
+        cargo run --quiet --locked --package scripts --bin runner-readiness -- \
+            retain-driver-log --input "${bleat_driver_log}" --output "${bleat_retained_driver_log}" \
+            || exit_code=1
     fi
     rm -f "${bleat_driver_log}"
     exit "${exit_code}"
@@ -123,13 +130,13 @@ bleat_wait_for_driver() {
         fi
         if ! kill -0 "${bleat_driver_pid}" 2>/dev/null; then
             print -u2 "External URL confirmation driver exited before becoming ready"
-            cat "${bleat_driver_log}" >&2
+            print -u2 "Redacted driver evidence will be retained in .build/deep-link-results-${bleat_run_id}.log"
             return 1
         fi
         sleep 0.25
     done
     print -u2 "Timed out waiting for the external URL confirmation driver"
-    cat "${bleat_driver_log}" >&2
+    print -u2 "Redacted driver evidence will be retained in .build/deep-link-results-${bleat_run_id}.log"
     return 1
 }
 
@@ -211,6 +218,7 @@ xcodebuild \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG EXTERNAL_URL_DRIVER' \
     -parallel-testing-enabled NO \
+    -resultBundlePath "${bleat_driver_result}" \
     -only-testing:BleatUITests/BleatUITests/testAcceptsExternalURLConfirmationFromHost \
     test >"${bleat_driver_log}" 2>&1 &
 bleat_driver_pid="$!"
@@ -233,7 +241,8 @@ bleat_data_container="$(
         "${bleat_bundle_identifier}" \
         data
 )"
-sleep 0.2
+cargo run --quiet --locked --package scripts --bin runner-readiness -- \
+    deep-link-seed --preferences "${bleat_data_container}/Library/Preferences/${bleat_bundle_identifier}.plist"
 xcrun simctl terminate "${bleat_simulator_id}" "${bleat_bundle_identifier}"
 
 # The first route starts the app through the registered scheme. The remaining
@@ -263,6 +272,9 @@ bleat_wait_for_unchanged_receipt "${bleat_last_receipt}"
 bleat_finish_driver
 wait "${bleat_driver_pid}"
 bleat_driver_pid=""
+cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+    --bin verify-test-results -- --result-bundle "${bleat_driver_result}" \
+    --expected BleatUITests/BleatUITests/testAcceptsExternalURLConfirmationFromHost
 
 xcrun simctl launch \
     --terminate-running-process \

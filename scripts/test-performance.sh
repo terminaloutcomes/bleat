@@ -49,25 +49,8 @@ xcodebuild \
     BLEAT_CLOUDKIT_MODE="${BLEAT_CLOUDKIT_MODE:-enabled}" \
     test
 
-# Verify the test actually executed and passed (console exit status alone
-# is not evidence per AGENTS.md).
-executed="$(
-    xcrun xcresulttool get test-results tests \
-        --path "${result_bundle}" \
-        | jq --raw-output '
-            [.testNodes[].children[].children[].children[]
-              | select(.nodeType == "Test Case")
-              | "\(.name) \(.result)"] | join("\n")
-        '
-)"
-print "${executed}"
-if [[ -z "${executed}" ]]; then
-    print -u2 "No performance test cases executed; treating as a failed validation gate"
-    exit 1
-fi
-if ! grep -q "Passed" <<<"${executed}"; then
-    print -u2 "Performance test cases did not pass"
-    exit 1
-fi
+cargo run --quiet --locked --manifest-path "${bleat_script_dir}/Cargo.toml" \
+    --bin verify-test-results -- --result-bundle "${result_bundle}" \
+    --expected BleatUITests/BleatPerformanceUITests/testTenKBooksLaunchBrowsingAndSearchPerformance
 
 print "Performance baseline result bundle: ${result_bundle}"

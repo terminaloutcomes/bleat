@@ -8,9 +8,9 @@ on:
       - project.yml
       - CHANGELOG.md
       - scripts/archive-beta.sh
-      - scripts/src/release_versions.rs
-      - scripts/src/bin/resolve-build-number.rs
-      - scripts/src/bin/resolve-marketing-version.rs
+      - build-scripts/src/release_versions.rs
+      - build-scripts/src/bin/resolve-build-number.rs
+      - build-scripts/src/bin/resolve-marketing-version.rs
       - .github/workflows/release.yml
 
 permissions:
@@ -119,7 +119,7 @@ jobs:
         shell: zsh {0}
         run: |
           set -euo pipefail
-          build_number="$(cargo run --quiet --locked --package scripts --bin resolve-build-number --)"
+          build_number="$(cargo run --quiet --locked --package build-scripts --bin resolve-build-number --)"
           print "build_number=${build_number}" >> "${GITHUB_OUTPUT}"
           print "Release build number: ${build_number}"
 

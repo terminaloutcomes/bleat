@@ -377,8 +377,11 @@ final class HTTPTransportTests {
         let local = try NormalizedServerURL("https://books.home")
         await router.configure(primary: primary, local: local)
         let updates = await router.activityUpdates(for: primary)
-        var iterator = updates.makeAsyncIterator()
-        let initialUpdate = await iterator.next()
+        let reader = BoundedAsyncStreamReader(updates)
+        guard
+            let initialUpdate = await requireEndpointActivitySnapshot(
+                from: reader, stage: "initial snapshot")
+        else { return }
         #expect(initialUpdate == ServerEndpointActivitySnapshot())
         let requestURL = try #require(
             URL(string: "https://books.example/audio/file.mp3"))
@@ -389,8 +392,10 @@ final class HTTPTransportTests {
             purpose: .playback
         )
 
-        let nextPlaybackUpdate = await iterator.next()
-        let playbackUpdate = try #require(nextPlaybackUpdate)
+        guard
+            let playbackUpdate = await requireEndpointActivitySnapshot(
+                from: reader, stage: "playback update")
+        else { return }
         #expect(
             playbackUpdate.lastConnection
                 == ServerConnectionActivity(
@@ -404,8 +409,10 @@ final class HTTPTransportTests {
             purpose: .webSocket
         )
 
-        let nextWebSocketUpdate = await iterator.next()
-        let webSocketUpdate = try #require(nextWebSocketUpdate)
+        guard
+            let webSocketUpdate = await requireEndpointActivitySnapshot(
+                from: reader, stage: "WebSocket update")
+        else { return }
         #expect(webSocketUpdate.webSocket == .primary)
         #expect(webSocketUpdate.lastConnection?.purpose == .webSocket)
     }
@@ -618,6 +625,28 @@ final class HTTPTransportTests {
         await transport.clearSession()
         #expect(transport.cookieCount == 0)
     }
+}
+
+private func requireEndpointActivitySnapshot(
+    from reader: BoundedAsyncStreamReader<ServerEndpointActivitySnapshot>,
+    stage: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async -> ServerEndpointActivitySnapshot? {
+    switch await reader.next() {
+    case .element(let snapshot):
+        return snapshot
+    case .finished:
+        Issue.record(
+            "Endpoint activity stream finished before the \(stage)",
+            sourceLocation: sourceLocation
+        )
+    case .timedOut(let timeout, let elapsed):
+        Issue.record(
+            "Endpoint activity stream missed the \(stage); elapsed \(elapsed), limit \(timeout)",
+            sourceLocation: sourceLocation
+        )
+    }
+    return nil
 }
 
 private actor DiagnosticRecorderSpy: DiagnosticRecording {

@@ -24,14 +24,18 @@ final class FrameworkCallbackTests: XCTestCase {
         }
         XCTAssertEqual(play(()), .noSuchContent)
         coordinator.setResumableSelectionAvailable(true)
+        let callbackBaseline =
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
         XCTAssertEqual(play(()), .success)
         XCTAssertEqual(pause(()), .noSuchContent)
         coordinator.clear()
         XCTAssertEqual(play(()), .noSuchContent)
-        let drained = expectation(
-            description: "Queued bootstrap command drained")
-        Task { @MainActor in drained.fulfill() }
-        await fulfillment(of: [drained], timeout: 2)
+        let callbackProcessed = await waitUntil(timeout: .seconds(30)) {
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
+                > callbackBaseline
+        }
+        XCTAssertTrue(
+            callbackProcessed, "Queued bootstrap callback did not drain")
         XCTAssertTrue(commands.isEmpty)
     }
 
@@ -48,17 +52,23 @@ final class FrameworkCallbackTests: XCTestCase {
             PlaybackRemoteCommand.play
         }
         coordinator.setResumableSelectionAvailable(true)
+        let callbackBaseline =
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
         XCTAssertEqual(play(()), .success)
         coordinator.setResumableSelectionAvailable(false)
         XCTAssertEqual(play(()), .noSuchContent)
-        // Replacement playback cannot revive a command for a discarded selection.
+        // Replacement playback cannot revive a command for a discarded
+        // selection.
         coordinator.publish(snapshot())
-        let drained = expectation(
-            description: "Retired bootstrap command drained")
-        Task { @MainActor in drained.fulfill() }
-        await fulfillment(of: [drained], timeout: 2)
+        let callbackProcessed = await waitUntil(timeout: .seconds(30)) {
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
+                > callbackBaseline
+        }
+        XCTAssertTrue(
+            callbackProcessed, "Retired bootstrap callback did not drain")
         XCTAssertTrue(commands.isEmpty)
-        // Retiring the bootstrap flag preserves valid prepared-playback commands.
+        // Retiring the bootstrap flag preserves valid prepared-playback
+        // commands.
         coordinator.setResumableSelectionAvailable(false)
         let pause = coordinator.makeRemoteCommandCallback { (_: Void) in
             PlaybackRemoteCommand.pause
@@ -113,6 +123,8 @@ final class FrameworkCallbackTests: XCTestCase {
             return .accepted
         }
         coordinator.publish(snapshot())
+        let callbackBaseline =
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
         let callback = coordinator.makeRemoteCommandCallback { (_: Void) in
             .pause
         }
@@ -122,9 +134,12 @@ final class FrameworkCallbackTests: XCTestCase {
         // Replace playback before the queued command can run. A fresh snapshot
         // must not resurrect the command admitted for the retired playback.
         coordinator.publish(snapshot())
-        let drained = expectation(description: "Main actor queue drained")
-        Task { @MainActor in drained.fulfill() }
-        await fulfillment(of: [drained], timeout: 2)
+        let callbackProcessed = await waitUntil(timeout: .seconds(30)) {
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
+                > callbackBaseline
+        }
+        XCTAssertTrue(
+            callbackProcessed, "Retired playback callback did not drain")
         XCTAssertTrue(commands.isEmpty)
     }
 
@@ -208,5 +223,23 @@ final class FrameworkCallbackTests: XCTestCase {
             canPerformPreviousCommand: false, canPerformNextCommand: false,
             currentChapterIndex: nil, currentChapterTitle: nil, chapterCount: 0
         )
+    }
+
+    private func waitUntil(
+        timeout: Duration,
+        condition: @MainActor () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            guard !Task.isCancelled else { return false }
+            if condition() { return true }
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return false
+            }
+        }
+        return condition()
     }
 }

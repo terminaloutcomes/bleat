@@ -760,6 +760,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private let service: any AppServicing
+    @ObservationIgnored
+    private(set) var taskCompletionProcessingSequenceForTesting = 0
+    @ObservationIgnored
+    private(set) var automaticCleanupEvaluationSequenceForTesting = 0
     private let diagnosticEmitter: OrderedDownloadDiagnosticEmitter
     private var diagnosticSequence = 0
     private let remoteTelemetryTracer: any RemoteTelemetryTracing
@@ -1971,6 +1975,23 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    var isResettingLocalDownloadsForTesting: Bool {
+        isResettingLocalDownloads
+    }
+
+    func pendingDownloadOperationWaiterCountForTesting(
+        accountID: AccountID,
+        itemID: LibraryItemID
+    ) -> Int {
+        downloadOperationWaiters[
+            AutomaticDownloadKey(accountID: accountID, itemID: itemID)
+        ]?.count ?? 0
+    }
+
+    var deferredAutomaticCacheCleanupCountForTesting: Int {
+        deferredAutomaticCacheCleanup.count
+    }
+
     func reloadSyncedPreferences() {
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         let storedMaximum =
@@ -2684,6 +2705,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     private func applyCleanupPolicyToFinishedDownloads() async {
+        defer { automaticCleanupEvaluationSequenceForTesting += 1 }
         automaticCleanupTask?.cancel()
         automaticCleanupTask = nil
         switch automaticCleanupPolicy {
@@ -5025,6 +5047,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         task: URLSessionTask,
         error: (any Error)?
     ) async {
+        defer { taskCompletionProcessingSequenceForTesting += 1 }
         guard let description = task.taskDescription,
             let descriptor = try? DownloadChunkTaskDescription.decode(
                 description
@@ -5582,6 +5605,27 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     }
 
     #if DEBUG || BLEAT_UI_TESTING
+        enum EditDownloadFixtureState: String {
+            case idle, running, completed, cancelled, failed
+        }
+
+        private(set) var editDownloadFixtureState = EditDownloadFixtureState
+            .idle
+        private(set) var editDownloadFixtureProgress = 0
+        @ObservationIgnored
+        private var editDownloadFixturePendingUpdates = 0
+        private var editDownloadFixtureCompletionRequested = false
+
+        func advanceEditDownloadFixture() {
+            guard editDownloadFixtureState == .running else { return }
+            editDownloadFixturePendingUpdates += 2
+        }
+
+        func completeEditDownloadFixture() {
+            guard editDownloadFixtureState == .running else { return }
+            editDownloadFixtureCompletionRequested = true
+        }
+
         // Exercise the same observed byte-progress path as URLSession callbacks.
         // Only the disposable UI-test record is changed; no network transfer runs.
         func runEditPresentationDownloadFixture() async {
@@ -5600,19 +5644,35 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     DownloadedBookRecord(
                         manifest: manifest, detail: completed.detail)
                 ]
+                editDownloadFixtureState = .running
+                editDownloadFixtureProgress = 0
+                editDownloadFixturePendingUpdates = 0
+                editDownloadFixtureCompletionRequested = false
                 defer {
                     records = [completed]
                     clearTransferredBytes(for: identity)
                 }
-                for tick in 1...200 {
+                // The menu requests a finite pair of real progress callbacks.
+                // The editor separately releases completion after entering a draft.
+                while !editDownloadFixtureCompletionRequested {
                     try await Task.sleep(for: .milliseconds(200))
+                    guard editDownloadFixturePendingUpdates > 0 else {
+                        continue
+                    }
+                    editDownloadFixturePendingUpdates -= 1
                     updateTransferredBytes(
-                        entry.expectedByteLength * Int64(tick) / 200,
+                        entry.expectedByteLength
+                            * Int64(min(editDownloadFixtureProgress + 1, 199))
+                            / 200,
                         for: identity)
+                    editDownloadFixtureProgress += 1
                 }
+                editDownloadFixtureState = .completed
             } catch is CancellationError {
+                editDownloadFixtureState = .cancelled
                 return
             } catch {
+                editDownloadFixtureState = .failed
                 failure = .transferFailed
             }
         }

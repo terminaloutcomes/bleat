@@ -5,7 +5,7 @@ import XCTest
 
 @testable import BleatCore
 
-final class MetadataEditingLiveTests: XCTestCase {
+final class MetadataEditingLiveTests: SwiftPMObservedLiveTestCase {
     func testPinnedRootAndPrefixMetadataUpdates() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let rootURL = environment["BLEAT_LIVE_ROOT_URL"],

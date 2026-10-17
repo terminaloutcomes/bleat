@@ -2777,9 +2777,21 @@ actor PrivateCloudSyncRun {
     private var watchdogs: [UUID: Task<Void, Never>] = [:]
     private var cancellationTask: Task<Void, Never>?
     private let deadline: Duration
+    private let currentInstant: @Sendable () -> ContinuousClock.Instant
+    private let sleep: @Sendable (Duration) async throws -> Void
 
-    init(deadline: Duration = .seconds(60)) {
+    init(
+        deadline: Duration = .seconds(60),
+        currentInstant: @escaping @Sendable () -> ContinuousClock.Instant = {
+            ContinuousClock.now
+        },
+        sleep: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
+    ) {
         self.deadline = deadline
+        self.currentInstant = currentInstant
+        self.sleep = sleep
     }
 
     func waitForResult() async -> Result<Void, PrivateCloudSyncFailure> {
@@ -2794,10 +2806,11 @@ actor PrivateCloudSyncRun {
 
     func setForeground(_ foreground: Bool) {
         guard self.foreground != foreground else { return }
-        let now = ContinuousClock.now
+        let now = currentInstant()
         for (id, value) in callbacks {
             let elapsed =
-                value.elapsed + (value.since.map { now - $0 } ?? .zero)
+                value.elapsed
+                + (value.since.map { $0.duration(to: now) } ?? .zero)
             callbacks[id] = (elapsed, foreground ? now : nil)
         }
         self.foreground = foreground
@@ -2807,11 +2820,14 @@ actor PrivateCloudSyncRun {
         cancelOperations: @escaping @Sendable () async -> Void
     ) -> UUID {
         let id = UUID()
-        callbacks[id] = (.zero, foreground ? ContinuousClock.now : nil)
+        callbacks[id] = (.zero, foreground ? currentInstant() : nil)
         watchdogs[id] = Task { [weak self] in
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 guard let self else { return }
+                guard let delay = await self.watchdogDelay(for: id) else {
+                    return
+                }
+                do { try await self.sleep(delay) } catch { return }
                 if await self.checkDeadline(for: id) {
                     await self.requestCancellation(cancelOperations)
                     return
@@ -2857,7 +2873,7 @@ actor PrivateCloudSyncRun {
         }
         let elapsed =
             callback.elapsed
-            + (callback.since.map { ContinuousClock.now - $0 } ?? .zero)
+            + (callback.since.map { $0.duration(to: currentInstant()) } ?? .zero)
         guard elapsed >= deadline else { return false }
         failCallback(
             PrivateCloudSyncFailure(
@@ -2871,10 +2887,23 @@ actor PrivateCloudSyncRun {
     func checkCallback(_ id: UUID) throws(PrivateCloudSyncError) {
         if let callbackFailure { throw callbackFailure.cause }
         guard callbacks[id] != nil else { return }
-        callbacks[id] = (.zero, foreground ? ContinuousClock.now : nil)
+        callbacks[id] = (.zero, foreground ? currentInstant() : nil)
     }
 
     func failure() -> PrivateCloudSyncFailure? { callbackFailure }
+
+    private func watchdogDelay(for id: UUID) -> Duration? {
+        guard let callback = callbacks[id], callbackFailure == nil else {
+            return nil
+        }
+        guard foreground else { return .seconds(1) }
+        let elapsed =
+            callback.elapsed
+            + (callback.since.map { $0.duration(to: currentInstant()) } ?? .zero)
+        let remaining = deadline - elapsed
+        return remaining > .zero
+            ? min(remaining, .seconds(1)) : .milliseconds(1)
+    }
 
     func failCallback(_ failure: PrivateCloudSyncFailure) {
         guard callbackFailure == nil else { return }
@@ -2908,10 +2937,20 @@ actor PrivateCloudSyncLifecycle {
     private var foreground = true
 
     func begin(
-        deadline: Duration = .seconds(60)
+        deadline: Duration = .seconds(60),
+        currentInstant: @escaping @Sendable () -> ContinuousClock.Instant = {
+            ContinuousClock.now
+        },
+        sleep: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
     ) async throws(PrivateCloudSyncError) -> PrivateCloudSyncRun {
         guard run == nil else { throw .stopping }
-        let next = PrivateCloudSyncRun(deadline: deadline)
+        let next = PrivateCloudSyncRun(
+            deadline: deadline,
+            currentInstant: currentInstant,
+            sleep: sleep
+        )
         await next.setForeground(foreground)
         run = next
         return next

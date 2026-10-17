@@ -30,11 +30,9 @@ for destination in "${bleat_destinations[@]}"; do
         -resultBundlePath "${result_bundle}" \
         -only-testing:BleatUITests/BleatLandscapeUITests \
         test
-    xcrun xcresulttool get test-results summary --path "${result_bundle}" --format json \
-        | jq --exit-status '
-            .result == "Passed"
-            and .totalTestCount == 3
-            and .passedTests == 3
-            and .failedTests == 0
-        ' >/dev/null
+    cargo run --quiet --locked --manifest-path "${bleat_repository_root}/scripts/Cargo.toml" \
+        --bin verify-test-results -- --result-bundle "${result_bundle}" \
+        --expected BleatUITests/BleatLandscapeUITests/testPrimaryScreensRemainUsableInLandscape \
+        --expected BleatUITests/BleatLandscapeUITests/testLoginRemainsUsableInLandscape \
+        --expected BleatUITests/BleatLandscapeUITests/testRotationPreservesNavigationAndPlayback
 done

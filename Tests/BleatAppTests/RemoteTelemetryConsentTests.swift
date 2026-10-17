@@ -463,18 +463,26 @@ final class RemoteTelemetryConsentTests: XCTestCase {
                 interval: .milliseconds(1)
             )
         }
-        while controller.tokenAvailabilityRequests == 0 {
-            await Task.yield()
+        let requestStarted = await waitUntil(timeout: .seconds(3)) {
+            controller.tokenAvailabilityRequests > 0
         }
+        XCTAssertTrue(
+            requestStarted,
+            "Token availability monitor did not make its first request within 3 seconds."
+        )
         XCTAssertEqual(
             model.remoteTelemetryTokenAvailability,
             .missing
         )
 
         controller.tokenAvailability = .available
-        while model.remoteTelemetryTokenAvailability != .available {
-            await Task.yield()
+        let becameAvailable = await waitUntil(timeout: .seconds(3)) {
+            model.remoteTelemetryTokenAvailability == .available
         }
+        XCTAssertTrue(
+            becameAvailable,
+            "Token availability did not update to available within 3 seconds."
+        )
         monitor.cancel()
         await monitor.value
 
@@ -495,8 +503,17 @@ final class RemoteTelemetryConsentTests: XCTestCase {
         let refresh = Task { @MainActor in
             await model.refreshRemoteTelemetryTokenAvailability()
         }
-        while !controller.isAvailabilityRequestPending {
-            await Task.yield()
+        let requestPending = await waitUntil(timeout: .seconds(3)) {
+            controller.isAvailabilityRequestPending
+        }
+        XCTAssertTrue(
+            requestPending,
+            "Token availability request did not suspend within 3 seconds."
+        )
+        guard requestPending else {
+            controller.completeAvailabilityRequest(with: .available)
+            await refresh.value
+            return
         }
 
         model.setRemoteTelemetryEnabled(false)
@@ -507,6 +524,25 @@ final class RemoteTelemetryConsentTests: XCTestCase {
             model.remoteTelemetryTokenAvailability,
             .disabled
         )
+    }
+
+    private func waitUntil(
+        timeout: Duration,
+        condition: @MainActor () async -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            guard !Task.isCancelled else { return false }
+            if await condition() { return true }
+            do {
+                try await Task.sleep(for: .milliseconds(10))
+            } catch {
+                return false
+            }
+        }
+        guard !Task.isCancelled else { return false }
+        return await condition()
     }
 
     #if DEBUG && os(iOS)
@@ -777,6 +813,7 @@ private final class DeferredTelemetryAvailabilityController:
 {
     private var availabilityContinuation:
         CheckedContinuation<TelemetryTokenAvailability, Never>?
+    private var completedAvailability: TelemetryTokenAvailability?
 
     var isAvailabilityRequestPending: Bool {
         availabilityContinuation != nil
@@ -788,7 +825,11 @@ private final class DeferredTelemetryAvailabilityController:
     ) {}
 
     func telemetryTokenAvailability() async -> TelemetryTokenAvailability {
-        await withCheckedContinuation { continuation in
+        if let completedAvailability {
+            self.completedAvailability = nil
+            return completedAvailability
+        }
+        return await withCheckedContinuation { continuation in
             availabilityContinuation = continuation
         }
     }
@@ -798,6 +839,10 @@ private final class DeferredTelemetryAvailabilityController:
     ) {
         let continuation = availabilityContinuation
         availabilityContinuation = nil
-        continuation?.resume(returning: availability)
+        if let continuation {
+            continuation.resume(returning: availability)
+        } else {
+            completedAvailability = availability
+        }
     }
 }

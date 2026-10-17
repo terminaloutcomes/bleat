@@ -175,6 +175,15 @@ struct RootView: View {
                     }
                     .accessibilityIdentifier("testing.playback.completeSync")
                 }
+                if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-slow-context-download"
+                ), UITestContextDownloadGate.shared.isWaiting {
+                    Button("Complete Download Preparation") {
+                        UITestContextDownloadGate.shared.release()
+                    }
+                    .accessibilityIdentifier(
+                        "testing.download.completePreparation")
+                }
             }
         #endif
         .task {
@@ -4647,6 +4656,21 @@ private struct BookDetailView: View {
                 if let account = model.account {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
+                            #if DEBUG || BLEAT_UI_TESTING
+                                if ProcessInfo.processInfo.arguments.contains(
+                                    "--ui-testing-edit-download-progress")
+                                {
+                                    Button(
+                                        "Advance Download (\(model.downloads.editDownloadFixtureProgress))"
+                                    ) {
+                                        model.downloads
+                                            .advanceEditDownloadFixture()
+                                    }
+                                    .menuActionDismissBehavior(.disabled)
+                                    .accessibilityIdentifier(
+                                        "testing.download.advance")
+                                }
+                            #endif
                             if canOpenEditor(detail) {
                                 Button("Edit", systemImage: "pencil") {
                                     showMetadataEditor = true

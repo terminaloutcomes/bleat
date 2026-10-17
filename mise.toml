@@ -243,7 +243,7 @@ run = [{ task = "security:validate" }, "./scripts/archive-beta.sh"]
 
 [tasks."release:check"]
 description = "Require matching project, generated Xcode, and changelog versions"
-run = "cargo run --quiet --locked --package scripts --bin validate-release-version --"
+run = "cargo run --quiet --locked --package build-scripts --bin validate-release-version --"
 
 [tasks."appstore:upload"]
 description = "Archive, inspect, and upload an App Store-eligible build to App Store Connect"
@@ -254,7 +254,7 @@ run = "cargo run --quiet --locked --package scripts --bin upload-app-store-conne
 description = "Validate the internal TestFlight export configuration"
 run = [
   { task = "test:cloudkit-schema" },
-  "cargo test --locked --package scripts --test release_versions",
+  "cargo test --locked --package build-scripts --test release_versions",
   "./scripts/test-testflight-export-options.sh",
 ]
 

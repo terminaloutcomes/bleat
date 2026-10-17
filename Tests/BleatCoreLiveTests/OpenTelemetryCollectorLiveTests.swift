@@ -6,7 +6,7 @@
 
     @testable import BleatCore
 
-    final class OpenTelemetryCollectorLiveTests: XCTestCase {
+    final class OpenTelemetryCollectorLiveTests: SwiftPMObservedLiveTestCase {
         func testStockCollectorValidatesBleatTokenAndBoundsIngress()
             async throws
         {

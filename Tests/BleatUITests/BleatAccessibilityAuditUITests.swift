@@ -384,7 +384,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
     private func scrollUntilHittable(
         _ element: XCUIElement,
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         XCTAssertTrue(container.waitForExistence(timeout: 5))
         for _ in 0..<30 {
@@ -405,7 +407,11 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTFail("Could not scroll to hittable element \(element)")
+        XCTFail(
+            "Could not scroll to hittable element \(element)",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
@@ -448,7 +454,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
         _ element: XCUIElement,
         of obstacles: [XCUIElement],
         in container: XCUIElement,
-        app: XCUIApplication
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         for _ in 0..<12 {
             let visibleObstacles = obstacles.filter { $0.exists }
@@ -467,7 +475,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
         }.joined(separator: "; ")
         XCTFail(
             "Could not scroll \(element) at \(element.frame) clear of "
-                + obstacleFrames
+                + obstacleFrames,
+            file: file,
+            line: line
         )
     }
 

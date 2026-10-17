@@ -6,6 +6,8 @@ CoreSimulator, SwiftPM caches, Docker, local ports, and network resources.
 
 Start with [contributor setup and validation selection](contributing.md).
 See [detailed developer tools](developer-tools.md) for additional command examples.
+Follow the [test reliability rules](test-reliability.md) when writing or auditing
+tests, shared fixtures, synchronization helpers, and result verification.
 
 `mise run check` changes source: its dependencies format Swift and Rust.
 API/Rust validation tasks also run Rust formatting. Review the resulting diff.
@@ -123,6 +125,33 @@ telemetry integration, the local host/Simulator gate, core live tests, and app-l
 journeys. Signed host tests require the configured development team. Run an
 individual stage with `mise run test:local`, `mise run test:live`, or
 `mise run test:app-live`.
+
+Xcode runners verify exact target/suite/function identities and outcomes using
+`scripts/src/test_results.rs`. Broad selections first enumerate the built test
+products; focused journey runners declare their expected cases explicitly.
+Missing, duplicate, unexpected, failed, unknown, and unapproved skipped results
+fail the gate, as do result-summary failures or runtime warnings. An entirely
+skipped selection never counts as successful validation. Result bundles and
+discovery artifacts are retained for inspection.
+
+Live and telemetry SwiftPM runners use `scripts/src/swift_test_results.rs` to
+discover XCTest and Swift Testing separately, then compare fresh structured
+reports with the exact filtered selection. Reports and sibling selection JSON
+files live under `.build/swiftpm-test-results/`. Unsupported command options
+are rejected rather than allowing discovery and execution to use different
+configurations. The ordinary Audiobookshelf live lane names the optional
+OIDC, large-library, and telemetry cases allowed to skip without their separate
+fixtures; the telemetry lane permits no skips.
+
+Live XCTest classes inherit `SwiftPMObservedLiveTestCase`, which records native
+XCTest outcomes when the runner enables reporting. SwiftPM's serial XCTest lane
+does not emit XCTest XML on the tested toolchain, and its parallel XML reporter
+can encode skipped cases as passing. The native observer's JSON is authoritative
+for XCTest; Swift Testing uses its own XML report. Missing observer records fail
+the gate, so new live XCTest classes must participate in this reporting lifecycle.
+
+See [runner verification evidence](release-evidence/test-runner-verification.md)
+for the implementation scope, regression checks, and remaining execution gaps.
 
 Run the host test suite with code coverage:
 
@@ -286,12 +315,25 @@ schemas differ, and the CloudKit schema pull-request check requires the same
 parity. CloudKit-disabled and Personal Team archives still validate the desired
 schema against the code but do not require production parity.
 
-Xcode bootstraps the Rust build helpers with the macOS SDK and clears inherited
-`RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER` settings for that compilation. A
-persistent compiler-cache process can retain an earlier build phase's sandbox
-and cannot safely write a fresh Xcode build directory. The standalone capability
-validator uses the same compiler environment. This is checked by the
-`release_versions` regression target.
+Xcode builds its configuration, release-version and metadata helpers from the
+`build-scripts` workspace package. That package has no HTTP, TLS or native C
+build dependencies; the larger `scripts` package depends on it for shared
+version logic. Both the Xcode phase and standalone capability validator use
+ordinary Cargo without selecting another SDK or overriding Rust compilers or
+compiler wrappers. Keep build-only dependencies in this package so checking
+configuration cannot pull in the operational tooling's network stack.
+
+The package split follows the 2026-10-16 build investigation. Previously these
+small helpers belonged to `scripts`, so selecting one binary still compiled the
+package's operational HTTP/TLS dependencies. Earlier SDK and cache-wrapper
+workarounds did not remove that dependency coupling. Command-local Homebrew
+`RUSTC` overrides then mixed compiler distributions with rustup `RUSTDOC` during
+telemetry doctests; those overrides are not part of the supported workflow.
+The separate `check-cfg` rejection in the earlier Xcode log did not identify its
+compiler, so it is not evidence for changing the user's Rust installation.
+The regression tests now check the real package dependency tree and preservation
+of the caller's compiler environment, rather than substituting Cargo with a C
+header-compilation probe and treating that as Rust-toolchain evidence.
 
 The physical-device workflows use paid capabilities by default:
 
@@ -349,8 +391,9 @@ xcodegen generate
 ```
 
 Xcode's `Prepare Build Metadata` phase runs with user script sandboxing enabled.
-It declares its repository inputs with recursive directory access, builds the Rust
-helpers with the macOS SDK even for iOS destinations, and runs the release and
+It declares all Cargo workspace member directories as inputs because Cargo reads
+every member manifest even when selecting one package. It builds the Rust
+helpers from the isolated `build-scripts` package even for iOS destinations, and runs the release and
 capability validators. The metadata helper reads the platform's `App/Info.plist`
 or `App/Info-macOS.plist` template and Git HEAD, then writes `Bleat-Info.plist` in
 the target's intermediate directory. Cargo build products live in that same
@@ -362,7 +405,7 @@ plist.
 When changing build phases, validate from canonical filesystem paths: a `/tmp`
 alias can prevent sandbox rules from restricting the underlying `/private/tmp`
 checkout. Focused helper regressions run with
-`cargo test --locked -p scripts --test build_metadata --test release_version_check`;
+`cargo test --locked -p build-scripts --test build_metadata --test release_version_check`;
 `BleatAppTests/AppMetadataTests` also checks metadata in the built app bundle.
 
 ## Disposable-server validation
@@ -446,11 +489,10 @@ fallback metadata must still agree with the release date. Device build and
 signed-capability verification are implemented in `scripts/src/device_build.rs`;
 `scripts/build-device.sh` is its thin CLI entry point.
 
-Xcode's Rust build preparation and standalone capability validator launch
-Cargo through `xcrun --sdk macosx` so
-native host dependencies use macOS headers even during iPhone and Simulator
-builds. This selection is scoped to Cargo; the application retains its target
-SDK. `mise run iphone` requires no caller-supplied SDK or compiler flags.
+Xcode's Rust build preparation and standalone capability validator use the
+isolated `build-scripts` package with ordinary Cargo. Neither launcher overrides
+the compiler, compiler wrappers or SDK. `mise run iphone` requires no
+caller-supplied SDK or compiler flags.
 
 Use the App Store Connect CLI for release operations wherever it supports the
 operation, including metadata, build selection, and status checks.

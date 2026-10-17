@@ -4,6 +4,7 @@
 
 - [Contributor setup and validation](contributing.md)
 - [Development workflows](development.md)
+  - [Test reliability](test-reliability.md)
   - [Detailed developer tools](developer-tools.md)
   - [App Store analytics](appstore-analytics.md)
   - [Website development](website.md)
@@ -27,6 +28,12 @@
 
 # Release Evidence
 
+- [Test reliability audit progress](release-evidence/test-reliability-audit.md)
+  - [Runner and shell-case review](release-evidence/test-reliability-runners.md)
+  - [Runner verification batch](release-evidence/test-runner-verification.md)
+  - [App test follow-ups](release-evidence/test-reliability-app-followups.md)
+  - [Core test follow-ups](release-evidence/test-reliability-core-followups.md)
+  - [UI, live and tooling follow-ups](release-evidence/test-reliability-other-followups.md)
 - [Statistics validation](statistics-validation.md)
 - [CarPlay release evidence](release-evidence/carplay.md)
 - [Performance baseline](release-evidence/performance-baseline.md)

@@ -1254,11 +1254,15 @@ final class RemoteTelemetryTests {
             label: "app.bleat.remote-telemetry.storage.test"
         )
         let persistenceGate = DispatchSemaphore(value: 0)
+        let flushWaitStarted = AuthTelemetryTestSignal()
         let exporter = try BoundedPersistentSpanExporter(
             storageURL: directory,
             downstream: RecordingSpanExporter(result: .failure),
             policy: .default,
-            storageQueue: storageQueue
+            storageQueue: storageQueue,
+            onPersistenceWait: {
+                Task { await flushWaitStarted.signal() }
+            }
         )
         storageQueue.async { persistenceGate.wait() }
         defer {
@@ -1278,7 +1282,11 @@ final class RemoteTelemetryTests {
             completion.complete()
             return result
         }
-        try await Task.sleep(for: .milliseconds(50))
+        #expect(
+            await requireAuthTelemetrySignal(
+                flushWaitStarted,
+                stage: "async flush waiting for queued persistence"
+            ))
         #expect(!(completion.isComplete))
         #expect(batchFiles(in: directory).isEmpty)
 
@@ -1303,12 +1311,21 @@ final class RemoteTelemetryTests {
             await exporter.shutdown(explicitTimeout: 2)
             firstCompletion.complete()
         }
-        await downstream.waitUntilShutdownStarts()
+        #expect(
+            await requireAuthTelemetrySignal(
+                downstream.shutdownStartedSignal,
+                stage: "downstream log shutdown entry"
+            ))
         let second = Task {
             await exporter.shutdown(explicitTimeout: 2)
             secondCompletion.complete()
         }
-        try? await Task.sleep(for: .milliseconds(50))
+        #expect(
+            await requireAuthTelemetryCondition(
+                stage: "second caller joining shared log shutdown"
+            ) {
+                exporter.shutdownJoinCountForTesting == 2
+            })
 
         #expect(!(firstCompletion.isComplete))
         #expect(!(secondCompletion.isComplete))
@@ -1385,9 +1402,9 @@ final class RemoteTelemetryTests {
 
         let exportResult = await exporter.export(spans: [span])
         #expect(exportResult == .success)
-        #expect(downstream.waitUntilStarted(timeout: 2) == .success)
+        #expect(await downstream.waitUntilStarted())
         exporter.disable()
-        #expect(downstream.waitUntilFinished(timeout: 2) == .success)
+        #expect(await downstream.waitUntilFinished())
 
         #expect(downstream.recordedSpans.isEmpty)
         exporter.disableAndPurge()
@@ -1599,7 +1616,7 @@ private final class GatedShutdownLogExporter:
     RemoteTelemetryDownstreamLogExporter, @unchecked Sendable
 {
     private let lock = NSLock()
-    private let shutdownStarted = TestAsyncSignal()
+    nonisolated let shutdownStartedSignal = AuthTelemetryTestSignal()
     private let shutdownCompletion = TestAsyncSignal()
     private var shutdowns = 0
 
@@ -1627,17 +1644,13 @@ private final class GatedShutdownLogExporter:
 
     func shutdown(explicitTimeout: TimeInterval?) async {
         lock.withLock { shutdowns += 1 }
-        shutdownStarted.complete()
+        await shutdownStartedSignal.signal()
         await shutdownCompletion.wait()
     }
 
     func cancelActiveExports() {}
 
     func disable() {}
-
-    func waitUntilShutdownStarts() async {
-        await shutdownStarted.wait()
-    }
 
     func completeShutdown() {
         shutdownCompletion.complete()
@@ -1790,9 +1803,8 @@ private final class CancellableBlockingSpanExporter:
     RemoteTelemetryDownstreamSpanExporter, @unchecked Sendable
 {
     private let lock = NSLock()
-    private let started = DispatchSemaphore(value: 0)
-    private let release = DispatchSemaphore(value: 0)
-    private let finished = DispatchSemaphore(value: 0)
+    private let started = AuthTelemetryTestSignal()
+    private let finished = AuthTelemetryTestSignal()
     private var cancelled = false
     private var spans: [SpanData] = []
 
@@ -1804,22 +1816,16 @@ private final class CancellableBlockingSpanExporter:
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) -> SpanExporterResultCode {
-        started.signal()
-        _ = release.wait(timeout: .now() + (explicitTimeout ?? 30))
-        let result: SpanExporterResultCode = lock.withLock {
-            guard !cancelled else { return .failure }
-            self.spans.append(contentsOf: spans)
-            return .success
-        }
-        finished.signal()
-        return result
+        // The production pipeline uses the async witness. Keep this required
+        // synchronous witness inert so the fake never blocks a test executor.
+        .failure
     }
 
     func export(
         spans: [SpanData],
         explicitTimeout: TimeInterval?
     ) async -> SpanExporterResultCode {
-        started.signal()
+        await started.signal()
         let deadline = ContinuousClock.now.advanced(
             by: .seconds(explicitTimeout ?? 30)
         )
@@ -1827,14 +1833,18 @@ private final class CancellableBlockingSpanExporter:
             !lock.withLock({ cancelled }),
             ContinuousClock.now < deadline
         {
-            try? await Task.sleep(for: .milliseconds(10))
+            do {
+                try await Task.sleep(for: .milliseconds(10))
+            } catch {
+                break
+            }
         }
         let result: SpanExporterResultCode = lock.withLock {
             guard !cancelled, !Task.isCancelled else { return .failure }
             self.spans.append(contentsOf: spans)
             return .success
         }
-        finished.signal()
+        await finished.signal()
         return result
     }
 
@@ -1854,15 +1864,28 @@ private final class CancellableBlockingSpanExporter:
 
     func cancelActiveExports() {
         lock.withLock { cancelled = true }
-        release.signal()
     }
 
-    func waitUntilStarted(timeout: TimeInterval) -> DispatchTimeoutResult {
-        started.wait(timeout: .now() + timeout)
+    func waitUntilStarted(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            started,
+            stage: "downstream telemetry export start",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 
-    func waitUntilFinished(timeout: TimeInterval) -> DispatchTimeoutResult {
-        finished.wait(timeout: .now() + timeout)
+    func waitUntilFinished(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        await requireAuthTelemetrySignal(
+            finished,
+            stage: "downstream telemetry export cancellation completion",
+            timeout: .seconds(30),
+            sourceLocation: sourceLocation
+        )
     }
 }
 
