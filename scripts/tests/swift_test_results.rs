@@ -7,6 +7,7 @@ use scripts::swift_test_results::{
 
 const X: &str = "BleatCoreLiveTests.SampleTests/testReturnsValue";
 const S: &str = "BleatCoreTests.SampleTests/testReturnsValue()";
+const COLLECTOR_OUTAGE: &str = "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testCollectorOutageRetainsAndDrainsAfterReconnect";
 
 fn expected(xctest: &[&str], swift_testing: &[&str]) -> ExpectedTests {
     ExpectedTests {
@@ -191,6 +192,50 @@ fn accepts_an_allowed_skip_when_another_test_passes() {
     )
     .expect("one allowed skip does not hide a passing selected case");
     assert_eq!((passed, skipped), (1, 1));
+}
+
+#[test]
+fn live_runner_allowlist_is_exact_and_does_not_leak_to_telemetry_runner() {
+    let live_runner = include_str!("../test-live.sh");
+    let telemetry_runner = include_str!("../test-telemetry.sh");
+    let declaration = format!("--allow-skip \"{COLLECTOR_OUTAGE}\"");
+    assert_eq!(live_runner.matches(&declaration).count(), 1);
+    assert!(!telemetry_runner.contains(&declaration));
+
+    let allowed = AllowedSkips::from([COLLECTOR_OUTAGE.to_owned()]);
+    let (passed, skipped) = verify_observation_records(
+        &[
+            record(COLLECTOR_OUTAGE, XCTestObservationOutcome::Skipped),
+            record(X, XCTestObservationOutcome::Passed),
+        ],
+        &counts(&[COLLECTOR_OUTAGE, X]),
+        &allowed,
+    )
+    .expect("the exact allowlisted outage skip can coexist with passing tests");
+    assert_eq!((passed, skipped), (1, 1));
+
+    let error = verify_observation_records(
+        &[record(COLLECTOR_OUTAGE, XCTestObservationOutcome::Skipped)],
+        &counts(&[COLLECTOR_OUTAGE]),
+        &AllowedSkips::new(),
+    )
+    .expect_err("the outage skip is rejected without the live-runner declaration");
+    assert!(matches!(
+        error,
+        SwiftTestResultsError::UnexpectedSkip { .. }
+    ));
+
+    let unrelated = "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testUnrelatedCase";
+    let error = verify_observation_records(
+        &[record(unrelated, XCTestObservationOutcome::Skipped)],
+        &counts(&[unrelated]),
+        &allowed,
+    )
+    .expect_err("the outage allowlist does not permit other skips");
+    assert!(matches!(
+        error,
+        SwiftTestResultsError::UnexpectedSkip { .. }
+    ));
 }
 
 #[test]

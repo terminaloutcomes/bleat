@@ -58,6 +58,7 @@ cargo run --quiet --locked --manifest-path "${bleat_script_dir}/Cargo.toml" \
     --allow-skip "BleatCoreLiveTests.OpenTelemetryCollectorLiveTests/testStockCollectorValidatesBleatTokenAndBoundsIngress" \
     --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testApiShutdownKillSwitchRetainsThenRelaunchDrainsWithoutReenrollment" \
     --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testExistingPipelineRefreshesJWTAndDrainsQueuedSpan" \
+    --allow-skip "BleatCoreLiveTests.TelemetryRecoveryLiveTests/testCollectorOutageRetainsAndDrainsAfterReconnect" \
     --report "${bleat_swift_report}" -- swift test \
     --package-path "${bleat_script_dir:h}" \
     --no-parallel \

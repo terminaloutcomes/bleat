@@ -753,3 +753,66 @@ The final signed owning `LibraryCachePerformanceTests` suite passed all four
 identities with zero failures or skips (`.build/p2-cache-suite-signed.xml` and
 companion log). Swift strict-format lint, Rust formatting and documentation
 references were checked after the fixes.
+
+## PR review corrections (2026-10-17)
+
+The three review findings on PR #367 were confirmed against `cb3caba` and
+corrected on the source branch before extraction into the smaller PRs:
+
+- Search fixture entry could precede continuation registration. Its explicit
+  not-registered/waiting/released state now retains an early release and makes
+  repeated release harmless. The first-call decision is captured before the
+  actor hop. Two bounded regressions cover release before and after registration.
+- Cache-child supervision treated cancellation as a fake process exit and could
+  hang during task-group teardown. Cancellation now has its own outcome and
+  shares termination/reaping cleanup with timeout. Retained observers drain
+  output before cancellation propagates and owned reports are removed. The
+  externally supervised regression covers cancellation before launch, during
+  startup and after readiness. Independent rescue watchdogs contain nested
+  children if cleanup regresses; needing a rescue is a test failure.
+- The default Audiobookshelf runner omitted the collector-outage recovery case
+  from its exact skip declarations. That identity is now allowed there, while
+  the configured telemetry runner still requires it to pass. The regression
+  checks exact allowance, unrelated-skip rejection and strict default behavior.
+
+Validation artifacts:
+
+- `pr367-review-focused-typed.xml` under `.build/`: both affected host suites,
+  15 identities passed, zero failures/errors/skips.
+- `pr367-review-repeated.xml` and its log under `.build/`: five selected
+  cancellation/release identities ran three native repetitions each. The XML
+  contains five aggregate records; the log verifies all 15 executions.
+- `pr367-review-signed-host.log` under `.build/`: the signed host gate verified
+  all 564 inventory identities passing with zero skips and exported coverage.
+- `cargo test --locked --package scripts --test swift_test_results`: 11 tests
+  passed. Strict Clippy for that target, strict Swift formatting, shell syntax
+  and diff checks passed.
+- Three earlier focused build attempts failed at the regression's inferred
+  catch type and executed zero tests. Their logs are retained under `.build/`
+  as `pr367-review-focused.log`, `pr367-review-focused-corrected.log` and
+  `pr367-review-focused-final.log`. An explicit typed `do` boundary corrected
+  the error; those attempts are not counted as test evidence.
+
+Independent read-only review of the complete corrections returned no findings.
+Live validation:
+
+- Default `mise exec -- ./scripts/test-live.sh`: 13 passed and eight exact
+  expected skips, including collector outage, from 21 discovered XCTest cases.
+  `pr367-review-live.log` under `.build/` retains the verified selection and
+  cleanup. The current-stable 2.37.0 compatibility profile independently passed
+  the same 13/8 selection in `pr367-review-compatibility.log`.
+- `mise run test:compatibility` did not pass overall. The minimum 2.26.0
+  profile executed no tests: GHCR denied the pinned image manifest pull before
+  startup. The command used normal host access. Its original output remains in
+  `pr367-review-compatibility.log`; no image pin or authentication setting was
+  changed to conceal the blocker.
+- `mise run test:telemetry` passed: four Python checks, 76 Swift Testing cases,
+  three configuration XCTest cases, 97 Rust API cases, and six live telemetry
+  XCTest cases. Collector outage passed with no skip allowance. Reports and
+  native observations are under `.build/swiftpm-test-results/`; the final log
+  is `.build/pr367-review-telemetry.log`. Owned containers, volumes and raw
+  temporary capture data were removed by the gate.
+
+The minimum-profile image remains an external validation prerequisite. Final
+CI is checked on the published head separately. This batch does not close
+issue #362 or claim new app/UI, physical-device or archive evidence.

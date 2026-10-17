@@ -267,18 +267,65 @@ final class LibraryCachePerformanceTests {
     /// cache reads run concurrently.
     @Test
     func testCacheReadsDoNotBlockTheMainActor() async throws {
-        switch CacheHeartbeatChildMode(
+        let childMode = CacheHeartbeatChildMode(
             rawValue: ProcessInfo.processInfo.environment[
                 "BLEAT_CACHE_HEARTBEAT_CHILD"] ?? ""
-        ) {
-        case .hang?:
+        )
+        switch childMode {
+        case .hang?, .startupHang?:
             // The parent must kill and reap a process whose async test never
             // completes. This exercises the watchdog cleanup path directly.
-            writeCacheChildReadyMarker(mode: .hang)
+            if childMode == .hang {
+                writeCacheChildReadyMarker(mode: .hang)
+            }
             let (stream, continuation) = AsyncStream<Void>.makeStream()
             defer { continuation.finish() }
             var iterator = stream.makeAsyncIterator()
             _ = await iterator.next()
+            return
+        case .cancellation?:
+            writeCacheChildReadyMarker(mode: .cancellation)
+            let preCancelled = Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return try await runCacheHeartbeatChild(
+                    mode: .hang, timeout: .seconds(60))
+            }
+            do {
+                _ = try await preCancelled.value
+                Issue.record("Pre-cancelled supervisor launched a child")
+            } catch is CancellationError {}
+
+            let startupLifecycle = CacheHeartbeatChildLifecycle()
+            let launched = BoundedTestCounter()
+            let startingChild = Task {
+                try await runCacheHeartbeatChild(
+                    mode: .startupHang, timeout: .seconds(60),
+                    launchNotifications: launched, lifecycle: startupLifecycle)
+            }
+            let launch = await launched.wait(
+                untilAtLeast: 1, timeout: .seconds(15))
+            #expect(
+                launch.reached, "startup child must launch before cancellation")
+            startingChild.cancel()
+            try await expectCacheChildCancellation(
+                startingChild, lifecycle: startupLifecycle)
+
+            let lifecycle = CacheHeartbeatChildLifecycle()
+            let ready = BoundedTestCounter()
+            let child = Task {
+                try await runCacheHeartbeatChild(
+                    mode: .hang, timeout: .seconds(60),
+                    readyNotifications: ready, lifecycle: lifecycle)
+            }
+            let readiness = await ready.wait(
+                untilAtLeast: 1, timeout: .seconds(15))
+            #expect(
+                readiness.reached,
+                "nested hanging child must report readiness before cancellation"
+            )
+            child.cancel()
+            try await expectCacheChildCancellation(child, lifecycle: lifecycle)
+            print("cache-read-child=cancellation-cleanup-complete")
             return
         case .workload?:
             writeCacheChildReadyMarker(mode: .workload)
@@ -333,6 +380,25 @@ final class LibraryCachePerformanceTests {
             workloadChild.output.contains("cache-read-child=workload-complete"),
             "selected test did not report workload completion; output: \(workloadChild.output)"
         )
+    }
+
+    /// The outer process watchdog bounds even a regression in cancellation
+    /// cleanup, which otherwise could strand this test's structured task.
+    @Test
+    func testCacheHeartbeatChildCancellationReapsChild() async throws {
+        let result = try await runCacheHeartbeatChild(
+            mode: .cancellation, timeout: .seconds(25))
+        #expect(
+            !result.didTimeOut,
+            "cancellation supervisor hung; output: \(result.output)")
+        #expect(
+            result.exitStatus == 0,
+            "cancellation supervisor failed; output: \(result.output)")
+        #expect(result.executedTests == 1)
+        #expect(result.testNames == ["testCacheReadsDoNotBlockTheMainActor()"])
+        #expect(
+            result.output.contains(
+                "cache-read-child=cancellation-cleanup-complete"))
     }
 
     private static func runCacheReadHeartbeatWorkload() async throws {
@@ -495,12 +561,15 @@ private struct CacheHeartbeatChildResult {
 
 private enum CacheHeartbeatChildMode: String {
     case hang
+    case startupHang
     case workload
+    case cancellation
 }
 
 private enum CacheHeartbeatChildEvent: Sendable {
     case exited(Int32)
     case timedOut
+    case cancelled
 }
 
 private actor CacheHeartbeatChildOutput {
@@ -549,6 +618,72 @@ private actor CacheHeartbeatChildOutput {
     }
 }
 
+private actor CacheHeartbeatChildLifecycle {
+    private var process: Process?
+    private var reportDirectory: URL?
+    private var rescueTask: Task<Void, Never>?
+    private var rescued = false
+
+    func record(process: Process, reportDirectory: URL) {
+        self.process = process
+        self.reportDirectory = reportDirectory
+        // Independently contain a regression in the supervisor itself. Five
+        // seconds is a rescue budget, never a readiness or success criterion.
+        rescueTask = Task.detached {
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch { return }
+            await self.rescueIfRunning()
+        }
+    }
+
+    private func rescueIfRunning() {
+        guard let process, process.isRunning else { return }
+        rescued = true
+        killCacheHeartbeatChild(process)
+    }
+
+    func finishRescue() async -> Bool {
+        rescueTask?.cancel()
+        await rescueTask?.value
+        rescueTask = nil
+        return rescued
+    }
+
+    func isCleanedUp() -> Bool {
+        guard let process, let reportDirectory else { return false }
+        return !process.isRunning
+            && !FileManager.default.fileExists(atPath: reportDirectory.path)
+    }
+}
+
+private func expectCacheChildCancellation(
+    _ task: Task<CacheHeartbeatChildResult, Error>,
+    lifecycle: CacheHeartbeatChildLifecycle
+) async throws {
+    let outcome = await task.result
+    let rescued = await lifecycle.finishRescue()
+    #expect(
+        !rescued,
+        "Supervisor cancellation required the independent rescue watchdog")
+    #expect(await lifecycle.isCleanedUp())
+    switch outcome {
+    case .success:
+        Issue.record("Cancelled child supervisor returned a result")
+    case .failure(let error):
+        guard error is CancellationError else { throw error }
+    }
+}
+
+private func killCacheHeartbeatChild(_ process: Process) {
+    guard process.isRunning else { return }
+    let result = Darwin.kill(process.processIdentifier, SIGKILL)
+    let failure = errno
+    if result != 0 && failure != ESRCH {
+        Issue.record("Could not kill owned cache child: errno=\(failure)")
+    }
+}
+
 private final class CacheHeartbeatXUnitParser: NSObject, XMLParserDelegate {
     private(set) var testNames: [String] = []
 
@@ -572,8 +707,12 @@ private final class CacheHeartbeatXUnitParser: NSObject, XMLParserDelegate {
 /// child at the deadline; no blocking wait or detached cache worker remains.
 private func runCacheHeartbeatChild(
     mode: CacheHeartbeatChildMode,
-    timeout: Duration
+    timeout: Duration,
+    readyNotifications: BoundedTestCounter? = nil,
+    launchNotifications: BoundedTestCounter? = nil,
+    lifecycle: CacheHeartbeatChildLifecycle? = nil
 ) async throws -> CacheHeartbeatChildResult {
+    try Task.checkCancellation()
     let process = Process()
     process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
     let childReportDirectory = FileManager.default.temporaryDirectory
@@ -582,6 +721,14 @@ private func runCacheHeartbeatChild(
         at: childReportDirectory,
         withIntermediateDirectories: true
     )
+    defer {
+        do {
+            try FileManager.default.removeItem(at: childReportDirectory)
+        } catch {
+            Issue.record(
+                "Could not remove child test report directory: \(error)")
+        }
+    }
     let childReportURL = childReportDirectory.appendingPathComponent(
         "child.xunit.xml")
 
@@ -634,9 +781,11 @@ private func runCacheHeartbeatChild(
             continuation.finish()
         }
     }
+    try Task.checkCancellation()
     try process.run()
-    let processID = process.processIdentifier
-    let terminationTask = Task {
+    await lifecycle?.record(
+        process: process, reportDirectory: childReportDirectory)
+    let terminationTask = Task.detached {
         let event = await waitForCacheHeartbeatTermination(terminationEvents)
         if case .exited(let status) = event {
             await outputProbe.recordExit(status)
@@ -647,7 +796,7 @@ private func runCacheHeartbeatChild(
         try outputPipe.fileHandleForWriting.close()
     } catch {
         if process.isRunning {
-            _ = Darwin.kill(processID, SIGKILL)
+            killCacheHeartbeatChild(process)
         }
         _ = await terminationTask.value
         throw error
@@ -655,7 +804,7 @@ private func runCacheHeartbeatChild(
 
     // Drain output while the child runs; a pipe that is not consumed can fill
     // and block the test process before the timeout handler gets a chance.
-    let outputReader = Task {
+    let outputReader = Task.detached {
         do {
             for try await byte in outputPipe.fileHandleForReading.bytes {
                 await outputProbe.append(byte)
@@ -664,14 +813,26 @@ private func runCacheHeartbeatChild(
             Issue.record("Could not read cache child output: \(error)")
         }
     }
-    let readyWait = await outputProbe.waitUntilReadyOrExit(
-        timeout: .seconds(15)
-    )
+    await launchNotifications?.increment()
+
+    // Keep the readiness budget alive when the caller is already cancelled.
+    // Cancellation kills the child, whose retained observer wakes readiness.
+    let readinessTask = Task.detached {
+        await outputProbe.waitUntilReadyOrExit(timeout: .seconds(15))
+    }
+    let readyWait = await withTaskCancellationHandler {
+        await readinessTask.value
+    } onCancel: {
+        if process.isRunning {
+            killCacheHeartbeatChild(process)
+        }
+    }
     let initialOutput = await outputProbe.snapshot()
     let ready = readyWait.reached && initialOutput.ready
 
     let event: CacheHeartbeatChildEvent
     if ready {
+        await readyNotifications?.increment()
         event = await waitForCacheHeartbeatChild(
             terminationTask,
             process: process,
@@ -681,10 +842,12 @@ private func runCacheHeartbeatChild(
         // A broken test filter or runner setup must also have bounded cleanup.
         let stillRunning = process.isRunning
         if stillRunning {
-            _ = Darwin.kill(processID, SIGKILL)
+            killCacheHeartbeatChild(process)
         }
         let terminalEvent = await terminationTask.value
-        event = stillRunning ? .timedOut : terminalEvent
+        event =
+            Task.isCancelled
+            ? .cancelled : (stillRunning ? .timedOut : terminalEvent)
     }
 
     await outputReader.value
@@ -698,13 +861,11 @@ private func runCacheHeartbeatChild(
         return delegate.testNames
     }
     let executedTests = testNames?.count
-    do {
-        try FileManager.default.removeItem(at: childReportDirectory)
-    } catch {
-        Issue.record("Could not remove child test report directory: \(error)")
-    }
 
+    try Task.checkCancellation()
     switch event {
+    case .cancelled:
+        throw CancellationError()
     case .exited(let status):
         return CacheHeartbeatChildResult(
             didTimeOut: false,
@@ -741,7 +902,7 @@ private func waitForCacheHeartbeatChild(
             do {
                 try await Task.sleep(for: timeout)
             } catch {
-                return .exited(-1)
+                return .cancelled
             }
             return .timedOut
         }
@@ -750,14 +911,15 @@ private func waitForCacheHeartbeatChild(
         case .exited:
             group.cancelAll()
             return firstEvent
-        case .timedOut:
+        case .timedOut, .cancelled:
             if process.isRunning {
-                _ = Darwin.kill(process.processIdentifier, SIGKILL)
+                killCacheHeartbeatChild(process)
             }
             // The retained observer proves OS termination and reap.
             _ = await terminationTask.value
             _ = await group.next()
-            return .timedOut
+            group.cancelAll()
+            return firstEvent
         }
     }
 }

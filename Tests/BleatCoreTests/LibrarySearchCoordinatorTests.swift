@@ -310,6 +310,131 @@ final class LibrarySearchCoordinatorTests {
     }
 
     @Test
+    func testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall()
+        async throws
+    {
+        let service = SearchTestService(ignoreCancellationOnFirstCall: true)
+        let completion = BoundedTestCounter()
+        let context = Self.context(account: "a", library: "one")
+        let request = try LibrarySearchRequest(query: "book")
+        await service.resumeBlockedCall()
+        await service.resumeBlockedCall()
+
+        let task = Task {
+            let result:
+                Result<
+                    LibraryRepositoryResult<LibrarySearchResults>,
+                    LibraryRepositoryError
+                >
+            do throws(LibraryRepositoryError) {
+                result = .success(
+                    try await service.search(
+                        context: context,
+                        request: request
+                    ))
+            } catch let error {
+                result = .failure(error)
+            }
+            await completion.increment()
+            return result
+        }
+        let callWait = await service.waitForFirstCall()
+        #expect(
+            callWait.reached,
+            "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
+        )
+        guard callWait.reached else {
+            task.cancel()
+            await service.resumeBlockedCall()
+            _ = await task.result
+            return
+        }
+        let blockedWait = await service.waitForBlockedCall()
+        #expect(
+            blockedWait.reached,
+            "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+        )
+        guard blockedWait.reached else {
+            task.cancel()
+            await service.resumeBlockedCall()
+            _ = await task.result
+            return
+        }
+
+        let completionWait = await completion.wait(untilAtLeast: 1)
+        #expect(
+            completionWait.reached,
+            "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
+        )
+        if !completionWait.reached {
+            task.cancel()
+            await service.resumeBlockedCall()
+        }
+        let result = await task.value
+
+        guard case .success(let value) = result else {
+            Issue.record("Expected the cancellation-ignoring call to succeed")
+            return
+        }
+        #expect(value.source == .remote)
+        await service.resumeBlockedCall()
+        #expect(await service.callCount() == 1)
+    }
+
+    @Test
+    func testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall()
+        async throws
+    {
+        let service = SearchTestService(ignoreCancellationOnFirstCall: true)
+        let completion = BoundedTestCounter()
+        let context = Self.context(account: "a", library: "one")
+        let request = try LibrarySearchRequest(query: "book")
+        let task = Task {
+            let result = try await service.search(
+                context: context,
+                request: request
+            )
+            await completion.increment()
+            return result
+        }
+        let callWait = await service.waitForFirstCall()
+        #expect(
+            callWait.reached,
+            "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
+        )
+        guard callWait.reached else {
+            task.cancel()
+            await service.resumeBlockedCall()
+            _ = await task.result
+            return
+        }
+        let blockedWait = await service.waitForBlockedCall()
+        #expect(
+            blockedWait.reached,
+            "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+        )
+        guard blockedWait.reached else {
+            task.cancel()
+            await service.resumeBlockedCall()
+            _ = await task.result
+            return
+        }
+
+        await service.resumeBlockedCall()
+        await service.resumeBlockedCall()
+        let completionWait = await completion.wait(untilAtLeast: 1)
+        #expect(
+            completionWait.reached,
+            "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
+        )
+        if !completionWait.reached {
+            task.cancel()
+            await service.resumeBlockedCall()
+        }
+        _ = await task.result
+    }
+
+    @Test
     func testRepositoryFailuresRemainTyped() async throws {
         let sleeper = SearchTestSleeper()
         let remoteError = AudiobookshelfAPIError.unexpectedStatus(503)
@@ -497,11 +622,22 @@ private actor SearchTestService {
     private let failure: LibraryRepositoryError?
     private var recordedCalls: [Call] = []
     private var cancelledCalls = 0
-    private var blockedContinuation: CheckedContinuation<Void, Never>?
+    private enum BlockedCallState {
+        case notRegistered
+        case waiting(CheckedContinuation<Void, Never>)
+        case released
+    }
+
+    private var blockedCallState = BlockedCallState.notRegistered
     private let callRegistrations = BoundedTestCounter()
+    private let blockedCallRegistrations = BoundedTestCounter()
 
     func waitForFirstCall() async -> BoundedTestWaitResult {
         await callRegistrations.wait(untilAtLeast: 1)
+    }
+
+    func waitForBlockedCall() async -> BoundedTestWaitResult {
+        await blockedCallRegistrations.wait(untilAtLeast: 1)
     }
 
     init(
@@ -526,8 +662,9 @@ private actor SearchTestService {
                 context: context,
                 request: request
             ))
+        let isFirstCall = recordedCalls.count == 1
         await callRegistrations.increment()
-        if blockFirstCall, recordedCalls.count == 1 {
+        if blockFirstCall, isFirstCall {
             do {
                 try await Task.sleep(for: .seconds(30))
             } catch {
@@ -535,11 +672,25 @@ private actor SearchTestService {
                 throw .cancelled
             }
         }
-        if ignoreCancellationOnFirstCall,
-            recordedCalls.count == 1
-        {
+        if ignoreCancellationOnFirstCall, isFirstCall {
             await withCheckedContinuation { continuation in
-                blockedContinuation = continuation
+                switch blockedCallState {
+                case .notRegistered:
+                    blockedCallState = .waiting(continuation)
+                    Task {
+                        await blockedCallRegistrations.increment()
+                    }
+                case .waiting:
+                    continuation.resume()
+                    Task {
+                        await blockedCallRegistrations.increment()
+                    }
+                case .released:
+                    Task {
+                        await blockedCallRegistrations.increment()
+                    }
+                    continuation.resume()
+                }
             }
         }
         if let failure {
@@ -566,7 +717,14 @@ private actor SearchTestService {
     }
 
     func resumeBlockedCall() {
-        blockedContinuation?.resume()
-        blockedContinuation = nil
+        switch blockedCallState {
+        case .notRegistered:
+            blockedCallState = .released
+        case .waiting(let continuation):
+            blockedCallState = .released
+            continuation.resume()
+        case .released:
+            break
+        }
     }
 }
