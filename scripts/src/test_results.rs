@@ -639,8 +639,151 @@ fn read_bundle_tests(path: &Path) -> Result<(String, SummaryCounts)> {
     }
     let summary: Value = serde_json::from_slice(&summary.stdout)
         .map_err(|error| VerifyError::InvalidJson(error.to_string()))?;
-    let counts = validate_summary(&summary)?;
+    let counts = validate_summary_with_legacy_fallback(&summary, || read_legacy_summary(path))?;
     Ok((json, counts))
+}
+
+fn read_legacy_summary(path: &Path) -> Result<Value> {
+    let output = Command::new("xcrun")
+        .args(["xcresulttool", "get", "object", "--legacy", "--path"])
+        .arg(path)
+        .args(["--format", "json"])
+        .output()
+        .map_err(VerifyError::ProcessStart)?;
+    if !output.status.success() {
+        return Err(VerifyError::ProcessFailed(
+            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        ));
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| VerifyError::InvalidJson(error.to_string()))
+}
+
+fn validate_summary_with_legacy_fallback<F>(
+    summary: &Value,
+    load_legacy: F,
+) -> Result<SummaryCounts>
+where
+    F: FnOnce() -> Result<Value>,
+{
+    if !summary.is_object() {
+        return Err(VerifyError::InvalidResult("summary must be an object"));
+    }
+    if summary.get("runtimeWarnings").is_some() {
+        return validate_summary(summary);
+    }
+
+    let legacy = load_legacy()?;
+    validate_legacy_issue_summaries(&legacy)?;
+    let mut compatible_summary = summary.clone();
+    compatible_summary["runtimeWarnings"] = serde_json::json!([]);
+    validate_summary(&compatible_summary)
+}
+
+fn validate_legacy_issue_summaries(record: &Value) -> Result<()> {
+    if record
+        .get("_type")
+        .and_then(|value| value.get("_name"))
+        .and_then(Value::as_str)
+        != Some("ActionsInvocationRecord")
+    {
+        return Err(VerifyError::InvalidResult(
+            "legacy invocation record type missing or invalid",
+        ));
+    }
+    let actions = typed_array_values(record.get("actions"), "legacy actions array missing")?;
+    if actions.is_empty() {
+        return Err(VerifyError::InvalidResult("legacy actions array is empty"));
+    }
+
+    for action in actions {
+        if action
+            .get("_type")
+            .and_then(|value| value.get("_name"))
+            .and_then(Value::as_str)
+            != Some("ActionRecord")
+        {
+            return Err(VerifyError::InvalidResult(
+                "legacy action record type missing or invalid",
+            ));
+        }
+        let action_result = action
+            .get("actionResult")
+            .ok_or(VerifyError::InvalidResult("legacy action result missing"))?;
+        if action_result
+            .get("_type")
+            .and_then(|value| value.get("_name"))
+            .and_then(Value::as_str)
+            != Some("ActionResult")
+        {
+            return Err(VerifyError::InvalidResult(
+                "legacy action result type missing or invalid",
+            ));
+        }
+        let issues = action_result
+            .get("issues")
+            .ok_or(VerifyError::InvalidResult(
+                "legacy action result issues missing",
+            ))?;
+        if issues
+            .get("_type")
+            .and_then(|value| value.get("_name"))
+            .and_then(Value::as_str)
+            != Some("ResultIssueSummaries")
+        {
+            return Err(VerifyError::InvalidResult(
+                "legacy action result issues type missing or invalid",
+            ));
+        }
+        for (field, expected_type) in [
+            ("errorSummaries", "IssueSummary"),
+            ("testFailureSummaries", "TestFailureIssueSummary"),
+            ("analyzerWarningSummaries", "IssueSummary"),
+            ("warningSummaries", "IssueSummary"),
+            ("testWarningSummaries", "TestIssueSummary"),
+        ] {
+            let Some(value) = issues.get(field) else {
+                // xcresulttool's typed legacy JSON omits empty arrays.
+                continue;
+            };
+            let values = typed_array_values(Some(value), "legacy issue summary array is invalid")?;
+            for item in values {
+                if item
+                    .get("_type")
+                    .and_then(|typed| typed.get("_name"))
+                    .and_then(Value::as_str)
+                    != Some(expected_type)
+                {
+                    return Err(VerifyError::InvalidResult(
+                        "legacy issue summary entry type is invalid",
+                    ));
+                }
+            }
+            if !values.is_empty() {
+                return Err(VerifyError::FailedOutcome(format!(
+                    "legacy action result reports {field}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn typed_array_values<'a>(value: Option<&'a Value>, missing: &'static str) -> Result<&'a [Value]> {
+    let value = value.ok_or(VerifyError::InvalidResult(missing))?;
+    if value
+        .get("_type")
+        .and_then(|typed| typed.get("_name"))
+        .and_then(Value::as_str)
+        != Some("Array")
+    {
+        return Err(VerifyError::InvalidResult(missing));
+    }
+    value
+        .get("_values")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or(VerifyError::InvalidResult(missing))
 }
 
 fn validate_summary(summary: &Value) -> Result<SummaryCounts> {
@@ -715,4 +858,112 @@ pub fn validate_summary_json(json: &str) -> Result<()> {
     let summary: Value =
         serde_json::from_str(json).map_err(|error| VerifyError::InvalidJson(error.to_string()))?;
     validate_summary(&summary).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LEGACY_EMPTY_ISSUES: &str =
+        include_str!("../tests/fixtures/test-results/legacy-empty-issue-summaries.json");
+
+    fn passed_summary() -> Value {
+        serde_json::json!({
+            "result": "Passed",
+            "passedTests": 2,
+            "failedTests": 0,
+            "skippedTests": 0,
+            "expectedFailures": 0,
+            "testFailures": []
+        })
+    }
+
+    fn legacy_with_issue(field: &str, type_name: &str) -> Value {
+        let mut record: Value = serde_json::from_str(LEGACY_EMPTY_ISSUES).expect("legacy fixture");
+        record["actions"]["_values"][0]["actionResult"]["issues"][field] = serde_json::json!({
+            "_type": { "_name": "Array" },
+            "_values": [{ "_type": { "_name": type_name } }]
+        });
+        record
+    }
+
+    #[test]
+    fn missing_modern_warning_field_uses_real_legacy_empty_array_shape() {
+        let summary = passed_summary();
+        let legacy: Value = serde_json::from_str(LEGACY_EMPTY_ISSUES).expect("legacy fixture");
+        assert!(validate_summary_with_legacy_fallback(&summary, || Ok(legacy)).is_ok());
+        assert!(validate_summary_json(&summary.to_string()).is_err());
+    }
+
+    #[test]
+    fn legacy_warning_and_error_summaries_fail_closed() {
+        for (field, type_name) in [
+            ("warningSummaries", "IssueSummary"),
+            ("testWarningSummaries", "TestIssueSummary"),
+            ("analyzerWarningSummaries", "IssueSummary"),
+            ("errorSummaries", "IssueSummary"),
+            ("testFailureSummaries", "TestFailureIssueSummary"),
+        ] {
+            let summary = passed_summary();
+            let legacy = legacy_with_issue(field, type_name);
+            assert!(
+                matches!(
+                    validate_summary_with_legacy_fallback(&summary, || Ok(legacy)),
+                    Err(VerifyError::FailedOutcome(_))
+                ),
+                "accepted legacy issue summary {field}"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_record_requires_nonempty_actions_and_action_issues() {
+        let summary = passed_summary();
+        let mut missing_issues: Value =
+            serde_json::from_str(LEGACY_EMPTY_ISSUES).expect("legacy fixture");
+        missing_issues["actions"]["_values"][0]["actionResult"]
+            .as_object_mut()
+            .expect("action result object")
+            .remove("issues");
+        assert!(matches!(
+            validate_summary_with_legacy_fallback(&summary, || Ok(missing_issues)),
+            Err(VerifyError::InvalidResult(_))
+        ));
+
+        let mut no_actions: Value =
+            serde_json::from_str(LEGACY_EMPTY_ISSUES).expect("legacy fixture");
+        no_actions["actions"]["_values"] = serde_json::json!([]);
+        assert!(matches!(
+            validate_summary_with_legacy_fallback(&summary, || Ok(no_actions)),
+            Err(VerifyError::InvalidResult(_))
+        ));
+    }
+
+    #[test]
+    fn non_object_summary_is_rejected_before_legacy_fallback() {
+        for summary in [Value::Null, serde_json::json!([]), serde_json::json!(42)] {
+            assert!(matches!(
+                validate_summary_with_legacy_fallback(&summary, || {
+                    panic!("invalid summary must not request legacy evidence")
+                }),
+                Err(VerifyError::InvalidResult("summary must be an object"))
+            ));
+        }
+    }
+
+    #[test]
+    fn null_modern_warning_field_does_not_use_legacy_fallback() {
+        let mut summary = passed_summary();
+        summary["runtimeWarnings"] = Value::Null;
+        assert!(matches!(
+            validate_summary_with_legacy_fallback(&summary, || {
+                Err(VerifyError::InvalidResult(
+                    "legacy fallback unexpectedly requested",
+                ))
+            }),
+            Err(VerifyError::InvalidResult(
+                "summary runtimeWarnings array missing"
+            ))
+        ));
+    }
 }

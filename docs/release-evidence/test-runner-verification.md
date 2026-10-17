@@ -12,6 +12,13 @@ aggregate case outcome, and reconciles summary counts and diagnostics. Unknown
 outcomes, missing or additional cases, duplicates, unapproved skips, failures,
 runtime warnings, and entirely skipped selections fail validation.
 
+Xcode 26.6 omits `runtimeWarnings` from the summary. For that schema, the
+verifier reads the bundle's typed legacy action-result issue summaries and
+rejects warning or error entries before accepting the summary. Missing or
+malformed issue records fail validation; a present but malformed modern
+`runtimeWarnings` value does not trigger this fallback. CI smoke discovery is
+read from Xcode's dedicated JSON output file, separately from console output.
+
 Core, macOS, focused Xcode, and CI smoke runners derive expectations from built
 test discovery. App-live, performance, download performance, landscape,
 release-secret, screenshot, and external deep-link journey runners declare the
