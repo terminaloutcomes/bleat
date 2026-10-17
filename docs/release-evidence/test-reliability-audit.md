@@ -757,7 +757,9 @@ references were checked after the fixes.
 ## PR review corrections (2026-10-17)
 
 The three review findings on PR #367 were confirmed against `cb3caba` and
-corrected on the source branch before extraction into the smaller PRs:
+corrected in the current bounded PR #367 batch. Remaining work is staged under
+issues #369 through #376; this batch can integrate independently of epic or
+release completion:
 
 - Search fixture entry could precede continuation registration. Its explicit
   not-registered/waiting/released state now retains an early release and makes
@@ -813,6 +815,14 @@ Live validation:
   is `.build/pr367-review-telemetry.log`. Owned containers, volumes and raw
   temporary capture data were removed by the gate.
 
-The minimum-profile image remains an external validation prerequisite. Final
-CI is checked on the published head separately. This batch does not close
-issue #362 or claim new app/UI, physical-device or archive evidence.
+The minimum-profile image remains an external compatibility-validation
+prerequisite, owned by the Bleat maintainers under issue #376. It is not a
+failed test or an unmet development-merge gate for this bounded batch. Broader
+configuration and release evidence remains owned by the staged follow-ups;
+issue #369 reconciles current dispositions against the historical audit.
+
+CI for review-fix head `39fd45a` passed all five workflows, including 608 verified
+iOS smoke passes and zero skips in [Validate Bleat run 39021211739](https://github.com/terminaloutcomes/bleat/actions/runs/39021211739).
+Subsequent branch updates require their own normal CI; the PR records its final
+head and checks. This batch does not close issue #362 or claim new physical-device,
+full app-live, signed macOS authentication or release archive evidence.
