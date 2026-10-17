@@ -216,26 +216,25 @@ pub fn run() -> Result<()> {
 
     // Derive the expected case set from the exact products and test selection
     // just built. This catches disabled, missing, and unexpectedly added tests.
-    let discovery = checked_output(
-        xcodebuild().args([
-            "-destination",
-            &resolved_destination,
-            "-enumerate-tests",
-            "-test-enumeration-style",
-            "flat",
-            "-test-enumeration-format",
-            "json",
-            "-test-enumeration-output-path",
-            "-",
-            "test-without-building",
-        ]),
+    let discovery_path = Path::new(&result).with_extension("discovery.json");
+    ensure_success(
+        xcodebuild()
+            .args([
+                "-destination",
+                &resolved_destination,
+                "-enumerate-tests",
+                "-test-enumeration-style",
+                "flat",
+                "-test-enumeration-format",
+                "json",
+                "-test-enumeration-output-path",
+            ])
+            .arg(&discovery_path)
+            .arg("test-without-building")
+            .status()?,
         "Enumerate smoke tests",
     )?;
-    let discovery_text = String::from_utf8(discovery)?;
-    std::fs::write(
-        Path::new(&result).with_extension("discovery.json"),
-        &discovery_text,
-    )?;
+    let discovery_text = std::fs::read_to_string(&discovery_path)?;
     let only = [
         APP_TESTS.to_owned(),
         STARTUP.to_owned(),
