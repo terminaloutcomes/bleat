@@ -48527,7 +48527,7 @@
       "source": {
         "path": "Tests/BleatAppTests/TranscriptExportArtifactTests.swift",
         "line": 100,
-        "endLineBeforeNextTest": 175
+        "endLineBeforeNextTest": 176
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -48544,7 +48544,7 @@
         },
         {
           "line": 142,
-          "expression": "withExtendedLifetime(completedWrites) {"
+          "expression": "try withExtendedLifetime(completedWrites) {"
         }
       ],
       "assertions": [
@@ -48569,11 +48569,11 @@
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 164,
+          "line": 165,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 170,
+          "line": 171,
           "expression": "XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))"
         }
       ],

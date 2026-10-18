@@ -155,7 +155,13 @@ tests, not a failing test or runtime coverage. The log additionally reports the
 CoreSimulator version mismatch and an arm64/x86_64 destination ambiguity. This
 PR does not change the unrelated platform compatibility path.
 
-Independent review removed an unnecessary outer `try` and corrected the source
-audit's unsupported runner-timeout claim. The task group joins finite local
+Independent review corrected the source audit's unsupported runner-timeout claim. The task group joins finite local
 writes; there is no test-local or explicitly enabled runner timeout, so a
 filesystem hang remains a runner-level risk.
+
+CI run `39135127213` at `5c44d38` failed during app-test compilation: its
+toolchain requires `try` on `withExtendedLifetime` around the throwing file
+reads. The review-directed removal was incorrect; no tests executed and no
+`ios-smoke-results` artifact was available. The correction binds the throwing
+`Data(contentsOf:)` read outside the XCTest autoclosure and retains the required
+outer `try`, making error propagation explicit. Updated-head CI is required.

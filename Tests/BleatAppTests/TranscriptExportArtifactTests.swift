@@ -139,7 +139,7 @@ final class TranscriptExportArtifactTests: XCTestCase {
         }
 
         // Each artifact owns a lease that deletes its file on deinitialization.
-        withExtendedLifetime(completedWrites) {
+        try withExtendedLifetime(completedWrites) {
             XCTAssertEqual(completedWrites.count, 8)
             XCTAssertEqual(Set(completedWrites.map { $0.1.url }).count, 8)
             for (index, artifact) in completedWrites {
@@ -161,8 +161,9 @@ final class TranscriptExportArtifactTests: XCTestCase {
                     artifact.contentType, expectedContentType, "Export \(index)"
                 )
                 // Exact UTF-8 bytes are the exported subtitle file contract.
+                let actualData = try Data(contentsOf: artifact.url)
                 XCTAssertEqual(
-                    try Data(contentsOf: artifact.url),
+                    actualData,
                     Data(expectedText.utf8),
                     "Export \(index) must retain its own payload."
                 )
