@@ -552,23 +552,56 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     @Test
     func testBearerNeverAppearsInCapturedProcessLogs() async throws {
-        let secret = "captured-private-bearer-material"
-        let provider = SequenceTokenProvider(tokens: [secret])
-        let client = RecordingOtlpClient(results: [.failure])
-        let exporter = exporter(provider: provider, client: client)
-
-        let captured = try await captureStandardOutput {
-            print("stdout capture sentinel")
+        if let rawMode = ProcessInfo.processInfo.environment[
+            BearerLogChild.environmentKey]
+        {
+            let mode = try #require(BearerLogChild.Mode(rawValue: rawMode))
+            FileHandle.standardOutput.write(
+                Data("stdout capture sentinel\n".utf8))
             FileHandle.standardError.write(
-                Data("stderr capture sentinel\n".utf8)
-            )
-            _ = await exporter.export(spans: [span()])
+                Data("stderr capture sentinel\n".utf8))
+            switch mode {
+            case .incompleteReport:
+                // Simulate successful process termination without runner evidence.
+                Darwin._exit(0)
+            case .hang:
+                // Deliberately never complete: only the parent's deadline may
+                // stop this injected uncooperative child.
+                let never = AsyncStream<Void> { _ in }
+                for await _ in never {}
+            case .failure:
+                Issue.record("Injected child test failure")
+            case .flood:
+                // Larger than a Darwin pipe: the parent must drain concurrently.
+                for _ in 0..<128 {
+                    FileHandle.standardOutput.write(
+                        Data(repeating: 120, count: 16 * 1024))
+                }
+            case .leak:
+                FileHandle.standardError.write(
+                    Data("Bearer \(BearerLogChild.secret)\n".utf8))
+            case .exporter:
+                let provider = SequenceTokenProvider(tokens: [
+                    BearerLogChild.secret
+                ])
+                let client = RecordingOtlpClient(results: [.failure])
+                let exporter = exporter(provider: provider, client: client)
+                let result = await exporter.export(spans: [span()])
+                #expect(client.exportCount == 1)
+                #expect(client.asynchronousExportCount == 1)
+                #expect(await provider.requestCount == 1)
+                #expect(result == .failure)
+            }
+            return
         }
-
-        #expect(captured.contains("stdout capture sentinel"))
-        #expect(captured.contains("stderr capture sentinel"))
-        #expect(!(captured.contains(secret)))
-        #expect(!(captured.contains("Bearer \(secret)")))
+        let result = await BearerLogChild.run()
+        #expect(result.failure == nil)
+        #expect(result.cleanupFailures.isEmpty)
+        #expect(result.reaped)
+        #expect(result.readersClosed)
+        #expect(result.writersClosed)
+        #expect(result.reportRemoved)
+        #expect(result.privacyFailure == nil)
     }
 
     private func exporter(
@@ -613,48 +646,6 @@ final class AuthenticatedOtlpSpanExporterTests {
             eventName: "bleat.cloudkit.sync.failed"
         )
     }
-}
-
-private enum StandardOutputCaptureError: Error {
-    case unavailable
-}
-
-private func captureStandardOutput(
-    _ operation: () async -> Void
-) async throws -> String {
-    let pipe = Pipe()
-    let savedStandardOutput = dup(STDOUT_FILENO)
-    let savedStandardError = dup(STDERR_FILENO)
-    guard savedStandardOutput >= 0, savedStandardError >= 0 else {
-        if savedStandardOutput >= 0 { close(savedStandardOutput) }
-        if savedStandardError >= 0 { close(savedStandardError) }
-        throw StandardOutputCaptureError.unavailable
-    }
-    defer {
-        close(savedStandardOutput)
-        close(savedStandardError)
-    }
-
-    fflush(nil)
-    guard
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO) >= 0,
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO) >= 0
-    else {
-        throw StandardOutputCaptureError.unavailable
-    }
-
-    await operation()
-    fflush(nil)
-    guard
-        dup2(savedStandardOutput, STDOUT_FILENO) >= 0,
-        dup2(savedStandardError, STDERR_FILENO) >= 0
-    else {
-        throw StandardOutputCaptureError.unavailable
-    }
-    try pipe.fileHandleForWriting.close()
-    let captured = pipe.fileHandleForReading.readDataToEndOfFile()
-    try pipe.fileHandleForReading.close()
-    return String(decoding: captured, as: UTF8.self)
 }
 
 private actor SequenceTokenProvider: TelemetryTokenProviding {
