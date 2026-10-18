@@ -28,12 +28,14 @@ use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{path::PathBuf, str::FromStr};
-use tokio::fs;
+use std::str::FromStr;
+use tokio::sync::oneshot;
 use tower::ServiceExt;
 use url::Url;
 use uuid::Uuid;
 
+#[path = "support/signing_fixture.rs"]
+mod signing_fixture;
 mod support;
 
 use support::TestPostgres;
@@ -97,57 +99,67 @@ async fn test_router(postgres: &TestPostgres) -> axum::Router {
     configured_test_router(postgres, |_| {}).await
 }
 
+#[derive(Debug, thiserror::Error)]
+enum ProductionRouterError {
+    #[error("configuration: {0}")]
+    Configuration(#[from] bleat_api::config::ConfigError),
+    #[error("database: {0}")]
+    Database(#[from] bleat_api::database::DatabaseError),
+    #[error("router: {0}")]
+    Router(#[from] RouterBuildError),
+}
+
+async fn production_router_with_key(
+    postgres: &TestPostgres,
+    key: Vec<u8>,
+) -> Result<axum::Router, ProductionRouterError> {
+    let mut arguments = test_arguments(postgres);
+    let database_config = postgres.config();
+    let (_cancel, cancelled) = oneshot::channel();
+    signing_fixture::run(
+        signing_fixture::unique_path(),
+        key,
+        cancelled,
+        move |path| async move {
+            arguments.deployment_mode = DeploymentMode::Production;
+            arguments.public_issuer =
+                Url::parse("https://telemetry.example.test").expect("test issuer should parse");
+            arguments.apple_team_id = Some("TEAM123456".to_owned());
+            arguments.app_identifier = Some("com.example.Bleat".to_owned());
+            arguments.app_attest_environment = AppAttestEnvironment::Production;
+            arguments.jwt_signing_key_file = Some(path);
+            let result = async {
+                let config = Config::from_arguments(arguments, TelemetryExportConfig::default())?;
+                let database = connect_and_migrate(&database_config).await?;
+                router(&config, database).map_err(ProductionRouterError::from)
+            }
+            .await;
+            Ok::<_, std::convert::Infallible>(result)
+        },
+    )
+    .await
+    .finish()
+}
+
 async fn production_router(postgres: &TestPostgres) -> axum::Router {
     let signer = JwsEs256Signer::generate_es256().expect("production test signer should generate");
     let key = signer
         .private_key_to_der()
         .expect("production test signer should export");
-    let path = std::env::temp_dir().join(format!("bleat-production-jwt-{}.der", Uuid::new_v4()));
-    fs::write(&path, key.as_slice())
+    production_router_with_key(postgres, key.as_slice().to_vec())
         .await
-        .expect("production test key should be written");
-    let path_argument = path.to_string_lossy().into_owned();
-    let mut arguments = test_arguments(postgres);
-    arguments.deployment_mode = DeploymentMode::Production;
-    arguments.public_issuer =
-        Url::parse("https://telemetry.example.test").expect("test issuer should parse");
-    arguments.apple_team_id = Some("TEAM123456".to_owned());
-    arguments.app_identifier = Some("com.example.Bleat".to_owned());
-    arguments.app_attest_environment = AppAttestEnvironment::Production;
-    arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
-    let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
-        .expect("test configuration should validate");
-    let result = router(&config, database(postgres).await).expect("production router should build");
-    fs::remove_file(path)
-        .await
-        .expect("production test key should be removed");
-    result
+        .expect("production router should build")
 }
 
 #[tokio::test]
 async fn production_router_preserves_the_signing_configuration_failure() {
     let postgres = TestPostgres::start().await;
-    let path = std::env::temp_dir().join(format!("bleat-invalid-jwt-{}.der", Uuid::new_v4()));
-    fs::write(&path, b"not-a-signing-key")
+    let error = production_router_with_key(&postgres, b"not-a-signing-key".to_vec())
         .await
-        .expect("invalid test key should be written");
-    let path_argument = path.to_string_lossy().into_owned();
-    let mut arguments = test_arguments(&postgres);
-    arguments.deployment_mode = DeploymentMode::Production;
-    arguments.public_issuer =
-        Url::parse("https://telemetry.example.test").expect("test issuer should parse");
-    arguments.apple_team_id = Some("TEAM123456".to_owned());
-    arguments.app_identifier = Some("com.example.Bleat".to_owned());
-    arguments.app_attest_environment = AppAttestEnvironment::Production;
-    arguments.jwt_signing_key_file = Some(PathBuf::from(path_argument));
-    let config = Config::from_arguments(arguments, TelemetryExportConfig::default())
-        .expect("test configuration should validate");
-    let error = router(&config, database(&postgres).await)
         .expect_err("invalid signing material should prevent router construction");
-    fs::remove_file(path)
-        .await
-        .expect("invalid test key should be removed");
-
+    let ProductionRouterError::Router(error) = error else {
+        panic!("expected router signing-configuration failure, got {error:?}");
+    };
     assert_eq!(
         error,
         RouterBuildError::TokenIssuer(TokenIssuerError::SigningKeyConfiguration)
