@@ -118,8 +118,8 @@ identities are unchanged, so the navigation and host inventories need no update.
 Validation on 2026-10-19, based on `07cd9bae` (PR #383), Xcode 27.1
 (`27A9275`): `mise run swift-lint`, `mise run docs:check`, and
 `git diff --check` passed. The documentation checker reported
-`Documentation references verified`. Local focused
-repetitions and the local owning `BleatAppTests` run are **unexecuted**: destination
+`Documentation references verified`. Initially, local focused
+repetitions and the local owning `BleatAppTests` run were **unexecuted**: destination
 discovery with `xcrun simctl list devices available` invoked Xcode's
 `xcodebuild -runFirstLaunch`, waiting for macOS authorization to install
 components (installed CoreSimulator `1171.7`, toolchain expects `1174.9.2`). A
@@ -189,7 +189,40 @@ with one known issue and the signed-Keychain case excluded. Rust coverage
 reported 3.865%, below its advisory 80% threshold; that job passed. These are
 separate CI lanes, not local signed-host or device evidence.
 
-Focused ten-iteration execution remains required after local Xcode component
-installation is authorized. The owning CI suite does not establish those
-repetitions. Independent source review cleared this source revision; the PR
-remains draft with no merge clearance while that evidence is outstanding.
+The owning CI suite does not establish focused repetitions. Independent source
+review cleared this source revision. The subsequently completed local evidence
+is recorded below; broader #374 and #362 requirements remain open.
+
+### Verified local repetitions and owning suite
+
+After the user authorized Apple's component update on 2026-10-19, installed
+CoreSimulator `1174.9.2` matched Xcode 27.1 (`27A9275`). Simulator discovery
+completed successfully. At unchanged source revision
+`53836c2a4b6015712e3217f0d3da2417f9655fbf`, the selected iPhone 17 Pro
+(iOS Simulator 26.5) ran the exact concurrent export identity **10 times: all
+10 passed**, zero skips, failures, expected failures or runtime warnings.
+The bundle `.build/export-ios-focused-10.xcresult` was inspected with
+`xcresulttool` summary/tests and `verify-test-results --expected
+BleatAppTests/TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup
+--repetitions 10`. The summary contains one unique identity and ten run
+outcomes; these are ten repetitions, not ten different tests.
+
+The first local full-owning attempt, `.build/export-ios-owning.xcresult`,
+executed no actual test case: SpringBoard denied test-host launch with
+`Busy / Application failed preflight checks`. Its summary records one synthetic
+runner failure. That failed attempt is retained and is not passing coverage.
+Explicit `simctl bootstatus -b` then found the device needed booting and waited
+through data migration and system-app readiness to terminal `Finished` (9s).
+The built test host was installed after readiness, then the existing build was
+enumerated using the repository runner's flat JSON enumeration options.
+
+With a fresh result bundle, `test-without-building -only-testing:BleatAppTests
+-parallel-testing-enabled NO` passed the full owning suite: **606 outcomes,
+zero skips, failures, expected failures or runtime warnings**, including all
+eight transcript artifact tests. `.build/export-ios-owning-ready.xcresult` was
+inspected with `xcresulttool` summary/tests and strictly verified against
+`.build/export-evidence/ios-owning.discovery.json` with `--only BleatAppTests`.
+All assertions were unchanged; no timing sleep, tolerance increase, or product
+workaround was added. `.envrc` retained its original checksum. This is local
+Simulator evidence; the earlier macOS compile blocker and lack of physical-device
+validation remain explicit.

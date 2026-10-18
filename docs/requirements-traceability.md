@@ -654,8 +654,11 @@ Remaining device evidence keeps #341 open.
 Concurrent transcript-export assertion coverage (#384, child of #374) retains
 all eight artifact leases and checks distinct URLs, exact UTF-8 VTT/SRT content,
 format/content type and orphan cleanup after task-group completion. See the
-[bounded source review and validation blocker](release-evidence/test-reliability-app-followups.md#concurrent-transcript-export-assertions-384).
+[bounded source review and validation evidence](release-evidence/test-reliability-app-followups.md#concurrent-transcript-export-assertions-384).
 This is test-only remediation. CI run `39136376326` at `aaca43b` verified
 606 app outcomes and two UI smoke outcomes, including this target once, with
-zero failures/skips/runtime warnings. Focused repetitions remain unexecuted
-pending local Xcode component-install authorization.
+zero failures/skips/runtime warnings. After the component update, local Xcode
+27.1 validation at `53836c2` verified ten focused repetitions and all 606 owning
+app outcomes, with zero skips/failures/runtime warnings. A prior SpringBoard
+Busy launch failure executed no actual test cases and is retained separately;
+explicit boot readiness and installation preceded the successful owning run.
