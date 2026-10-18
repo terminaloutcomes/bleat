@@ -980,6 +980,7 @@ Descriptions received from the server are untrusted rich text. Render a sanitize
 - Require both `permissions.update` and `permissions.upload`.
 - Treat `{ "success": true, "cover": <server cover path> }` as success.
 - Refetch the item after success because the cover response does not include the new item `updatedAt` used for cache busting.
+- After a successful cover upload/refetch (including retry), refresh the matching account/item in active playback with a fresh cover request, even if the server timestamp is unchanged. Update in-app and system Now Playing artwork without changing playback position, intent, or queue. Reject obsolete image completions.
 - Keep the previous cached cover until the server confirms success.
 - Fetch with `GET /api/items/<item-id>/cover`, optionally using `width`, `height`, `format`, and `ts=<updatedAt>`; the current server intentionally permits unauthenticated cover GETs.
 - Cache-bust with `ts=<updatedAt>` rather than appending bearer tokens to URLs.

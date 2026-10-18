@@ -18,6 +18,8 @@ enum PlaybackState: Equatable, Sendable {
 }
 
 struct PlaybackRuntimeSnapshotForTesting {
+    let playerIdentity: ObjectIdentifier?
+    let queuedItemIdentities: [ObjectIdentifier]
     let itemStatus: AVPlayerItem.Status?
     let timeControlStatus: AVPlayer.TimeControlStatus?
     let playerRate: Float
@@ -491,6 +493,7 @@ final class PlaybackModel {
     private(set) var author = ""
     private(set) var narrator = ""
     private(set) var coverURL: URL?
+    private var coverWasEdited = false
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
@@ -507,6 +510,9 @@ final class PlaybackModel {
 
     var runtimeSnapshotForTesting: PlaybackRuntimeSnapshotForTesting {
         PlaybackRuntimeSnapshotForTesting(
+            playerIdentity: player.map(ObjectIdentifier.init),
+            queuedItemIdentities: player?.items().map(ObjectIdentifier.init)
+                ?? [],
             itemStatus: player?.currentItem?.status,
             timeControlStatus: player?.timeControlStatus,
             playerRate: player?.rate ?? 0,
@@ -614,9 +620,32 @@ final class PlaybackModel {
     }
 
     var coverLoadPolicy: BookCoverLoadPolicy {
-        preparation?.sessionID == nil
+        preparation?.sessionID == nil && !coverWasEdited
             ? .cacheOnly
             : .allowNetwork
+    }
+
+    func refreshCover(for account: ServerAccount, detail: LibraryBookDetail) {
+        guard accountID == account.id, itemID == detail.id, hasActiveBook,
+            let url = BookCoverURL.make(
+                server: account.server,
+                itemID: detail.id,
+                updatedAtMilliseconds: detail.updatedAtMilliseconds,
+                width: 600,
+                height: 600
+            ),
+            var components = URLComponents(
+                url: url, resolvingAgainstBaseURL: false)
+        else { return }
+        // A successful upload may retain the server's previous item timestamp.
+        components.queryItems =
+            (components.queryItems ?? []) + [
+                URLQueryItem(name: "revision", value: UUID().uuidString)
+            ]
+        guard let refreshedURL = components.url else { return }
+        coverWasEdited = true
+        coverURL = refreshedURL
+        updateNowPlaying()
     }
 
     var cachedContinuationPhase: CachedContinuationPhase {
@@ -890,6 +919,7 @@ final class PlaybackModel {
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
         narrator = detail.narrators.joined(separator: ", ")
+        coverWasEdited = false
         coverURL = BookCoverURL.make(
             server: account.server,
             itemID: detail.id,
@@ -1093,6 +1123,7 @@ final class PlaybackModel {
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
         narrator = detail.narrators.joined(separator: ", ")
+        coverWasEdited = false
         coverURL = BookCoverURL.make(
             server: account?.server,
             itemID: detail.id,
@@ -2101,6 +2132,7 @@ final class PlaybackModel {
         title = ""
         author = ""
         narrator = ""
+        coverWasEdited = false
         coverURL = nil
         currentTime = 0
         duration = 0

@@ -18612,6 +18612,205 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    #if os(iOS)
+        func testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry()
+            async throws
+        {
+            for retriesUpload in [false, true] {
+                let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+                defer { fixture.cleanUp() }
+                let account = try fixtureAccount(
+                    accountID: fixture.accountID.rawValue)
+                let detail = fixture.detail
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([fixtureLibrary()]),
+                    firstPage: .success(
+                        fixturePage(libraryID: detail.libraryID)),
+                    bookDetail: .success(detail),
+                    metadataSave: .success(.saved(detail)),
+                    coverReplacement: retriesUpload
+                        ? .failure(.coverUpdate(.uploadRejected))
+                        : .success(detail)
+                )
+                let image = artworkTestImage(edge: 3, colour: .red)
+                let data = try XCTUnwrap(image.pngData())
+                let oldImage = artworkTestImage(edge: 2, colour: .blue)
+                let oldData = try XCTUnwrap(oldImage.pngData())
+                let loader = BookCoverImageLoader(
+                    diskCapacity: 0,
+                    fetch: { request in
+                        (
+                            request.url?.query?.contains("revision=") == true
+                                ? data : oldData,
+                            try XCTUnwrap(
+                                HTTPURLResponse(
+                                    url: try XCTUnwrap(request.url),
+                                    statusCode: 200,
+                                    httpVersion: nil, headerFields: nil))
+                        )
+                    })
+                let publisher = TestNowPlayingInfoPublisher()
+                let model = AppModel(
+                    service: service,
+                    localSessionStore: LocalPlaybackSessionStore(
+                        defaults: fixture.defaults),
+                    playbackPositionStore: PlaybackPositionStore(
+                        defaults: fixture.defaults),
+                    nowPlayingCoordinator: NowPlayingCoordinator(
+                        infoCenter: publisher, coverLoader: loader,
+                        registersRemoteCommands: false)
+                )
+                await model.start()
+                let playback = model.playback
+                let initialURL = try XCTUnwrap(
+                    BookCoverURL.make(
+                        server: account.server, itemID: detail.id,
+                        updatedAtMilliseconds: detail.updatedAtMilliseconds,
+                        width: 600, height: 600))
+                _ = await loader.image(for: initialURL, accountID: account.id)
+                await playback.startDownloaded(
+                    detail: detail, trackURLs: [fixture.audioURL],
+                    accountID: account.id, account: account)
+
+                await assertEventually(
+                    "downloaded playback is ready", timeout: .seconds(5),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: { playback.state == .playing })
+                let initialArtwork = await waitForNowPlayingArtwork(
+                    in: publisher)
+                XCTAssertEqual(
+                    initialArtwork?.image(at: oldImage.size)?.size,
+                    oldImage.size
+                )
+                // Exercise playing and paused saves; only paused positions admit exact equality.
+                if retriesUpload {
+                    playback.pause()
+                    await playback.seek(to: 5)
+                    XCTAssertEqual(playback.state, .paused)
+                    XCTAssertEqual(playback.currentTime, 5)
+                }
+                let originalURL = playback.coverURL
+                let position = playback.currentTime
+                let started = ContinuousClock.now
+                let state = playback.state
+                let runtime = playback.runtimeSnapshotForTesting
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: detail), baseline: detail,
+                    coverJPEGData: data)
+                if retriesUpload {
+                    XCTAssertEqual(playback.coverURL, originalURL)
+                    await service.setCoverReplacement(.success(detail))
+                    await model.retryBookCoverUpload()
+                }
+                XCTAssertNotEqual(playback.coverURL, originalURL)
+                XCTAssertEqual(playback.coverLoadPolicy, .allowNetwork)
+                let artwork = await waitForNowPlayingArtwork(in: publisher)
+                XCTAssertEqual(artwork?.image(at: image.size)?.size, image.size)
+                if retriesUpload {
+                    XCTAssertEqual(playback.currentTime, position)
+                } else {
+                    let elapsed = started.duration(to: .now).components
+                    let seconds =
+                        Double(elapsed.seconds) + Double(elapsed.attoseconds)
+                        / 1e18
+                    XCTAssertGreaterThanOrEqual(playback.currentTime, position)
+                    // Periodic AVPlayer sampling adds at most half a second of granularity.
+                    XCTAssertLessThanOrEqual(
+                        playback.currentTime - position, seconds + 0.5)
+                }
+                XCTAssertEqual(playback.state, state)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.itemStatus,
+                    runtime.itemStatus)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerRate,
+                    runtime.playerRate)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerIdentity,
+                    runtime.playerIdentity)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.queuedItemIdentities,
+                    runtime.queuedItemIdentities)
+                let refreshedURL = playback.coverURL
+                let other = fixtureBookDetail(
+                    item: fixtureBook(
+                        id: "another-book", title: "Other",
+                        libraryID: detail.libraryID))
+                playback.refreshCover(for: account, detail: other)
+                playback.refreshCover(
+                    for: try fixtureAccount(accountID: "other-account"),
+                    detail: detail)
+                XCTAssertEqual(playback.coverURL, refreshedURL)
+                await playback.stop()
+            }
+        }
+
+        func testLatestArtworkRejectsOlderImageCompletion() async throws {
+            let gate = AsyncGate()
+            let oldURL = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=old"))
+            let newURL = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=new"))
+            let oldImage = artworkTestImage(edge: 2, colour: .blue)
+            let newImage = artworkTestImage(edge: 3, colour: .red)
+            let oldData = try XCTUnwrap(oldImage.pngData())
+            let newData = try XCTUnwrap(newImage.pngData())
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    if request.url == oldURL { await gate.enterAndWait() }
+                    return (
+                        request.url == oldURL ? oldData : newData,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200, httpVersion: nil,
+                                headerFields: nil))
+                    )
+                })
+            let publisher = TestNowPlayingInfoPublisher()
+            let coordinator = NowPlayingCoordinator(
+                infoCenter: publisher, coverLoader: loader,
+                registersRemoteCommands: false)
+            defer { coordinator.clear() }
+            coordinator.publish(
+                nowPlayingSnapshot(accountID: nil, coverURL: oldURL))
+            await gate.waitUntilEntered()
+            coordinator.publish(
+                nowPlayingSnapshot(accountID: nil, coverURL: newURL))
+            let artwork = await waitForNowPlayingArtwork(in: publisher)
+            XCTAssertEqual(
+                artwork?.image(at: newImage.size)?.size, newImage.size)
+            await gate.release()
+            await assertEventually(
+                "both artwork tasks completed", timeout: .seconds(3),
+                observed: {
+                    "completed: \(coordinator.artworkCompletionSequenceForTesting)"
+                },
+                condition: {
+                    coordinator.artworkCompletionSequenceForTesting == 2
+                })
+            let latest =
+                publisher.nowPlayingInfo?[MPMediaItemPropertyArtwork]
+                as? MPMediaItemArtwork
+            XCTAssertEqual(
+                latest?.image(at: newImage.size)?.size, newImage.size)
+        }
+        private func artworkTestImage(edge: CGFloat, colour: UIColor) -> UIImage
+        {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            return UIGraphicsImageRenderer(
+                size: CGSize(width: edge, height: edge), format: format
+            )
+            .image { context in
+                colour.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: edge, height: edge))
+            }
+        }
+    #endif
+
     func testBookEditRetainsSavedMetadataWhenCoverUploadFails()
         async throws
     {

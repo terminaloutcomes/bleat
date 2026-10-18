@@ -4660,6 +4660,7 @@ final class AppModel {
                     bookDetailRefreshState = .idle
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
+                    playback.refreshCover(for: account, detail: updated)
                     bookEditSaveState = .saved
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
@@ -4718,6 +4719,7 @@ final class AppModel {
             bookDetailRefreshState = .idle
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
+            playback.refreshCover(for: account, detail: updated)
             bookEditSaveState = .coverSaved(updated)
         } catch let error {
             guard bookCoverRetryOperationID == operationID,

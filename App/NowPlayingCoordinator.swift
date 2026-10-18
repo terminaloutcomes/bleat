@@ -210,6 +210,7 @@ final class NowPlayingCoordinator {
     private var artwork: MPMediaItemArtwork?
     private var artworkTask: Task<Void, Never>?
     private var artworkGeneration: UInt64 = 0
+    private(set) var artworkCompletionSequenceForTesting = 0
 
     init(
         infoCenter: any NowPlayingInfoPublishing =
@@ -289,7 +290,9 @@ final class NowPlayingCoordinator {
         artworkGeneration &+= 1
         let generation = artworkGeneration
         artworkTask = Task { @MainActor [weak self] in
-            guard let self,
+            guard let self else { return }
+            defer { artworkCompletionSequenceForTesting += 1 }
+            guard
                 let image = await coverLoader.image(
                     for: nextArtworkIdentity.url,
                     accountID: nextArtworkIdentity.accountID,
