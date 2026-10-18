@@ -19,6 +19,7 @@ pub mod deploy_device;
 pub mod device_build;
 pub mod documentation;
 pub mod error;
+pub mod large_library;
 pub mod listening_repair;
 pub mod live_fixtures;
 pub mod runner_readiness;
