@@ -1,6 +1,6 @@
 //! Owned synthetic media fixtures for the large-library live harness.
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom},
     path::Path,
     process::Command,
@@ -26,6 +26,8 @@ pub enum GenerationError {
     Manifest(#[from] serde_json::Error),
     #[error("ffmpeg failed to generate silent audio")]
     Media,
+    #[error("fixture publication was interrupted; inspect the retained fixture before retrying")]
+    PublicationInterrupted,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,6 +36,51 @@ struct Manifest {
     format: String,
     count: usize,
     audio_sha256: String,
+    state: PublicationState,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PublicationState {
+    Ready,
+    Publishing,
+}
+
+fn write_manifest(file: &mut File, manifest: &Manifest) -> Result<(), GenerationError> {
+    file.seek(SeekFrom::Start(0))?;
+    file.set_len(0)?;
+    serde_json::to_writer(&mut *file, manifest)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+// These exact inert files are the checked-in default directory scaffold. Their
+// bytes deliberately define the initialization contract; they remain unowned
+// and are never replaced or deleted by generation.
+fn can_initialize(output: &Path) -> Result<bool, GenerationError> {
+    let entries = fs::read_dir(output)?.collect::<Result<Vec<_>, _>>()?;
+    if entries.is_empty() {
+        return Ok(true);
+    }
+    if entries.len() != 2 {
+        return Ok(false);
+    }
+    for entry in entries {
+        let expected: &[u8] = match entry.file_name().to_str() {
+            Some(".gitignore") => {
+                include_bytes!("../../TestSupport/ServerHarness/media-large/.gitignore")
+            }
+            Some(".gitkeep") => {
+                include_bytes!("../../TestSupport/ServerHarness/media-large/.gitkeep")
+            }
+            _ => return Ok(false),
+        };
+        regular_file(&entry.path())?;
+        if fs::read(entry.path())? != expected {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn ownership(reason: &'static str) -> GenerationError {
@@ -119,6 +166,10 @@ fn audio_digest(path: &Path) -> Result<String, GenerationError> {
 }
 
 fn validate(output: &Path, manifest: &Manifest, count: usize) -> Result<(), GenerationError> {
+    match manifest.state {
+        PublicationState::Publishing => return Err(GenerationError::PublicationInterrupted),
+        PublicationState::Ready => {}
+    }
     if manifest.format != FORMAT
         || manifest.count > 100_000
         || (manifest.count > 0
@@ -192,6 +243,15 @@ fn generate_with(
     count: usize,
     media: impl FnOnce(&Path) -> Result<(), GenerationError>,
 ) -> Result<(), GenerationError> {
+    generate_with_publication(output, count, media, |_| Ok(()))
+}
+
+fn generate_with_publication(
+    output: &Path,
+    count: usize,
+    media: impl FnOnce(&Path) -> Result<(), GenerationError>,
+    mut published: impl FnMut(usize) -> Result<(), GenerationError>,
+) -> Result<(), GenerationError> {
     // Normalize trailing separators and `.` before checking the destination;
     // symlink_metadata on `link/` would otherwise follow the directory link.
     if output
@@ -212,7 +272,7 @@ fn generate_with(
     }
     fs::create_dir_all(output)?;
     let marker = output.join(MANIFEST);
-    let mut file = if fs::read_dir(output)?.next().is_none() {
+    let mut file = if can_initialize(output)? {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -220,15 +280,15 @@ fn generate_with(
             .open(&marker)?;
         file.try_lock()
             .map_err(|_| ownership("generator is already running"))?;
-        serde_json::to_writer(
+        write_manifest(
             &mut file,
             &Manifest {
                 format: FORMAT.into(),
                 count: 0,
                 audio_sha256: String::new(),
+                state: PublicationState::Ready,
             },
         )?;
-        file.sync_all()?;
         file
     } else {
         regular_file(&marker)?;
@@ -240,7 +300,7 @@ fn generate_with(
     let mut bytes = Vec::new();
     file.seek(SeekFrom::Start(0))?;
     file.read_to_end(&mut bytes)?;
-    let manifest: Manifest = serde_json::from_slice(&bytes)?;
+    let mut manifest: Manifest = serde_json::from_slice(&bytes)?;
     validate(output, &manifest, count)?;
 
     // Only this unique staging directory is automatically cleaned on failure.
@@ -261,8 +321,12 @@ fn generate_with(
         )?;
     }
     validate(output, &manifest, count)?;
+    // Persist fail-closed state before any destructive publication. A matching
+    // old prefix cannot prove completion after an interrupted expansion.
+    manifest.state = PublicationState::Publishing;
+    write_manifest(&mut file, &manifest)?;
+    File::open(output)?.sync_all()?;
     // Remove only the two validated files, never a recursive book glob.
-    // Interrupted publication leaves an inconsistent manifest and fails closed.
     for index in 0..manifest.count {
         let book = output.join(book_name(index));
         fs::remove_file(book.join("track.mp3"))?;
@@ -272,18 +336,19 @@ fn generate_with(
     for index in 0..count {
         let name = book_name(index);
         fs::rename(stage.path().join(&name), output.join(name))?;
+        published(index + 1)?;
     }
-    file.seek(SeekFrom::Start(0))?;
-    file.set_len(0)?;
-    serde_json::to_writer(
+    // Make directory publication durable before recording successful completion.
+    File::open(output)?.sync_all()?;
+    write_manifest(
         &mut file,
         &Manifest {
             format: FORMAT.into(),
             count,
             audio_sha256: digest,
+            state: PublicationState::Ready,
         },
     )?;
-    file.sync_all()?;
     stage.close()?;
     Ok(())
 }
@@ -350,6 +415,35 @@ mod tests {
                 json!({"metadata": {"title":"Book Title 0", "authors":["Author One"], "narrators":["Narrator 0"], "genres":["Non-Fiction"], "series":[], "year":"1950", "publisher":"Publisher 0", "explicit":true}, "tags":["tag-0"]})
             );
             assert_eq!(fs::read_dir(output).expect("output").count(), 4);
+        }
+    }
+
+    #[test]
+    fn rejects_modified_or_augmented_checkout_scaffold_without_mutation() {
+        for change in ["ignore", "keep", "extra", "symlink"] {
+            let root = tempfile::tempdir().expect("fixture");
+            fs::write(
+                root.path().join(".gitignore"),
+                include_bytes!("../../TestSupport/ServerHarness/media-large/.gitignore"),
+            )
+            .expect("ignore");
+            fs::write(root.path().join(".gitkeep"), b"").expect("keep");
+            match change {
+                "ignore" => {
+                    fs::write(root.path().join(".gitignore"), b"unrelated").expect("change")
+                }
+                "keep" => fs::write(root.path().join(".gitkeep"), b"unrelated").expect("change"),
+                "extra" => fs::write(root.path().join("sentinel"), b"keep").expect("extra"),
+                _ => {
+                    fs::remove_file(root.path().join(".gitkeep")).expect("remove");
+                    symlink(root.path().join(".gitignore"), root.path().join(".gitkeep"))
+                        .expect("link");
+                }
+            }
+            let before = snapshot(root.path());
+            assert!(run(root.path(), 1).is_err(), "{change}");
+            assert_eq!(snapshot(root.path()), before);
+            assert!(!root.path().join(MANIFEST).exists());
         }
     }
 
@@ -509,6 +603,54 @@ mod tests {
         let fresh = root.path().join("fresh");
         assert!(generate_with(&fresh, 1, |_| Err(GenerationError::Media)).is_err());
         run(&fresh, 1).expect("retry after initial media failure");
+    }
+
+    #[test]
+    fn rejects_interrupted_expansion_when_retry_uses_old_or_smaller_count() {
+        for original_count in [1, 2] {
+            let root = tempfile::tempdir().expect("fixture");
+            run(root.path(), original_count).expect("initial");
+            fs::write(root.path().join("sentinel"), b"keep").expect("sentinel");
+            let result = generate_with_publication(
+                root.path(),
+                original_count + 2,
+                |track| {
+                    fs::write(track, b"test audio")?;
+                    Ok(())
+                },
+                |published| {
+                    if published == original_count + 1 {
+                        Err(GenerationError::Media)
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(matches!(result, Err(GenerationError::Media)));
+            assert!(
+                root.path().join(book_name(original_count)).is_dir(),
+                "interrupted expansion must have published an extra book"
+            );
+            let before = snapshot(root.path());
+            for retry_count in [original_count, 1, original_count + 2] {
+                assert!(
+                    matches!(
+                        run(root.path(), retry_count),
+                        Err(GenerationError::PublicationInterrupted)
+                    ),
+                    "interrupted publication must reject retry count {retry_count}"
+                );
+                assert_eq!(
+                    snapshot(root.path()),
+                    before,
+                    "retry must not mutate any retained resource"
+                );
+            }
+            assert_eq!(
+                fs::read(root.path().join("sentinel")).expect("sentinel"),
+                b"keep"
+            );
+        }
     }
 
     #[test]

@@ -30,6 +30,15 @@ fn large_library_wrapper_forwards_count_output_and_repository_override() {
         } else {
             root.join("TestSupport/ServerHarness/media-large")
         };
+        if !explicit {
+            fs::create_dir_all(&output).expect("fresh checkout output");
+            let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../TestSupport/ServerHarness/media-large");
+            for name in [".gitignore", ".gitkeep"] {
+                fs::copy(source.join(name), output.join(name))
+                    .expect("copy actual checkout scaffold");
+            }
+        }
         for count in [3, 1, 1] {
             let mut command = Command::new(&wrapper);
             command
@@ -49,7 +58,21 @@ fn large_library_wrapper_forwards_count_output_and_repository_override() {
                 "{}",
                 String::from_utf8_lossy(&result.stderr)
             );
-            assert_eq!(fs::read_dir(&output).expect("output").count(), count + 1);
+            assert_eq!(
+                fs::read_dir(&output).expect("output").count(),
+                count + 1 + if explicit { 0 } else { 2 }
+            );
+            if !explicit {
+                assert_eq!(
+                    fs::read(output.join(".gitignore")).expect("retained ignore"),
+                    include_bytes!("../../TestSupport/ServerHarness/media-large/.gitignore")
+                );
+                assert!(
+                    fs::read(output.join(".gitkeep"))
+                        .expect("retained keep")
+                        .is_empty()
+                );
+            }
             assert!(output.join("book-00000/metadata.json").is_file());
         }
         let args = fs::read_to_string(&capture).expect("capture");

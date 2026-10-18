@@ -37,9 +37,14 @@ The generator's shell entry point launches `scripts`' Rust
 `generate-large-library` binary and requires Cargo and ffmpeg. It preserves
 `BLEAT_LARGE_LIBRARY_COUNT` (default 10000), the optional output directory,
 and `BLEAT_REPOSITORY_ROOT`. Counts must be integers from 1 through 100000.
-A new or empty destination is initialized with `.bleat-large-library.json`;
-existing populated destinations without a valid manifest are rejected without
-claiming or replacing their contents. Older unmarked datasets must be retained
+A new or empty destination, or one containing only the exact checked-in
+`.gitignore` and empty `.gitkeep` scaffold from
+`TestSupport/ServerHarness/media-large/`, is initialized with
+`.bleat-large-library.json`. Scaffold files must be single-link regular files
+with identical bytes; this exact identity is the scaffold recognition contract.
+They are preserved without replacement or deletion. Any additional or changed
+content prevents scaffold initialization. Other populated destinations without
+a valid manifest are rejected without claiming or replacing their contents. Older unmarked datasets must be retained
 and a new empty destination selected; do not add a marker to adopt old data.
 
 Regeneration validates the manifest, each recorded book's exact two-file shape,
@@ -50,9 +55,12 @@ hard-linked files and unowned numeric-name collisions cause safe refusal.
 Unrecorded siblings (including `book-notes` and `.silent-template.mp3`) survive.
 A unique owned staging directory contains temporary media and is cleaned on
 normal failures. A manifest lock rejects overlapping generator invocations.
-Media generation finishes before old books are removed; interrupted publication
-fails closed on the next run and requires inspection rather than automatic
-recovery. Do not edit fixture contents while generation is running.
+Media generation finishes before old books are removed. Before publication,
+the locked manifest is written and synchronized with a typed `publishing` state;
+the directory is synchronized before replacing books. After all replacements,
+the directory is synchronized before recording `ready`. Interrupted publication
+therefore rejects every retry count, including the former or a smaller count,
+and requires inspection rather than automatic recovery. Do not edit fixture contents while generation is running.
 
 Focused ownership and wrapper regressions are in
 `scripts/src/large_library.rs` and `scripts/tests/large_library_cli.rs`.
@@ -76,6 +84,28 @@ parsed metadata, valid 1-second MP3 audio, retained `book-notes` sentinel and
 unowned template, and absence of staging leftovers. The disposable destination
 was removed afterward. These are generator safety checks; the historical
 10,000-book performance and live-server results below were not rerun.
+
+### Follow-up review corrections (2026-10-18)
+
+PR #381 follow-up review identified two P2 defects in the initial implementation:
+the checked-in default-output scaffold was rejected, and interrupted expansion
+could be accepted at the previous count while leaving extra books. Both were
+reproduced by failing regressions before correction. The default wrapper test
+now copies the actual checked-in scaffold; altered, augmented and symlinked
+scaffolds are rejected without mutation. The
+`rejects_interrupted_expansion_when_retry_uses_old_or_smaller_count` regression
+interrupts the actual rename loop after an extra book is published, using
+identical audio. Retries at the former, smaller and expanded counts all return
+the typed interrupted-publication failure without changing retained resources.
+
+After these corrections, all nine `large_library::tests` cases and both
+`large_library_cli` cases passed. The same complete scripts gate passed 136 tests
+with no failures or ignored tests; Clippy, formatting and documentation checks
+passed. A new real-wrapper/ffmpeg 3 → 1 → 1 smoke run started from an exact copy
+of the tracked scaffold and verified preserved scaffold/sentinels, exact book
+names, parsed metadata, valid 1-second audio, `ready` manifest counts and staging
+cleanup. Both reported P2 findings are resolved; interrupted publication still
+requires inspection and fixture contents must remain unchanged during generation.
 
 ## Off-main-actor evidence
 
