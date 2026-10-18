@@ -162,8 +162,14 @@ complete signed host gate: 573 expected identities passed with zero skips,
 including the retained description-privacy test and all nine added identities.
 The report verifier independently rechecked both product XML files against the
 inventory. The signed helper profile/entitlements were verified by the gate;
-coverage exported executed lines for both libraries. A committed-revision
-confirmation is recorded below after publication preparation.
+coverage exported executed lines for both libraries. The final sequential
+confirmation reran that exact command at implementation commit
+`629d90064b8cea5031a2ca91f9067437a7d16030`: 573/573 passed, zero skips,
+with XML identities independently reverified. Its artifacts are
+`.build/issue-382/signed-final.log` and
+`.build/issue-382/signed-final-verified.xml`. Two fresh independent read-only
+review-agent cycles reported no findings (no P0/P1 or lower-priority findings).
+This evidence-only follow-up changes no tested source.
 
 Artifacts are `.build/issue-382/sequential/<selection>-<repetition>.xml` and
 sibling `.log` files, `.build/issue-382/signed-host.log`,

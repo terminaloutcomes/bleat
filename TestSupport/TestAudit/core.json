@@ -21964,15 +21964,16 @@
   "issue_382": {
     "issue": "https://github.com/terminaloutcomes/bleat/issues/382",
     "implementation": "Bounded process-isolated bearer-log scenario; original identity retained; 9 supervisor regressions added. Historical review and execution records above are unchanged.",
-    "source_review_revision": "523f4b2e1a58aaf247d45567af10deacf1ee60f6 plus issue-382 scoped working tree",
+    "source_review_revision": "629d90064b8cea5031a2ca91f9067437a7d16030",
     "execution": {
       "status": "passed",
       "focused_final": "10/10 passed; superseded failed implementation attempts retained in evidence",
       "repetitions": "Three individual runs per affected identity and three per owning suite; sequential matrix 36 reports, 114 executions passed, zero failures/errors/skips; exact identities verified against inventory. Earlier overlapping-build matrix also verified 114 passes and is superseded for repetition acceptance.",
-      "signed_host": "573/573 expected identities passed, zero skips; .build/host-results/tests.xml; final committed-revision confirmation pending",
+      "signed_host": "Two complete signed gates passed 573/573 expected identities with zero skips. Final sequential confirmation tested commit 629d90064b8cea5031a2ca91f9067437a7d16030; .build/host-results/tests.xml and .build/issue-382/signed-final-verified.xml.",
       "commands": "See linked evidence section for exact commands/selections and artifact paths.",
       "warnings": "OpenTelemetry dependency watchOS deployment deprecation; host Xcode reported outdated CoreSimulator service (no simulator claim); expected read-only SwiftData permission diagnostics in existing injected-failure tests."
     },
-    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382"
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382",
+    "reviews": "Two fresh independent read-only review-agent cycles reported No findings; no P0/P1 or lower-priority findings."
   }
 }
