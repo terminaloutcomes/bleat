@@ -655,5 +655,7 @@ Concurrent transcript-export assertion coverage (#384, child of #374) retains
 all eight artifact leases and checks distinct URLs, exact UTF-8 VTT/SRT content,
 format/content type and orphan cleanup after task-group completion. See the
 [bounded source review and validation blocker](release-evidence/test-reliability-app-followups.md#concurrent-transcript-export-assertions-384).
-This is test-only remediation; focused repetitions and the owning app suite
-remain unexecuted pending local Xcode component-install authorization.
+This is test-only remediation. CI run `39136376326` at `aaca43b` verified
+606 app outcomes and two UI smoke outcomes, including this target once, with
+zero failures/skips/runtime warnings. Focused repetitions remain unexecuted
+pending local Xcode component-install authorization.

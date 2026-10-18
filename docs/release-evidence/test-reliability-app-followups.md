@@ -118,8 +118,8 @@ identities are unchanged, so the navigation and host inventories need no update.
 Validation on 2026-10-19, based on `07cd9bae` (PR #383), Xcode 27.1
 (`27A9275`): `mise run swift-lint`, `mise run docs:check`, and
 `git diff --check` passed. The documentation checker reported
-`Documentation references verified`. Focused
-repetitions and the owning `BleatAppTests` suite are **unexecuted**: destination
+`Documentation references verified`. Local focused
+repetitions and the local owning `BleatAppTests` run are **unexecuted**: destination
 discovery with `xcrun simctl list devices available` invoked Xcode's
 `xcodebuild -runFirstLaunch`, waiting for macOS authorization to install
 components (installed CoreSimulator `1171.7`, toolchain expects `1174.9.2`). A
@@ -165,3 +165,31 @@ reads. The review-directed removal was incorrect; no tests executed and no
 `ios-smoke-results` artifact was available. The correction binds the throwing
 `Data(contentsOf:)` read outside the XCTest autoclosure and retains the required
 outer `try`, making error propagation explicit. Updated-head CI is required.
+
+### Verified CI owning-suite evidence
+
+[CI run 39136376326](https://github.com/terminaloutcomes/bleat/actions/runs/39136376326)
+passed at `aaca43befcc7820c8f1545efa6110dc1766abcbc` with Xcode 26.6
+(`17F113`) on iPhone 17 Pro, iOS Simulator 26.5. The downloaded
+`ios-smoke-results` bundle
+`.build/export-evidence/ci-smoke-corrected/5645-1792334208001.xcresult`
+was inspected with `xcresulttool` summary/tests and reverified with the
+repository's `verify-test-results` against its build-derived discovery and
+actual smoke selectors: **608 passed outcomes, zero skips, failures, expected
+failures, or runtime warnings**. These comprise 606 `BleatAppTests` outcomes
+(including all eight `TranscriptExportArtifactTests`) and two UI smoke outcomes.
+`testConcurrentFirstWritesSafelyShareOrphanCleanup` passed once (0.030153s).
+The initial local verifier invocation used an unmatched guessed UI selector and
+was rejected; using the actual selectors from `scripts/src/ci_smoke.rs` verified
+all 608 outcomes. That rejected verification is not test coverage.
+
+All PR CI checks passed on this tested revision; website deployment was
+intentionally skipped. The unsigned host job reported 573 tests in 43 suites,
+with one known issue and the signed-Keychain case excluded. Rust coverage
+reported 3.865%, below its advisory 80% threshold; that job passed. These are
+separate CI lanes, not local signed-host or device evidence.
+
+Focused ten-iteration execution remains required after local Xcode component
+installation is authorized. The owning CI suite does not establish those
+repetitions. Independent source review cleared this source revision; the PR
+remains draft with no merge clearance while that evidence is outstanding.
