@@ -2,14 +2,14 @@
 
 Issue [#362](https://github.com/terminaloutcomes/bleat/issues/362) owns this
 work. This record tracks source-level findings from the `BleatAppTests` audit.
-All follow-ups are owned by the Bleat maintainers; no separate issues were
-created. The per-test source evidence is recorded in
+All follow-ups are owned by the Bleat maintainers; bounded remediation issues
+are linked where created. The per-test source evidence is recorded in
 `TestSupport/TestAudit/app.json`.
 
 The app source audit is complete: all 593 in-scope test bodies have individual
 purpose, setup, action/postcondition, synchronization, nine-rule, compiler/skip,
-and decision assessments in `TestSupport/TestAudit/app.json` (509 keep, 4 fix,
-80 follow-up). The 10 async-gate
+and decision assessments in `TestSupport/TestAudit/app.json` (510 keep, 4 fix,
+79 follow-up). The 10 async-gate
 test declarations in `TestAsyncGateTests.swift` are excluded here and are covered
 by the parent audit; shared gate helpers live in `TestAsyncGates.swift`. Open
 items below are specific reliability defects that remain after source review.
@@ -25,7 +25,6 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testTenKBooksLoadNextBooksPagePerformance` | Remove the force unwrap constructing `AuthorID` in generated fixture data; make fixture creation report a test failure instead of trapping. | A constructor change or malformed fixture input can terminate the test process before XCTest records a useful failure. | Bleat maintainers |
 | `AppModelTests/testSeriesPaginationCoalescesAnInFlightPageWithoutBlockingMainActor`; `testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion`; `testConfirmedSeriesSerializeSharedBookHandoffPerAccount` | Replace one `Task.yield()` used as a competing-task barrier with an explicit admission/queue signal before checking coalescing or request ordering. | Yield only schedules cooperatively and does not establish that the other task reached the intended state; request-count and order assertions can pass before the competing operation is admitted. | Bleat maintainers |
 | `AppModelTests/testSetFinishedNewerCommitRejectsOlderDetailReconciliation`; `testSetFinishedReconciliationDoesNotRestoreObsoleteSearch`; `testCompletedReconciliationDoesNotCancelLaterUserSearch`; `testCancelledReconciliationSearchPreservesLoadedResults` | Expose and await reconciliation/search completion (and propagate cancellation) instead of using swallowed `try?` sleeps or yield-count polling before asserting stale work was rejected. | A 100ms delay or up to 50 sleeps does not prove the reconciliation task finished; a late detail/search result could overwrite the assertion after the test returns. One polling loop also suppresses cancellation. | Bleat maintainers |
-| `TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup` | Assert that concurrent writes create distinct artifact URLs and that each URL retains the expected content/type, in addition to existence and shared orphan cleanup. | Eight concurrent writers currently all report an existing file, which does not detect a URL collision or one writer overwriting another. | Bleat maintainers |
 
 | `AppModelTests/testRemotePlaybackProgressSyncEmitsOneTypedAttempt`; `testDownloadHTTPMetricsAreRecordedOffMainActorWithoutCacheHits`; `testContinueDownloadMissingLocalAccountHasTypedFailureAndPreservesBytes`; `testRestoredDownloadCallbacksMissingAccountKeepTypedStageAndBytes`; `testDownloadRestorePreservesQuarantinedLegacyTrackAndPresentsTypedCause`; `testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch` | Use an asserted bounded condition helper at each asynchronous observation, retaining the wait result, elapsed budget, source location, and observed state in XCTest failures; ensure session and observer cleanup runs on failure. | Current polling is time-bounded but some loops discard whether they observed the condition, or check a nearby but different state. A later callback may arrive after the test or an ordinary failure can lack actionable timeout context. Preserve typed failure and real legacy-persistence assertions. | Bleat maintainers |
 | `AppModelTests/testLateTerminalSaveCannotSetFailureForReplacementBatch`; `testTranscriptDeletionWaitsForLateTranscriptSave`; `testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes`; `testRereadClearsPinnedCompletionEvenWhenPlanFails`; `testLocalCompletionWaitsForInFlightAutomaticWork`; `testTransportFailureWaitsForNetworkAndDropsTransientProgress`; `testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff`; `testRetryAfterHeaderDelaysRetryableServerReplacement`; `testPauseIntentPrecedesConcurrentTerminalCallback`; `testLateCancelledTaskCallbackDoesNotRestartDownload`; `testLargeCellularDownloadsPreserveEveryPendingConfirmation`; `testConcurrentDownloadTriggersShareOneBookOperation`; `testFetchedCallbackTimeoutKeepsRetryBlockedUntilDrain` | Replace yield counts and short absence sleeps with a gate entry/completion signal for the operation under test. Make timeout cleanup release continuations, cancel owned tasks, and join their completion before checking absence or ordering. | Scheduler opportunities and short delays do not prove callback processing, retry cancellation, deletion admission, or pin cleanup has settled. Late work can invalidate the asserted result or leave a suspended task behind. Keep each existing late-callback, queue-reset, and persistence assertion. | Bleat maintainers |
@@ -102,3 +101,44 @@ The existing request and model-state assertions remain. Both tests passed three
 repetitions each (six exact outcomes, zero skips), and the owning app suite
 passed all 598 identities with zero skips (`.build/p2-live-refresh.xcresult`,
 `.build/p2-app-owning.xcresult`).
+
+## Concurrent transcript export assertions (#384)
+
+Child [#384](https://github.com/terminaloutcomes/bleat/issues/384) of
+[#374](https://github.com/terminaloutcomes/bleat/issues/374) resolves only
+`TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup`.
+The test joins eight writes with distinct UTF-8 payloads, alternating VTT/SRT
+formats and identical titles. It retains every artifact lease through assertions
+of eight distinct URLs, exact expected subtitle bytes, format/content type, file
+existence, and shared orphan cleanup. Byte equality intentionally verifies the
+file encoding and line-ending contract. No production exporter defect is claimed.
+The nine-rule source review is updated in `TestSupport/TestAudit/app.json`; test
+identities are unchanged, so the navigation and host inventories need no update.
+
+Validation on 2026-10-19, based on `07cd9bae` (PR #383), Xcode 27.1
+(`27A9275`): `mise run swift-lint` and `git diff --check` passed. Focused
+repetitions and the owning `BleatAppTests` suite are **unexecuted**: destination
+discovery with `xcrun simctl list devices available` invoked Xcode's
+`xcodebuild -runFirstLaunch`, waiting for macOS authorization to install
+components (installed CoreSimulator `1171.7`, toolchain expects `1174.9.2`). A
+process sample identifies `DVTFirstLaunchPackageInstaller` →
+`PKInstallRequest authorizeForRight` → `AuthorizationCopyRights`; this is an
+environment blocker, not a source/test failure. No tests, skips, or passing
+runtime results are claimed; no `.xcresult` was produced.
+
+After local component-install authorization, the required focused command is:
+
+```sh
+mise exec -- xcodebuild -project Bleat.xcodeproj -scheme Bleat \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -resultBundlePath .build/export-focused.xcresult \
+  -only-testing:BleatAppTests/TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup \
+  -test-iterations 10 test
+```
+
+Then run the owning `BleatAppTests` bundle with a fresh result-bundle path and
+`-only-testing:BleatAppTests`. Inspect every executed identity and iteration via
+`xcrun xcresulttool get test-results tests --path <bundle>` and the corresponding
+summary before recording results. Exact commands/destination may need the
+installed runtime's UDID per the development guide. Broader #374 and #362
+requirements remain open; signed macOS and physical-device evidence are separate.

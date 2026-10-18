@@ -48527,7 +48527,7 @@
       "source": {
         "path": "Tests/BleatAppTests/TranscriptExportArtifactTests.swift",
         "line": 100,
-        "endLineBeforeNextTest": 147
+        "endLineBeforeNextTest": 175
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -48535,50 +48535,76 @@
       ],
       "actions": [
         {
-          "line": 106,
-          "expression": "defer { try? FileManager.default.removeItem(at: root) }"
+          "line": 116,
+          "expression": "let completedWrites = try await withThrowingTaskGroup("
         },
         {
-          "line": 116,
-          "expression": "let transcript = transcript(text: \"Concurrent\")"
+          "line": 124,
+          "expression": "let artifact = try writer.write("
+        },
+        {
+          "line": 142,
+          "expression": "try withExtendedLifetime(completedWrites) {"
         }
       ],
       "assertions": [
         {
-          "line": 142,
-          "expression": "XCTAssertEqual(completedWrites, Array(repeating: true, count: 8))"
+          "line": 143,
+          "expression": "XCTAssertEqual(completedWrites.count, 8)"
         },
         {
-          "line": 143,
+          "line": 144,
+          "expression": "XCTAssertEqual(Set(completedWrites.map { $0.1.url }).count, 8)"
+        },
+        {
+          "line": 154,
+          "expression": "XCTAssertTrue("
+        },
+        {
+          "line": 158,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 160,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 164,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 170,
           "expression": "XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))"
         }
       ],
-      "synchronizationEvidence": [],
+      "synchronizationEvidence": [
+        "Throwing task group joins all eight writes before verification; withExtendedLifetime retains every artifact lease until all assertions finish."
+      ],
       "manualReview": {
         "status": "source_reviewed",
         "intendedBehavior": "Safely race eight first writes and orphan cleanup through shared writer.",
-        "purpose": "Temporary root, seeded orphan, shared artifact writer, throwing task group.",
+        "purpose": "Independent temporary root with seeded earlier-session orphan; shared real writer; eight distinct UTF-8 payloads alternating VTT/SRT, identical titles.",
         "actionPostconditions": [
           {
-            "action": "Run 8 concurrent writes and collect file existence.",
-            "postcondition": "Eight writes report existing artifact; orphan removed."
+            "action": "Join all eight concurrent writes while retaining their returned artifacts and leases.",
+            "postcondition": "Eight distinct URLs remain readable with each expected exact UTF-8 payload, format/content type; earlier-session orphan removed."
           }
         ],
-        "timeoutAndToleranceRationale": "Temporary filesystem fixtures are synchronous/local; task group is awaited. Callback expectation bounded at 3s. AV duration compares expected fixture duration with 0.15s allowance.",
+        "timeoutAndToleranceRationale": "No sleeps, polling or tolerance. Structured task-group completion joins finite local writes; runner timeout bounds infrastructure failure.",
         "ruleAssessments": {
-          "1": "The filesystem, serialization, model, AV asset or typed error result is paired with specific assertions.",
-          "2": "No condition polling; callback-based item provider has a bounded 3s XCTest expectation.",
-          "3": "N/A unless AV media duration is read; no playback clock state is exercised.",
-          "4": "Concurrent writer task group joins all eight results; item-provider callback expectation is fulfilled by actual callback.",
-          "5": "All file writes use unique temporary roots and `defer` cleanup; UserDefaults not touched.",
-          "6": "Pure/helper and local filesystem integration; UITest playback fixtures use bundled media, not server/device route.",
-          "7": "Follow-up: currently verifies eight files exist but not distinct URLs or that each concurrent artifact retains its own content; add those concurrency postconditions. No race has been observed, but existing assertion cannot detect overwrite/collision.",
-          "8": "Exact byte/text/type checks. AV duration has explicit 0.15s tolerance for media-container duration precision; item provider bound is 3s.",
-          "9": "macOS sharing method is `#if os(macOS)`; iOS playback fixture checks run in app host."
+          "1": "Assert eight results, eight distinct URLs, per-export existence, exact UTF-8 bytes, format/content type, and orphan removal after every write completes.",
+          "2": "Task-group completion is the write completion contract; no scheduling delay or existence polling.",
+          "3": "N/A: no playback or clock assertions.",
+          "4": "Structured throwing task group awaits children on success/failure; artifact leases are retained through verification. No framework callbacks.",
+          "5": "Unique temporary root and seeded orphan establish independent state; defer and leases clean files. No personal preferences/stores.",
+          "6": "Real local filesystem/exporter integration in app host; no network, live server or physical device.",
+          "7": "Strengthens assertions without retries, sleeps or production changes; no production race claimed.",
+          "8": "Per-export index diagnoses content/type/existence failures. Exact bytes intentionally verify subtitle file encoding and line-ending contract.",
+          "9": "Focused repetitions and owning app suite require exact xcresult verification; current evidence is recorded in the linked follow-up document. No skip/conditional guard on this test."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "The concurrent writer scenario is meaningful but asserts existence only, not isolation/content for each concurrent artifact."
+          "outcome": "keep",
+          "reason": "Issue #384 resolves the isolation/content source finding with retained leases and semantic postconditions; execution evidence is recorded separately."
         }
       }
     },

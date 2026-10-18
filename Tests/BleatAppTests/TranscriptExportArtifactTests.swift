@@ -113,34 +113,62 @@ final class TranscriptExportArtifactTests: XCTestCase {
             withIntermediateDirectories: true
         )
         let writer = TranscriptExportArtifactWriter(rootURL: root)
-        let transcript = transcript(text: "Concurrent")
-
         let completedWrites = try await withThrowingTaskGroup(
-            of: Bool.self
+            of: (Int, TranscriptExportArtifact).self
         ) { group in
             for index in 0..<8 {
+                let transcript = transcript(text: "Concurrent café \(index)")
+                let format: TranscriptExportFormat =
+                    index.isMultiple(of: 2) ? .webVTT : .subRip
                 group.addTask {
                     let artifact = try writer.write(
-                        title: "Book \(index)",
+                        title: "Book",
                         transcripts: [transcript],
-                        format: .webVTT,
+                        format: format,
                         isIncomplete: false
                     )
-                    return FileManager.default.fileExists(
-                        atPath: artifact.url.path
-                    )
+                    return (index, artifact)
                 }
             }
 
-            var results: [Bool] = []
+            var results: [(Int, TranscriptExportArtifact)] = []
             for try await result in group {
                 results.append(result)
             }
             return results
         }
 
-        XCTAssertEqual(completedWrites, Array(repeating: true, count: 8))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+        // Each artifact owns a lease that deletes its file on deinitialization.
+        try withExtendedLifetime(completedWrites) {
+            XCTAssertEqual(completedWrites.count, 8)
+            XCTAssertEqual(Set(completedWrites.map { $0.1.url }).count, 8)
+            for (index, artifact) in completedWrites {
+                let expectedFormat: TranscriptExportFormat =
+                    index.isMultiple(of: 2) ? .webVTT : .subRip
+                let expectedContentType: UTType =
+                    index.isMultiple(of: 2) ? .webVTT : .subRip
+                let expectedText =
+                    index.isMultiple(of: 2)
+                    ? "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nConcurrent café \(index)\n"
+                    : "1\r\n00:00:00,000 --> 00:00:01,000\r\nConcurrent café \(index)\r\n\r\n"
+                XCTAssertTrue(
+                    FileManager.default.fileExists(atPath: artifact.url.path),
+                    "Export \(index) must survive all concurrent writes."
+                )
+                XCTAssertEqual(
+                    artifact.format, expectedFormat, "Export \(index)")
+                XCTAssertEqual(
+                    artifact.contentType, expectedContentType, "Export \(index)"
+                )
+                // Exact UTF-8 bytes are the exported subtitle file contract.
+                XCTAssertEqual(
+                    try Data(contentsOf: artifact.url),
+                    Data(expectedText.utf8),
+                    "Export \(index) must retain its own payload."
+                )
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+        }
     }
 
     #if os(macOS)
