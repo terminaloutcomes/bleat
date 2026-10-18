@@ -646,5 +646,16 @@
     "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection()",
     "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows()",
     "malformedBookkeepingContentsRemainRetained()"
+  ],
+  "BleatCoreTests.BearerLogChildTests": [
+    "successfulCaptureDrainsBeyondPipeCapacity()",
+    "childFailureIsReaped()",
+    "deadlineKillsAndReapsChild()",
+    "cancellationKillsAndReapsChild()",
+    "successfulExitWithoutCompleteReportFails()",
+    "overflowFailsWithoutTruncationPass()",
+    "launchFailureClosesHandles()",
+    "secretOutputFailsWithPrivateDiagnostics()",
+    "reportRequiresExactlyOneSuccessfulIdentity()"
   ]
 }

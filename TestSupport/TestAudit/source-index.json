@@ -4391,7 +4391,7 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInCapturedProcessLogs",
-      "line": 529,
+      "line": 554,
       "language": "swift"
     },
     {
@@ -9313,6 +9313,69 @@
       "name": "testContextDownloadGateCancellationCleansPendingOperation",
       "line": 99,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "successfulCaptureDrainsBeyondPipeCapacity",
+      "line": 7,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "childFailureIsReaped",
+      "line": 21,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "deadlineKillsAndReapsChild",
+      "line": 29,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "cancellationKillsAndReapsChild",
+      "line": 39,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "successfulExitWithoutCompleteReportFails",
+      "line": 55,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "overflowFailsWithoutTruncationPass",
+      "line": 61,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "launchFailureClosesHandles",
+      "line": 68,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "secretOutputFailsWithPrivateDiagnostics",
+      "line": 79,
+      "language": "swift",
+      "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+      "name": "reportRequiresExactlyOneSuccessfulIdentity",
+      "line": 94,
+      "language": "swift",
+      "added_in": "issue-382"
     }
   ]
 }

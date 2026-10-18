@@ -93,6 +93,10 @@
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "assessment": "Reviewed fixture/container/repository/session/slice helpers and every observer/statistics body, including BLEAT_STATISTICS_PERFORMANCE guarded stress test; async stream waits and process-global timezone mutation are linked follow-ups."
+    },
+    {
+      "path": "Tests/BleatCoreTests/BearerLogChild.swift",
+      "assessment": "Issue 382: native asynchronous DispatchIO capture/report readers, observed descriptor cleanup and process termination/reap, bounded output and exact structural child outcome checks. Owned supervisor survives caller cancellation and is joined. Raw output is never returned to assertion diagnostics. See issue_382 execution evidence; unrelated historical helper assessments remain unchanged."
     }
   ],
   "tests": [
@@ -3466,7 +3470,12 @@
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "The helper mutates process-global file descriptors while Swift Testing can run other suites concurrently; isolate this capture in a subprocess or provide process-wide exclusive serialization. Also ensure descriptor restoration is guaranteed if either dup2 restoration fails.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "issue_382": {
+        "decision": "fixed",
+        "source_review": "Parent descriptors never change. An awaited independent supervisor observes real child termination and DispatchIO cleanup, enforces total and cleanup budgets, retains bounded complete output, and rejects invalid child xUnit evidence. Child asserts actual exporter failure and transport/provider invocation. Raw output never enters returned results or test diagnostics.",
+        "execution": "See top-level issue_382 evidence; original historical assessment retained."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
@@ -21662,6 +21671,309 @@
         "owning_suite_run": "passed"
       },
       "review_status": "source_reviewed"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::successfulCaptureDrainsBeyondPipeCapacity",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 7
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Capture a 2MiB child write, assert byte count, both sentinels, exact successful child result and unchanged parent descriptors.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Capture a 2MiB child write, assert byte count, both sentinels, exact successful child result and unchanged parent descriptors. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Capture a 2MiB child write, assert byte count, both sentinels, exact successful child result and unchanged parent descriptors.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::childFailureIsReaped",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 21
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Inject child test failure and assert childFailed plus unchanged parent descriptors.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Inject child test failure and assert childFailed plus unchanged parent descriptors. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Inject child test failure and assert childFailed plus unchanged parent descriptors.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::deadlineKillsAndReapsChild",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 29
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Enforce a 300ms deadline against a deliberately non-completing child; assert timeout plus unchanged parent descriptors.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Enforce a 300ms deadline against a deliberately non-completing child; assert timeout plus unchanged parent descriptors. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Enforce a 300ms deadline against a deliberately non-completing child; assert timeout plus unchanged parent descriptors.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::cancellationKillsAndReapsChild",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 39
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Await process launch signal, cancel caller, await owned supervisor; assert cancelled and unchanged parent descriptors.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Await process launch signal, cancel caller, await owned supervisor; assert cancelled and unchanged parent descriptors. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Await process launch signal, cancel caller, await owned supervisor; assert cancelled and unchanged parent descriptors.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::successfulExitWithoutCompleteReportFails",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 55
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Child exits zero before runner finalization; assert malformed report rejection rather than privacy pass.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Child exits zero before runner finalization; assert malformed report rejection rather than privacy pass. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Child exits zero before runner finalization; assert malformed report rejection rather than privacy pass.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::overflowFailsWithoutTruncationPass",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 61
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Child writes 2MiB against a 32KiB bound; require outputOverflow instead of truncated success.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Child writes 2MiB against a 32KiB bound; require outputOverflow instead of truncated success. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Child writes 2MiB against a 32KiB bound; require outputOverflow instead of truncated success.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::launchFailureClosesHandles",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 68
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Use nonexistent executable; assert launch error, no child created, and closed reader/writer plus removed report directory.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Use nonexistent executable; assert launch error, no child created, and closed reader/writer plus removed report directory. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Use nonexistent executable; assert launch error, no child created, and closed reader/writer plus removed report directory.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::secretOutputFailsWithPrivateDiagnostics",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 79
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Inject synthetic bearer into captured stderr; require secretInOutput, return only typed diagnostic with no raw captured bytes.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Inject synthetic bearer into captured stderr; require secretInOutput, return only typed diagnostic with no raw captured bytes. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Inject synthetic bearer into captured stderr; require secretInOutput, return only typed diagnostic with no raw captured bytes.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/BearerLogChildTests.swift::reportRequiresExactlyOneSuccessfulIdentity",
+      "source": {
+        "path": "Tests/BleatCoreTests/BearerLogChildTests.swift",
+        "line": 94
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Parse good xUnit and reject zero, missing, wrong, duplicate, skipped, failed, unknown, malformed and incomplete evidence.",
+      "dependencies_and_setup": "Fresh owned subprocess and UUID report directory per async invocation; fixed local XML fixtures for parser test. No credentials or personal storage.",
+      "action_postconditions": "Parse good xUnit and reject zero, missing, wrong, duplicate, skipped, failed, unknown, malformed and incomplete evidence. Async lifecycle tests also assert observed reap (except launch failure), all reader/writer closures and report-directory removal, with no cleanup failures.",
+      "synchronization": "Native DispatchIO read/cleanup callbacks and Process termination handler; cancellation observer task is owned and joined. Parser case is synchronous.",
+      "timeout_tolerance": "20s total child/capture budget; 5s cleanup budget. Intentional timeout fixture uses 300ms. Cancellation launch signal has 10s budget. No playback/tolerance contract.",
+      "classification": "Deterministic host subprocess/descriptor integration; XML parser fixture is pure structural validation.",
+      "compiler_skip": "No skips or opt-in guards. Both SwiftPM and provisioned signed helper launches supported.",
+      "decision": "keep",
+      "reason": "Direct postconditions exercise the same lifecycle used by the original privacy test.",
+      "rules": {
+        "1": "Parse good xUnit and reject zero, missing, wrong, duplicate, skipped, failed, unknown, malformed and incomplete evidence.",
+        "2": "Bounded event-driven completion and explicit cleanup-state assertions; no arbitrary readiness sleeps.",
+        "3": "N/A: no playback.",
+        "4": "Supervisor is joined on cancellation/failure; native read closure and process termination are observed.",
+        "5": "Fresh isolated process/temp directory; no parent descriptor redirection.",
+        "6": "Controlled local child/exporter/transport; not live telemetry.",
+        "7": "No retries; earlier failed implementation attempts retained in issue evidence.",
+        "8": "Typed failure, original test source location, elapsed/timeout and separate cleanup errors; raw child output is never published.",
+        "9": "Three individual and three owning-suite repetitions passed with exact XML identities; all outcomes retained in issue-382 evidence."
+      },
+      "issue_382": {
+        "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
+      }
     }
-  ]
+  ],
+  "issue_382": {
+    "issue": "https://github.com/terminaloutcomes/bleat/issues/382",
+    "implementation": "Bounded process-isolated bearer-log scenario; original identity retained; 9 supervisor regressions added. Historical review and execution records above are unchanged.",
+    "source_review_revision": "629d90064b8cea5031a2ca91f9067437a7d16030",
+    "execution": {
+      "status": "passed",
+      "focused_final": "10/10 passed; superseded failed implementation attempts retained in evidence",
+      "repetitions": "Three individual runs per affected identity and three per owning suite; sequential matrix 36 reports, 114 executions passed, zero failures/errors/skips; exact identities verified against inventory. Earlier overlapping-build matrix also verified 114 passes and is superseded for repetition acceptance.",
+      "signed_host": "Two complete signed gates passed 573/573 expected identities with zero skips. Final sequential confirmation tested commit 629d90064b8cea5031a2ca91f9067437a7d16030; .build/host-results/tests.xml and .build/issue-382/signed-final-verified.xml.",
+      "commands": "See linked evidence section for exact commands/selections and artifact paths.",
+      "warnings": "OpenTelemetry dependency watchOS deployment deprecation; host Xcode reported outdated CoreSimulator service (no simulator claim); expected read-only SwiftData permission diagnostics in existing injected-failure tests."
+    },
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382",
+    "reviews": "Two fresh independent read-only review-agent cycles reported No findings; no P0/P1 or lower-priority findings."
+  }
 }

@@ -78,3 +78,116 @@ non-completing child exercises the kill/reap path before the real workload.
 The child owns and joins its read task; an uncooperative synchronous read is
 bounded by the parent process watchdog. Focused unsigned and signed executions
 passed with zero skips. Other unrelated follow-up rows remain unchanged.
+
+## Bearer-log subprocess (issue 382)
+
+[Issue #382](https://github.com/terminaloutcomes/bleat/issues/382) implements
+only the bearer-log row above. The historical assessment and execution records
+remain unchanged; this does not complete #372 or #362.
+
+`AuthenticatedOtlpSpanExporterTests.testBearerNeverAppearsInCapturedProcessLogs()`
+retains its identity. Its child executes the real exporter with a controlled
+token provider and failing recording transport, asserting one asynchronous
+transport export, one token request and the expected failure. The separate
+exporter/failure-description privacy test remains intact. The parent captures
+both stream sentinels, checks both raw-secret and full-bearer exclusions, and
+requires a complete xUnit document containing exactly the expected successful
+child identity. Missing, duplicate, unexpected, skipped, failed, unknown and
+incomplete evidence are rejected with typed causes.
+
+`Tests/BleatCoreTests/BearerLogChild.swift` uses Foundation's asynchronous process
+termination callback and native DispatchIO reads. It never changes parent
+stdout/stderr. The independent supervisor is owned and joined: caller
+cancellation requests termination without cancelling the stream consumer that
+must observe process reaping and reader closure. Output is drained while the
+child writes, with a 1 MiB retained-output limit and 64 KiB report limit;
+overflow and incomplete reads fail rather than silently truncating a privacy
+check. Raw output is discarded after checking and is absent from returned
+results and test diagnostics. Cleanup failures remain separate from the
+original operation failure, with elapsed time and the requested budget retained.
+
+The 20-second execution/capture budget allows instrumented helper startup and
+the exporter's two-second timeout. A separate five-second cleanup budget bounds
+SIGKILL/reap and reader cancellation; a cleanup deadline is an explicit failure,
+never a successful cleanup claim. Report directories and owned writer handles
+are removed/closed on every path. The existing cache-process helper was inspected
+but remains separate because its readiness/SwiftData workload contract differs.
+Both direct SwiftPM binaries and the provisioned signed helper's bundle/library
+arguments are supported. No dependency or general host-runner change is needed.
+
+Nine `BearerLogChildTests` identities exercise success with 2 MiB of pipe output,
+child failure, a deliberately non-completing child's deadline, caller
+cancellation, overflow, launch failure, zero exit with incomplete runner
+evidence, secret-bearing stderr, and structural report rejection. Lifecycle
+cases assert observed termination/reaping (except when launch creates no child),
+reader/writer closure and report removal. Parent descriptor identities are
+compared across success, failure, timeout and cancellation. The exceptional
+OS cleanup-deadline fallback is not fault-injected.
+
+Implementation is based on `523f4b2e1a58aaf247d45567af10deacf1ee60f6` in the
+issue-382 branch. Validation used macOS 26.6.2 (25G83), Xcode 27.1 (27A9275),
+Swift 6.4.0 and Swift Testing 2084 on arm64. Execution evidence and tested
+implementation commit are recorded below separately from the source review.
+
+Initial development attempts are retained: the original baseline passed 1/1;
+the first changed attempt did not compile because of an incorrect AsyncStream
+initializer; the next run passed 8/9 with cancellation cleanup failing three
+assertions. The owned supervisor corrected that cancellation bug, and the next
+run passed 9/9. After adding the incomplete-report fixture, 9/10 passed: the
+runner creates its report before executing the test, so early exit produces
+malformed XML rather than a missing file. The expectation now matches that
+observed typed rejection. The next focused run passed 10/10. No retry-to-green
+claim is made for these implementation attempts.
+
+The final sequential repetition matrix used:
+
+```sh
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter '<selection>' --xunit-output '.build/issue-382/sequential/<selection>-<repetition>.xml'
+```
+
+For repetitions 1, 2 and 3, selections were the original privacy function,
+each of the nine function names in `BearerLogChildTests` (listed exactly in
+`TestSupport/HostTests/inventory.json`, without trailing parentheses), and
+both owning suites `AuthenticatedOtlpSpanExporterTests` and `BearerLogChildTests`.
+All 36 reports were parsed and compared to their exact expected inventory
+identities, rejecting failures, errors and skips: 30 individual executions,
+57 exporter-suite executions and 27 helper-suite executions all passed (114/114).
+The first matrix used `--skip-build` and also verified 114 passing executions,
+but overlapped the signed build's SwiftPM scheduling. It remains retained and
+is superseded by the sequential matrix for repetition acceptance; this is not
+parallel signed-host evidence.
+
+`mise exec -- env BLEAT_HOST_SIGNING=required ./scripts/test-host.sh` passed the
+complete signed host gate: 573 expected identities passed with zero skips,
+including the retained description-privacy test and all nine added identities.
+The report verifier independently rechecked both product XML files against the
+inventory. The signed helper profile/entitlements were verified by the gate;
+coverage exported executed lines for both libraries. The final sequential
+confirmation reran that exact command at implementation commit
+`629d90064b8cea5031a2ca91f9067437a7d16030`: 573/573 passed, zero skips,
+with XML identities independently reverified. Its artifacts are
+`.build/issue-382/signed-final.log` and
+`.build/issue-382/signed-final-verified.xml`. Two fresh independent read-only
+review-agent cycles reported no findings (no P0/P1 or lower-priority findings).
+This evidence-only follow-up changes no tested source.
+
+Artifacts are `.build/issue-382/sequential/<selection>-<repetition>.xml` and
+sibling `.log` files, `.build/issue-382/signed-host.log`,
+`.build/issue-382/signed-verified.xml`, `.build/host-results/tests.xml`, and
+`.build/coverage/swift-host/lcov.info`. Initial attempts are retained as
+`.build/issue-382/bleat-382-focused-1.log` through `bleat-382-focused-5.log`
+(with XML where a run executed), and `.build/issue-382/baseline.xml`.
+Child XML is structurally checked before its isolated temporary directory is
+removed; captured output is not retained. All repetition logs were checked for
+absence of the synthetic bearer. `.envrc`'s SHA-256 was unchanged after the gate.
+
+`mise run docs:check` and strict `xcrun swift-format lint` of the three changed
+Swift files passed. The first lint attempt rejected three associated-value
+cases sharing declarations; splitting those declarations corrected it.
+The signed build emitted the existing dependency watchOS deployment deprecation.
+Xcode also reported CoreSimulator 1171.7.0 older than its required 1174.9.2 and
+disabled Simulator support; the macOS host gate still completed. That host
+installation warning remains unresolved and no Simulator validation is claimed.
+SwiftData permission error 513 messages occurred inside existing deliberately
+read-only store tests, whose expected rollback/failure assertions passed.
+No live-server, app/device or release-validation claim follows from this change.
