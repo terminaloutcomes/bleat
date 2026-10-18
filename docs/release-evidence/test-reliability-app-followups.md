@@ -116,7 +116,9 @@ The nine-rule source review is updated in `TestSupport/TestAudit/app.json`; test
 identities are unchanged, so the navigation and host inventories need no update.
 
 Validation on 2026-10-19, based on `07cd9bae` (PR #383), Xcode 27.1
-(`27A9275`): `mise run swift-lint` and `git diff --check` passed. Focused
+(`27A9275`): `mise run swift-lint`, `mise run docs:check`, and
+`git diff --check` passed. The documentation checker reported
+`Documentation references verified`. Focused
 repetitions and the owning `BleatAppTests` suite are **unexecuted**: destination
 discovery with `xcrun simctl list devices available` invoked Xcode's
 `xcodebuild -runFirstLaunch`, waiting for macOS authorization to install
