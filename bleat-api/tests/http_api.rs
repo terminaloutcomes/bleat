@@ -109,6 +109,8 @@ enum ProductionRouterError {
     Router(#[from] RouterBuildError),
 }
 
+type ProductionRouterOutcome = signing_fixture::Outcome<axum::Router, ProductionRouterError>;
+
 async fn production_router_with_key(
     postgres: &TestPostgres,
     key: Vec<u8>,
@@ -116,7 +118,7 @@ async fn production_router_with_key(
     let mut arguments = test_arguments(postgres);
     let database_config = postgres.config();
     let (_cancel, cancelled) = oneshot::channel();
-    signing_fixture::run(
+    let outcome: ProductionRouterOutcome = signing_fixture::run(
         signing_fixture::unique_path(),
         key,
         cancelled,
@@ -128,17 +130,13 @@ async fn production_router_with_key(
             arguments.app_identifier = Some("com.example.Bleat".to_owned());
             arguments.app_attest_environment = AppAttestEnvironment::Production;
             arguments.jwt_signing_key_file = Some(path);
-            let result = async {
-                let config = Config::from_arguments(arguments, TelemetryExportConfig::default())?;
-                let database = connect_and_migrate(&database_config).await?;
-                router(&config, database).map_err(ProductionRouterError::from)
-            }
-            .await;
-            Ok::<_, std::convert::Infallible>(result)
+            let config = Config::from_arguments(arguments, TelemetryExportConfig::default())?;
+            let database = connect_and_migrate(&database_config).await?;
+            router(&config, database).map_err(ProductionRouterError::from)
         },
     )
-    .await
-    .finish()
+    .await;
+    outcome.finish()
 }
 
 async fn production_router(postgres: &TestPostgres) -> axum::Router {
@@ -168,6 +166,46 @@ async fn production_router_preserves_the_signing_configuration_failure() {
         error.to_string(),
         "JWT signing configuration is invalid: token signing-key configuration is invalid"
     );
+}
+
+#[tokio::test]
+async fn production_router_cleanup_failure_retains_signing_configuration_cause() {
+    let path = signing_fixture::unique_path();
+    let (_cancel, cancelled) = oneshot::channel();
+    let outcome: ProductionRouterOutcome = signing_fixture::run(
+        path.clone(),
+        b"not-a-signing-key".to_vec(),
+        cancelled,
+        |created| async move {
+            tokio::fs::remove_file(&created)
+                .await
+                .expect("fixture should exist");
+            tokio::fs::create_dir(&created)
+                .await
+                .expect("inject cleanup failure");
+            Err(ProductionRouterError::Router(
+                RouterBuildError::TokenIssuer(TokenIssuerError::SigningKeyConfiguration),
+            ))
+        },
+    )
+    .await;
+    tokio::fs::remove_dir(&path)
+        .await
+        .expect("remove owned fault injection directory");
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| outcome.finish()))
+        .expect_err("cleanup failure must fail the lifecycle");
+    let failure = failure
+        .downcast::<ProductionRouterOutcome>()
+        .expect("final failure must preserve the actual router outcome type");
+    assert!(failure.cleanup.is_err());
+    assert!(matches!(
+        failure.operation,
+        Err(signing_fixture::Failure::Operation(
+            ProductionRouterError::Router(RouterBuildError::TokenIssuer(
+                TokenIssuerError::SigningKeyConfiguration
+            ))
+        ))
+    ));
 }
 
 async fn response_json(response: axum::response::Response) -> Value {

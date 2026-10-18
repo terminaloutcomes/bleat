@@ -20,8 +20,8 @@ pub struct Outcome<T, E> {
     pub cleanup: io::Result<()>,
 }
 
-impl<T, E: Debug> Outcome<T, E> {
-    pub fn finish(self) -> T {
+impl<T: Send + 'static, E: Debug + Send + 'static> Outcome<T, E> {
+    pub fn finish(self) -> Result<T, E> {
         // Report both causes before resuming an original panic payload.
         if let Err(error) = &self.cleanup {
             eprintln!(
@@ -35,8 +35,19 @@ impl<T, E: Debug> Outcome<T, E> {
             }
             outcome => outcome,
         };
-        self.cleanup.expect("signing fixture cleanup must succeed");
-        operation.expect("signing fixture operation must succeed")
+        match (operation, self.cleanup) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(Failure::Operation(error)), Ok(())) => Err(error),
+            (operation, cleanup) => {
+                eprintln!(
+                    "signing fixture lifecycle failed: operation={:?}; cleanup={cleanup:?}",
+                    operation.as_ref().err()
+                );
+                // Preserve typed causes for combined failures, including a
+                // successful operation whose cleanup failed.
+                std::panic::panic_any(Outcome { operation, cleanup });
+            }
+        }
     }
 }
 
@@ -153,13 +164,11 @@ mod tests {
             },
         )
         .await;
-        outcome.cleanup.expect("cleanup should succeed");
-        let Err(Failure::Operation(original)) = outcome.operation else {
-            panic!("stage failure must survive")
-        };
         absent(&path).await;
-        // Return the exact typed stage, rather than reconstructing it from text.
-        assert_eq!(original, stage);
+        assert_eq!(
+            outcome.finish().expect_err("stage failure must survive"),
+            stage
+        );
     }
 
     #[tokio::test]
@@ -185,7 +194,7 @@ mod tests {
             })
             .await;
             absent(&path).await;
-            assert_eq!(outcome.finish(), value);
+            assert_eq!(outcome.finish().expect("operation should succeed"), value);
         }
     }
 
@@ -269,10 +278,20 @@ mod tests {
         } else {
             assert!(outcome.operation.is_ok());
         }
-        assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| outcome.finish())).is_err(),
-            "cleanup failure must fail even successful work"
-        );
+        let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| outcome.finish()))
+            .expect_err("cleanup failure must fail even successful work");
+        let failure = failure
+            .downcast::<Outcome<(), Stage>>()
+            .expect("finish must preserve both typed outcomes");
+        assert!(failure.cleanup.is_err());
+        if fail_operation {
+            assert!(matches!(
+                failure.operation,
+                Err(Failure::Operation(Stage::Database))
+            ));
+        } else {
+            assert!(failure.operation.is_ok());
+        }
     }
 
     #[tokio::test]
@@ -302,7 +321,7 @@ mod tests {
                 Ok::<_, Infallible>(())
             })
             .await;
-            result.finish();
+            result.finish().expect("inner operation should succeed");
             absent(&other).await;
             assert_eq!(
                 fs::read(first_copy).await.expect("first still owned"),
@@ -324,7 +343,7 @@ mod tests {
         fs::remove_file(&sentinel)
             .await
             .expect("sentinel owner cleans up");
-        outcome.finish();
+        outcome.finish().expect("outer operation should succeed");
         absent(&first).await;
         assert_ne!(first, second);
         assert!(

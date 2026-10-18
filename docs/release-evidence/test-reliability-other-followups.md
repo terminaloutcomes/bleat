@@ -18,7 +18,7 @@ Tracked by [issue #362](https://github.com/terminaloutcomes/bleat/issues/362). O
 
 7. **Constrain large-library generator cleanup.** `TestSupport/ServerHarness/generate-large-library.sh` removes `${output_dir}/book-*` before regenerating. Its default repository-owned `media-large` destination is scoped, but the optional output directory can point at an unrelated location. Validate the destination against a dedicated generated-fixture directory or require a clearly named marker before deleting generated folders.
 
-8. **Signing-key lifecycle implemented ([#378](https://github.com/terminaloutcomes/bleat/issues/378)).** The two fixtures in `bleat-api/tests/http_api.rs` already used awaited Tokio writes/removals; the remaining defect was success-only cleanup. They now share `bleat-api/tests/support/signing_fixture.rs`: exclusive creation establishes ownership, awaited writes/flush finish before use, and operation errors or panic payloads are captured before checked removal. The helper retains cleanup failure alongside the operation result and fails otherwise successful work. Independent review retained a P2 in `production_router_with_key`: its nested result hides the original configuration/database/router diagnostic when cleanup also fails. The helper-level combined-failure regression does not cover that integration shape. Cancellation is explicitly signalled; the owner aborts and joins the operation before removal and must itself be awaited to completion. This does not guarantee cleanup when the owner is dropped/aborted, the runtime is destroyed, or the process is killed. Nine focused regressions cover typed configuration/database/router failure injection, success and unexpected success, controlled cancellation, unwinding, cleanup failure alone/combined with operation failure, distinct fixtures, and an unrelated sentinel/collision. Both malformed-key assertions are preserved. Docker-backed validation and the exact execution evidence are recorded below; the retained P2 remains a follow-up, and this work does not close #376 or the wider audit.
+8. **Signing-key lifecycle implemented ([#378](https://github.com/terminaloutcomes/bleat/issues/378)).** The two fixtures in `bleat-api/tests/http_api.rs` already used awaited Tokio writes/removals; the remaining defect was success-only cleanup. They now share `bleat-api/tests/support/signing_fixture.rs`: exclusive creation establishes ownership, awaited writes/flush finish before use, and operation errors or panic payloads are captured before checked removal. The helper retains cleanup failure alongside the operation result and fails otherwise successful work. The initial review P2 in `production_router_with_key` is fixed: the real operation result passes directly through the lifecycle, and combined failure retains both typed causes. A regression using the same `ProductionRouterOutcome` type verifies the exact signing-configuration cause at the final failure boundary. Cancellation is explicitly signalled; the owner aborts and joins the operation before removal and must itself be awaited to completion. This does not guarantee cleanup when the owner is dropped/aborted, the runtime is destroyed, or the process is killed. Ten focused regressions cover typed configuration/database/router failure injection, success and unexpected success, controlled cancellation, unwinding, cleanup failure alone/combined with operation failure, distinct fixtures, and an unrelated sentinel/collision. Both malformed-key assertions are preserved. Docker-backed validation and the exact execution evidence are recorded below; this work addresses only the two fixture lifecycles, not #376 or the wider audit.
 
 ## Fixed during this audit
 
@@ -76,8 +76,8 @@ its concurrent compilation/Release tasks were interrupted. These are not
 successful integration evidence. The healthy endpoint was verified before the
 reruns; no test wait or assertion was weakened.
 
-One independent read-only review reported no P0/P1 findings and the P2 described
-in follow-up 8, retained per the requested review-and-ship severity policy. No
+The initial independent read-only review reported no P0/P1 findings and one P2,
+subsequently fixed on user request as described in follow-up 8. No
 production code or dependencies changed. Owner-future abortion, process kill,
 and runtime destruction remain outside the cleanup guarantee.
 
@@ -94,3 +94,33 @@ Each of the nine new identities also passed separately with the same Cargo
 command filtered to its full identity and `--exact` (one executed test per
 invocation). Logs are `individual-<identity>.log` in the same artifact directory.
 `mise run docs:check` passed; its log is `docs.log`. `git diff --check` passed.
+
+
+### Issue #378 diagnostic-preservation follow-up
+
+On user request, the initial P2 at `bleat-api/tests/http_api.rs` was fixed:
+`production_router_with_key` now passes its real typed result directly into
+`Outcome`. `finish` returns that error after successful cleanup; when cleanup
+also fails it reports and preserves both typed outcomes in the panic payload.
+An existing panic payload still resumes unchanged after cleanup reporting.
+The new `production_router_cleanup_failure_retains_signing_configuration_cause`
+regression shares the actual caller's `ProductionRouterOutcome` type and
+asserts the exact `RouterBuildError::TokenIssuer(TokenIssuerError::SigningKeyConfiguration)`
+cause survives the final combined-failure boundary. Existing stage and cleanup
+regressions now verify `finish`, including typed combined failures.
+
+The focused `cleanup_failure` selection passed 3/3. The new identity also passed
+alone with `--exact` (1/1). The full HTTP target passed 22/22, then passed again
+inside `mise run api:validate`: 107 total tests (75 library, nine database,
+22 HTTP, one startup), formatting, all-target compilation, strict Clippy and
+Release build passed. `mise run docs:check` and `git diff --check` passed.
+The same healthy OrbStack endpoint settings were used, with no failed attempt
+in this follow-up. Fault-injection panic output was expected and asserted;
+no unexplained warning or skip occurred. Evidence logs are retained under
+`.build/issue-378/` as `p2-focused.log`, `p2-individual.log`, `p2-http.log`,
+`p2-validate.log`, and `p2-docs.log`.
+
+A fresh independent complete-change review reported no findings and confirmed
+the original P2 resolved (two independent reviews in total). Partial-write/flush
+fault injection is still untested, and the documented owner-abortion/runtime/
+process termination exclusions remain.

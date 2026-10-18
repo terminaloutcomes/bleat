@@ -4244,14 +4244,14 @@
       "purpose": "Supply malformed temporary production signing key and require router construction to preserve typed SigningKeyConfiguration failure and stable privacy-safe message.",
       "review": {
         "status": "reviewed",
-        "decision": "followup",
-        "reason": "Issue #378 adds exclusive Tokio creation, awaited writes, joined operation outcomes and checked async cleanup, including panic and controlled cancellation. Independent review retained a P2: production_router_with_key nests its typed error in the success value, so simultaneous setup and cleanup failure loses the setup diagnostic. Deterministic creation/write-failure injection is also untested."
+        "decision": "fixed",
+        "reason": "Issue #378 adds exclusive Tokio creation, awaited writes, joined operation outcomes and checked async cleanup, including panic and controlled cancellation. The initial P2 is fixed: production_router_with_key passes its typed result directly through the lifecycle; finish preserves both causes in a typed outcome when cleanup also fails. A caller-shaped regression covers the exact signing configuration cause. Partial-write/flush failure injection remains untested."
       },
       "profile": "rust_service_integration",
       "enablement": "Cargo integration test: `cargo test --locked --package bleat-api --test http_api`; uses TestPostgres/testcontainers and requires an available Docker daemon and local port allocation, plus test-only signing configuration constructed by the fixture.",
       "action_postconditions": "Supply malformed temporary production signing key and require router construction to preserve typed SigningKeyConfiguration failure and stable privacy-safe message.",
       "setup_dependencies": "Fresh PostgreSQL 17 TestPostgres, migrated through SeaORM; production_router_with_key owns the generated or malformed key through support/signing_fixture.rs. The caller awaits the lifecycle; cancellation is signalled explicitly. Runtime destruction and process kill are excluded.",
-      "synchronization_timeout": "Native Tokio creation/write/flush/removal are awaited. The operation task is joined before removal, including panic and controlled cancellation. Nine fixture regression cases use explicit signals and typed failure injection without sleeps. Docker startup is delegated to TestPostgres."
+      "synchronization_timeout": "Native Tokio creation/write/flush/removal are awaited. The operation task is joined before removal, including panic and controlled cancellation. Ten fixture regression cases use explicit signals and typed failure injection without sleeps. Docker startup is delegated to TestPostgres."
     },
     {
       "id": "bleat-api-integration::health_and_readiness_are_typed_and_receive_request_ids",
@@ -4276,14 +4276,14 @@
       "purpose": "Build production router, reject dev attestation/token evidence with generic typed HTTP failures/request correlation, and verify discovery/JWKS cache headers and ETags.",
       "review": {
         "status": "reviewed",
-        "decision": "followup",
-        "reason": "Issue #378 adds exclusive Tokio creation, awaited writes, joined operation outcomes and checked async cleanup, including panic and controlled cancellation. Independent review retained a P2: production_router_with_key nests its typed error in the success value, so simultaneous setup and cleanup failure loses the setup diagnostic. Deterministic creation/write-failure injection is also untested."
+        "decision": "fixed",
+        "reason": "Issue #378 adds exclusive Tokio creation, awaited writes, joined operation outcomes and checked async cleanup, including panic and controlled cancellation. The initial P2 is fixed: production_router_with_key passes its typed result directly through the lifecycle; finish preserves both causes in a typed outcome when cleanup also fails. A caller-shaped regression covers the exact signing configuration cause. Partial-write/flush failure injection remains untested."
       },
       "profile": "rust_service_integration",
       "enablement": "Cargo integration test: `cargo test --locked --package bleat-api --test http_api`; uses TestPostgres/testcontainers and requires an available Docker daemon and local port allocation, plus test-only signing configuration constructed by the fixture.",
       "action_postconditions": "Build production router, reject dev attestation/token evidence with generic typed HTTP failures/request correlation, and verify discovery/JWKS cache headers and ETags.",
       "setup_dependencies": "Fresh PostgreSQL 17 TestPostgres, migrated through SeaORM; production_router_with_key owns the generated or malformed key through support/signing_fixture.rs. The caller awaits the lifecycle; cancellation is signalled explicitly. Runtime destruction and process kill are excluded.",
-      "synchronization_timeout": "Native Tokio creation/write/flush/removal are awaited. The operation task is joined before removal, including panic and controlled cancellation. Nine fixture regression cases use explicit signals and typed failure injection without sleeps. Docker startup is delegated to TestPostgres."
+      "synchronization_timeout": "Native Tokio creation/write/flush/removal are awaited. The operation task is joined before removal, including panic and controlled cancellation. Ten fixture regression cases use explicit signals and typed failure injection without sleeps. Docker startup is delegated to TestPostgres."
     },
     {
       "id": "bleat-api-integration::development_evidence_enrolls_and_issues_verifiable_es256_token",
