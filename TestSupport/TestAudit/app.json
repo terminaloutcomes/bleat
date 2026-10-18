@@ -48544,7 +48544,7 @@
         },
         {
           "line": 142,
-          "expression": "try withExtendedLifetime(completedWrites) {"
+          "expression": "withExtendedLifetime(completedWrites) {"
         }
       ],
       "assertions": [
@@ -48590,7 +48590,7 @@
             "postcondition": "Eight distinct URLs remain readable with each expected exact UTF-8 payload, format/content type; earlier-session orphan removed."
           }
         ],
-        "timeoutAndToleranceRationale": "No sleeps, polling or tolerance. Structured task-group completion joins finite local writes; runner timeout bounds infrastructure failure.",
+        "timeoutAndToleranceRationale": "No sleeps, polling or tolerance. Structured task-group completion joins finite local writes; there is no test-local or explicitly enabled runner timeout, so a filesystem hang remains a runner-level risk.",
         "ruleAssessments": {
           "1": "Assert eight results, eight distinct URLs, per-export existence, exact UTF-8 bytes, format/content type, and orphan removal after every write completes.",
           "2": "Task-group completion is the write completion contract; no scheduling delay or existence polling.",

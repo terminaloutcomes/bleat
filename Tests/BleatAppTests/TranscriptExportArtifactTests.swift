@@ -139,7 +139,7 @@ final class TranscriptExportArtifactTests: XCTestCase {
         }
 
         // Each artifact owns a lease that deletes its file on deinitialization.
-        try withExtendedLifetime(completedWrites) {
+        withExtendedLifetime(completedWrites) {
             XCTAssertEqual(completedWrites.count, 8)
             XCTAssertEqual(Set(completedWrites.map { $0.1.url }).count, 8)
             for (index, artifact) in completedWrites {

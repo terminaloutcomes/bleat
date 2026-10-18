@@ -126,7 +126,8 @@ components (installed CoreSimulator `1171.7`, toolchain expects `1174.9.2`). A
 process sample identifies `DVTFirstLaunchPackageInstaller` →
 `PKInstallRequest authorizeForRight` → `AuthorizationCopyRights`; this is an
 environment blocker, not a source/test failure. No tests, skips, or passing
-runtime results are claimed; no `.xcresult` was produced.
+runtime results are claimed for that discovery attempt; no Simulator `.xcresult`
+was produced.
 
 After local component-install authorization, the required focused command is:
 
@@ -144,3 +145,17 @@ Then run the owning `BleatAppTests` bundle with a fresh result-bundle path and
 summary before recording results. Exact commands/destination may need the
 installed runtime's UDID per the development guide. Broader #374 and #362
 requirements remain open; signed macOS and physical-device evidence are separate.
+
+The supported development-signed macOS app-hosted route was also attempted
+with `BleatMac`, `platform=macOS`, ten iterations, and the same focused identity.
+It failed during compilation of unchanged `App/RootView.swift:4669`: SwiftUI
+`MenuActionDismissBehavior.disabled` is unavailable on macOS. The retained
+`.build/export-macos-focused.xcresult` records a build failure and zero executed
+tests, not a failing test or runtime coverage. The log additionally reports the
+CoreSimulator version mismatch and an arm64/x86_64 destination ambiguity. This
+PR does not change the unrelated platform compatibility path.
+
+Independent review removed an unnecessary outer `try` and corrected the source
+audit's unsupported runner-timeout claim. The task group joins finite local
+writes; there is no test-local or explicitly enabled runner timeout, so a
+filesystem hang remains a runner-level risk.
