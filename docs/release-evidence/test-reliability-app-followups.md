@@ -2,14 +2,14 @@
 
 Issue [#362](https://github.com/terminaloutcomes/bleat/issues/362) owns this
 work. This record tracks source-level findings from the `BleatAppTests` audit.
-All follow-ups are owned by the Bleat maintainers; no separate issues were
-created. The per-test source evidence is recorded in
+All follow-ups are owned by the Bleat maintainers; bounded remediation issues
+are linked where created. The per-test source evidence is recorded in
 `TestSupport/TestAudit/app.json`.
 
 The app source audit is complete: all 593 in-scope test bodies have individual
 purpose, setup, action/postcondition, synchronization, nine-rule, compiler/skip,
-and decision assessments in `TestSupport/TestAudit/app.json` (509 keep, 4 fix,
-80 follow-up). The 10 async-gate
+and decision assessments in `TestSupport/TestAudit/app.json` (510 keep, 4 fix,
+79 follow-up). The 10 async-gate
 test declarations in `TestAsyncGateTests.swift` are excluded here and are covered
 by the parent audit; shared gate helpers live in `TestAsyncGates.swift`. Open
 items below are specific reliability defects that remain after source review.
@@ -25,7 +25,6 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testTenKBooksLoadNextBooksPagePerformance` | Remove the force unwrap constructing `AuthorID` in generated fixture data; make fixture creation report a test failure instead of trapping. | A constructor change or malformed fixture input can terminate the test process before XCTest records a useful failure. | Bleat maintainers |
 | `AppModelTests/testSeriesPaginationCoalescesAnInFlightPageWithoutBlockingMainActor`; `testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion`; `testConfirmedSeriesSerializeSharedBookHandoffPerAccount` | Replace one `Task.yield()` used as a competing-task barrier with an explicit admission/queue signal before checking coalescing or request ordering. | Yield only schedules cooperatively and does not establish that the other task reached the intended state; request-count and order assertions can pass before the competing operation is admitted. | Bleat maintainers |
 | `AppModelTests/testSetFinishedNewerCommitRejectsOlderDetailReconciliation`; `testSetFinishedReconciliationDoesNotRestoreObsoleteSearch`; `testCompletedReconciliationDoesNotCancelLaterUserSearch`; `testCancelledReconciliationSearchPreservesLoadedResults` | Expose and await reconciliation/search completion (and propagate cancellation) instead of using swallowed `try?` sleeps or yield-count polling before asserting stale work was rejected. | A 100ms delay or up to 50 sleeps does not prove the reconciliation task finished; a late detail/search result could overwrite the assertion after the test returns. One polling loop also suppresses cancellation. | Bleat maintainers |
-| `TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup` | Assert that concurrent writes create distinct artifact URLs and that each URL retains the expected content/type, in addition to existence and shared orphan cleanup. | Eight concurrent writers currently all report an existing file, which does not detect a URL collision or one writer overwriting another. | Bleat maintainers |
 
 | `AppModelTests/testRemotePlaybackProgressSyncEmitsOneTypedAttempt`; `testDownloadHTTPMetricsAreRecordedOffMainActorWithoutCacheHits`; `testContinueDownloadMissingLocalAccountHasTypedFailureAndPreservesBytes`; `testRestoredDownloadCallbacksMissingAccountKeepTypedStageAndBytes`; `testDownloadRestorePreservesQuarantinedLegacyTrackAndPresentsTypedCause`; `testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch` | Use an asserted bounded condition helper at each asynchronous observation, retaining the wait result, elapsed budget, source location, and observed state in XCTest failures; ensure session and observer cleanup runs on failure. | Current polling is time-bounded but some loops discard whether they observed the condition, or check a nearby but different state. A later callback may arrive after the test or an ordinary failure can lack actionable timeout context. Preserve typed failure and real legacy-persistence assertions. | Bleat maintainers |
 | `AppModelTests/testLateTerminalSaveCannotSetFailureForReplacementBatch`; `testTranscriptDeletionWaitsForLateTranscriptSave`; `testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes`; `testRereadClearsPinnedCompletionEvenWhenPlanFails`; `testLocalCompletionWaitsForInFlightAutomaticWork`; `testTransportFailureWaitsForNetworkAndDropsTransientProgress`; `testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff`; `testRetryAfterHeaderDelaysRetryableServerReplacement`; `testPauseIntentPrecedesConcurrentTerminalCallback`; `testLateCancelledTaskCallbackDoesNotRestartDownload`; `testLargeCellularDownloadsPreserveEveryPendingConfirmation`; `testConcurrentDownloadTriggersShareOneBookOperation`; `testFetchedCallbackTimeoutKeepsRetryBlockedUntilDrain` | Replace yield counts and short absence sleeps with a gate entry/completion signal for the operation under test. Make timeout cleanup release continuations, cancel owned tasks, and join their completion before checking absence or ordering. | Scheduler opportunities and short delays do not prove callback processing, retry cancellation, deletion admission, or pin cleanup has settled. Late work can invalidate the asserted result or leave a suspended task behind. Keep each existing late-callback, queue-reset, and persistence assertion. | Bleat maintainers |
@@ -102,3 +101,128 @@ The existing request and model-state assertions remain. Both tests passed three
 repetitions each (six exact outcomes, zero skips), and the owning app suite
 passed all 598 identities with zero skips (`.build/p2-live-refresh.xcresult`,
 `.build/p2-app-owning.xcresult`).
+
+## Concurrent transcript export assertions (#384)
+
+Child [#384](https://github.com/terminaloutcomes/bleat/issues/384) of
+[#374](https://github.com/terminaloutcomes/bleat/issues/374) resolves only
+`TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup`.
+The test joins eight writes with distinct UTF-8 payloads, alternating VTT/SRT
+formats and identical titles. It retains every artifact lease through assertions
+of eight distinct URLs, exact expected subtitle bytes, format/content type, file
+existence, and shared orphan cleanup. Byte equality intentionally verifies the
+file encoding and line-ending contract. No production exporter defect is claimed.
+The nine-rule source review is updated in `TestSupport/TestAudit/app.json`; test
+identities are unchanged, so the navigation and host inventories need no update.
+
+Validation on 2026-10-19, based on `07cd9bae` (PR #383), Xcode 27.1
+(`27A9275`): `mise run swift-lint`, `mise run docs:check`, and
+`git diff --check` passed. The documentation checker reported
+`Documentation references verified`. Initially, local focused
+repetitions and the local owning `BleatAppTests` run were **unexecuted**: destination
+discovery with `xcrun simctl list devices available` invoked Xcode's
+`xcodebuild -runFirstLaunch`, waiting for macOS authorization to install
+components (installed CoreSimulator `1171.7`, toolchain expects `1174.9.2`). A
+process sample identifies `DVTFirstLaunchPackageInstaller` →
+`PKInstallRequest authorizeForRight` → `AuthorizationCopyRights`; this is an
+environment blocker, not a source/test failure. No tests, skips, or passing
+runtime results are claimed for that discovery attempt; no Simulator `.xcresult`
+was produced.
+
+After local component-install authorization, the required focused command is:
+
+```sh
+mise exec -- xcodebuild -project Bleat.xcodeproj -scheme Bleat \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -resultBundlePath .build/export-focused.xcresult \
+  -only-testing:BleatAppTests/TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup \
+  -test-iterations 10 test
+```
+
+Then run the owning `BleatAppTests` bundle with a fresh result-bundle path and
+`-only-testing:BleatAppTests`. Inspect every executed identity and iteration via
+`xcrun xcresulttool get test-results tests --path <bundle>` and the corresponding
+summary before recording results. Exact commands/destination may need the
+installed runtime's UDID per the development guide. Broader #374 and #362
+requirements remain open; signed macOS and physical-device evidence are separate.
+
+The supported development-signed macOS app-hosted route was also attempted
+with `BleatMac`, `platform=macOS`, ten iterations, and the same focused identity.
+It failed during compilation of unchanged `App/RootView.swift:4669`: SwiftUI
+`MenuActionDismissBehavior.disabled` is unavailable on macOS. The retained
+`.build/export-macos-focused.xcresult` records a build failure and zero executed
+tests, not a failing test or runtime coverage. The log additionally reports the
+CoreSimulator version mismatch and an arm64/x86_64 destination ambiguity. This
+PR does not change the unrelated platform compatibility path.
+
+Independent review corrected the source audit's unsupported runner-timeout claim. The task group joins finite local
+writes; there is no test-local or explicitly enabled runner timeout, so a
+filesystem hang remains a runner-level risk.
+
+CI run `39135127213` at `5c44d38` failed during app-test compilation: its
+toolchain requires `try` on `withExtendedLifetime` around the throwing file
+reads. The review-directed removal was incorrect; no tests executed and no
+`ios-smoke-results` artifact was available. The correction binds the throwing
+`Data(contentsOf:)` read outside the XCTest autoclosure and retains the required
+outer `try`, making error propagation explicit. Updated-head CI is required.
+
+### Verified CI owning-suite evidence
+
+[CI run 39136376326](https://github.com/terminaloutcomes/bleat/actions/runs/39136376326)
+passed at `aaca43befcc7820c8f1545efa6110dc1766abcbc` with Xcode 26.6
+(`17F113`) on iPhone 17 Pro, iOS Simulator 26.5. The downloaded
+`ios-smoke-results` bundle
+`.build/export-evidence/ci-smoke-corrected/5645-1792334208001.xcresult`
+was inspected with `xcresulttool` summary/tests and reverified with the
+repository's `verify-test-results` against its build-derived discovery and
+actual smoke selectors: **608 passed outcomes, zero skips, failures, expected
+failures, or runtime warnings**. These comprise 606 `BleatAppTests` outcomes
+(including all eight `TranscriptExportArtifactTests`) and two UI smoke outcomes.
+`testConcurrentFirstWritesSafelyShareOrphanCleanup` passed once (0.030153s).
+The initial local verifier invocation used an unmatched guessed UI selector and
+was rejected; using the actual selectors from `scripts/src/ci_smoke.rs` verified
+all 608 outcomes. That rejected verification is not test coverage.
+
+All PR CI checks passed on this tested revision; website deployment was
+intentionally skipped. The unsigned host job reported 573 tests in 43 suites,
+with one known issue and the signed-Keychain case excluded. Rust coverage
+reported 3.865%, below its advisory 80% threshold; that job passed. These are
+separate CI lanes, not local signed-host or device evidence.
+
+The owning CI suite does not establish focused repetitions. Independent source
+review cleared this source revision. The subsequently completed local evidence
+is recorded below; broader #374 and #362 requirements remain open.
+
+### Verified local repetitions and owning suite
+
+After the user authorized Apple's component update on 2026-10-19, installed
+CoreSimulator `1174.9.2` matched Xcode 27.1 (`27A9275`). Simulator discovery
+completed successfully. At unchanged source revision
+`53836c2a4b6015712e3217f0d3da2417f9655fbf`, the selected iPhone 17 Pro
+(iOS Simulator 26.5) ran the exact concurrent export identity **10 times: all
+10 passed**, zero skips, failures, expected failures or runtime warnings.
+The bundle `.build/export-ios-focused-10.xcresult` was inspected with
+`xcresulttool` summary/tests and `verify-test-results --expected
+BleatAppTests/TranscriptExportArtifactTests/testConcurrentFirstWritesSafelyShareOrphanCleanup
+--repetitions 10`. The summary contains one unique identity and ten run
+outcomes; these are ten repetitions, not ten different tests.
+
+The first local full-owning attempt, `.build/export-ios-owning.xcresult`,
+executed no actual test case: SpringBoard denied test-host launch with
+`Busy / Application failed preflight checks`. Its summary records one synthetic
+runner failure. That failed attempt is retained and is not passing coverage.
+Explicit `simctl bootstatus -b` then found the device needed booting and waited
+through data migration and system-app readiness to terminal `Finished` (9s).
+The built test host was installed after readiness, then the existing build was
+enumerated using the repository runner's flat JSON enumeration options.
+
+With a fresh result bundle, `test-without-building -only-testing:BleatAppTests
+-parallel-testing-enabled NO` passed the full owning suite: **606 outcomes,
+zero skips, failures, expected failures or runtime warnings**, including all
+eight transcript artifact tests. `.build/export-ios-owning-ready.xcresult` was
+inspected with `xcresulttool` summary/tests and strictly verified against
+`.build/export-evidence/ios-owning.discovery.json` with `--only BleatAppTests`.
+All assertions were unchanged; no timing sleep, tolerance increase, or product
+workaround was added. `.envrc` retained its original checksum. This is local
+Simulator evidence; the earlier macOS compile blocker and lack of physical-device
+validation remain explicit.
