@@ -1101,7 +1101,7 @@ final class AuthenticatedRequestTests {
     }
 
     @Test
-    func testMissingSavedCredentialsMemoizesConclusiveFailure() async throws {
+    func testConclusiveRefreshStatusFailureIsMemoized() async throws {
         let fixture = try Fixture(
             responses: [
                 .success(.init(data: Data(), statusCode: 401)),

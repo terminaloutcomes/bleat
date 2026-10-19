@@ -4492,8 +4492,8 @@
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-      "name": "testMissingSavedCredentialsMemoizesConclusiveFailure",
-      "line": 1031,
+      "name": "testConclusiveRefreshStatusFailureIsMemoized",
+      "line": 1104,
       "language": "swift"
     },
     {

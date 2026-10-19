@@ -112,7 +112,7 @@
     "testOrdinaryRequestRetriesOnlyOnce()",
     "testRefreshFailuresAreTypedAndAccountScoped()",
     "testRefreshTransportFailureIsNotCachedAndRetries()",
-    "testMissingSavedCredentialsMemoizesConclusiveFailure()",
+    "testConclusiveRefreshStatusFailureIsMemoized()",
     "testTransientSavedLoginFailuresAreNotCachedAndRetry()",
     "testMissingSessionTokensUseSynchronizedNativeLogin()",
     "testCredentialFailuresAreTyped()",
