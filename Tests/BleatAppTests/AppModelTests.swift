@@ -14127,6 +14127,65 @@ final class AppModelTests: XCTestCase {
         model.setLiveUpdatesActive(false)
     }
 
+    func testLiveCoverChangeOutsideSelectedLibraryRefreshesOnlyActiveArtwork()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount(accountID: fixture.accountID.rawValue)
+        let browsingLibrary = LibrarySummary(
+            id: LibraryID(rawValue: "other-library"), name: "Fixture",
+            mediaType: .book)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([browsingLibrary]),
+            firstPage: .success(fixturePage(libraryID: browsingLibrary.id)))
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            localSessionStore: LocalPlaybackSessionStore(
+                defaults: fixture.defaults),
+            playbackPositionStore: PlaybackPositionStore(
+                defaults: fixture.defaults),
+            operationObserver: { operations.record($0) })
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
+        await model.playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: account.id, account: account)
+        model.playback.pause()
+        await model.playback.seek(to: 0.25)
+        let before = model.playback.coverURL
+        XCTAssertNotNil(before)
+        let baseline = await service.liveRefreshRequestCounts()
+        let consumed = operations.expectation(for: .liveUpdateConsumed)
+        await service.emitLiveUpdate(
+            .event(
+                .itemsChanged(
+                    AudiobookshelfLiveItemChange(
+                        libraryIDs: [fixture.detail.libraryID],
+                        itemIDs: [fixture.detail.id]))))
+        await fulfillment(of: [consumed], timeout: 30)
+        XCTAssertNotEqual(model.playback.coverURL, before)
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.001)
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, baseline)
+        let refreshed = model.playback.coverURL
+        let unrelatedConsumed = operations.expectation(for: .liveUpdateConsumed)
+        await service.emitLiveUpdate(
+            .event(
+                .itemsChanged(
+                    AudiobookshelfLiveItemChange(
+                        libraryIDs: [fixture.detail.libraryID],
+                        itemIDs: [LibraryItemID(rawValue: "unrelated")]))))
+        await fulfillment(of: [unrelatedConsumed], timeout: 30)
+        XCTAssertEqual(model.playback.coverURL, refreshed)
+        model.setLiveUpdatesActive(false)
+        await model.playback.stop()
+    }
+
     func testLiveRefreshCancelsQueuedCatalogChangeOnBackground() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -20946,7 +21005,7 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(outcome, .started(source: .downloaded))
         XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.05)
-        XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)
+        XCTAssertEqual(model.playback.coverLoadPolicy, .allowNetwork)
         XCTAssertTrue(
             model.playback.state == .buffering
                 || model.playback.state == .playing

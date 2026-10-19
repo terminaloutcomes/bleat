@@ -984,6 +984,7 @@ Descriptions received from the server are untrusted rich text. Render a sanitize
 - Keep the previous cached cover until the server confirms success.
 - Fetch with `GET /api/items/<item-id>/cover`, optionally using `width`, `height`, `format`, and `ts=<updatedAt>`; the current server intentionally permits unauthenticated cover GETs.
 - Cache-bust with `ts=<updatedAt>` rather than appending bearer tokens to URLs.
+- Revalidate cached covers at process/refresh boundaries even if timestamps are unchanged; retire obsolete requests and all variants after confirmed replacement. Preserve valid offline artwork independently of downloaded audio. See [cover and asset lifecycle policy](cover-cache-lifecycle.md) for ownership, cache identity and bounded remaining audit work.
 - Chapter editing, track reordering, provider matching, and writing embedded audio tags are deferred.
 
 ### 8.4 Server item deletion

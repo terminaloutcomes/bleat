@@ -1,6 +1,7 @@
 import BleatCore
 import Foundation
 import MediaPlayer
+import Observation
 import Synchronization
 
 enum PlaybackRemoteCommand: Equatable, Sendable {
@@ -140,6 +141,7 @@ enum NowPlayingArtwork {
 }
 
 private struct NowPlayingArtworkIdentity: Equatable {
+    let generation: [UUID?]
     let accountID: AccountID?
     let url: URL
     let policy: BookCoverLoadPolicy
@@ -264,6 +266,8 @@ final class NowPlayingCoordinator {
         }
         let nextArtworkIdentity = snapshot.coverURL.map {
             NowPlayingArtworkIdentity(
+                generation: BookCoverRefresh.shared.generation(
+                    accountID: snapshot.accountID, url: $0),
                 accountID: snapshot.accountID,
                 url: $0,
                 policy: snapshot.coverLoadPolicy
@@ -289,6 +293,7 @@ final class NowPlayingCoordinator {
 
         artworkGeneration &+= 1
         let generation = artworkGeneration
+        observeArtworkChanges(generation: generation, snapshot: snapshot)
         artworkTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { artworkCompletionSequenceForTesting += 1 }
@@ -311,6 +316,26 @@ final class NowPlayingCoordinator {
             infoCenter.nowPlayingInfo = latestSnapshot.information(
                 artwork: artwork
             )
+        }
+    }
+
+    private func observeArtworkChanges(
+        generation: UInt64, snapshot: NowPlayingSnapshot
+    ) {
+        withObservationTracking {
+            _ = BookCoverRefresh.shared.generation(
+                accountID: snapshot.accountID, url: snapshot.coverURL)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, artworkGeneration == generation,
+                    let snapshot = latestSnapshot
+                else { return }
+                publish(snapshot)
+                if artworkGeneration == generation {
+                    observeArtworkChanges(
+                        generation: generation, snapshot: snapshot)
+                }
+            }
         }
     }
 

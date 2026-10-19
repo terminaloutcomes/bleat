@@ -170,6 +170,7 @@
         }
 
         private struct TemplatePresentation: Equatable, Sendable {
+            let artworkGeneration: UUID?
             let phase: AppPhase
             let account: AccountPresentation?
             let selectedLibraryID: LibraryID?
@@ -1003,6 +1004,8 @@
                 AccountPresentation(id: $0.id, server: $0.server)
             }
             return TemplatePresentation(
+                artworkGeneration: BookCoverRefresh.shared
+                    .presentationGeneration(accountID: accountID),
                 phase: model.phase,
                 account: account,
                 selectedLibraryID: model.selectedLibrary?.id,
@@ -1469,6 +1472,8 @@
             }
             let generation = presentationGeneration
             withObservationTracking {
+                _ = BookCoverRefresh.shared.presentationGeneration(
+                    accountID: model.account?.id)
                 _ = model.phase
                 _ = model.account?.id
                 _ = model.selectedLibrary?.id
@@ -1591,7 +1596,9 @@
             url: URL
         ) -> NSString {
             let account = accountID?.rawValue ?? "anonymous"
-            return "\(account)\u{0}\(url.absoluteString)" as NSString
+            return
+                "\(account)\u{0}\(url.absoluteString)\u{0}\(BookCoverRefresh.shared.generation(accountID: accountID, url: url))"
+                as NSString
         }
     }
 

@@ -1,24 +1,94 @@
 import BleatCore
 import CryptoKit
+import OSLog
+import Observation
 import SwiftUI
 
-enum BookCoverLoadPolicy: Equatable, Sendable {
+enum BookCoverLoadPolicy: Hashable, Sendable {
     case allowNetwork
     case cacheOnly
 }
 
-private struct BookCoverCacheKey: Hashable, Sendable {
+private struct BookCoverResource: Hashable, Sendable {
     let accountID: AccountID
     let url: URL
 
+    init(accountID: AccountID, url: URL) {
+        self.accountID = accountID
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = nil
+        self.url = components?.url ?? url
+    }
+}
+
+private struct BookCoverCacheKey: Hashable, Sendable {
+    let resource: BookCoverResource
+    let url: URL
+
+    init(accountID: AccountID, url: URL) {
+        resource = BookCoverResource(accountID: accountID, url: url)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let items = components?.queryItems?.filter {
+            $0.name != "ts" && $0.name != "revision"
+        }
+        components?.queryItems = items
+        self.url = components?.url ?? url
+    }
+
+    var accountID: AccountID { resource.accountID }
     var memoryKey: NSString {
         "\(accountID.rawValue)\u{0}\(url.absoluteString)" as NSString
     }
 }
 
+// A refresh changes request identity even when the server keeps updatedAt.
+// Cache invalidation completes before publishing this observable generation.
+@MainActor @Observable
+final class BookCoverRefresh {
+    static let shared = BookCoverRefresh()
+    private var presentationGenerations: [AccountID: UUID] = [:]
+
+    func presentationGeneration(accountID: AccountID?) -> UUID? {
+        accountID.flatMap { presentationGenerations[$0] }
+    }
+
+    private var accountGenerations: [AccountID: UUID] = [:]
+    private var itemGenerations: [AccountID: [LibraryItemID: UUID]] = [:]
+
+    func generation(accountID: AccountID?, url: URL?) -> [UUID?] {
+        guard let accountID else { return [] }
+        let itemID = url.map {
+            LibraryItemID(
+                rawValue: $0.deletingLastPathComponent().lastPathComponent)
+        }
+        return [
+            accountGenerations[accountID],
+            itemID.flatMap { itemGenerations[accountID]?[$0] },
+        ]
+    }
+
+    func refresh(accountID: AccountID, itemID: LibraryItemID? = nil) {
+        presentationGenerations[accountID] = UUID()
+        if let itemID {
+            itemGenerations[accountID, default: [:]][itemID] = UUID()
+        } else {
+            accountGenerations[accountID] = UUID()
+        }
+    }
+}
+
+private struct PersistedBookCover: Codable {
+    let timestamp: Int64
+    let data: Data
+}
+
 private struct LoadedBookCover: @unchecked Sendable {
     let data: Data
     let image: PlatformImage
+}
+
+enum BookCoverCacheEvent: Sendable {
+    case joined, committed, obsoleteCompletion
 }
 
 actor BookCoverImageLoader {
@@ -33,16 +103,31 @@ actor BookCoverImageLoader {
 
     private var tracer: any RemoteTelemetryTracing
     private let fetch: Fetch
+    private let observe: @Sendable (BookCoverCacheEvent) -> Void
     private let diskCapacity: Int
     private let cacheRoot: URL?
     private let memory = NSCache<NSString, PlatformImage>()
     private var endpointRouter: ServerEndpointRouter?
     private var memoryKeys: [AccountID: Set<String>] = [:]
-    private var inFlight: [BookCoverCacheKey: Task<LoadedBookCover?, Never>] =
-        [:]
+    private struct Request {
+        let id: UUID
+        let generation: UUID
+        let timestamp: Int64
+        let task: Task<LoadedBookCover?, Never>
+    }
+    private var inFlight: [BookCoverCacheKey: Request] = [:]
+    private var generations: [BookCoverResource: UUID] = [:]
+    private var requestedRevisions: [BookCoverResource: String] = [:]
+    private var latestRequested: [BookCoverResource: Int64] = [:]
+    private var validated: Set<BookCoverCacheKey> = []
+    private var memoryDigests: [BookCoverCacheKey: SHA256.Digest] = [:]
+    private var memoryTimestamps: [BookCoverCacheKey: Int64] = [:]
+    private static let logger = Logger(
+        subsystem: "org.terminaloutcomes.bleat", category: "cover-cache")
 
     init(
         diskCapacity: Int = BookCoverImageLoader.diskCapacity,
+        observe: @escaping @Sendable (BookCoverCacheEvent) -> Void = { _ in },
         cacheRoot: URL? = nil,
         tracer: any RemoteTelemetryTracing = InactiveRemoteTelemetryTracer(),
         fetch: @escaping Fetch = { request in
@@ -59,6 +144,7 @@ actor BookCoverImageLoader {
         self.diskCapacity = max(0, diskCapacity)
         self.cacheRoot = cacheRoot
         self.fetch = fetch
+        self.observe = observe
         self.tracer = tracer
         memory.totalCostLimit = Self.memoryCapacity
         memory.countLimit = 256
@@ -84,58 +170,218 @@ actor BookCoverImageLoader {
             )?.image
         }
         let key = BookCoverCacheKey(accountID: accountID, url: url)
-        if let image = memory.object(forKey: key.memoryKey) {
-            return image
+        let revision = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "revision" })?.value
+        if let revision, requestedRevisions[key.resource] != revision {
+            retireRequests { $0 == key.resource }
+            validated = validated.filter { $0.resource != key.resource }
+            requestedRevisions[key.resource] = revision
         }
-
-        let request = URLRequest(
-            url: url,
-            cachePolicy: .reloadIgnoringLocalCacheData
-        )
-        if let image = loadFromDisk(for: key) {
-            storeInMemory(image, for: key)
-            return image
+        let timestamp = max(
+            Self.timestamp(url), resourceTimestamp(for: key.resource),
+            latestRequested[key.resource] ?? 0)
+        if timestamp > (latestRequested[key.resource] ?? 0) {
+            retireRequests { $0 == key.resource }
+            validated = validated.filter { $0.resource != key.resource }
+            latestRequested[key.resource] = timestamp
         }
-
-        guard policy == .allowNetwork else {
+        if policy == .cacheOnly || validated.contains(key) {
+            if let image = cachedImage(
+                for: key, timestamp: timestamp, legacyURL: url)
+            {
+                Self.logger.debug("cover_cache_hit")
+                return image
+            }
+        }
+        guard policy == .allowNetwork else { return nil }
+        if let active = inFlight[key], active.timestamp < timestamp {
+            retireRequests { $0 == key.resource }
+            validated = validated.filter { $0.resource != key.resource }
+        }
+        let generation = generations[key.resource] ?? UUID()
+        generations[key.resource] = generation
+        let request: Request
+        if let current = inFlight[key] {
+            request = current
+            observe(.joined)
+            Self.logger.debug("cover_refresh_joined")
+        } else {
+            let endpointRouter = endpointRouter
+            let tracer = tracer
+            let task = Task { [fetch] in
+                await Self.fetchImage(
+                    URLRequest(
+                        url: Self.requestURL(url, timestamp: timestamp),
+                        cachePolicy: .reloadIgnoringLocalCacheData),
+                    using: fetch, endpointRouter: endpointRouter, tracer: tracer
+                )
+            }
+            request = Request(
+                id: UUID(), generation: generation, timestamp: timestamp,
+                task: task)
+            inFlight[key] = request
+            Self.logger.debug("cover_revalidation_started")
+        }
+        let loaded = await request.task.value
+        guard generations[key.resource] == request.generation else {
+            observe(.obsoleteCompletion)
+            Self.logger.debug("cover_obsolete_completion_rejected")
             return nil
         }
-
-        if let task = inFlight[key] {
-            return await task.value?.image
+        // Every waiter verifies ownership. Only the owner commits the result.
+        guard inFlight[key]?.id == request.id else {
+            return cachedImage(for: key, timestamp: timestamp, legacyURL: url)
         }
-
-        let endpointRouter = endpointRouter
-        let tracer = tracer
-        let task = Task { [fetch] in
-            await Self.fetchImage(
-                request,
-                using: fetch,
-                endpointRouter: endpointRouter,
-                tracer: tracer
-            )
-        }
-        inFlight[key] = task
-        let loaded = await task.value
         inFlight[key] = nil
         guard let loaded else {
+            Self.logger.debug("cover_revalidation_failed_offline_fallback")
+            return cachedImage(for: key, timestamp: timestamp, legacyURL: url)
+        }
+        let previous = loadFromDisk(for: key, legacyURL: url)
+        let latestTimestamp = max(
+            previous?.timestamp ?? 0, resourceTimestamp(for: key.resource))
+        // Exact bytes intentionally identify this rendered variant. A changed
+        // encoding may cause an extra invalidation, never stale reuse.
+        let changed =
+            memoryDigests[key].map { $0 != SHA256.hash(data: loaded.data) }
+            ?? previous.map { $0.data != loaded.data } ?? false
+        if changed || timestamp > latestTimestamp && latestTimestamp > 0 {
+            invalidateVariants(
+                for: url, accountID: accountID, preserving: request.id)
+        }
+        let storedTimestamp = max(timestamp, latestTimestamp)
+        storeOnDisk(loaded.data, timestamp: storedTimestamp, for: key)
+        storeInMemory(loaded.image, timestamp: storedTimestamp, for: key)
+        memoryDigests[key] = SHA256.hash(data: loaded.data)
+        validated.insert(key)
+        observe(.committed)
+        Self.logger.debug("cover_revalidation_committed")
+        let committedGeneration = generations[key.resource]
+        if changed || timestamp > latestTimestamp && latestTimestamp > 0 {
+            await BookCoverRefresh.shared.refresh(
+                accountID: accountID,
+                itemID: LibraryItemID(
+                    rawValue: url.deletingLastPathComponent().lastPathComponent)
+            )
+        }
+        guard generations[key.resource] == committedGeneration else {
             return nil
         }
-        storeOnDisk(loaded.data, for: key)
-        storeInMemory(loaded.image, for: key)
         return loaded.image
+    }
+
+    // Revalidation keeps offline bytes, whereas a confirmed replacement retires
+    // every size/timestamp/revision of this one account/server/item.
+    func revalidate(for accountID: AccountID) {
+        validated = validated.filter { $0.accountID != accountID }
+        retireRequests { $0.accountID == accountID }
+    }
+
+    func invalidate(for url: URL, accountID: AccountID) {
+        invalidateVariants(for: url, accountID: accountID, preserving: nil)
+    }
+
+    private func invalidateVariants(
+        for url: URL, accountID: AccountID, preserving requestID: UUID?
+    ) {
+        let resource = BookCoverResource(accountID: accountID, url: url)
+        if let requestID {
+            for key in inFlight.keys.filter({
+                $0.resource == resource && inFlight[$0]?.id != requestID
+            }) {
+                inFlight.removeValue(forKey: key)?.task.cancel()
+            }
+        } else {
+            retireRequests { $0 == resource }
+        }
+        let keys = memoryTimestamps.keys.filter { $0.resource == resource }
+        for key in keys {
+            memory.removeObject(forKey: key.memoryKey)
+            memoryTimestamps[key] = nil
+            memoryDigests[key] = nil
+            memoryKeys[accountID]?.remove(key.memoryKey as String)
+            validated.remove(key)
+        }
+        if let directory = resourceDirectory(for: resource) {
+            try? FileManager.default.removeItem(at: directory)
+            // A persistent tombstone prevents resurrection of pre-policy files.
+            try? FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true)
+            try? Data().write(
+                to: directory.appendingPathComponent(".invalidated"),
+                options: .atomic)
+        }
+        Self.logger.debug("cover_confirmed_replacement_invalidated")
+    }
+
+    private func retireRequests(matching includes: (BookCoverResource) -> Bool)
+    {
+        for resource in generations.keys.filter(includes) {
+            generations[resource] = UUID()
+        }
+        for key in inFlight.keys.filter({ includes($0.resource) }) {
+            let request = inFlight.removeValue(forKey: key)
+            request?.task.cancel()
+        }
+    }
+
+    private func resourceTimestamp(for resource: BookCoverResource) -> Int64 {
+        let memoryTimestamp =
+            memoryTimestamps.filter { $0.key.resource == resource }.values.max()
+            ?? 0
+        guard
+            let url = resourceDirectory(for: resource)?.appendingPathComponent(
+                ".revision"),
+            let data = readCacheData(at: url, maximumBytes: 64),
+            let text = String(data: data, encoding: .utf8)
+        else { return memoryTimestamp }
+        return max(memoryTimestamp, Int64(text) ?? 0)
+    }
+
+    private func cachedImage(
+        for key: BookCoverCacheKey, timestamp: Int64, legacyURL: URL
+    ) -> PlatformImage? {
+        let timestamp = max(timestamp, resourceTimestamp(for: key.resource))
+        if let cachedTimestamp = memoryTimestamps[key],
+            cachedTimestamp >= timestamp,
+            let image = memory.object(forKey: key.memoryKey)
+        {
+            return image
+        }
+        if let cached = loadFromDisk(for: key, legacyURL: legacyURL),
+            cached.timestamp >= timestamp,
+            let image = PlatformImageSupport.image(from: cached.data)
+        {
+            storeInMemory(image, timestamp: cached.timestamp, for: key)
+            return image
+        }
+        return nil
+    }
+
+    private static func requestURL(_ url: URL, timestamp: Int64) -> URL {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let items = components?.queryItems?.map {
+            $0.name == "ts"
+                ? URLQueryItem(name: "ts", value: String(timestamp)) : $0
+        }
+        components?.queryItems = items
+        return components?.url ?? url
+    }
+
+    private static func timestamp(_ url: URL) -> Int64 {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .first(where: { $0.name == "ts" })?.value.flatMap(Int64.init) ?? 0
     }
 
     func removeAll(for accountID: AccountID) {
         for key in memoryKeys.removeValue(forKey: accountID) ?? [] {
             memory.removeObject(forKey: key as NSString)
         }
-        let inFlightKeys = inFlight.keys.filter {
-            $0.accountID == accountID
-        }
-        for key in inFlightKeys {
-            inFlight[key]?.cancel()
-            inFlight[key] = nil
+        retireRequests { $0.accountID == accountID }
+        validated = validated.filter { $0.accountID != accountID }
+        memoryDigests = memoryDigests.filter { $0.key.accountID != accountID }
+        memoryTimestamps = memoryTimestamps.filter {
+            $0.key.accountID != accountID
         }
         if let directory = accountCacheDirectory(for: accountID) {
             try? FileManager.default.removeItem(at: directory)
@@ -145,6 +391,8 @@ actor BookCoverImageLoader {
     func clearMemoryCache() {
         memory.removeAllObjects()
         memoryKeys = [:]
+        memoryTimestamps = [:]
+        memoryDigests = [:]
     }
 
     func setTracer(_ tracer: any RemoteTelemetryTracing) {
@@ -157,8 +405,10 @@ actor BookCoverImageLoader {
 
     private func storeInMemory(
         _ image: PlatformImage,
+        timestamp: Int64,
         for key: BookCoverCacheKey
     ) {
+        memoryTimestamps[key] = timestamp
         let size = PlatformImageSupport.pixelSize(of: image)
         let width = Double(size.width)
         let height = Double(size.height)
@@ -245,28 +495,59 @@ actor BookCoverImageLoader {
         return nil
     }
 
-    private func loadFromDisk(for key: BookCoverCacheKey) -> PlatformImage? {
-        guard let url = diskURL(for: key),
-            let values = try? url.resourceValues(
-                forKeys: [.isRegularFileKey, .fileSizeKey]
-            ),
-            values.isRegularFile == true,
-            let fileSize = values.fileSize,
-            (0...Self.maximumResponseBytes).contains(fileSize),
-            let data = try? Data(contentsOf: url),
-            let image = PlatformImageSupport.image(from: data)
-        else {
-            return nil
+    // Maintainer-approved synchronous filesystem boundary for the scoped #400
+    // fix: reads, atomic writes, pruning and deletion remain actor-owned. Native
+    // async durable directory/mutation APIs are unavailable in Foundation. #411
+    // owns reconsidering execution, awaited cancellation/cleanup and latency;
+    // this approval does not extend to other filesystem owners.
+    private func readCacheData(at url: URL, maximumBytes: Int) -> Data? {
+        guard
+            let values = try? url.resourceValues(forKeys: [
+                .isRegularFileKey, .fileSizeKey,
+            ]),
+            values.isRegularFile == true, let size = values.fileSize,
+            (0...maximumBytes).contains(size)
+        else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    private func loadFromDisk(for key: BookCoverCacheKey, legacyURL: URL)
+        -> PersistedBookCover?
+    {
+        guard let directory = resourceDirectory(for: key.resource),
+            let url = diskURL(for: key)
+        else { return nil }
+        if let data = readCacheData(
+            at: url, maximumBytes: Self.maximumResponseBytes * 2),
+            data.count <= Self.maximumResponseBytes * 2,
+            let cached = try? JSONDecoder().decode(
+                PersistedBookCover.self, from: data),
+            cached.data.count <= Self.maximumResponseBytes,
+            PlatformImageSupport.image(from: cached.data) != nil
+        {
+            try? FileManager.default.setAttributes(
+                [.modificationDate: Date()], ofItemAtPath: url.path)
+            return cached
         }
-        try? FileManager.default.setAttributes(
-            [.modificationDate: Date()],
-            ofItemAtPath: url.path
-        )
-        return image
+        // Preserve existing offline artwork on upgrade; online requests must
+        // validate it before use. A replacement tombstone prohibits fallback.
+        guard
+            !FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent(".invalidated").path),
+            let legacy = accountCacheDirectory(for: key.accountID)?
+                .appendingPathComponent(Self.hash(legacyURL.absoluteString)),
+            let data = readCacheData(
+                at: legacy, maximumBytes: Self.maximumResponseBytes),
+            data.count <= Self.maximumResponseBytes,
+            PlatformImageSupport.image(from: data) != nil
+        else { return nil }
+        return PersistedBookCover(
+            timestamp: Self.timestamp(legacyURL), data: data)
     }
 
     private func storeOnDisk(
         _ data: Data,
+        timestamp: Int64,
         for key: BookCoverCacheKey
     ) {
         guard data.count <= Self.maximumResponseBytes,
@@ -279,7 +560,15 @@ actor BookCoverImageLoader {
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            try data.write(to: url, options: .atomic)
+            let persisted = try JSONEncoder().encode(
+                PersistedBookCover(timestamp: timestamp, data: data))
+            // Advance the watermark before publishing payload bytes. If an
+            // interrupted write leaves an older payload, it must not become
+            // eligible through an older saved metadata snapshot after restart.
+            try Data(String(timestamp).utf8).write(
+                to: url.deletingLastPathComponent().appendingPathComponent(
+                    ".revision"), options: .atomic)
+            try persisted.write(to: url, options: .atomic)
             pruneDiskCache()
         } catch {
             return
@@ -288,9 +577,7 @@ actor BookCoverImageLoader {
 
     private func diskURL(for key: BookCoverCacheKey) -> URL? {
         guard diskCapacity > 0,
-            let directory = accountCacheDirectory(
-                for: key.accountID
-            )
+            let directory = resourceDirectory(for: key.resource)
         else {
             return nil
         }
@@ -298,6 +585,14 @@ actor BookCoverImageLoader {
             Self.hash(key.url.absoluteString),
             isDirectory: false
         )
+    }
+
+    private func resourceDirectory(for resource: BookCoverResource) -> URL? {
+        guard diskCapacity > 0 else { return nil }
+        return accountCacheDirectory(for: resource.accountID)?
+            .appendingPathComponent("v2", isDirectory: true)
+            .appendingPathComponent(
+                Self.hash(resource.url.absoluteString), isDirectory: true)
     }
 
     private func accountCacheDirectory(
@@ -398,6 +693,7 @@ struct BookCoverView: View {
     let cornerRadius: CGFloat
     let loadPolicy: BookCoverLoadPolicy
     @State private var state = BookCoverLoadState.idle
+    @State private var loadedRequest: BookCoverRequest?
 
     init(
         accountID: AccountID?,
@@ -438,8 +734,15 @@ struct BookCoverView: View {
         Color.clear.overlay {
             switch state {
             case .loaded(let image):
-                PlatformImageSupport.resizableView(for: image)
-                    .scaledToFill()
+                if loadedRequest?.accountID == request.accountID,
+                    loadedRequest?.url == request.url,
+                    loadedRequest?.generation.last == request.generation.last
+                {
+                    PlatformImageSupport.resizableView(for: image)
+                        .scaledToFill()
+                } else {
+                    placeholder.overlay { ProgressView() }
+                }
             case .idle, .loading:
                 placeholder
                     .overlay {
@@ -456,21 +759,33 @@ struct BookCoverView: View {
                 state = .failed
                 return
             }
-            state = .loading
+            let loadingRequest = request
+            if case .loaded = state {} else { state = .loading }
             let image = await BookCoverImageLoader.shared.image(
                 for: url,
                 accountID: accountID,
                 policy: loadPolicy
             )
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled, request == loadingRequest else {
                 return
             }
+            if image == nil, case .loaded = state,
+                loadedRequest?.accountID == loadingRequest.accountID,
+                loadedRequest?.url == loadingRequest.url,
+                loadedRequest?.generation.last == loadingRequest.generation.last
+            {
+                return
+            }
+            loadedRequest = loadingRequest
             state = image.map(BookCoverLoadState.loaded) ?? .failed
         }
     }
 
     private var request: BookCoverRequest {
-        BookCoverRequest(accountID: accountID, url: url)
+        BookCoverRequest(
+            generation: BookCoverRefresh.shared.generation(
+                accountID: accountID, url: url), policy: loadPolicy,
+            accountID: accountID, url: url)
     }
 
     private var placeholder: some View {
@@ -484,6 +799,8 @@ struct BookCoverView: View {
 }
 
 private struct BookCoverRequest: Hashable {
+    let generation: [UUID?]
+    let policy: BookCoverLoadPolicy
     let accountID: AccountID?
     let url: URL?
 }

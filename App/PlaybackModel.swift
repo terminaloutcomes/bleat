@@ -493,7 +493,6 @@ final class PlaybackModel {
     private(set) var author = ""
     private(set) var narrator = ""
     private(set) var coverURL: URL?
-    private var coverWasEdited = false
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
     private(set) var rate: Float = 1
@@ -619,10 +618,10 @@ final class PlaybackModel {
         state == .playing
     }
 
+    var artworkNetworkAvailable = true
+
     var coverLoadPolicy: BookCoverLoadPolicy {
-        preparation?.sessionID == nil && !coverWasEdited
-            ? .cacheOnly
-            : .allowNetwork
+        hasActiveBook && artworkNetworkAvailable ? .allowNetwork : .cacheOnly
     }
 
     func refreshCover(for account: ServerAccount, detail: LibraryBookDetail) {
@@ -643,7 +642,6 @@ final class PlaybackModel {
                 URLQueryItem(name: "revision", value: UUID().uuidString)
             ]
         guard let refreshedURL = components.url else { return }
-        coverWasEdited = true
         coverURL = refreshedURL
         updateNowPlaying()
     }
@@ -919,7 +917,6 @@ final class PlaybackModel {
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
         narrator = detail.narrators.joined(separator: ", ")
-        coverWasEdited = false
         coverURL = BookCoverURL.make(
             server: account.server,
             itemID: detail.id,
@@ -1123,7 +1120,6 @@ final class PlaybackModel {
         title = detail.title
         author = detail.authors.map(\.name).joined(separator: ", ")
         narrator = detail.narrators.joined(separator: ", ")
-        coverWasEdited = false
         coverURL = BookCoverURL.make(
             server: account?.server,
             itemID: detail.id,
@@ -2132,7 +2128,6 @@ final class PlaybackModel {
         title = ""
         author = ""
         narrator = ""
-        coverWasEdited = false
         coverURL = nil
         currentTime = 0
         duration = 0

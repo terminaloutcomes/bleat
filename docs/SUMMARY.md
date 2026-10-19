@@ -49,3 +49,5 @@
 # Historical
 
 - [Host Swift Testing migration evaluation](historical/swift-testing-evaluation.md)
+
+- [Cover and asset lifecycle](cover-cache-lifecycle.md)

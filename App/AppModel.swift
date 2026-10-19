@@ -3018,6 +3018,8 @@ final class AppModel {
 
     private func refreshSelectedLibraryContent() async {
         guard !Task.isCancelled else { return }
+        if let account { await revalidateCoverArtwork(for: account) }
+        guard !Task.isCancelled else { return }
         homeShelvesGeneration &+= 1
         let operationGeneration = homeShelvesGeneration
         guard let account, let library = selectedLibrary else {
@@ -4524,6 +4526,8 @@ final class AppModel {
             // older bookmark results only once that replacement is certain.
             bookDetailGeneration &+= 1
             bookDetail = .loaded(detail)
+            await refreshCoverArtwork(
+                for: account, detail: detail, replacement: false)
             await diagnostics.record(.completed(.loadBook, category: .api))
             await loadBookBookmarks()
         } catch let error {
@@ -4617,6 +4621,33 @@ final class AppModel {
         }
     }
 
+    private func refreshCoverArtwork(
+        for account: ServerAccount, detail: LibraryBookDetail, replacement: Bool
+    ) async {
+        if replacement,
+            let url = BookCoverURL.make(
+                server: account.server, itemID: detail.id,
+                updatedAtMilliseconds: detail.updatedAtMilliseconds, width: 600,
+                height: 600)
+        {
+            await BookCoverImageLoader.shared.invalidate(
+                for: url, accountID: account.id)
+        } else {
+            await BookCoverImageLoader.shared.revalidate(for: account.id)
+        }
+        BookCoverRefresh.shared.refresh(
+            accountID: account.id, itemID: replacement ? detail.id : nil)
+        playback.refreshCover(for: account, detail: detail)
+    }
+
+    private func revalidateCoverArtwork(for account: ServerAccount) async {
+        await BookCoverImageLoader.shared.revalidate(for: account.id)
+        BookCoverRefresh.shared.refresh(accountID: account.id)
+        if let detail = playback.preparedBookDetail {
+            playback.refreshCover(for: account, detail: detail)
+        }
+    }
+
     func saveBookEdits(
         draft: BookMetadataDraft,
         baseline: LibraryBookDetail,
@@ -4660,7 +4691,8 @@ final class AppModel {
                     bookDetailRefreshState = .idle
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
-                    playback.refreshCover(for: account, detail: updated)
+                    await refreshCoverArtwork(
+                        for: account, detail: updated, replacement: true)
                     bookEditSaveState = .saved
                 } catch let error {
                     bookEditSaveState = .metadataSavedCoverFailed(
@@ -4719,7 +4751,8 @@ final class AppModel {
             bookDetailRefreshState = .idle
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
-            playback.refreshCover(for: account, detail: updated)
+            await refreshCoverArtwork(
+                for: account, detail: updated, replacement: true)
             bookEditSaveState = .coverSaved(updated)
         } catch let error {
             guard bookCoverRetryOperationID == operationID,
@@ -4800,6 +4833,8 @@ final class AppModel {
                 detail: detail,
                 mode: mode
             )
+            await refreshCoverArtwork(
+                for: account, detail: detail, replacement: true)
             playbackPositionStore.clearLastPlaying(
                 accountID: account.id, itemID: detail.id)
             let localDownloadCleanupFailed: Bool
@@ -7266,6 +7301,8 @@ final class AppModel {
                 defer { operationObserver?(.networkPathStateApplied(state)) }
                 let previousState = networkPathState
                 networkPathState = state
+                playback.artworkNetworkAvailable =
+                    state.availability != .unavailable
                 operationObserver?(.networkPathApplied)
                 switch state.change(from: previousState) {
                 case .duplicatePath, .qualityOnly: continue
@@ -7451,6 +7488,14 @@ final class AppModel {
                         guard let selectedLibrary,
                             change.libraryIDs.contains(selectedLibrary.id)
                         else {
+                            // Playback can belong to a different library from
+                            // the current browser. Its cover still needs the
+                            // server event, without reloading the other catalog.
+                            if let itemID = playback.itemID,
+                                change.itemIDs.contains(itemID)
+                            {
+                                await revalidateCoverArtwork(for: account)
+                            }
                             continue
                         }
                         scheduleLiveRefresh(
