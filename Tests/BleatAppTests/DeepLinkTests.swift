@@ -36,7 +36,7 @@ final class DeepLinkTests: XCTestCase {
         }
     }
 
-    func testParserRejectsMalformedOrAmbiguousLinks() {
+    func testParserRejectsMalformedOrAmbiguousLinks() throws {
         let invalid = [
             "https://book/item",
             "bleat://book",
@@ -55,7 +55,13 @@ final class DeepLinkTests: XCTestCase {
         ]
 
         for value in invalid {
-            XCTAssertThrowsError(try DeepLinkParser.parse(URL(string: value)!))
+            let url = try XCTUnwrap(
+                URL(string: value), "Invalid URL fixture: \(value)"
+            )
+            XCTAssertThrowsError(
+                try DeepLinkParser.parse(url),
+                "Expected parser rejection: \(value)"
+            )
         }
     }
 
