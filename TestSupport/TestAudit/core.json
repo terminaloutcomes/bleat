@@ -3575,7 +3575,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 147
+        "line": 161
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3600,14 +3600,14 @@
         "8": "Typed errors and exact response/count/store state are asserted. Missing barrier diagnostic is pending bounded-gate follow-up.",
         "9": "Source review only; no per-test repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Launch originator, wait refresh; launch second request, wait blocked initial send; release refresh/save/send gates; assert both 200, one refresh, no mid-token requests, two final requests and final credentials.",
       "synchronization": "Three actor-gate waits use unbounded checked continuations; tests explicitly release gates and await both task results.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "A lost transition can suspend before release forever; bound and diagnose each gate.",
+      "reason": "Stage gates were already bounded; final originator/joiner outcome observations now have bounds before task-value consumption. Both send outcomes retain HTTP 200, one refresh, zero mid-token sends, two final-token sends and stored final credentials.",
       "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
       "timing_followup": {
         "date": "2026-10-16",
@@ -3615,13 +3615,33 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      },
+      "refresh_caller_completion_review": {
+        "base_revision": "c33a5605858bb022ecccd6cfc65f90df2142c9c7",
+        "previous_decision": "follow_up",
+        "historical_reason": "A lost transition can suspend before release forever; bound and diagnose each gate.",
+        "historical_assessment": "Original gate/synchronization notes remain revision-bound historical evidence. This nine-rule block reviews the current caller-outcome observation change.",
+        "decision": "fix",
+        "rules": {
+          "1": "Both send outcomes retain HTTP 200, one refresh, zero mid-token sends, two final-token sends and stored final credentials. Each completion actor is signaled only after the actual send/recovery call returns or throws; original response and typed-error assertions remain.",
+          "2": "Use separate existing completion actors for originator and joiner, observed concurrently with source-located stage diagnostics. Only proven outcomes permit task-value awaits. Existing refresh/mid-save/initial-send gates and release order remain unchanged.",
+          "3": "Existing ten-second failure budget per completion actor, concurrent observations; no latency assertion or sleep used as readiness.",
+          "4": "On missing outcome, release all fake gates, request cancellation of both handles and return without awaiting unconfirmed work. This does not prove stuck task termination; asynchronous drainage remains open when unproven.",
+          "5": "Fresh in-memory credential store, fake transport, coordinator and two independent single-waiter completion actors; synthetic account/tokens only.",
+          "6": "Host-local deterministic auth integration with fake HTTP transport; no production or transport redesign.",
+          "7": "No retry-to-green or reduced assertion strength; success and typed negative outcomes remain consumed from their original task handles after completion proof.",
+          "8": "New completion diagnostics contain only missing caller stage and elapsed timeout. Caught operation errors are rethrown unchanged; no result/token payload is added to those diagnostics.",
+          "9": "Reviewed the existing bounded completion helper for one waiter per actor and the three tests. Repeated, owning and signed evidence is linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 24/24, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372"
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 219
+        "line": 282
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3646,14 +3666,14 @@
         "8": "Typed errors and exact response/count/store state are asserted. Missing barrier diagnostic is pending bounded-gate follow-up.",
         "9": "Source review only; no per-test repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Gate originator refresh; launch explicit recovery with other token; release; assert both typed refreshRejected, completed refresh retains old-access, later old-token recovery reuses rejection and refresh count remains one.",
       "synchronization": "Actor continuations gate refresh/save and waits have no timeout.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Unbounded fake readiness signals can hang on regression; bound them.",
+      "reason": "Stage gates were already bounded; final originator/joiner outcome observations now have bounds before task-value consumption. Originator send and joiner recovery retain exact refreshRejected errors, original rejected-token provenance and subsequent cached rejection.",
       "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
       "timing_followup": {
         "date": "2026-10-16",
@@ -3661,13 +3681,33 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      },
+      "refresh_caller_completion_review": {
+        "base_revision": "c33a5605858bb022ecccd6cfc65f90df2142c9c7",
+        "previous_decision": "follow_up",
+        "historical_reason": "Unbounded fake readiness signals can hang on regression; bound them.",
+        "historical_assessment": "Original gate/synchronization notes remain revision-bound historical evidence. This nine-rule block reviews the current caller-outcome observation change.",
+        "decision": "fix",
+        "rules": {
+          "1": "Originator send and joiner recovery retain exact refreshRejected errors, original rejected-token provenance and subsequent cached rejection. Each completion actor is signaled only after the actual send/recovery call returns or throws; original response and typed-error assertions remain.",
+          "2": "Use separate existing completion actors for originator and joiner, observed concurrently with source-located stage diagnostics. Only proven outcomes permit task-value awaits. Existing refresh/mid-save/initial-send gates and release order remain unchanged.",
+          "3": "Existing ten-second failure budget per completion actor, concurrent observations; no latency assertion or sleep used as readiness.",
+          "4": "On missing outcome, release all fake gates, request cancellation of both handles and return without awaiting unconfirmed work. This does not prove stuck task termination; asynchronous drainage remains open when unproven.",
+          "5": "Fresh in-memory credential store, fake transport, coordinator and two independent single-waiter completion actors; synthetic account/tokens only.",
+          "6": "Host-local deterministic auth integration with fake HTTP transport; no production or transport redesign.",
+          "7": "No retry-to-green or reduced assertion strength; success and typed negative outcomes remain consumed from their original task handles after completion proof.",
+          "8": "New completion diagnostics contain only missing caller stage and elapsed timeout. Caught operation errors are rethrown unchanged; no result/token payload is added to those diagnostics.",
+          "9": "Reviewed the existing bounded completion helper for one waiter per actor and the three tests. Repeated, owning and signed evidence is linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 24/24, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372"
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 299
+        "line": 404
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3692,14 +3732,14 @@
         "8": "Typed errors and exact response/count/store state are asserted. No elapsed-time wait requires timeout reporting.",
         "9": "Source review only; no per-test repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Gate first refresh and second old request; release in stages; assert both refreshRejected, one refresh, no mid requests, and reauthentication required.",
       "synchronization": "Actor gate waits are unbounded; final task results awaited.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Any missing transition blocks the suite indefinitely; add bounded event contracts.",
+      "reason": "Stage gates were already bounded; final originator/joiner outcome observations now have bounds before task-value consumption. Both sends retain exact refreshRejected errors, one refresh, zero mid-token retry and the reauthentication-required state.",
       "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
       "timing_followup": {
         "date": "2026-10-16",
@@ -3707,6 +3747,26 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The staged fake gates now use bounded signals and release-before-entry latches. The subsequent signed owning run verified all 561 identities passing with zero skips, including the final failure-path cancellation adjustment."
+      },
+      "refresh_caller_completion_review": {
+        "base_revision": "c33a5605858bb022ecccd6cfc65f90df2142c9c7",
+        "previous_decision": "follow_up",
+        "historical_reason": "Any missing transition blocks the suite indefinitely; add bounded event contracts.",
+        "historical_assessment": "Original gate/synchronization notes remain revision-bound historical evidence. This nine-rule block reviews the current caller-outcome observation change.",
+        "decision": "fix",
+        "rules": {
+          "1": "Both sends retain exact refreshRejected errors, one refresh, zero mid-token retry and the reauthentication-required state. Each completion actor is signaled only after the actual send/recovery call returns or throws; original response and typed-error assertions remain.",
+          "2": "Use separate existing completion actors for originator and joiner, observed concurrently with source-located stage diagnostics. Only proven outcomes permit task-value awaits. Existing refresh/mid-save/initial-send gates and release order remain unchanged.",
+          "3": "Existing ten-second failure budget per completion actor, concurrent observations; no latency assertion or sleep used as readiness.",
+          "4": "On missing outcome, release all fake gates, request cancellation of both handles and return without awaiting unconfirmed work. This does not prove stuck task termination; asynchronous drainage remains open when unproven.",
+          "5": "Fresh in-memory credential store, fake transport, coordinator and two independent single-waiter completion actors; synthetic account/tokens only.",
+          "6": "Host-local deterministic auth integration with fake HTTP transport; no production or transport redesign.",
+          "7": "No retry-to-green or reduced assertion strength; success and typed negative outcomes remain consumed from their original task handles after completion proof.",
+          "8": "New completion diagnostics contain only missing caller stage and elapsed timeout. Caught operation errors are rethrown unchanged; no result/token payload is added to those diagnostics.",
+          "9": "Reviewed the existing bounded completion helper for one waiter per actor and the three tests. Repeated, owning and signed evidence is linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 24/24, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372"
       }
     },
     {
@@ -22638,5 +22698,15 @@
     "changed_test": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testConcurrentLogShutdownCallersAwaitSharedCompletion",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-shared-log-shutdown-completion-issue-372",
     "historical_counts": "Unchanged; current core records 586, source declarations 1576 and host inventory 592."
+  },
+  "issue_372_refresh_caller_completion": {
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372",
+    "historical_counts": "Unchanged: host inventory 592, source declarations 1,576, core audit 586."
   }
 }

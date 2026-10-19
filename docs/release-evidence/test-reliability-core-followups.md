@@ -15,7 +15,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient` | Replace the token fake’s 50ms sleep window with a barrier proving concurrent callers have joined before token release. | A sleep approximates overlap but does not guarantee all eight export tasks join the same refresh under slow scheduling. |
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion` | Bound the fake shutdown gate’s entry notification and report if the close closure is never entered. | `waitUntilEntered()` uses an unbounded continuation; the explicit release only happens after that wait returns. |
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs` | Capture output in a subprocess or enforce process-wide exclusive serialization, and restore both file descriptors through guaranteed cleanup. | `captureStandardOutput` redirects process-global stdout/stderr while other Swift Testing suites can execute concurrently; a restoration failure can also leave a descriptor redirected. |
-| `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh`, `testTwentyUnauthorizedRequestsShareOneRejectedRefresh`, `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`, `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`, `testConcurrentRejectionJoinsFailingInFlightRefresh`, `testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery` | Add bounded, diagnostic arrival notifications to the concurrent HTTP fake barriers and staged refresh gates. | Count barriers currently suspend with checked continuations until all request calls arrive, and gated tests wait for refresh/save/initial-send states indefinitely. If a regression prevents a stage from occurring, the test process hangs rather than reporting which transition timed out. Preserve each cancellation/coalescing race scenario. |
+| `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh`, `testTwentyUnauthorizedRequestsShareOneRejectedRefresh`, `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`, `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`, `testConcurrentRejectionJoinsFailingInFlightRefresh`, `testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery` | Add bounded, diagnostic arrival notifications to the concurrent HTTP fake barriers and staged refresh gates. | Count barriers currently suspend with checked continuations until all request calls arrive, and gated tests wait for refresh/save/initial-send states indefinitely. If a regression prevents a stage from occurring, the test process hangs rather than reporting which transition timed out. Preserve each cancellation/coalescing race scenario. The three staged-refresh cases have [bounded final-outcome evidence](#bounded-in-flight-refresh-caller-outcomes-issue-372); the other concurrent-barrier cases remain outside that slice. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized` | Implemented: renamed to describe conclusive refresh-status failure memoization. | The existing old access/refresh credentials, 401/503/401 responses, two typed failure assertions, exact three request paths and reauthentication assertion are unchanged. Separate `testCredentialFailuresAreTyped` retains missing-credentials coverage. See [rename evidence](#refresh-status-test-identity-issue-372). |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterStreamsEveryServerConnectionPurpose` | Bound each `AsyncStream` event read and report the missing snapshot stage on timeout. | Three awaited `iterator.next()` calls have no deadline, so a missing initial/update yield can hang the suite. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportKeepsThenClearsSessionCookies` | Replace the test URLProtocol helper’s `preconditionFailure` for unexpected route with a captured typed test failure. | An unexpected adapter request currently traps the process instead of reporting the failing route as a test issue. |
@@ -1043,3 +1043,69 @@ source-index line locations follow the edited file. Inventory 592, source-index
 configuration/device/live-server acceptance claim. Broader #372/#362 criteria
 and unrelated telemetry cleanup findings remain open. Fresh exact-head source
 review and CI are required before merging this slice.
+
+
+## Bounded in-flight refresh caller outcomes (issue #372)
+
+At merged base `c33a5605858bb022ecccd6cfc65f90df2142c9c7`, three authenticated
+request tests already used bounded fake stage gates, but still awaited their
+originator/joiner task outcomes without final completion bounds:
+
+- `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`
+- `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`
+- `testConcurrentRejectionJoinsFailingInFlightRefresh`
+
+Each actual send/recovery call now reports completion to its own existing
+`AuthTelemetryTestCompletion` actor after returning or throwing. Success values
+return unchanged and caught errors are rethrown unchanged. Concurrent bounded
+observations precede all six existing task-value consumptions. The existing
+ten-second failure budgets and source-located originator/joiner diagnostics are
+used without adding a timing assertion or sleep as readiness. If an outcome is
+missing, the test releases all fake gates, requests cancellation of both handles
+and returns without awaiting unconfirmed work. Cancellation is not proof that a
+genuinely stuck task terminated; asynchronous drainage remains open when unproven.
+
+Original refresh-entry/mid-save/initial-send gating and release ordering remain
+unchanged. The success case still requires both HTTP 200 outcomes, exactly one
+refresh, zero mid-token requests, two final-token requests and stored final
+credentials. The provenance case retains both exact refreshRejected outcomes,
+the originator's recorded rejected token and subsequent cached rejection. The
+failing-join case retains both exact refreshRejected outcomes, one refresh,
+zero mid-token retries and reauthentication state. Completion signals carry only
+a Boolean; new timeout diagnostics do not include result/token payloads.
+
+All fixtures are fresh in-memory stores/transports/coordinators with synthetic
+accounts and tokens. There is no new helper, production change or declaration.
+Earlier bounded stage-gate work is not re-claimed by this final-outcome slice.
+Historical audit gate findings remain retained; three current dispositions gain
+individual nine-rule reviews. Inventory 592, source-index 1,576 and core audit 586
+counts remain unchanged. Broader lifecycle/configuration/device/live-server and
+file-backed cleanup criteria remain open.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused executions: **3/3 each**, exact original
+  identities, zero failures/errors/skips.
+- Owning `AuthenticatedRequestTests`: **24/24**, exact inventory identities,
+  zero failures/errors/skips.
+- Supported complete signed host gate: **592/592**, exact inventory identities,
+  zero failures/errors/skips. Signing/entitlements/provisioning checked by the
+  gate and production LCOV exported. Existing watchOS deprecation, read-only
+  Cocoa 513 diagnostics and three intentional cleanup known issues remain
+  retained; no new runtime warning or unexpected issue was observed.
+- Built discovery matches all **592** host declarations. Strict repository
+  Swift lint, documentation references and final diff/JSON checks passed.
+  No unsuccessful or zero-test validation attempt occurred for this slice.
+
+Commands use supported serial Swift Testing: `mise exec -- env
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter`
+with the three exact names above prefixed by `AuthenticatedRequestTests.` and
+joined by `|`, writing `.build/i372-refresh-focused-1.xml`. Repetitions add
+`--skip-build` and distinct `-2`/`-3` reports. Owning selection is
+`AuthenticatedRequestTests`, writing `.build/i372-refresh-owning.xml`. Each XML
+has a matching log. Complete signed validation uses
+`mise exec -- ./scripts/test-host.sh`, retaining
+`.build/i372-refresh-signed-host.log`. Discovery/lint/docs/outcome evidence is
+`.build/i372-refresh-discovery.txt`, `.build/i372-refresh-lint.log`,
+`.build/i372-refresh-docs.log` and `.build/i372-refresh-verification.json`.
+Fresh exact-head source review and CI are required before merge.
