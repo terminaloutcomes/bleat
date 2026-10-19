@@ -302,59 +302,25 @@ struct PrivateCloudPersistenceTests {
         #expect(!event.text.contains("UserInfo"))
     }
 
-    @Test func failedMigrationSaveRetainsLegacyPreferences() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(
-            at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
-        let url = root.appendingPathComponent("read-only.store")
-        do {
-            _ = try ModelContainer(
-                for: schema,
-                configurations: [
-                    ModelConfiguration(
-                        schema: schema, url: url, cloudKitDatabase: .none)
-                ])
+    @Test(.enabled(if: ReadOnlyMigrationChild.shouldRun))
+    func failedMigrationSaveRetainsLegacyPreferences() async throws {
+        if let marker = ProcessInfo.processInfo.environment[
+            ReadOnlyMigrationChild.environmentKey]
+        {
+            try await ReadOnlyMigrationChild.perform(raw: marker)
+            return
         }
-        let container = try ModelContainer(
-            for: schema,
-            configurations: [
-                ModelConfiguration(
-                    schema: schema,
-                    url: url, allowsSave: false, cloudKitDatabase: .none)
-            ])
-        var domains = OwnedDefaultsDomains()
-        defer { domains.removeAll() }
-        let defaults = try domains.make()
-        let value = record("retained")
-        defaults.set(
-            ["retained": PrivateCloudPersistence.encodeSystemFields(value)],
-            forKey: PrivateCloudPersistence.metadataKey)
-        let store = PrivateCloudSyncStore(
-            statistics: StatisticsRepository(modelContainer: container),
-            accounts: AccountStore(modelContainer: container),
-            credentialStore: nil,
-            configuration: CloudConfigurationStore(
-                defaults: try domains.make()),
-            defaults: PrivateCloudDefaultsReference(defaults))
-        do {
-            try await store.prepareStorage()
-            Issue.record("Read-only save must fail")
-        } catch let error as PrivateCloudSyncError {
-            guard case .storage(.metadataWriteFailed(let native)) = error else {
-                Issue.record("Wrong failure kind")
-                return
-            }
-            #expect(native.domain == NSCocoaErrorDomain)
-            #expect(native.code == NSFileWriteNoPermissionError)
+        let result = await ReadOnlyMigrationChild.run()
+        #expect(result.failures.isEmpty)
+        #expect(result.cleanupFailures.isEmpty)
+        #expect(result.resourcesRemoved)
+        #expect(result.preferencesVerified)
+        #expect(result.readersClosed && result.writersClosed)
+        guard case .exited(let exit) = result.state else {
+            Issue.record("Migration child exit/reap was not observed")
+            return
         }
-        #expect(
-            defaults.object(forKey: PrivateCloudPersistence.metadataKey) != nil)
-        #expect(
-            !(try PrivateCloudPersistence(container: container)
-                .migrationComplete()))
+        #expect(exit.reason == .normal && exit.status == 0)
     }
 
     @Test

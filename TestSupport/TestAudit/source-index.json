@@ -5945,25 +5945,25 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources",
-      "line": 96,
+      "line": 97,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "cancelledMigrationRetainsCommittedProgressAndCoalescesCallers",
-      "line": 132,
+      "line": 133,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedStoredStateDoesNotBecomeAnEmptyDefault",
-      "line": 219,
+      "line": 220,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedBookkeepingContentsRemainRetained",
-      "line": 237,
+      "line": 238,
       "language": "swift"
     },
     {
@@ -5975,43 +5975,43 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
-      "line": 285,
+      "line": 286,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "failedMigrationSaveRetainsLegacyPreferences",
-      "line": 304,
+      "line": 306,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",
-      "line": 361,
+      "line": 327,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedCoordinatorStateRetainsAllLegacyData",
-      "line": 401,
+      "line": 368,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
-      "line": 426,
+      "line": 393,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
-      "line": 448,
+      "line": 415,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
-      "line": 463,
+      "line": 430,
       "language": "swift"
     },
     {
@@ -9382,6 +9382,90 @@
       "line": 94,
       "language": "swift",
       "added_in": "issue-382"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "actualHelperContracts",
+      "line": 13,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "alreadyCancelledDoesNotLaunch",
+      "line": 156,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "cancellationAcrossPhasesIsDrained",
+      "line": 183,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "deadlineReapsBeforeCleanup",
+      "line": 141,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "injectedLaunchCancellationIsLatched",
+      "line": 168,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "injectedReportFaultsCannotPass",
+      "line": 92,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "launchFailureClosesOwnedHandles",
+      "line": 114,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "operationAndCleanupFailuresRemainSeparate",
+      "line": 271,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "partialSetupClosesBothPipeEnds",
+      "line": 129,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "typedReportGrammarRejectsAmbiguousAndUnboundedInput",
+      "line": 348,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "uncertainExitPreservesAllResources",
+      "line": 216,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "xmlGrammarRejectsUntrustedAndAmbiguousReports",
+      "line": 379,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "uncertainIOPreservesOwnedResources",
+      "line": 243,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "stalledDiagnosticIsStoppedAndClosureIsProven",
+      "line": 292,
+      "language": "swift"
     }
   ]
 }
