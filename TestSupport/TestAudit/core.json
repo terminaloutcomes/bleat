@@ -10862,36 +10862,37 @@
         "action_postconditions": "Await result and assert remote source."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Await result and assert remote source.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Await result and assert remote source.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used."
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testDebouncesForConfiguredDurationBeforeSearching",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 25
+        "line": 36
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -10901,43 +10902,44 @@
         "action_postconditions": "Start task, await fake sleeper start, assert zero calls and exactly 300ms requested; release sleeper; await task and assert remote result/one call."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Start task, await fake sleeper start, assert zero calls and exactly 300ms requested; release sleeper; await task and assert remote result/one call.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Start task, await fake sleeper start, assert zero calls and exactly 300ms requested; release sleeper; await task and assert remote result/one call.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testNewQuerySupersedesPendingDebounce",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 69
+        "line": 87
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -10947,43 +10949,44 @@
         "action_postconditions": "Start detached first request; wait for first fake sleep; start second; await second sleep; assert one pending timer; release; assert first typed superseded, second success, and only second query called."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Start detached first request; wait for first fake sleep; start second; await second sleep; assert one pending timer; release; assert first typed superseded, second success, and only second query called.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Start detached first request; wait for first fake sleep; start second; await second sleep; assert one pending timer; release; assert first typed superseded, second success, and only second query called.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testAccountAndLibraryChangeCancelsInFlightSearch",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 134
+        "line": 167
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -10993,43 +10996,44 @@
         "action_postconditions": "Release first debounce; wait service entry; start second context/release; await both; assert first superseded, second succeeds, calls have both exact contexts and old service sleep cancellation count is one."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Release first debounce; wait service entry; start second context/release; await both; assert first superseded, second succeeds, calls have both exact contexts and old service sleep cancellation count is one.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Release first debounce; wait service entry; start second context/release; await both; assert first superseded, second succeeds, calls have both exact contexts and old service sleep cancellation count is one.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCallerCancellationStopsPendingDebounce",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 222
+        "line": 271
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11039,43 +11043,44 @@
         "action_postconditions": "Wait for sleeper registration, cancel detached task; await task; assert typed cancelled and service count zero."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Wait for sleeper registration, cancel detached task; await task; assert typed cancelled and service count zero.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Wait for sleeper registration, cancel detached task; await task; assert typed cancelled and service count zero.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 260
+        "line": 319
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11085,43 +11090,44 @@
         "action_postconditions": "Wait until fake service entered blocking continuation, cancel task, release it; assert operation returns typed cancelled."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Wait until fake service entered blocking continuation, cancel task, release it; assert operation returns typed cancelled.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Wait until fake service entered blocking continuation, cancel task, release it; assert operation returns typed cancelled.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 313
+        "line": 383
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11160,7 +11166,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 382
+        "line": 452
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11199,7 +11205,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryFailuresRemainTyped",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 433
+        "line": 503
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11209,43 +11215,44 @@
         "action_postconditions": "Start task, wait for debounce registration, release it; assert typed `.repository(.remote(503))`."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Start task, wait for debounce registration, release it; assert typed `.repository(.remote(503))`.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Start task, wait for debounce registration, release it; assert typed `.repository(.remote(503))`.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryCancellationMapsToCoordinatorCancellation",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 475
+        "line": 555
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11255,37 +11262,38 @@
         "action_postconditions": "Run scripted cancellation after controlled debounce; assert typed coordinator cancelled."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-        "timeout_tolerance": "N/A: no elapsed-time output tolerance is asserted."
+        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
         "1": "Run scripted cancellation after controlled debounce; assert typed coordinator cancelled.",
-        "2": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
+        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "All async calls are awaited. No unowned task/observer remains after the test body.",
+        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
         "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
         "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No retries or assertion weakening; scenario matrix/typed outcomes are retained.",
-        "8": "Assertions compare exact typed results, request fields, store state, or event values. No playback; no wall-clock duration or guessed yields. The `.seconds(30)` is fake service cancellation behavior in one case, not its completion bound.",
-        "9": "No individual repetition run for this test; source review is not execution evidence."
+        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
+        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
+        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
       "action_postconditions": "Run scripted cancellation after controlled debounce; assert typed coordinator cancelled.",
-      "synchronization": "Fake sleeper start and fake service entry use actor continuations/Async state, then explicit release; tests await final Task.value. The fake waitForSleepCount/waitForFirstCall helpers have no timeout, so absence of the signal can hang the suite.",
-      "timeout_tolerance": "N/A: no timing tolerance asserted.",
+      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
       "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded.",
-      "shared_helper_review": "Inspected scripted test helpers: actor-backed fakes expose awaited state; fixture data is fixed or loaded from the package bundle; no personal local state is used.",
+      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
+      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
     },
     {
       "identifier": "Tests/BleatCoreTests/LiveUpdatesTests.swift::testRoutingAndEndpointPreferenceChangesPreservePendingConnection",
@@ -23323,6 +23331,70 @@
       },
       "decision": "keep",
       "reason": "Exactly-once waiter ownership is a prerequisite for failure-safe cancellation/release cleanup in the twenty-caller tests."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testSearchSleeperCancellationAndRetirement",
+      "source": {
+        "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+        "line": 602
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Validate private sleeper cancellation and permanent retirement before entry and after registration, including repeated cleanup and no reopening by ordinary resume.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor, existing bounded entry signal and completion counter per four parameter cases; no real clock delay, server, storage or global state.",
+        "action_postconditions": "Gate entry explicitly; cancel or cleanup before entry versus after positive registration; await actual operation outcome, then repeat cleanup. Actual sleep returns CancellationError for both caller cancellation and fixture retirement; pending count is zero."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Existing ten-second start signal plus five-second registration and terminal counters. Pre-entry control order is explicit, not scheduler guessed. Only actual API return signals completion.",
+        "timeout_tolerance": "Failure budgets are diagnostic bounds, not latency assertions; no readiness sleep or real 300 ms wait."
+      },
+      "compiler_skip_conditions": "No compile guard, skip or opt-in; four exhaustive enum cases.",
+      "rules": {
+        "1": "Actual sleep returns CancellationError for both caller cancellation and fixture retirement; pending count is zero. Repeated retirement/release preserves zero retained storage.",
+        "2": "Positive registration where required and actual terminal result are bounded and asserted before consumption. Failed guards return to awaited cleanup.",
+        "3": "N/A: no player, seek, media-time or elapsed performance measurement.",
+        "4": "Cleanup cancels caller, opens any entry gate, and retires/releases private fixture state. Cancellation before registration and after positive registration are both covered; no global Task drainage claim.",
+        "5": "Fresh actor, gate and counter per parameter case; synthetic context/request, no personal configuration state.",
+        "6": "Deterministic private test-fixture boundary; no framework callback, live service or device claim.",
+        "7": "No blind retry or timing slack; controlled states exercise actual ownership transitions.",
+        "8": "Stage/elapsed/limit identify missing registration or completion; parameter case and pending storage distinguish lifecycle failure.",
+        "9": "Focused repeats, owning/signed gates and targeted negative mutations are retained separately."
+      },
+      "decision": "keep",
+      "reason": "Validate private sleeper cancellation and permanent retirement before entry and after registration, including repeated cleanup and no reopening by ordinary resume."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancellableRepositoryHoldCancellationAndRelease",
+      "source": {
+        "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+        "line": 673
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Validate private cancellable repository hold cancellation and explicit release before entry and after registration, preserving actual typed failure/success and terminal empty storage.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor, existing bounded entry signal and completion counter per four parameter cases; no real clock delay, server, storage or global state.",
+        "action_postconditions": "Gate entry explicitly; cancel or cleanup before entry versus after positive registration; await actual operation outcome, then repeat cleanup. Actual service returns typed .cancelled for caller cancellation or .remote success for release; one call, exact cancellation count and zero retained waiters."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Existing ten-second start signal plus five-second registration and terminal counters. Pre-entry control order is explicit, not scheduler guessed. Only actual API return signals completion.",
+        "timeout_tolerance": "Failure budgets are diagnostic bounds, not latency assertions; no readiness sleep or real 300 ms wait."
+      },
+      "compiler_skip_conditions": "No compile guard, skip or opt-in; four exhaustive enum cases.",
+      "rules": {
+        "1": "Actual service returns typed .cancelled for caller cancellation or .remote success for release; one call, exact cancellation count and zero retained waiters. Repeated retirement/release preserves zero retained storage.",
+        "2": "Positive registration where required and actual terminal result are bounded and asserted before consumption. Failed guards return to awaited cleanup.",
+        "3": "N/A: no player, seek, media-time or elapsed performance measurement.",
+        "4": "Cleanup cancels caller, opens any entry gate, and retires/releases private fixture state. Cancellation before registration and after positive registration are both covered; no global Task drainage claim.",
+        "5": "Fresh actor, gate and counter per parameter case; synthetic context/request, no personal configuration state.",
+        "6": "Deterministic private test-fixture boundary; no framework callback, live service or device claim.",
+        "7": "No blind retry or timing slack; controlled states exercise actual ownership transitions.",
+        "8": "Stage/elapsed/limit identify missing registration or completion; parameter case and pending storage distinguish lifecycle failure.",
+        "9": "Focused repeats, owning/signed gates and targeted negative mutations are retained separately."
+      },
+      "decision": "keep",
+      "reason": "Validate private cancellable repository hold cancellation and explicit release before entry and after registration, preserving actual typed failure/success and terminal empty storage."
     }
   ],
   "issue_382": {
@@ -23510,5 +23582,22 @@
     "scope": "Three existing twenty-request cases and three private fake continuation ownership paths; one new parameterized helper contract with three kinds and two phases. No production authentication change.",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372",
     "remaining": "Whole production-task graph drainage, other #372 follow-ups and seven neighboring startup clock oracles remain unresolved."
+  },
+  "issue_372_search_caller_completion": {
+    "tests": [
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testDefaultSleeperRunsZeroDurationSearch",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testDebouncesForConfiguredDurationBeforeSearching",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testNewQuerySupersedesPendingDebounce",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testAccountAndLibraryChangeCancelsInFlightSearch",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCallerCancellationStopsPendingDebounce",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryFailuresRemainTyped",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryCancellationMapsToCoordinatorCancellation",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testSearchSleeperCancellationAndRetirement",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancellableRepositoryHoldCancellationAndRelease"
+    ],
+    "scope": "Eight existing coordinator cases; two new private-fixture contracts with four cases each; controlled fixture ownership and current-file navigation/evidence only.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-caller-completion-and-private-fixture-retirement-issue-372",
+    "excluded": "Production coordinator/authentication, whole production-task graph drainage, seven app startup clock oracles and broad tracker reconciliation."
   }
 }

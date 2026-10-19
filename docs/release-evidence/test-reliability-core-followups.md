@@ -1763,3 +1763,83 @@ One function identity is added to inventory/source/core audit: host inventory is
 This slice is stacked on #408 while its merge awaits authorization; it does not
 advance `main`. Fresh exact-head CI and independent review remain required.
 Broader #372/#362 acceptance and unrelated follow-ups remain open.
+
+## Search caller completion and private fixture retirement (issue #372)
+
+Seven remaining controlled `LibrarySearchCoordinatorTests` bounded registration
+but still joined caller task values without a terminal observation; their failed
+registration guards also cancelled then joined unconfirmed results. The default
+zero-duration native-sleeper case directly awaited the coordinator without a
+bounded terminal observation. These are test-lifecycle findings, not observed
+production search defects.
+
+All eight now observe actual coordinator return/throw with existing bounded
+counters before consuming task values. Failed readiness or completion observations
+return without unknown joins. Existing awaited `withTestCleanup` requests every
+owned caller's cancellation, permanently retires the private sleeper and releases
+service holds on normal, guard and throwing exits. Completion is produced after
+the real API returns; cleanup never manufactures it. Cancellation/control release
+does not prove whole production-task graph drainage.
+
+The exact requested 300 ms debounce, zero pre-release calls, latest-query pending
+count, first-query supersession, account/library call order, cooperative
+cancellation count, cancellation-ignoring stale-result rejection and both typed
+repository failure mappings remain. The default case still uses the actual
+zero-duration sleeper. Positive blocked registration is added where an in-flight
+repository hold is the scenario. Five-second caller failure budgets match the
+existing registration bounds; they are not scheduler-speed assertions.
+
+Private `SearchTestSleeper` now distinguishes final retirement from ordinary
+resume between debounce generations and checks cancellation at entry/registration.
+Private `SearchTestService` replaces its deliberate thirty-second cancellable hold
+with a controlled checked continuation; its cancellation-ignoring latch is
+preserved. All release/cancellation paths detach retained state before resuming.
+Two new parameterized helper contracts each exercise four orderings: caller
+cancellation versus fixture cleanup, before entry versus after positive
+registration. They check actual typed outcomes, exact service cancellation counts,
+empty terminal storage and safe repeated cleanup. Entry order is explicitly gated;
+there is no readiness sleep or guessed yield count.
+
+Only eight existing cases, two private fixtures, their result helper, two new
+helper contracts and required inventory/audit/navigation/evidence change.
+Production coordinator/authentication and the seven unresolved app-clock oracles
+are untouched. Source-index/audit reconciliation is confined to this file; it is
+not a broad tracker reconciliation.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused serial runs: **10/10 exact function identities each**;
+  both new helper identities have four parameter cases each.
+- Owning `LibrarySearchCoordinatorTests`: **12/12**; restored-source focus:
+  **10/10**. Complete supported signed host gate: **600/600** exact inventory.
+  Every final run has zero failures/errors/skips.
+- Four expected-failing mutations were killed at required assertions: omitted
+  caller terminal witness, omitted sleeper retirement guard, omitted early
+  service-release latch, and omitted service cancellation delivery. Each has an
+  executed failed test/result XML, bounded failure diagnostic and no continuation
+  trap. The exact final source hash was restored after every attempt.
+- Strict Swift lint, docs, all-original-postconditions, unchanged prior two helper
+  contracts/cancellation-ignoring boundary and source/audit scope checks passed.
+  Existing dependency deployment-target warnings, three declared fixture-cleanup
+  known issues and intentional read-only SwiftData failure diagnostics remain
+  separately documented; no warning suppression was added.
+
+Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter` selecting the eight cases and two new
+helpers, XML/logs `.build/i372-search-caller-focused-{1,2,3}`. Owning selection is
+`LibrarySearchCoordinatorTests`, reports `i372-search-caller-owning`; restored
+selection uses `i372-search-caller-restored`. Signed command is
+`mise exec -- ./scripts/test-host.sh`, retained XML in
+`.build/i372-search-caller-signed-results`. Exact verification and negative
+mutation manifests are `.build/i372-search-caller-verification.json` and
+`.build/i372-search-caller-mutations.json`; raw logs remain private.
+
+One preparation failure left a baseline-only ten-test run, and the first edited
+build failed at two helper typing annotations without running new tests. Both
+are retained and excluded from final coverage. The corrected preliminary owning
+suite passed twelve identities and is separate from the final repetitions.
+Two function identities are added: inventory **600**, source index **1,586** and
+core audit **596**. Only the eight selected dispositions and changed-file source
+locations are refreshed, plus two helper records. Fresh exact-head CI and
+independent review are required before merge; broader #372/#362 acceptance,
+production drainage and seven startup clock oracles remain open.

@@ -8,17 +8,28 @@ final class LibrarySearchCoordinatorTests {
     @Test
     func testDefaultSleeperRunsZeroDurationSearch() async throws {
         let service = SearchTestService()
-        let coordinator = LibrarySearchCoordinator(
-            debounceDuration: .zero
-        )
-
-        let result = try await coordinator.search(
-            context: Self.context(account: "a", library: "one"),
-            request: try LibrarySearchRequest(query: "book"),
-            operation: service.search
-        )
-
-        #expect(result.source == .remote)
+        let coordinator = LibrarySearchCoordinator(debounceDuration: .zero)
+        let context = Self.context(account: "a", library: "one")
+        let request = try LibrarySearchRequest(query: "book")
+        let completed = BoundedTestCounter()
+        let task = Task {
+            await performSearchForTest(
+                coordinator: coordinator, context: context, request: request,
+                service: service, completion: completed)
+        }
+        try await withTestCleanup {
+            task.cancel()
+            await service.resumeBlockedCall()
+        } operation: {
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "zero-duration search returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = try await task.value.get()
+            #expect(result.source == .remote)
+        }
     }
 
     @Test
@@ -36,33 +47,40 @@ final class LibrarySearchCoordinatorTests {
         let context = Self.context(account: "a", library: "one")
         let request = try LibrarySearchRequest(query: "book")
 
+        let completed = BoundedTestCounter()
         let task = Task {
-            try await coordinator.search(
-                context: context,
-                request: request,
-                operation: service.search
-            )
+            await performSearchForTest(
+                coordinator: coordinator, context: context, request: request,
+                service: service, completion: completed)
         }
-        let sleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            sleepWait.reached,
-            "first debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
-        )
-        guard sleepWait.reached else {
+        try await withTestCleanup {
             task.cancel()
-            _ = await task.result
-            return
-        }
-        let initialCallCount = await service.callCount()
-        let requestedDurations = await sleeper.requestedDurations()
-        #expect(initialCallCount == 0)
-        #expect(requestedDurations == [.milliseconds(300)])
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let sleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                sleepWait.reached,
+                "first debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
+            )
+            guard sleepWait.reached else { return }
+            let initialCallCount = await service.callCount()
+            let requestedDurations = await sleeper.requestedDurations()
+            #expect(initialCallCount == 0)
+            #expect(requestedDurations == [.milliseconds(300)])
 
-        await sleeper.resumeAll()
-        let result = try await task.value
-        let finalCallCount = await service.callCount()
-        #expect(result.source == .remote)
-        #expect(finalCallCount == 1)
+            await sleeper.resumeAll()
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "search caller returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = try await task.value.get()
+            let finalCallCount = await service.callCount()
+            #expect(result.source == .remote)
+            #expect(finalCallCount == 1)
+        }
     }
 
     @Test
@@ -78,56 +96,71 @@ final class LibrarySearchCoordinatorTests {
         let firstRequest = try LibrarySearchRequest(query: "first")
         let secondRequest = try LibrarySearchRequest(query: "second")
 
+        let firstCompleted = BoundedTestCounter()
         let first = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: context,
                 request: firstRequest,
-                service: service
+                service: service,
+                completion: firstCompleted
             )
         }
-        let firstSleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            firstSleepWait.reached,
-            "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
-        )
-        guard firstSleepWait.reached else {
-            first.cancel()
-            _ = await first.result
-            return
-        }
-        let second = Task.detached {
-            await performSearchForTest(
-                coordinator: coordinator,
-                context: context,
-                request: secondRequest,
-                service: service
+        var tasks = [first]
+        try await withTestCleanup {
+            for task in tasks { task.cancel() }
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let firstSleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                firstSleepWait.reached,
+                "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
             )
-        }
-        let secondSleepWait = await sleeper.waitForSleepCount(2)
-        #expect(
-            secondSleepWait.reached,
-            "replacement debounce registration timed out after \(secondSleepWait.elapsed), limit \(secondSleepWait.timeout)"
-        )
-        guard secondSleepWait.reached else {
-            first.cancel()
-            second.cancel()
-            _ = await first.result
-            _ = await second.result
-            return
-        }
-        let firstResult = await first.value
-        #expect(await sleeper.pendingCount() == 1)
-        await sleeper.resumeAll()
+            guard firstSleepWait.reached else { return }
+            let secondCompleted = BoundedTestCounter()
+            let second = Task.detached {
+                await performSearchForTest(
+                    coordinator: coordinator,
+                    context: context,
+                    request: secondRequest,
+                    service: service,
+                    completion: secondCompleted
+                )
+            }
+            tasks.append(second)
+            let secondSleepWait = await sleeper.waitForSleepCount(2)
+            #expect(
+                secondSleepWait.reached,
+                "replacement debounce registration timed out after \(secondSleepWait.elapsed), limit \(secondSleepWait.timeout)"
+            )
+            guard secondSleepWait.reached else { return }
+            let firstCompletionWait = await firstCompleted.wait(untilAtLeast: 1)
+            #expect(
+                firstCompletionWait.reached,
+                "first search returning: elapsed \(firstCompletionWait.elapsed), limit \(firstCompletionWait.timeout)"
+            )
+            guard firstCompletionWait.reached else { return }
+            let firstResult = await first.value
+            #expect(await sleeper.pendingCount() == 1)
+            await sleeper.resumeAll()
 
-        let secondResult = await second.value
-        Self.assertFailure(firstResult, equals: .superseded)
-        guard case .success = secondResult else {
-            Issue.record("Expected second search to succeed")
-            return
+            let secondCompletionWait = await secondCompleted.wait(
+                untilAtLeast: 1)
+            #expect(
+                secondCompletionWait.reached,
+                "second search returning: elapsed \(secondCompletionWait.elapsed), limit \(secondCompletionWait.timeout)"
+            )
+            guard secondCompletionWait.reached else { return }
+            let secondResult = await second.value
+            Self.assertFailure(firstResult, equals: .superseded)
+            guard case .success = secondResult else {
+                Issue.record("Expected second search to succeed")
+                return
+            }
+            let calls = await service.calls()
+            #expect(calls.map(\.request.query) == ["second"])
         }
-        let calls = await service.calls()
-        #expect(calls.map(\.request.query) == ["second"])
     }
 
     @Test
@@ -151,71 +184,87 @@ final class LibrarySearchCoordinatorTests {
         )
         let request = try LibrarySearchRequest(query: "book")
 
+        let firstCompleted = BoundedTestCounter()
         let first = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: firstContext,
                 request: request,
-                service: service
+                service: service,
+                completion: firstCompleted
             )
         }
-        let firstSleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            firstSleepWait.reached,
-            "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
-        )
-        guard firstSleepWait.reached else {
-            first.cancel()
-            _ = await first.result
-            return
-        }
-        await sleeper.resumeAll()
-        let firstCallWait = await service.waitForFirstCall()
-        #expect(
-            firstCallWait.reached,
-            "first repository call timed out after \(firstCallWait.elapsed), limit \(firstCallWait.timeout)"
-        )
-        guard firstCallWait.reached else {
-            first.cancel()
-            _ = await first.result
-            return
-        }
-
-        let second = Task.detached {
-            await performSearchForTest(
-                coordinator: coordinator,
-                context: secondContext,
-                request: request,
-                service: service
-            )
-        }
-        let secondSleepWait = await sleeper.waitForSleepCount(2)
-        #expect(
-            secondSleepWait.reached,
-            "replacement debounce registration timed out after \(secondSleepWait.elapsed), limit \(secondSleepWait.timeout)"
-        )
-        guard secondSleepWait.reached else {
-            first.cancel()
-            second.cancel()
+        var tasks = [first]
+        try await withTestCleanup {
+            for task in tasks { task.cancel() }
+            await sleeper.retireAll()
             await service.resumeBlockedCall()
-            _ = await first.result
-            _ = await second.result
-            return
-        }
-        await sleeper.resumeAll()
+        } operation: {
+            let firstSleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                firstSleepWait.reached,
+                "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
+            )
+            guard firstSleepWait.reached else { return }
+            await sleeper.resumeAll()
+            let firstCallWait = await service.waitForFirstCall()
+            #expect(
+                firstCallWait.reached,
+                "first repository call timed out after \(firstCallWait.elapsed), limit \(firstCallWait.timeout)"
+            )
+            guard firstCallWait.reached else { return }
+            let blockedWait = await service.waitForBlockedCall()
+            #expect(
+                blockedWait.reached,
+                "held repository registration: elapsed \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+            )
+            guard blockedWait.reached else { return }
 
-        let firstResult = await first.value
-        let secondResult = await second.value
-        Self.assertFailure(firstResult, equals: .superseded)
-        guard case .success = secondResult else {
-            Issue.record("Expected replacement search to succeed")
-            return
+            let secondCompleted = BoundedTestCounter()
+            let second = Task.detached {
+                await performSearchForTest(
+                    coordinator: coordinator,
+                    context: secondContext,
+                    request: request,
+                    service: service,
+                    completion: secondCompleted
+                )
+            }
+            tasks.append(second)
+            let secondSleepWait = await sleeper.waitForSleepCount(2)
+            #expect(
+                secondSleepWait.reached,
+                "replacement debounce registration timed out after \(secondSleepWait.elapsed), limit \(secondSleepWait.timeout)"
+            )
+            guard secondSleepWait.reached else { return }
+            await sleeper.resumeAll()
+
+            let firstCompletionWait = await firstCompleted.wait(untilAtLeast: 1)
+            #expect(
+                firstCompletionWait.reached,
+                "first search returning: elapsed \(firstCompletionWait.elapsed), limit \(firstCompletionWait.timeout)"
+            )
+            guard firstCompletionWait.reached else { return }
+            let firstResult = await first.value
+            let secondCompletionWait = await secondCompleted.wait(
+                untilAtLeast: 1)
+            #expect(
+                secondCompletionWait.reached,
+                "second search returning: elapsed \(secondCompletionWait.elapsed), limit \(secondCompletionWait.timeout)"
+            )
+            guard secondCompletionWait.reached else { return }
+            let secondResult = await second.value
+            Self.assertFailure(firstResult, equals: .superseded)
+            guard case .success = secondResult else {
+                Issue.record("Expected replacement search to succeed")
+                return
+            }
+            let calls = await service.calls()
+            let cancelledCallCount =
+                await service.cancelledCallCount()
+            #expect(calls.map(\.context) == [firstContext, secondContext])
+            #expect(cancelledCallCount == 1)
         }
-        let calls = await service.calls()
-        let cancelledCallCount =
-            await service.cancelledCallCount()
-        #expect(calls.map(\.context) == [firstContext, secondContext])
-        #expect(cancelledCallCount == 1)
     }
 
     @Test
@@ -230,30 +279,40 @@ final class LibrarySearchCoordinatorTests {
         let request = try LibrarySearchRequest(query: "book")
         let context = Self.context(account: "a", library: "one")
 
+        let completed = BoundedTestCounter()
         let task = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: context,
                 request: request,
-                service: service
+                service: service,
+                completion: completed
             )
         }
-        let sleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            sleepWait.reached,
-            "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
-        )
-        guard sleepWait.reached else {
+        try await withTestCleanup {
             task.cancel()
-            _ = await task.result
-            return
-        }
-        task.cancel()
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let sleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                sleepWait.reached,
+                "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
+            )
+            guard sleepWait.reached else { return }
+            task.cancel()
 
-        let result = await task.value
-        let callCount = await service.callCount()
-        Self.assertFailure(result, equals: .cancelled)
-        #expect(callCount == 0)
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "search caller returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = await task.value
+            let callCount = await service.callCount()
+            Self.assertFailure(result, equals: .cancelled)
+            #expect(callCount == 0)
+        }
     }
 
     @Test
@@ -271,42 +330,53 @@ final class LibrarySearchCoordinatorTests {
         )
         let request = try LibrarySearchRequest(query: "book")
         let context = Self.context(account: "a", library: "one")
+        let completed = BoundedTestCounter()
         let task = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: context,
                 request: request,
-                service: service
+                service: service,
+                completion: completed
             )
         }
-        let firstSleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            firstSleepWait.reached,
-            "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
-        )
-        guard firstSleepWait.reached else {
+        try await withTestCleanup {
             task.cancel()
-            _ = await task.result
-            return
-        }
-        await sleeper.resumeAll()
-        let firstCallWait = await service.waitForFirstCall()
-        #expect(
-            firstCallWait.reached,
-            "first repository call timed out after \(firstCallWait.elapsed), limit \(firstCallWait.timeout)"
-        )
-        guard firstCallWait.reached else {
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let firstSleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                firstSleepWait.reached,
+                "first debounce registration timed out after \(firstSleepWait.elapsed), limit \(firstSleepWait.timeout)"
+            )
+            guard firstSleepWait.reached else { return }
+            await sleeper.resumeAll()
+            let firstCallWait = await service.waitForFirstCall()
+            #expect(
+                firstCallWait.reached,
+                "first repository call timed out after \(firstCallWait.elapsed), limit \(firstCallWait.timeout)"
+            )
+            guard firstCallWait.reached else { return }
+            let blockedWait = await service.waitForBlockedCall()
+            #expect(
+                blockedWait.reached,
+                "held repository registration: elapsed \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+            )
+            guard blockedWait.reached else { return }
+
             task.cancel()
             await service.resumeBlockedCall()
-            _ = await task.result
-            return
+
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "search caller returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = await task.value
+            Self.assertFailure(result, equals: .cancelled)
         }
-
-        task.cancel()
-        await service.resumeBlockedCall()
-
-        let result = await task.value
-        Self.assertFailure(result, equals: .cancelled)
     }
 
     @Test
@@ -444,31 +514,41 @@ final class LibrarySearchCoordinatorTests {
         let request = try LibrarySearchRequest(query: "book")
         let context = Self.context(account: "a", library: "one")
 
+        let completed = BoundedTestCounter()
         let task = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: context,
                 request: request,
-                service: service
+                service: service,
+                completion: completed
             )
         }
-        let sleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            sleepWait.reached,
-            "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
-        )
-        guard sleepWait.reached else {
+        try await withTestCleanup {
             task.cancel()
-            _ = await task.result
-            return
-        }
-        await sleeper.resumeAll()
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let sleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                sleepWait.reached,
+                "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
+            )
+            guard sleepWait.reached else { return }
+            await sleeper.resumeAll()
 
-        let result = await task.value
-        Self.assertFailure(
-            result,
-            equals: .repository(.remote(remoteError))
-        )
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "search caller returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = await task.value
+            Self.assertFailure(
+                result,
+                equals: .repository(.remote(remoteError))
+            )
+        }
     }
 
     @Test
@@ -484,28 +564,198 @@ final class LibrarySearchCoordinatorTests {
         )
         let request = try LibrarySearchRequest(query: "book")
         let context = Self.context(account: "a", library: "one")
+        let completed = BoundedTestCounter()
         let task = Task.detached {
             await performSearchForTest(
                 coordinator: coordinator,
                 context: context,
                 request: request,
-                service: service
+                service: service,
+                completion: completed
             )
         }
-        let sleepWait = await sleeper.waitForSleepCount(1)
-        #expect(
-            sleepWait.reached,
-            "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
-        )
-        guard sleepWait.reached else {
+        try await withTestCleanup {
             task.cancel()
-            _ = await task.result
-            return
-        }
-        await sleeper.resumeAll()
+            await sleeper.retireAll()
+            await service.resumeBlockedCall()
+        } operation: {
+            let sleepWait = await sleeper.waitForSleepCount(1)
+            #expect(
+                sleepWait.reached,
+                "debounce registration timed out after \(sleepWait.elapsed), limit \(sleepWait.timeout)"
+            )
+            guard sleepWait.reached else { return }
+            await sleeper.resumeAll()
 
-        let result = await task.value
-        Self.assertFailure(result, equals: .cancelled)
+            let completionWait = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "search caller returning: elapsed \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = await task.value
+            Self.assertFailure(result, equals: .cancelled)
+        }
+    }
+
+    @Test(arguments: SearchFixtureScenario.allCases)
+    fileprivate func testSearchSleeperCancellationAndRetirement(
+        scenario: SearchFixtureScenario
+    ) async throws {
+        let sleeper = SearchTestSleeper()
+        let start = AuthTelemetryTestSignal()
+        let completed = BoundedTestCounter()
+        let task = Task {
+            guard
+                await requireAuthTelemetrySignal(
+                    start, stage: "private sleeper entry allowed")
+            else { return Result<Void, any Error>.failure(CancellationError()) }
+            let result: Result<Void, any Error>
+            do {
+                try await sleeper.sleep(for: .milliseconds(300))
+                result = .success(())
+            } catch { result = .failure(error) }
+            await completed.increment()
+            return result
+        }
+        try await withTestCleanup {
+            task.cancel()
+            await start.signal()
+            await sleeper.retireAll()
+        } operation: {
+            if scenario.beforeEntry {
+                if scenario.cancelsCaller {
+                    task.cancel()
+                    task.cancel()
+                } else {
+                    await sleeper.retireAll()
+                    await sleeper.retireAll()
+                    await sleeper.resumeAll()
+                }
+            }
+            await start.signal()
+            if !scenario.beforeEntry {
+                let registration = await sleeper.waitForSleepCount(1)
+                #expect(
+                    registration.reached,
+                    "private sleep registration: elapsed \(registration.elapsed), limit \(registration.timeout)"
+                )
+                guard registration.reached else { return }
+                #expect(await sleeper.pendingCount() == 1)
+                if scenario.cancelsCaller {
+                    task.cancel()
+                    task.cancel()
+                } else {
+                    await sleeper.retireAll()
+                    await sleeper.retireAll()
+                }
+            }
+            let completion = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completion.reached,
+                "private sleep returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return }
+            let result = await task.value
+            switch result {
+            case .failure(let error): #expect(error is CancellationError)
+            case .success: Issue.record("Expected cancelled or retired sleep")
+            }
+            #expect(await sleeper.pendingCount() == 0)
+            await sleeper.retireAll()
+            await sleeper.retireAll()
+            await sleeper.resumeAll()
+            #expect(await sleeper.pendingCount() == 0)
+        }
+    }
+
+    @Test(arguments: SearchFixtureScenario.allCases)
+    fileprivate func testCancellableRepositoryHoldCancellationAndRelease(
+        scenario: SearchFixtureScenario
+    ) async throws {
+        let service = SearchTestService(blockFirstCall: true)
+        let start = AuthTelemetryTestSignal()
+        let completed = BoundedTestCounter()
+        let context = Self.context(account: "a", library: "one")
+        let request = try LibrarySearchRequest(query: "book")
+        let task = Task {
+            guard
+                await requireAuthTelemetrySignal(
+                    start, stage: "private repository entry allowed")
+            else {
+                return Result<
+                    LibraryRepositoryResult<LibrarySearchResults>,
+                    LibraryRepositoryError
+                >.failure(.cancelled)
+            }
+            let result:
+                Result<
+                    LibraryRepositoryResult<LibrarySearchResults>,
+                    LibraryRepositoryError
+                >
+            do throws(LibraryRepositoryError) {
+                result = .success(
+                    try await service.search(context: context, request: request)
+                )
+            } catch { result = .failure(error) }
+            await completed.increment()
+            return result
+        }
+        try await withTestCleanup {
+            task.cancel()
+            await start.signal()
+            await service.resumeBlockedCall()
+        } operation: {
+            if scenario.beforeEntry {
+                if scenario.cancelsCaller {
+                    task.cancel()
+                    task.cancel()
+                } else {
+                    await service.resumeBlockedCall()
+                    await service.resumeBlockedCall()
+                }
+            }
+            await start.signal()
+            if !scenario.beforeEntry {
+                let registration = await service.waitForBlockedCall()
+                #expect(
+                    registration.reached,
+                    "private held-call registration: elapsed \(registration.elapsed), limit \(registration.timeout)"
+                )
+                guard registration.reached else { return }
+                #expect(await service.pendingCallCount() == 1)
+                if scenario.cancelsCaller {
+                    task.cancel()
+                    task.cancel()
+                } else {
+                    await service.resumeBlockedCall()
+                    await service.resumeBlockedCall()
+                }
+            }
+            let completion = await completed.wait(untilAtLeast: 1)
+            #expect(
+                completion.reached,
+                "private held call returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return }
+            let result = await task.value
+            switch result {
+            case .failure(let error):
+                #expect(scenario.cancelsCaller)
+                #expect(error == .cancelled)
+            case .success(let value):
+                #expect(!scenario.cancelsCaller)
+                #expect(value.source == .remote)
+            }
+            #expect(await service.callCount() == 1)
+            #expect(
+                await service.cancelledCallCount()
+                    == (scenario.cancelsCaller ? 1 : 0))
+            #expect(await service.pendingCallCount() == 0)
+            await service.resumeBlockedCall()
+            await service.resumeBlockedCall()
+            #expect(await service.pendingCallCount() == 0)
+        }
     }
 
     private static func context(
@@ -535,17 +785,44 @@ final class LibrarySearchCoordinatorTests {
     }
 }
 
+private enum SearchFixtureScenario: CaseIterable, Sendable {
+    case cancelBeforeEntry
+    case cancelAfterRegistration
+    case cleanupBeforeEntry
+    case cleanupAfterRegistration
+
+    var beforeEntry: Bool {
+        switch self {
+        case .cancelBeforeEntry, .cleanupBeforeEntry: true
+        case .cancelAfterRegistration, .cleanupAfterRegistration: false
+        }
+    }
+
+    var cancelsCaller: Bool {
+        switch self {
+        case .cancelBeforeEntry, .cancelAfterRegistration: true
+        case .cleanupBeforeEntry, .cleanupAfterRegistration: false
+        }
+    }
+}
+
 private func performSearchForTest(
     coordinator: LibrarySearchCoordinator,
     context: LibrarySearchContext,
     request: LibrarySearchRequest,
-    service: SearchTestService
+    service: SearchTestService,
+    completion: BoundedTestCounter
 ) async -> Result<
     LibraryRepositoryResult<LibrarySearchResults>,
     LibrarySearchCoordinatorError
 > {
+    let result:
+        Result<
+            LibraryRepositoryResult<LibrarySearchResults>,
+            LibrarySearchCoordinatorError
+        >
     do {
-        return .success(
+        result = .success(
             try await coordinator.search(
                 context: context,
                 request: request,
@@ -553,14 +830,17 @@ private func performSearchForTest(
             )
         )
     } catch let error {
-        return .failure(error)
+        result = .failure(error)
     }
+    await completion.increment()
+    return result
 }
 
 private actor SearchTestSleeper {
     private var continuations: [UUID: CheckedContinuation<Void, any Error>] =
         [:]
     private var durations: [Duration] = []
+    private var retired = false
     private let sleepRegistrations = BoundedTestCounter()
 
     func waitForSleepCount(_ count: Int) async -> BoundedTestWaitResult {
@@ -570,7 +850,13 @@ private actor SearchTestSleeper {
     func sleep(for duration: Duration) async throws {
         let id = UUID()
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, any Error>) in
+                guard !retired, !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
                 continuations[id] = continuation
                 durations.append(duration)
                 Task {
@@ -593,10 +879,19 @@ private actor SearchTestSleeper {
     }
 
     func resumeAll() {
-        let pending = continuations.values
+        let pending = Array(continuations.values)
         continuations.removeAll()
         for continuation in pending {
             continuation.resume()
+        }
+    }
+
+    func retireAll() {
+        retired = true
+        let pending = Array(continuations.values)
+        continuations.removeAll()
+        for continuation in pending {
+            continuation.resume(throwing: CancellationError())
         }
     }
 
@@ -624,6 +919,14 @@ private actor SearchTestService {
     }
 
     private var blockedCallState = BlockedCallState.notRegistered
+    private enum CancellableCallState {
+        case notRegistered
+        case waiting(CheckedContinuation<Void, any Error>)
+        case released
+        case cancelled
+    }
+
+    private var cancellableCallState = CancellableCallState.notRegistered
     private let callRegistrations = BoundedTestCounter()
     private let blockedCallRegistrations = BoundedTestCounter()
 
@@ -661,7 +964,7 @@ private actor SearchTestService {
         await callRegistrations.increment()
         if blockFirstCall, isFirstCall {
             do {
-                try await Task.sleep(for: .seconds(30))
+                try await waitForCancellableCallRelease()
             } catch {
                 cancelledCalls += 1
                 throw .cancelled
@@ -699,6 +1002,45 @@ private actor SearchTestService {
         )
     }
 
+    private func waitForCancellableCallRelease() async throws {
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, any Error>) in
+                switch cancellableCallState {
+                case .notRegistered:
+                    cancellableCallState = .waiting(continuation)
+                    Task { await blockedCallRegistrations.increment() }
+                case .waiting, .cancelled:
+                    continuation.resume(throwing: CancellationError())
+                case .released:
+                    continuation.resume()
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelCancellableCall() }
+        }
+    }
+
+    private func cancelCancellableCall() {
+        switch cancellableCallState {
+        case .notRegistered:
+            cancellableCallState = .cancelled
+        case .waiting(let continuation):
+            cancellableCallState = .cancelled
+            continuation.resume(throwing: CancellationError())
+        case .released, .cancelled:
+            break
+        }
+    }
+
+    func pendingCallCount() -> Int {
+        var count = 0
+        if case .waiting = blockedCallState { count += 1 }
+        if case .waiting = cancellableCallState { count += 1 }
+        return count
+    }
+
     func callCount() -> Int {
         recordedCalls.count
     }
@@ -719,6 +1061,15 @@ private actor SearchTestService {
             blockedCallState = .released
             continuation.resume()
         case .released:
+            break
+        }
+        switch cancellableCallState {
+        case .notRegistered:
+            cancellableCallState = .released
+        case .waiting(let continuation):
+            cancellableCallState = .released
+            continuation.resume()
+        case .released, .cancelled:
             break
         }
     }
