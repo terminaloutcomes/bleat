@@ -191,13 +191,23 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
+        let returnedA = AuthTelemetryTestCompletion<Bool>()
+        let returnedB = AuthTelemetryTestCompletion<Bool>()
+
         let taskA = Task { () -> HTTPResponse in
-            try await coordinator.sendAuthenticated(
-                request,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            do {
+                let value = try await coordinator.sendAuthenticated(
+                    request,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+                await returnedA.complete(true)
+                return value
+            } catch {
+                await returnedA.complete(true)
+                throw error
+            }
         }
         let refreshStarted = await transport.waitUntilRefreshStarted()
         #expect(refreshStarted)
@@ -208,12 +218,19 @@ final class AuthenticatedRequestTests {
         }
 
         let taskB = Task { () -> HTTPResponse in
-            try await coordinator.sendAuthenticated(
-                request,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            do {
+                let value = try await coordinator.sendAuthenticated(
+                    request,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+                await returnedB.complete(true)
+                return value
+            } catch {
+                await returnedB.complete(true)
+                throw error
+            }
         }
         let initialSendBlocked = await transport.waitUntilInitialSendBlocked()
         #expect(initialSendBlocked)
@@ -235,6 +252,18 @@ final class AuthenticatedRequestTests {
         }
         await transport.releaseInitialSend()
         await transport.releaseMidSave()
+
+        async let outcomeA = requireAuthTelemetryCompletion(
+            returnedA, stage: "in-flight refresh originator returning")
+        async let outcomeB = requireAuthTelemetryCompletion(
+            returnedB, stage: "in-flight refresh joiner returning")
+        let returned = await (outcomeA, outcomeB)
+        guard returned.0 == true, returned.1 == true else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
 
         let responseA = try await taskA.value
         let responseB = try await taskB.value
@@ -283,13 +312,23 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
+        let returnedA = AuthTelemetryTestCompletion<Bool>()
+        let returnedB = AuthTelemetryTestCompletion<Bool>()
+
         let taskA = Task { () -> HTTPResponse in
-            try await coordinator.sendAuthenticated(
-                request,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            do {
+                let value = try await coordinator.sendAuthenticated(
+                    request,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+                await returnedA.complete(true)
+                return value
+            } catch {
+                await returnedA.complete(true)
+                throw error
+            }
         }
         let refreshStarted = await transport.waitUntilRefreshStarted()
         #expect(refreshStarted)
@@ -300,11 +339,18 @@ final class AuthenticatedRequestTests {
         }
 
         let taskB = Task { () -> String in
-            try await coordinator.recoverAccessToken(
-                for: accountID,
-                server: server,
-                rejectedAccessToken: "other-token"
-            )
+            do {
+                let value = try await coordinator.recoverAccessToken(
+                    for: accountID,
+                    server: server,
+                    rejectedAccessToken: "other-token"
+                )
+                await returnedB.complete(true)
+                return value
+            } catch {
+                await returnedB.complete(true)
+                throw error
+            }
         }
         await transport.releaseRefresh()
         let midTokensSaved = await transport.waitUntilMidSaved()
@@ -316,6 +362,18 @@ final class AuthenticatedRequestTests {
             return
         }
         await transport.releaseMidSave()
+
+        async let outcomeA = requireAuthTelemetryCompletion(
+            returnedA, stage: "in-flight refresh originator returning")
+        async let outcomeB = requireAuthTelemetryCompletion(
+            returnedB, stage: "in-flight refresh joiner returning")
+        let returned = await (outcomeA, outcomeB)
+        guard returned.0 == true, returned.1 == true else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
 
         await assertThrowsErrorAsync(try await taskA.value) { error in
             #expect(error as? AuthenticatedRequestError == .refreshRejected)
@@ -374,13 +432,23 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
+        let returnedA = AuthTelemetryTestCompletion<Bool>()
+        let returnedB = AuthTelemetryTestCompletion<Bool>()
+
         let taskA = Task { () -> HTTPResponse in
-            try await coordinator.sendAuthenticated(
-                request,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            do {
+                let value = try await coordinator.sendAuthenticated(
+                    request,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+                await returnedA.complete(true)
+                return value
+            } catch {
+                await returnedA.complete(true)
+                throw error
+            }
         }
         let refreshStarted = await transport.waitUntilRefreshStarted()
         #expect(refreshStarted)
@@ -391,12 +459,19 @@ final class AuthenticatedRequestTests {
         }
 
         let taskB = Task { () -> HTTPResponse in
-            try await coordinator.sendAuthenticated(
-                request,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            do {
+                let value = try await coordinator.sendAuthenticated(
+                    request,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+                await returnedB.complete(true)
+                return value
+            } catch {
+                await returnedB.complete(true)
+                throw error
+            }
         }
         let initialSendBlocked = await transport.waitUntilInitialSendBlocked()
         #expect(initialSendBlocked)
@@ -418,6 +493,18 @@ final class AuthenticatedRequestTests {
         }
         await transport.releaseInitialSend()
         await transport.releaseMidSave()
+
+        async let outcomeA = requireAuthTelemetryCompletion(
+            returnedA, stage: "in-flight refresh originator returning")
+        async let outcomeB = requireAuthTelemetryCompletion(
+            returnedB, stage: "in-flight refresh joiner returning")
+        let returned = await (outcomeA, outcomeB)
+        guard returned.0 == true, returned.1 == true else {
+            await transport.releaseAllGates()
+            taskA.cancel()
+            taskB.cancel()
+            return
+        }
 
         await assertThrowsErrorAsync(try await taskA.value) { error in
             #expect(error as? AuthenticatedRequestError == .refreshRejected)

@@ -702,3 +702,9 @@ The [bounded shared log-shutdown completion slice](release-evidence/test-reliabi
 adds per-caller return proof before final task waits in the existing concurrent
 shutdown test. Earlier entry/join remediation and broader #372/#362 acceptance
 remain separately tracked.
+
+
+The [bounded in-flight refresh caller-outcome slice](release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372)
+adds completion proof before consuming six task outcomes across three existing
+authenticated-request tests, retaining typed failures and token/count semantics.
+Unconfirmed task drainage and broader #372/#362 criteria remain open.
