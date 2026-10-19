@@ -3132,15 +3132,35 @@
         "8": "Typed result and semantic counts/state are asserted. Elapsed timeout bound is explicitly asserted where applicable.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "keep",
+      "decision": "follow_up",
       "dependencies_and_setup": "ContinuousClock measures call; cancellation-ignoring provider has 10ms sleep loop ending at one second; 500ms upper bound is six times requested timeout.",
       "action_postconditions": "Provider waits one real second; export timeout is 50ms; assert failure, measured duration <500ms, zero RPC.",
       "synchronization": "ContinuousClock measures call; cancellation-ignoring provider has 10ms sleep loop ending at one second; 500ms upper bound is six times requested timeout.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic timeout/cancellation test using real clock; provider deliberately ignores cancellation.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "reason": "50ms deadline can race provider entry;500ms elapsed upper assertion depends on scheduling and fake polls for one second after caller cancellation. Controlled public deadline strategy and awaited fake retirement remain unresolved; source unchanged.",
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "otlp_timeout_design_review": {
+        "base_revision": "36da41d8921046f0cada2ac1a208cad0ec42a7d2",
+        "previous_decision": "keep",
+        "historical_reason": "Specific request/result/state postconditions cover the contract.",
+        "decision": "follow_up",
+        "rules": {
+          "1": "Existing public integration requests50ms timeout and expects failure/zero RPC; the intended contract is deadline return without waiting for cancellation-ignoring work, not scheduler speed.",
+          "2": "Current timeout starts inside export before async token task entry. No controllable clock/deadline seam is exposed by the exporter. Adding readiness observation alone would still race that50ms deadline.",
+          "3": "Existing500ms wall-clock assertion is scheduler-sensitive; widening it would not establish causal correctness. Keep source unchanged and disposition open pending deliberate controllable deadline strategy.",
+          "4": "Current fake polls for one second after cancellation and is not explicitly retired by the test. A controlled-retirement replacement was prepared outside repo but not applied or tested.",
+          "5": "Fresh memory-only provider/client/exporter, but fake work can outlive public caller; no fixture/native/global-output ownership.",
+          "6": "Current real-clock timeout integration is not a deterministic readiness test; helper-level awaitTask testing after confirmed readiness would exercise a narrower boundary and must not silently replace public integration coverage.",
+          "7": "No wider timing budget or retry added. No claim that passing current runs proves scheduler-independent reliability.",
+          "8": "Typed failure and zero RPC remain; no observed production failure/leak is inferred from this source assessment.",
+          "9": "Reviewed hardcoded Date deadline, min(timeout) behavior, awaitTask and one-second polling fake; design follow-up retained with scoped evidence."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372",
+        "status": "source_assessed_not_remediated",
+        "required_strategy": "Controllable deadline/clock seam for public integration, or explicit narrower helper test alongside retained integration; no blanket timing tolerance increase."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncLifecycleMethodsPreserveShutdownState",
@@ -3171,21 +3191,40 @@
         "8": "Typed result and semantic counts/state are asserted. Elapsed timeout bound is explicitly asserted where applicable.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "keep",
+      "decision": "fix",
       "dependencies_and_setup": "Recording fake clients; awaited async lifecycle calls.",
       "action_postconditions": "Assert initial flush success; shutdown both; assert failure afterward and exact one async/zero sync shutdown dispatch counts.",
       "synchronization": "Recording fake clients; awaited async lifecycle calls.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic exporter lifecycle test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "reason": "Bound actual returns of all six original lifecycle calls in three ordered phases; retain all typed state and exact shutdown-path counters.",
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "otlp_lifecycle_phase_review": {
+        "base_revision": "36da41d8921046f0cada2ac1a208cad0ec42a7d2",
+        "previous_decision": "keep",
+        "historical_reason": "Specific request/result/state postconditions cover the contract.",
+        "decision": "fix",
+        "rules": {
+          "1": "Preserve six calls in original order: initial span flush/log forceFlush success; span shutdown then log shutdown; subsequent flush failures. Retain span/log shutdown count one each, synchronous zero and asynchronous one each. Three actual phase-completion signals bound all six returns.",
+          "2": "Fresh completion actor per sequential phase, signalled only after both actual calls return. Observe bounded signal before original task-value consumption; typed flush results forwarded unchanged.",
+          "3": "Existing ten-second helper failure bounds only. No readiness sleeps or new wall-clock latency success threshold; exporter configuration unchanged.",
+          "4": "On missing phase completion cancel that owned task, request span/log exporter cancellation and return without awaiting unknown work or starting later phases. Prior completed phases are already confirmed; underlying task-graph drainage remains unproven.",
+          "5": "Fresh memory-only sequence token provider, span/log recording clients, exporters and phase completion actors. No filesystem, native session or process-global state.",
+          "6": "Deterministic host-local lifecycle state test using existing local fakes and exact original outcomes/counters.",
+          "7": "No retry-to-green, tolerance widening or assertion relaxation; original before/after shutdown success/failure semantics retained.",
+          "8": "Phase/source diagnostics contain no token, result or telemetry payload. Original typed results and semantic counts remain asserted.",
+          "9": "Individually reviewed all six calls, three producers and guards; focused repeats, owning/full signed/discovery and scope evidence linked."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372",
+        "remaining_limits": "No whole underlying production task drainage claim."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 388
+        "line": 435
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3224,7 +3263,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 407
+        "line": 454
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3290,7 +3329,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationUnblocksTokenWaitAndShutsTransportOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 453
+        "line": 500
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3356,7 +3395,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 521
+        "line": 568
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3422,7 +3461,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 558
+        "line": 605
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3507,7 +3546,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 618
+        "line": 665
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3546,7 +3585,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 679
+        "line": 726
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3585,7 +3624,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 718
+        "line": 765
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3644,7 +3683,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 781
+        "line": 828
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3703,7 +3742,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 835
+        "line": 882
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23104,5 +23143,19 @@
       "core_audit_records": 587
     },
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-retry-and-privacy-caller-bounds-issue-372"
+  },
+  "issue_372_otlp_lifecycle_phase_bounds": {
+    "base_revision": "36da41d8921046f0cada2ac1a208cad0ec42a7d2",
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncLifecycleMethodsPreserveShutdownState"
+    ],
+    "deferred_source_assessment": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider",
+    "counts_unchanged": {
+      "host_inventory": 593,
+      "source_declarations": 1577,
+      "core_audit_records": 587
+    },
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372"
   }
 }

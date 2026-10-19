@@ -1461,3 +1461,68 @@ outcome manifest use the `i372-otlp-retry-privacy-` prefix. Raw logs/build
 artifacts remain private. Fresh independent exact-head review and CI required.
 Broader #372/#362 lifecycle, configuration/device/live-server and unproven
 drainage criteria remain open; #400 implementation is separate.
+
+
+## OTLP lifecycle phase bounds and timeout follow-up (issue #372)
+
+At merged base `36da41d8921046f0cada2ac1a208cad0ec42a7d2`,
+`testAsyncLifecycleMethodsPreserveShutdownState` directly awaited six lifecycle
+calls. It now observes three sequential caller phases through separate existing
+completion actors: initial span flush/log forceFlush, span/log shutdown, then
+post-shutdown span flush/log forceFlush. Each phase signals only after both
+actual calls return; typed results are forwarded unchanged and consumed only
+after the bounded observation.
+
+Original order and assertions remain: initial flushes succeed, post-shutdown
+flushes fail, both clients shut down once, synchronous shutdown counts stay
+zero, and asynchronous counts equal one. Missing phase completion records a
+stage/source issue, cancels that owned phase task and requests cancellation on
+both exporters, then returns without consuming unconfirmed values or launching
+later phases. No claim that all underlying production tasks have drained. No
+production/helper/inventory/new declaration change or new wall-clock threshold.
+Only this existing test body and scoped evidence/locations change. Counts stay
+host 593, source index 1,577, core audit 587 and owning suite 20.
+
+The specifically reviewed timeout test remains an explicit unresolved follow-up:
+`testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider` requests a
+real 50 ms deadline and asserts return within 500 ms while its fake polls for one
+second. The 50 ms production deadline begins before async provider entry, so a
+readiness observation added afterward can still race expiration. The 500 ms upper
+wall-clock check measures scheduler delay as well as exporter behavior. Widening
+that threshold would not establish the intended causal property: deadline return
+while uncooperative provider work is still held.
+
+The exporter hardcodes a Date deadline with no controllable clock seam. A
+deterministic public integration needs a deliberate deadline-control strategy;
+calling the existing internal `awaitTask` only after a provider is ready would
+exercise a narrower boundary and must not silently replace public integration
+coverage. A controlled fake/contract replacement was prepared outside the
+repository but is unapplied and untested. Neither timing threshold nor that test's
+source is changed here, and current passing runs are not evidence of its
+scheduler-independent reliability. No production bug is inferred. Its audit
+disposition is now source-assessed follow-up; the lifecycle case has its own
+individual nine-rule fix review.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused runs: **1/1 each**, exact original identity, zero
+  failures/errors/skips.
+- Owning suite **20/20**, including existing timeout, process-isolated bearer and
+  controlled-token contracts, zero failures/errors/skips. This execution does not
+  resolve the timeout design finding above.
+- Complete supported signed host gate **593/593**, exact inventory identities,
+  zero failures/errors/skips; built discovery **593/593**.
+- Strict Swift lint, docs, exact one-body/audit-scope/source-index and final diff
+  checks passed.
+
+Focused supported serial command is `mise exec -- env
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter
+AuthenticatedOtlpSpanExporterTests.testAsyncLifecycleMethodsPreserveShutdownState`,
+report `.build/i372-otlp-lifecycle-focused-1.xml`. Independent repeats add
+`--skip-build` and distinct `-2`/`-3` reports. Owning filter is
+`AuthenticatedOtlpSpanExporterTests`, report `.build/i372-otlp-lifecycle-owning.xml`.
+Signed command is `mise exec -- ./scripts/test-host.sh`; discovery, signed-host
+log, lint/docs and outcome manifest use the `i372-otlp-lifecycle-` prefix. Raw logs
+and build artifacts stay private. Fresh exact-head review and CI required.
+Broader #372/#362 drainage/configuration/device/live-server criteria remain
+open; #400 implementation is separate.

@@ -364,16 +364,63 @@ final class AuthenticatedOtlpSpanExporterTests {
             timeout: 2
         )
 
-        var spanResult = await spanExporter.flush()
-        var logResult = await logExporter.forceFlush()
+        let initialReturned = AuthTelemetryTestCompletion<Bool>()
+        let initialFlush = Task {
+            let spanResult = await spanExporter.flush()
+            let logResult = await logExporter.forceFlush()
+            await initialReturned.complete(true)
+            return (spanResult, logResult)
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                initialReturned,
+                stage: "initial span/log flush callers returning") == true
+        else {
+            initialFlush.cancel()
+            spanExporter.cancelActiveExports()
+            logExporter.cancelActiveExports()
+            return
+        }
+        var (spanResult, logResult) = await initialFlush.value
         #expect(spanResult == .success)
         #expect(logResult == .success)
 
-        await spanExporter.shutdown()
-        await logExporter.shutdown()
+        let shutdownReturned = AuthTelemetryTestCompletion<Bool>()
+        let shutdown = Task {
+            await spanExporter.shutdown()
+            await logExporter.shutdown()
+            await shutdownReturned.complete(true)
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                shutdownReturned, stage: "span/log shutdown callers returning")
+                == true
+        else {
+            shutdown.cancel()
+            spanExporter.cancelActiveExports()
+            logExporter.cancelActiveExports()
+            return
+        }
+        await shutdown.value
 
-        spanResult = await spanExporter.flush()
-        logResult = await logExporter.forceFlush()
+        let finalReturned = AuthTelemetryTestCompletion<Bool>()
+        let finalFlush = Task {
+            let spanResult = await spanExporter.flush()
+            let logResult = await logExporter.forceFlush()
+            await finalReturned.complete(true)
+            return (spanResult, logResult)
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                finalReturned,
+                stage: "post-shutdown span/log flush callers returning") == true
+        else {
+            finalFlush.cancel()
+            spanExporter.cancelActiveExports()
+            logExporter.cancelActiveExports()
+            return
+        }
+        (spanResult, logResult) = await finalFlush.value
         #expect(spanResult == .failure)
         #expect(logResult == .failure)
         #expect(spanClient.shutdownCount == 1)
