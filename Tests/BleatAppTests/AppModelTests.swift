@@ -14143,11 +14143,11 @@ final class AppModelTests: XCTestCase {
         let operations = AppModelOperationEventProbe()
         let model = AppModel(
             service: service,
+            operationObserver: { operations.record($0) },
             localSessionStore: LocalPlaybackSessionStore(
                 defaults: fixture.defaults),
             playbackPositionStore: PlaybackPositionStore(
-                defaults: fixture.defaults),
-            operationObserver: { operations.record($0) })
+                defaults: fixture.defaults))
         try await startLiveRefreshTest(
             model, service: service, operations: operations)
         await model.playback.startDownloaded(
