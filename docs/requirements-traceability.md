@@ -729,3 +729,10 @@ remaining shutdown/later-export caller waits. Passing lifecycle cases exclude
 ordinary deadline cancellation through monotonic event proof; separate cancellation
 mutations retain deadline behavior and must fail. Broader #372/#362 drainage and
 configuration criteria remain open.
+
+
+The [remaining OTLP caller-bound slice](release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372)
+adds per-caller return proof for eight concurrent exports and final transport
+shutdown, retaining original success/count/metadata and before/after release
+assertions. Cleanup releases owned controls; native session termination and
+whole underlying task drainage remain unproven. Broader #372/#362 stays open.

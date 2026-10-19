@@ -1344,3 +1344,61 @@ manifest use the same `i372-otlp-control-` prefix. Raw logs/build artifacts stay
 private. Fresh exact-head source review and CI remain required. Broader
 #372/#362 lifecycle, native configuration/device/live-server and unproven
 drainage criteria remain open; cache implementation is separate.
+
+
+## Remaining OTLP caller-completion bounds (issue #372)
+
+At merged base `dfd389478c1707bf725bccebfb15f9ced9350442`, two existing
+`AuthenticatedOtlpSpanExporterTests` cases retained unbounded final caller
+consumption despite already bounded entry signals:
+
+- `testConcurrentExportsUseProviderSafelyAndReuseOneClient` awaited a structured
+  task-group exit for eight exports. It now owns eight caller tasks, each with a
+  distinct existing completion actor signalled after actual export returns. All
+  eight token entries are still required before release; each original success
+  Bool is observed before its task value. Refresh count one, eight client
+  exports and exact shared bearer metadata remain asserted before cleanup.
+- `testAsyncTransportShutdownWaitsForClosureCompletion` awaited shutdown's task
+  value after releasing its close gate. It now observes a completion signal
+  after actual transport shutdown and the original completed-state mark before
+  consuming that value. Bounded close entry, completed false before release
+  and completed true after release remain.
+
+Both tests await existing `withTestCleanup` on normal and failing exits. The
+concurrent case cancels owned callers, requests exporter cancellation and
+releases the provider gate. The transport case cancels its shutdown caller,
+releases its close gate and invalidates its owned ephemeral session. Missing
+completion records a stage/source-located failure (including concurrent caller
+index) and skips unconfirmed task-value consumption. The release controls latch
+late arrivals; no underlying production task-graph drainage or native session
+delegate termination is claimed.
+
+Existing ten-second helper bounds, exporter timeouts and fake implementations
+remain unchanged. No readiness sleep, retry or threshold relaxation. No new
+helper, production code, declaration or inventory identity. Only these two test
+bodies and scoped evidence/locations change. Two records receive individual
+nine-rule reviews; older findings stay revision-bound, including already
+remediated entry-gate history. Counts remain host593, source index1,577, core
+audit587 and owning suite20.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused runs: **2/2 each**, exact original identities, zero
+  failures/errors/skips.
+- Owning suite: **20/20**, including original bearer privacy and controlled
+  token-fake contract cases, zero failures/errors/skips.
+- Complete supported signed host gate: **593/593**, exact inventory identities,
+  zero failures/errors/skips; built discovery **593/593**.
+- Strict Swift lint, docs, source-index/audit scope and final diff checks passed.
+
+Focused supported serial command is `mise exec -- env
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter`
+with the two names above, report `.build/i372-otlp-remaining-focused-1.xml`;
+repeat independently with `--skip-build` and `-2`/`-3` reports. Owning filter is
+`AuthenticatedOtlpSpanExporterTests`, report
+`.build/i372-otlp-remaining-owning.xml`. Signed command is
+`mise exec -- ./scripts/test-host.sh`; discovery, signed-host log, lint/docs and
+outcome manifest use the `i372-otlp-remaining-` prefix. Raw framework/build logs
+stay private. Fresh independent exact-head review and CI are required. Broader
+#372/#362 lifecycle, configuration/device/live-server and unproven drainage
+criteria remain open; #400 cache implementation is separate.

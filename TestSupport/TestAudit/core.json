@@ -3249,14 +3249,14 @@
         "8": "Typed result and semantic counts/state are asserted. Global stdout/stderr capture or readiness failure details require follow-up.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Provider simulates 50ms with `Task.sleep` inside token refresh; this is a scheduling window rather than explicit joiner registration.",
       "action_postconditions": "Await group of eight; assert all true, refresh count one, eight client calls, metadata only shared bearer.",
       "synchronization": "Provider simulates 50ms with `Task.sleep` inside token refresh; this is a scheduling window rather than explicit joiner registration.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Replace fixed 50ms sleep with a gate that waits for all concurrent callers to join before releasing token; otherwise slow scheduling can produce multiple refreshes.",
+      "reason": "Start eight owned caller tasks, require all eight provider entries, release token, observe each actual export-return Bool with its own completion actor, retain eight successes plus refresh one, client exports eight and exact shared bearer metadata. Missing completion fails within the existing bound and cleanup releases owned controls without awaiting unknown work.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3264,13 +3264,33 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "remaining_otlp_caller_review": {
+        "base_revision": "dfd389478c1707bf725bccebfb15f9ced9350442",
+        "previous_decision": "follow_up",
+        "historical_reason": "Replace fixed 50ms sleep with a gate that waits for all concurrent callers to join before releasing token; otherwise slow scheduling can produce multiple refreshes.",
+        "historical_assessment": "Original rule text remains revision-bound. Current gate entry was already bounded at this base; this slice fixes the remaining final caller consumption.",
+        "decision": "fix",
+        "rules": {
+          "1": "Start eight owned caller tasks, require all eight provider entries, release token, observe each actual export-return Bool with its own completion actor, retain eight successes plus refresh one, client exports eight and exact shared bearer metadata.",
+          "2": "Keep the existing bounded eight-waiter signal and release ordering; add one bounded completion per actual export caller. Structured task-group exit no longer silently awaits unknown callers.",
+          "3": "Existing ten-second helper deadlines bound missing transitions; no readiness sleep, elapsed-time success threshold or timeout relaxation. Existing exporter timeout and provider behavior unchanged.",
+          "4": "Await withTestCleanup on all exits: cancel caller tasks, request exporter cancellation and release the token gate. Consume task values only after their own actual caller-return observation. Underlying production/fake task drainage remains unproven.",
+          "5": "Fresh memory-only single-flight provider, recording client, exporter and eight individual completion actors; no filesystem/native/global output ownership.",
+          "6": "Deterministic host-local lifecycle/caller-boundary test; original semantic observations and entry/release control remain.",
+          "7": "No retries-to-green or threshold relaxation. Required success and before/after/count/metadata assertions remain before cleanup.",
+          "8": "Bounded timeout issues identify stage, caller index where applicable and source location, without tokens or raw transport payloads.",
+          "9": "Individually reviewed existing signal/completion/cleanup seams and every caller producer/exit path; linked focused repeats, owning, full signed and discovery evidence."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372",
+        "remaining_limits": "Whole underlying production task drainage remains unproven; shared gate/helper redesign and unrelated acceptance are outside this slice."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationUnblocksTokenWaitAndShutsTransportOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 445
+        "line": 453
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3336,7 +3356,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 513
+        "line": 521
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3361,14 +3381,14 @@
         "8": "Typed result and semantic counts/state are asserted. Global stdout/stderr capture or readiness failure details require follow-up.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Actor AsyncShutdownGate uses unbounded continuation waits for entry/release; test explicitly releases after entry.",
       "action_postconditions": "Start shutdown; await gate entry; assert completion false; release gate; await shutdown; assert completed true.",
       "synchronization": "Actor AsyncShutdownGate uses unbounded continuation waits for entry/release; test explicitly releases after entry.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Gate entry can wait forever if shutdown fails to reach closure; add bounded diagnostic wait. The close operation itself is fully awaited.",
+      "reason": "Require controlled close-closure entry and completion false before release; release the gate, bound actual transport shutdown caller return, retain completion true after release. Missing completion fails within the existing bound and cleanup releases owned controls without awaiting unknown work.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3376,13 +3396,33 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "remaining_otlp_caller_review": {
+        "base_revision": "dfd389478c1707bf725bccebfb15f9ced9350442",
+        "previous_decision": "follow_up",
+        "historical_reason": "Gate entry can wait forever if shutdown fails to reach closure; add bounded diagnostic wait. The close operation itself is fully awaited.",
+        "historical_assessment": "Original rule text remains revision-bound. Current gate entry was already bounded at this base; this slice fixes the remaining final caller consumption.",
+        "decision": "fix",
+        "rules": {
+          "1": "Require controlled close-closure entry and completion false before release; release the gate, bound actual transport shutdown caller return, retain completion true after release.",
+          "2": "Keep existing bounded close-entry and explicit release ordering; add actual caller-return completion after transport.shutdown and original completed-state mark.",
+          "3": "Existing ten-second helper deadlines bound missing transitions; no readiness sleep, elapsed-time success threshold or timeout relaxation. Existing exporter timeout and provider behavior unchanged.",
+          "4": "Await withTestCleanup on all exits: cancel shutdown task, release close gate and invalidate owned session. Consume task value only after actual shutdown-return observation. Native session delegate termination and whole task-graph drainage are not claimed.",
+          "5": "Fresh controlled close gate, completed-state actor, completion actor and ephemeral session. Always release gate and invalidate session; no file/global output mutation.",
+          "6": "Deterministic host-local lifecycle/caller-boundary test; original semantic observations and entry/release control remain.",
+          "7": "No retries-to-green or threshold relaxation. Required success and before/after/count/metadata assertions remain before cleanup.",
+          "8": "Bounded timeout issues identify stage, caller index where applicable and source location, without tokens or raw transport payloads.",
+          "9": "Individually reviewed existing signal/completion/cleanup seams and every caller producer/exit path; linked focused repeats, owning, full signed and discovery evidence."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372",
+        "remaining_limits": "Whole underlying production task drainage remains unproven; shared gate/helper redesign and unrelated acceptance are outside this slice."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 540
+        "line": 558
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3467,7 +3507,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 600
+        "line": 618
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3506,7 +3546,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 661
+        "line": 679
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3545,7 +3585,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 700
+        "line": 718
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3584,7 +3624,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 728
+        "line": 746
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3623,7 +3663,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 751
+        "line": 769
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22996,5 +23036,19 @@
       "remediation": "Explicit30-second lifecycle fixture timeout plus captured monotonic pre-deadline cancellation proof; separate lifecycle and caller mutations retain ordinary deadline cancellation.",
       "production_changes": "none; temporary mutations restored byte-for-byte"
     }
+  },
+  "issue_372_remaining_otlp_caller_bounds": {
+    "base_revision": "dfd389478c1707bf725bccebfb15f9ced9350442",
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion"
+    ],
+    "counts_unchanged": {
+      "host_inventory": 593,
+      "source_declarations": 1577,
+      "core_audit_records": 587
+    },
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372"
   }
 }
