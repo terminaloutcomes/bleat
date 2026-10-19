@@ -32,7 +32,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift` (temporary directory cleanup in test defers and `makeRecordedSpan`) | Route temporary telemetry directory deletion through checked cleanup support instead of suppressing errors with `try?`. | UUID paths isolate tests, but cleanup failures silently accumulate telemetry files and consume host disk. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` (caller `cancelledMigrationRetainsCommittedProgressAndCoalescesCallers`) | Add a bounded checkpoint-entry notification preserving the exact 200-row commit boundary and coalesced-cancellation checks. | If migration never reaches the checkpoint, the checked continuation suspends indefinitely and the cancellation/recovery assertions never run. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::fixture` | Implemented: caller-scoped ownership retains and removes exact data/configuration domains, including restored/restarted/read-only stores and throwing exits. | See [scoped defaults evidence](#private-cloud-defaults-lifecycle-issue-372). File-backed root deletion and historical synchronization findings remain separate. |
-| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences` | **Open, blocked within this slice:** establish the read-only container lifetime before checked root removal. SwiftData exposes no close API; a scoped-operation experiment still retained that container after the actual failed migration. | Best-effort `try?` removal remains. [Lifetime investigation](#read-only-migration-fixture-lifetime-blocker-issue-372) records the failed candidate and precise remaining boundary; checkpoint synchronization is tracked separately above. |
+| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences` | Implemented: isolate the real migration in the current host executable and require observed process exit plus closed owned IO before checked root/domain removal. | [Process-boundary evidence](#read-only-migration-process-boundary-issue-372) retains the historical lifetime investigation and typed migration assertions; checkpoint synchronization remains separate. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`, `boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`, `observationHistoryAndPresentationAreAccountScoped` | Replace awaited AsyncStream iterator reads with bounded, source-located update/termination waits that assert the expected revision or close event. | If repository publication or termination regresses, `iterator.next()` suspends indefinitely instead of reporting which update was missing. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar` | Avoid changing process-global `NSTimeZone.default` while unrelated test suites may run concurrently; inject a calendar/time-zone or otherwise serialize the global mutation across all tests. | `.serialized` only orders this suite; other suites can observe the temporary Brisbane/Los Angeles process setting and become order-sensitive. |
 
@@ -808,3 +808,108 @@ independent outcome summary is `.build/i372-root-verification.json`. No new
 discovery identity is claimed.
 Simulator, live-server and physical-device gates were not run for this
 evidence-only change; they cannot resolve the observed local owner retention.
+
+
+## Read-only migration process boundary (issue #372)
+
+PR #397 now delivers the test-only process boundary following the historical
+[blocked lexical-lifetime experiment](#read-only-migration-fixture-lifetime-blocker-issue-372).
+That experiment and its failed/restored-baseline results above remain historical
+evidence. No SwiftData retention cause, permanent leak or framework defect is
+claimed. Production persistence and the bearer subprocess helper are unchanged.
+
+The original `failedMigrationSaveRetainsLegacyPreferences()` identity invokes
+the current host executable, retaining its required signed bundle/library
+arguments and replacing inherited selection/report arguments. In that child, a
+writable store is reopened read-only and actual `prepareStorage()` must produce
+`metadataWriteFailed`, Cocoa domain/code 513, byte-identical retained archive
+and an incomplete migration marker. No rollback changes the scenario.
+
+The parent owns a UUID root and two UUID defaults domains before launch. A
+versioned nonce marker prevents accidental recursive execution. Success requires
+normal observed exit zero, closed owned descriptors, complete bounded output,
+exactly one non-skipped passing XML identity, a nonce-bound typed report derived
+from the actual migration, and fresh cross-process preferences observations.
+Checked cleanup removes only those resources after exit and IO closure; fresh
+observers prove domain removal. Unrelated root/domain and parent descriptor
+sentinels remain intact. Coverage profiles use unique names outside the removed
+root while retaining the signed gate's product-prefix merge patterns.
+
+Native termination callbacks and DispatchIO drive supervision without global
+stdout/stderr redirection or blocking descriptor reads. Output/XML/typed limits
+are 1 MiB/64 KiB/16 KiB; parsers reject ambiguous identities/counts, entities,
+duplicate JSON keys and unbounded nesting/strings. Operation and cleanup errors
+are distinct. The deadline starts before launch (20 seconds, followed by a
+5-second teardown bound), but Foundation's synchronous `Process.run()` cannot
+be interrupted. Bounded Foundation parsing and owned filesystem metadata/removal
+are also synchronous boundaries. Caller cancellation does not cancel the exit
+observer. Unconfirmed exit or IO closure preserves resources; test-only recovery
+requires a separate real native termination and closure proof.
+
+Thirteen new supervisor test identities include 27 argument cases: 16 actual
+helper modes, four explicitly injected XML report faults, five deterministic
+cancellation phases and two injected IO-acknowledgment failures. The helper
+controls exercise actual assertion/throw/skip/known-issue/zero-selection/signal
+outcomes plus malformed, missing, duplicate, oversized and wrong-nonce reports.
+The normal migration branch contains no known-issue suppression; the deliberate
+known-issue control derives its count from the actual matcher and is rejected
+even when this runner represents it as passing XML. Launch/partial setup,
+timeout, pre-cancellation, injected launch cancellation, uncertain exit, uncertain
+IO and independent operation/cleanup failures have separate regressions. A lost
+supervisor event is labeled injection; it does not claim native SIGKILL failure.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 build 27A9275):
+
+- Three independent unsigned serial focused invocations: **14/14 each**,
+  zero failures/errors/skips, exact identity multisets independently compared
+  against the inventory. Reports: `.build/i372-isolation-repeat-1` through
+  `-3`, each with `.xml` and `.log` extensions.
+- Owning persistence, new supervisor and unchanged bearer suites: **35/35**,
+  zero failures/errors/skips, exact expected identities in
+  `.build/i372-isolation-owning-bearer-1.xml` and matching `.log`.
+- Final formatted-source signed host gate: **591/591**, zero failures/errors/
+  skips, exact inventory identity multiset independently compared from the two
+  product XML reports in `.build/host-results/`. The supported gate verified
+  signed runner identity, entitlement and provisioning profile and exported
+  production LCOV under `.build/coverage/swift-host/`. Log:
+  `.build/i372-isolation-signed-host-final.log`. The preceding signed run also
+  passed 591/591 before lint-only source corrections.
+- Built host discovery: **591/591** declarations, compared by canonical suite
+  and declaration names in `.build/i372-isolation-discovery.txt`. Product XML,
+  aggregate XML and parameter cases are not counted as extra identities.
+- Repository strict Swift lint and documentation references pass; diff/JSON
+  checks pass. Logs: `.build/i372-isolation-swift-lint-final.log` and
+  `.build/i372-isolation-docs-final.log`. Independent outcome summary:
+  `.build/i372-isolation-verification.json`. Initial strict lint found enum
+  case layout, for-each style and long trailing comments; corrected before
+  the final signed gate. An early XML inspection during gate execution found
+  incomplete output; it was discarded and repeated after process completion.
+
+Expected warnings remain the upstream OpenTelemetry watchOS minimum deprecation,
+read-only SwiftData Cocoa 513 diagnostics in the existing fault cases, and three
+intentional known cleanup issues. New child control failures are captured and
+asserted privately; they are not unexpected parent-suite failures or skips.
+
+Focused command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--skip-build --disable-xctest --no-parallel --filter
+'PrivateCloudPersistenceTests.failedMigrationSaveRetainsLegacyPreferences|ReadOnlyMigrationChildTests'
+--xunit-output .build/i372-isolation-repeat-1.xml`. Repetitions use distinct
+report names; the owning filter is
+`PrivateCloudPersistenceTests|ReadOnlyMigrationChildTests|BearerLogChildTests`.
+The complete signed lane uses `mise exec -- ./scripts/test-host.sh`.
+
+Earlier attempts remain local and receive no passing coverage credit: initial
+compile failures (unavailable Skip type, non-Sendable defaults alias, enum typo
+and a missing result argument), a canonical-URL guard failure corrected using
+validated file paths, and the first controls run's incorrect expected category
+for actual zero selection. A failed temporary editing assertion also reran the
+old guard once. Final repeats supersede these attempts without erasing them.
+Raw child/framework diagnostics, temporary paths and setup traces remain private.
+
+The source index adds thirteen declarations (1,575 current entries), the host
+inventory adds thirteen identities (591 total), and the core audit adds thirteen
+individual nine-rule reviews plus the specific owning-test/helper review.
+Historical audit counts remain revision-bound. Broader checkpoint/cancellation,
+configuration, Simulator, live-server and physical-device acceptance is unchanged.
+Fresh review of the final implementation SHA and green CI are required; the
+previous documentation-only review does not clear this implementation.

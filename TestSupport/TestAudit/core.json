@@ -13892,7 +13892,7 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
-        "line": 205
+        "line": 306
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13929,7 +13929,7 @@
       "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
       "file_root_lifetime_investigation": {
         "base_revision": "47f9af5b72676cae18b7d90bc17319f1a6153bbe",
-        "status": "open_blocked",
+        "status": "historical_blocker_resolved_by_process_boundary",
         "observed_owner_release": {
           "writable_container": true,
           "read_only_container": false,
@@ -13937,6 +13937,12 @@
         },
         "assessment": "Scoped awaited operation and lexical exit did not release the read-only container after actual metadataWriteFailed. ModelContainer has no public close API; existing test seams do not establish this lifetime. Candidate restored; original typed failure and retained-source assertions unchanged. No new coverage delivered.",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-fixture-lifetime-blocker-issue-372"
+      },
+      "process_boundary_review": {
+        "decision": "fix",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372",
+        "implementation": "Original identity runs the unchanged real read-only migration through the current host executable. Parent requires observed exit, closed owned IO, exact non-skipped successful XML identity, nonce-bound typed outcome, retained archive byte equality and incomplete migration before checked root/domain removal. Uncertain exit/IO preserves resources. Historical retention observation is not a framework-cause finding.",
+        "execution": "See issue_372_read_only_process_boundary and linked scoped evidence."
       }
     },
     {
@@ -22238,6 +22244,318 @@
       "decision": "keep",
       "reason": "Exercises actual owner and same lexical cleanup contract as migration callers, including partial allocation.",
       "shared_helper_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::actualHelperContracts",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 13
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reject actual helper assertion, throw, skip, known issue, zero selection, signal, invalid markers and bounded report/output failures; verify real migration, owned cleanup and unrelated sentinels.",
+      "rules": {
+        "1": "Reject actual helper assertion, throw, skip, known issue, zero selection, signal, invalid markers and bounded report/output failures; verify real migration, owned cleanup and unrelated sentinels.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::injectedReportFaultsCannotPass",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 92
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reject missing, malformed, duplicate and oversized XML using explicitly injected post-exit report faults while retaining real typed migration evidence.",
+      "rules": {
+        "1": "Reject missing, malformed, duplicate and oversized XML using explicitly injected post-exit report faults while retaining real typed migration evidence.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::launchFailureClosesOwnedHandles",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 114
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Report native launch failure separately and close owned descriptors before removing never-launched resources.",
+      "rules": {
+        "1": "Report native launch failure separately and close owned descriptors before removing never-launched resources.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::partialSetupClosesBothPipeEnds",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 129
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Close both owned pipe ends after injected partial setup failure without changing parent descriptors.",
+      "rules": {
+        "1": "Close both owned pipe ends after injected partial setup failure without changing parent descriptors.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::deadlineReapsBeforeCleanup",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 141
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Kill and observe termination of a deliberately hanging helper before checked resource removal.",
+      "rules": {
+        "1": "Kill and observe termination of a deliberately hanging helper before checked resource removal.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::alreadyCancelledDoesNotLaunch",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 156
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Do not launch when cancellation is already latched; prove no exit observer event is invented.",
+      "rules": {
+        "1": "Do not launch when cancellation is already latched; prove no exit observer event is invented.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::injectedLaunchCancellationIsLatched",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 168
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Latch injected cancellation during the launch invocation and observe real termination before cleanup; does not claim to interrupt Process.run.",
+      "rules": {
+        "1": "Latch injected cancellation during the launch invocation and observe real termination before cleanup; does not claim to interrupt Process.run.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::cancellationAcrossPhasesIsDrained",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 183
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Use bounded admission gates to verify cancellation before/after launch, teardown, validation and cleanup with exact termination and persistence outcomes.",
+      "rules": {
+        "1": "Use bounded admission gates to verify cancellation before/after launch, teardown, validation and cleanup with exact termination and persistence outcomes.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::uncertainExitPreservesAllResources",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 216
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Drop only the supervisor exit event, preserve root/domains on uncertain liveness and require separate native exit/IO proof before test-only recovery.",
+      "rules": {
+        "1": "Drop only the supervisor exit event, preserve root/domains on uncertain liveness and require separate native exit/IO proof before test-only recovery.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::uncertainIOPreservesOwnedResources",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 243
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Inject lost close acknowledgment or a reported close error after real close; preserve resources until independent native closure and exit proof permit recovery.",
+      "rules": {
+        "1": "Inject lost close acknowledgment or a reported close error after real close; preserve resources until independent native closure and exit proof permit recovery.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::operationAndCleanupFailuresRemainSeparate",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 271
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retain actual thrown-helper cause independently of injected post-reap missing-root cleanup failure.",
+      "rules": {
+        "1": "Retain actual thrown-helper cause independently of injected post-reap missing-root cleanup failure.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::typedReportGrammarRejectsAmbiguousAndUnboundedInput",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 291
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reject duplicate keys, appended objects, excessive nesting, unknown keys and oversized strings before typed JSON decode.",
+      "rules": {
+        "1": "Reject duplicate keys, appended objects, excessive nesting, unknown keys and oversized strings before typed JSON decode.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::xmlGrammarRejectsUntrustedAndAmbiguousReports",
+      "source": {
+        "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+        "line": 322
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Require one exact passing identity; reject skipped/failed/missing/duplicate cases, malformed counts, doctypes, entities and oversized XML.",
+      "rules": {
+        "1": "Require one exact passing identity; reject skipped/failed/missing/duplicate cases, malformed counts, doctypes, entities and oversized XML.",
+        "2": "Native process termination and DispatchIO completion callbacks; bounded actor admission for phase controls. No sleep or polling used as readiness.",
+        "3": "20-second operation and 5-second teardown defaults bound failure supervision after synchronous Process.run returns; deliberate controls use shorter failure deadlines, never latency assertions.",
+        "4": "Detached supervisor survives caller cancellation, drains owned IO and retains observer for uncertain termination. Test-only recovery requires independent native proof.",
+        "5": "Nonce-specific root, two defaults domains, coverage/report paths; unrelated root/domain and parent descriptor sentinels.",
+        "6": "Host-local subprocess integration or bounded parser unit test; uses the existing executable and required signed bundle arguments.",
+        "7": "No retry-to-green; negative controls assert exact typed rejection categories.",
+        "8": "Typed operation and cleanup failures stay distinct; bounded raw child diagnostics remain private local artifacts.",
+        "9": "Source reviewed with scenario-specific supervisor and all argument controls; focused repeats, owning/bearer regression and signed host results recorded in linked evidence."
+      },
+      "decision": "keep",
+      "reason": "Regression for the process-boundary acceptance and safe cleanup contract. Fault injection is labeled separately from actual helper outcomes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372"
     }
   ],
   "issue_382": {
@@ -22261,5 +22579,12 @@
       "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::ownedDefaultsAreRemovedOnSuccessAndThrowingExit"
     ],
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372"
+  },
+  "issue_372_read_only_process_boundary": {
+    "new_declarations": 13,
+    "historical_counts": "Prior audit metadata and evidence remain revision-bound.",
+    "shared_helper_review": "ReadOnlyMigrationChild is scenario-specific; reviewed fresh signed-executable arguments, nonce validation, bounded async owned IO, exit/IO state machine, separate cleanup errors, parser bounds, cross-process defaults proof and coverage paths. BearerLogChild is unchanged. Process.run and bounded Foundation parsing/filesystem metadata are synchronous boundaries; the deadline cannot interrupt Process.run.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372",
+    "execution": "Three independent 14/14 focused passes; 35/35 owning/new/bearer; signed 591/591 exact XML identities; zero failures/errors/skips; final lint and documentation checks passed."
   }
 }

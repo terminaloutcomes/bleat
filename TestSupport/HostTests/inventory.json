@@ -662,5 +662,20 @@
     "launchFailureClosesHandles()",
     "secretOutputFailsWithPrivateDiagnostics()",
     "reportRequiresExactlyOneSuccessfulIdentity()"
+  ],
+  "BleatCoreTests.ReadOnlyMigrationChildTests": [
+    "actualHelperContracts(mode:)",
+    "alreadyCancelledDoesNotLaunch()",
+    "cancellationAcrossPhasesIsDrained(phase:)",
+    "deadlineReapsBeforeCleanup()",
+    "injectedLaunchCancellationIsLatched()",
+    "injectedReportFaultsCannotPass(fault:)",
+    "launchFailureClosesOwnedHandles()",
+    "operationAndCleanupFailuresRemainSeparate()",
+    "partialSetupClosesBothPipeEnds()",
+    "typedReportGrammarRejectsAmbiguousAndUnboundedInput()",
+    "uncertainExitPreservesAllResources()",
+    "uncertainIOPreservesOwnedResources(injectedError:)",
+    "xmlGrammarRejectsUntrustedAndAmbiguousReports()"
   ]
 }
