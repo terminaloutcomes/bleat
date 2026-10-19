@@ -5,6 +5,77 @@ import Testing
 
 @Suite(.serialized)
 final class AuthenticatedRequestTests {
+    @Test(arguments: CoalescingTransportKind.allCases)
+    fileprivate func
+        testCoalescingTransportReleasesRegisteredAndLateCallersOnce(
+            kind: CoalescingTransportKind
+        ) async throws
+    {
+        let oldTokens = try AuthenticationTokens(
+            accessToken: "old-access", refreshToken: "old-refresh")
+        let newTokens = try AuthenticationTokens(
+            accessToken: "new-access", refreshToken: "new-refresh")
+        let server = try NormalizedServerURL("https://example.com")
+        var request = try Self.request(for: .libraries, server: server)
+        request.setValue(
+            "Bearer old-access", forHTTPHeaderField: "Authorization")
+        let tracedRequest = TracedHTTPRequest(
+            request: request, endpoint: .libraries)
+
+        for releaseBeforeEntry in [false, true] {
+            let transport = kind.transport(
+                oldTokens: oldTokens, newTokens: newTokens)
+            if releaseBeforeEntry {
+                await transport.releaseUnauthorizedRequests()
+                await transport.releaseUnauthorizedRequests()
+            }
+            let completed = BoundedTestCounter()
+            let task = Task {
+                let result: Result<HTTPResponse, any Error>
+                do {
+                    result = .success(try await transport.send(tracedRequest))
+                } catch { result = .failure(error) }
+                await completed.increment()
+                return result
+            }
+            try await withTestCleanup {
+                task.cancel()
+                // The early-release phase already owns a permanently open latch.
+                if !releaseBeforeEntry {
+                    await transport.releaseUnauthorizedRequests()
+                }
+            } operation: {
+                if !releaseBeforeEntry {
+                    guard
+                        await requireAuthTelemetrySignal(
+                            transport.allUnauthorizedRequestsArrived,
+                            stage: "registered unauthorized fake request")
+                    else { return }
+                    #expect(
+                        await transport.pendingUnauthorizedRequestCount() == 1)
+                    // Cancellation alone cannot retire this intentionally held fake call.
+                    task.cancel()
+                    await transport.releaseUnauthorizedRequests()
+                    await transport.releaseUnauthorizedRequests()
+                }
+                let completion = await completed.wait(untilAtLeast: 1)
+                #expect(
+                    completion.reached,
+                    "unauthorized fake caller returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+                )
+                guard completion.reached else { return }
+                let response = try await task.value.get()
+                #expect(response.statusCode == 401)
+                let pending = await transport.pendingUnauthorizedRequestCount()
+                #expect(pending == 0)
+                guard pending == 0 else { return }
+                await transport.releaseUnauthorizedRequests()
+                await transport.releaseUnauthorizedRequests()
+                #expect(await transport.pendingUnauthorizedRequestCount() == 0)
+            }
+        }
+    }
+
     @Test
     func testTwentyUnauthorizedRequestsShareOneRotatingRefresh() async throws {
         let accountID = AccountID(rawValue: "concurrent-account")
@@ -31,34 +102,46 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
-        let responses = try await withThrowingTaskGroup(
-            of: HTTPResponse.self
-        ) { group in
-            for _ in 0..<20 {
-                group.addTask {
-                    try await coordinator.sendAuthenticated(
-                        request,
-                        route: .libraries,
-                        accountID: accountID,
-                        server: server
-                    )
+        let completed = BoundedTestCounter()
+        let tasks = (0..<20).map { _ in
+            Task { () -> Result<HTTPResponse, any Error> in
+                let result: Result<HTTPResponse, any Error>
+                do {
+                    result = .success(
+                        try await coordinator.sendAuthenticated(
+                            request, route: .libraries, accountID: accountID,
+                            server: server))
+                } catch {
+                    result = .failure(error)
                 }
+                await completed.increment()
+                return result
             }
-
-            #expect(
+        }
+        let responses: [HTTPResponse]? = try await withTestCleanup {
+            for task in tasks { task.cancel() }
+            await transport.releaseUnauthorizedRequests()
+        } operation: {
+            guard
                 await requireAuthTelemetrySignal(
                     transport.allUnauthorizedRequestsArrived,
-                    stage: "20 initial unauthorized requests"
-                ))
+                    stage: "20 initial unauthorized requests")
+            else { return nil }
             await transport.releaseUnauthorizedRequests()
-
-            var responses: [HTTPResponse] = []
-            for try await response in group {
-                responses.append(response)
-            }
-            return responses
+            await transport.releaseUnauthorizedRequests()
+            let completion = await completed.wait(
+                untilAtLeast: 20, timeout: .seconds(10))
+            #expect(
+                completion.reached,
+                "20 coalesced callers returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return nil }
+            var values: [HTTPResponse] = []
+            for task in tasks { values.append(try await task.value.get()) }
+            #expect(await transport.pendingUnauthorizedRequestCount() == 0)
+            return values
         }
-
+        guard let responses else { return }
         #expect(
             responses.map(\HTTPResponse.statusCode)
                 == Array(repeating: 200, count: 20))
@@ -113,42 +196,51 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
-        let errors = await withTaskGroup(
-            of: AuthenticatedRequestError?.self
-        ) { group in
-            for _ in 0..<20 {
-                group.addTask {
-                    do {
-                        _ = try await coordinator.sendAuthenticated(
-                            request,
-                            route: .libraries,
-                            accountID: accountID,
-                            server: server
-                        )
-                        return nil
-                    } catch {
-                        return error as? AuthenticatedRequestError
-                    }
+        let completed = BoundedTestCounter()
+        let tasks = (0..<20).map { _ in
+            Task { () -> AuthenticatedRequestError? in
+                let result: AuthenticatedRequestError?
+                do {
+                    _ = try await coordinator.sendAuthenticated(
+                        request, route: .libraries, accountID: accountID,
+                        server: server)
+                    result = nil
+                } catch {
+                    result = error as? AuthenticatedRequestError
                 }
+                await completed.increment()
+                return result
             }
-
-            #expect(
+        }
+        let errors: [AuthenticatedRequestError?]? = try await withTestCleanup {
+            for task in tasks { task.cancel() }
+            await transport.releaseUnauthorizedRequests()
+        } operation: {
+            guard
                 await requireAuthTelemetrySignal(
                     transport.allUnauthorizedRequestsArrived,
-                    stage: "20 initial unauthorized requests"
-                ))
+                    stage: "20 initial unauthorized requests")
+            else { return nil }
             await transport.releaseUnauthorizedRequests()
-
-            var errors: [AuthenticatedRequestError?] = []
-            for await error in group {
-                errors.append(error)
-            }
-            return errors
+            await transport.releaseUnauthorizedRequests()
+            let completion = await completed.wait(
+                untilAtLeast: 20, timeout: .seconds(10))
+            #expect(
+                completion.reached,
+                "20 coalesced callers returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return nil }
+            var values: [AuthenticatedRequestError?] = []
+            for task in tasks { values.append(await task.value) }
+            #expect(await transport.pendingUnauthorizedRequestCount() == 0)
+            return values
         }
+        guard let errors else { return }
         let counts = await transport.counts()
         let requiresReauthentication =
             await coordinator.requiresReauthentication(for: accountID)
 
+        #expect(errors.count == 20)
         #expect(
             errors.compactMap { $0 }
                 == Array(repeating: .refreshRejected, count: 20))
@@ -555,31 +647,46 @@ final class AuthenticatedRequestTests {
         )
         let request = try Self.request(for: .libraries, server: server)
 
-        let responses = try await withThrowingTaskGroup(
-            of: HTTPResponse.self
-        ) { group in
-            for _ in 0..<20 {
-                group.addTask {
-                    try await coordinator.sendAuthenticated(
-                        request,
-                        route: .libraries,
-                        accountID: accountID,
-                        server: server
-                    )
+        let completed = BoundedTestCounter()
+        let tasks = (0..<20).map { _ in
+            Task { () -> Result<HTTPResponse, any Error> in
+                let result: Result<HTTPResponse, any Error>
+                do {
+                    result = .success(
+                        try await coordinator.sendAuthenticated(
+                            request, route: .libraries, accountID: accountID,
+                            server: server))
+                } catch {
+                    result = .failure(error)
                 }
+                await completed.increment()
+                return result
             }
-            #expect(
+        }
+        let responses: [HTTPResponse]? = try await withTestCleanup {
+            for task in tasks { task.cancel() }
+            await transport.releaseUnauthorizedRequests()
+        } operation: {
+            guard
                 await requireAuthTelemetrySignal(
                     transport.allUnauthorizedRequestsArrived,
-                    stage: "20 saved-login unauthorized requests"
-                ))
+                    stage: "20 initial unauthorized requests")
+            else { return nil }
             await transport.releaseUnauthorizedRequests()
-            var responses: [HTTPResponse] = []
-            for try await response in group {
-                responses.append(response)
-            }
-            return responses
+            await transport.releaseUnauthorizedRequests()
+            let completion = await completed.wait(
+                untilAtLeast: 20, timeout: .seconds(10))
+            #expect(
+                completion.reached,
+                "20 coalesced callers returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return nil }
+            var values: [HTTPResponse] = []
+            for task in tasks { values.append(try await task.value.get()) }
+            #expect(await transport.pendingUnauthorizedRequestCount() == 0)
+            return values
         }
+        guard let responses else { return }
         let counts = await transport.counts()
         let storedTokens = try await store.credentials(for: accountID)
 
@@ -2017,7 +2124,35 @@ private actor StaleReadCredentialStore: AccountCredentialStore {
     }
 }
 
-private actor ConcurrentRefreshTransport: HTTPTransport {
+private protocol CoalescingUnauthorizedTransport: HTTPTransport {
+    var allUnauthorizedRequestsArrived: AuthTelemetryTestSignal { get }
+    func releaseUnauthorizedRequests() async
+    func pendingUnauthorizedRequestCount() async -> Int
+}
+
+private enum CoalescingTransportKind: CaseIterable, Sendable {
+    case rotating, rejected, savedLogin
+
+    func transport(
+        oldTokens: AuthenticationTokens, newTokens: AuthenticationTokens
+    ) -> any CoalescingUnauthorizedTransport {
+        switch self {
+        case .rotating:
+            ConcurrentRefreshTransport(
+                unauthorizedRequestCount: 1, oldTokens: oldTokens,
+                newTokens: newTokens)
+        case .rejected:
+            ConcurrentRejectedRefreshTransport(
+                unauthorizedRequestCount: 1, accessToken: oldTokens.accessToken)
+        case .savedLogin:
+            ConcurrentSavedLoginRecoveryTransport(
+                unauthorizedRequestCount: 1, oldTokens: oldTokens,
+                newTokens: newTokens)
+        }
+    }
+}
+
+private actor ConcurrentRefreshTransport: CoalescingUnauthorizedTransport {
     private let unauthorizedRequestCount: Int
     private let oldTokens: AuthenticationTokens
     private let newTokens: AuthenticationTokens
@@ -2058,11 +2193,12 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
         case "Bearer \(oldTokens.accessToken)":
             oldAccessRequests += 1
             return await withCheckedContinuation { continuation in
-                unauthorizedWaiters.append(continuation)
                 if unauthorizedRequestsReleased {
                     continuation.resume(returning: Self.unauthorizedResponse)
-                } else if unauthorizedWaiters.count == unauthorizedRequestCount
-                {
+                    return
+                }
+                unauthorizedWaiters.append(continuation)
+                if unauthorizedWaiters.count == unauthorizedRequestCount {
                     Task { await allUnauthorizedRequestsArrived.signal() }
                 }
             }
@@ -2094,6 +2230,10 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
         correlations
     }
 
+    func pendingUnauthorizedRequestCount() -> Int {
+        unauthorizedWaiters.count
+    }
+
     func releaseUnauthorizedRequests() {
         unauthorizedRequestsReleased = true
         let waiters = unauthorizedWaiters
@@ -2108,7 +2248,9 @@ private actor ConcurrentRefreshTransport: HTTPTransport {
     }
 }
 
-private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
+private actor ConcurrentRejectedRefreshTransport:
+    CoalescingUnauthorizedTransport
+{
     private let unauthorizedRequestCount: Int
     private let accessToken: String
     private var ordinaryRequests = 0
@@ -2143,10 +2285,12 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
 
         ordinaryRequests += 1
         return await withCheckedContinuation { continuation in
-            unauthorizedWaiters.append(continuation)
             if unauthorizedRequestsReleased {
                 continuation.resume(returning: Self.unauthorizedResponse)
-            } else if unauthorizedWaiters.count == unauthorizedRequestCount {
+                return
+            }
+            unauthorizedWaiters.append(continuation)
+            if unauthorizedWaiters.count == unauthorizedRequestCount {
                 Task { await allUnauthorizedRequestsArrived.signal() }
             }
         }
@@ -2157,6 +2301,10 @@ private actor ConcurrentRejectedRefreshTransport: HTTPTransport {
         refreshRequests: Int
     ) {
         (ordinaryRequests, refreshRequests)
+    }
+
+    func pendingUnauthorizedRequestCount() -> Int {
+        unauthorizedWaiters.count
     }
 
     func releaseUnauthorizedRequests() {
@@ -2345,7 +2493,9 @@ private actor GatedMidFlightRefreshTransport: HTTPTransport {
     }
 }
 
-private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
+private actor ConcurrentSavedLoginRecoveryTransport:
+    CoalescingUnauthorizedTransport
+{
     private let unauthorizedRequestCount: Int
     private let oldTokens: AuthenticationTokens
     private let newTokens: AuthenticationTokens
@@ -2403,11 +2553,12 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
         case "Bearer \(oldTokens.accessToken)":
             oldAccessRequests += 1
             return await withCheckedContinuation { continuation in
-                unauthorizedWaiters.append(continuation)
                 if unauthorizedRequestsReleased {
                     continuation.resume(returning: Self.unauthorizedResponse)
-                } else if unauthorizedWaiters.count == unauthorizedRequestCount
-                {
+                    return
+                }
+                unauthorizedWaiters.append(continuation)
+                if unauthorizedWaiters.count == unauthorizedRequestCount {
                     Task { await allUnauthorizedRequestsArrived.signal() }
                 }
             }
@@ -2433,6 +2584,10 @@ private actor ConcurrentSavedLoginRecoveryTransport: HTTPTransport {
             authorizationRequests,
             newAccessRequests
         )
+    }
+
+    func pendingUnauthorizedRequestCount() -> Int {
+        unauthorizedWaiters.count
     }
 
     func releaseUnauthorizedRequests() {

@@ -1685,3 +1685,81 @@ log, lint/docs and verified outcome manifest use the `i372-search-release-`
 prefix. Raw framework/build logs remain private. Fresh independent exact-head
 review and CI required. Other search follow-ups and broader #372/#362 lifecycle/
 drainage/configuration/device/live criteria remain open. #400 is separate.
+
+## Coalesced request caller and private waiter ownership (issue #372)
+
+The three existing twenty-request `AuthenticatedRequestTests` retain successful
+rotation, rejected refresh and saved-password recovery behavior. Their bounded
+arrival observations previously led to structured task-group joins with no
+bounded caller-completion observation. Their three private transports also
+retained a checked continuation after resuming an already-released late request;
+a later release could try to resume that continuation again. This is a private
+test-fixture ownership finding, not an observed production authentication defect.
+
+Each case now owns twenty unstructured callers and observes actual send return
+or throw with the existing bounded counter. A ten-second batch completion budget
+covers all twenty results together, matching the existing auth arrival failure
+budget rather than imposing a speed target. Failed arrival/completion observations return
+before unknown task values are joined. Awaited existing cleanup requests every
+owned caller's cancellation and releases the fake latch on success, guard return
+and throw. Late calls see the permanently open latch without entering its waiter
+array; release detaches the current array before resuming it. Repeated release is
+explicitly exercised. No claim that cancellation/control release drains the whole
+production task graph is made.
+
+All original successful response, typed twenty-error, single refresh, recovery
+login/authorization, token/store and paired-correlation assertions remain. One
+new parameterized helper identity exercises rotating/rejected/saved-login private
+transports, each with registered-and-cancelled versus early-release/late-entry
+phases. It checks the actual 401 result, empty terminal waiter storage and safe
+repeated release. Only these private transports change; production authentication
+and shared synchronization helpers remain untouched. No readiness sleep or
+scheduler-speed threshold is added.
+
+Seven neighboring startup-position tests are explicitly marked unresolved in
+`TestSupport/TestAudit/app.json`. They sample positions after startup begins
+playing. Their initial-position forwarding coverage needs a true independent
+clock/player or direct initial-seek oracle; replacing that observation with a
+later seek would erase the oracle. Their source is unchanged, their prior audit
+decisions are retained as history, and no observed failure of these seven tests
+is claimed. This is a bounded neighbor review, not a repository-wide playback
+clock reconciliation or closure of the category.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Final focused runs **4/4 function identities each, three independent runs**;
+  helper contract has three enum cases, each with two control-order phases.
+- Owning `AuthenticatedRequestTests`: **25/25** exact function identities.
+- Post-mutation restored-source focus: **4/4**; full supported signed host gate:
+  **598/598** exact inventory. All final runs have zero failures/errors/skips.
+- Four separately retained mutations were killed: restoring each of the three
+  old late-waiter retention paths fails the pending-ownership assertion without
+  a continuation trap; omitting the rotating callers' completion observation
+  fails the bounded completion assertion. Every mutation restores the exact
+  final source hash before final verification.
+- Strict Swift lint, documentation, source/audit scope and original postcondition
+  preservation checks passed. Existing dependency deployment-target deprecation
+  warnings remain; no warning suppression was added. The signed run retains
+  three declared known issues in existing fixture-cleanup tests (two download
+  cleanup cases and one operation-versus-cleanup-failure case), plus intentional
+  read-only SwiftData failure diagnostics. Those fixture tests passed; these
+  outputs are distinct from unexpected failures and the four negative mutations.
+
+Focused command uses `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+'AuthenticatedRequestTests/(testTwentyUnauthorizedRequestsShareOne|testCoalescingTransportReleasesRegisteredAndLateCallersOnce)'
+--xunit-output ...`. Final focus XML/logs use
+`.build/i372-coalescing-final-focused-{1,2,3}`; owning uses
+`i372-coalescing-final-owning`, restoration uses `i372-coalescing-restored`.
+Signed command is `mise exec -- ./scripts/test-host.sh`; retained exact XML is
+`.build/i372-coalescing-signed-results`. Verification manifest and separate
+expected-failing mutation manifest are
+`.build/i372-coalescing-verification.json` and
+`.build/i372-coalescing-mutations.json`. Preliminary focused/owning passes are
+retained separately and superseded by final postcondition/cleanup-reviewed source.
+
+One function identity is added to inventory/source/core audit: host inventory is
+598, source index 1,584 and core records 594 including the reviewed #408 parent.
+This slice is stacked on #408 while its merge awaits authorization; it does not
+advance `main`. Fresh exact-head CI and independent review remain required.
+Broader #372/#362 acceptance and unrelated follow-ups remain open.

@@ -4426,146 +4426,152 @@
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-      "name": "testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
+      "name": "testCoalescingTransportReleasesRegisteredAndLateCallersOnce",
       "line": 9,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
+      "name": "testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
+      "line": 80,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testTwentyUnauthorizedRequestsShareOneRejectedRefresh",
-      "line": 96,
+      "line": 179,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead",
-      "line": 161,
+      "line": 253,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
-      "line": 282,
+      "line": 374,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testConcurrentRejectionJoinsFailingInFlightRefresh",
-      "line": 404,
+      "line": 496,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
-      "line": 525,
+      "line": 617,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRejectedRefreshUsesSavedPasswordAndRetriesRequest",
-      "line": 596,
+      "line": 703,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRefreshContractFailuresUseSavedPasswordAndRetryRequest",
-      "line": 677,
+      "line": 784,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testSavedPasswordRejectionRemainsTyped",
-      "line": 776,
+      "line": 883,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testSavedLoginCannotChangeRemoteUserIdentity",
-      "line": 846,
+      "line": 953,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testSavedLoginAuthorizationRejectionRequiresReauthentication",
-      "line": 904,
+      "line": 1011,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testForbiddenResponseDoesNotRefresh",
-      "line": 961,
+      "line": 1068,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testAuthenticationEndpointsNeverEnterRefresh",
-      "line": 981,
+      "line": 1088,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testOrdinaryRequestRetriesOnlyOnce",
-      "line": 1016,
+      "line": 1123,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRefreshFailuresAreTypedAndAccountScoped",
-      "line": 1050,
+      "line": 1157,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRefreshTransportFailureIsNotCachedAndRetries",
-      "line": 1142,
+      "line": 1249,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testConclusiveRefreshStatusFailureIsMemoized",
-      "line": 1191,
+      "line": 1298,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testTransientSavedLoginFailuresAreNotCachedAndRetry",
-      "line": 1225,
+      "line": 1332,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testMissingSessionTokensUseSynchronizedNativeLogin",
-      "line": 1322,
+      "line": 1429,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testCredentialFailuresAreTyped",
-      "line": 1378,
+      "line": 1485,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRequestValidationAndTransportFailuresAreTyped",
-      "line": 1437,
+      "line": 1544,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testAlreadyRotatedCredentialsAvoidAnotherRefresh",
-      "line": 1535,
+      "line": 1642,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testCompletedRotationCoversAStaleCredentialRead",
-      "line": 1575,
+      "line": 1682,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
       "name": "testRefreshFailureDoesNotAffectAnotherAccount",
-      "line": 1628,
+      "line": 1735,
       "language": "swift"
     },
     {
