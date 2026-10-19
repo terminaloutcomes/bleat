@@ -17744,7 +17744,7 @@
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testConcurrentLogShutdownCallersAwaitSharedCompletion",
       "source": {
         "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
-        "line": 1294
+        "line": 1302
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -17769,14 +17769,14 @@
         "8": "Tests assert exact exported attributes/counts, retained files, typed results or timing bound; gate failures need bounded diagnostics as recorded.",
         "9": "Inspected every body plus resource/span/temp-directory/batch helpers, exporters, TestAsyncSignal and blocking cancellation fake. No per-test repetitions recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Local synthetic telemetry data, unique temp directory, fresh pipeline/fakes; no external service.",
       "action_postconditions": "Start first shutdown and await downstream entry signal, start second, sleep 50ms, assert neither complete and one shutdown, release downstream and await both tasks and final counts.",
       "synchronization": "Await pipeline flush/export and inspect actor/lock-protected exporter state; no guessed-yield polling. Deliberate wall-clock measurement/sleep validates configured transaction/deadline/nonblocking contract and has an explicitly asserted tolerance. Waits for GatedShutdownLogExporter.waitUntilShutdownStarts via TestAsyncSignal with no timeout; caller then uses a 50ms sleep to stage second shutdown.",
       "timeout_tolerance": "Unbounded start signal / blocking async semaphore details are recorded in follow-up.",
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
-      "reason": "Replace TestAsyncSignal shutdown-entry wait with bounded source-located signal and prove second caller joined before release; preserve single-shutdown assertion.",
+      "reason": "Earlier bounded entry/join checks remain; separate bounded actual caller-return notifications now precede final task-value waits, preserving the controlled release and single-shutdown assertions.",
       "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -17784,6 +17784,27 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "log_shutdown_completion_review": {
+        "base_revision": "1695a4071633ef43898d741213d9c37a378bd91c",
+        "previous_decision": "follow_up",
+        "decision": "fix",
+        "scope": "Bound the final two caller-return observations only. Previously delivered entry/join checks, one shared downstream shutdown and controlled release remain unchanged.",
+        "rules": {
+          "1": "Two real queued exporter shutdown callers remain pending until one downstream shutdown is released; each publishes a separate completion value only after its actual shutdown call returns. Final flags and one-downstream-call assertions remain.",
+          "2": "Reuse separate AuthTelemetryTestCompletion actors and concurrent source-located bounded waits; do not await a task whose caller-return notification was not observed.",
+          "3": "Existing ten-second failure deadline per completion actor, observed concurrently; no latency assertion, sleep readiness or tolerance relaxation.",
+          "4": "Successful caller-return proof precedes each existing task-value await. Timeout reports the missing caller stage, cancels both task handles and returns without an unbounded wait. Unconfirmed operation completion is not claimed drained on failure.",
+          "5": "Fresh downstream fake, exporter, completion flags and separate value actors per test; no file/defaults/global-output mutation.",
+          "6": "Deterministic host async integration with controlled downstream completion; no live telemetry or external transport.",
+          "7": "No retry-to-green; existing coalescing and pre/post-release assertions retained.",
+          "8": "Each missing caller gets a distinct source-located timeout diagnostic. Completion values cannot be published before the corresponding actual shutdown returns.",
+          "9": "Reviewed existing single-waiter completion helper, one-shot downstream release and this caller; final repeated/owning/signed evidence is linked."
+        },
+        "execution": "Three focused executions 1/1 each; owning suite 39/39; signed host 592/592 and exact built discovery 592; zero failures/errors/skips. Strict repository Swift lint, documentation and final diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-shared-log-shutdown-completion-issue-372",
+        "historical_reason": "Replace TestAsyncSignal shutdown-entry wait with bounded source-located signal and prove second caller joined before release; preserve single-shutdown assertion.",
+        "historical_assessment": "Original rules, synchronization and shared-helper notes remain revision-bound historical audit evidence; this nine-rule block assesses the current body."
       }
     },
     {
@@ -22611,5 +22632,11 @@
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372",
     "execution": "Corrected source: three independent 15/15 focused passes, 36/36 owning/new/bearer, signed 592/592 and exact built discovery; zero failures/errors/skips. Strict lint and documentation checks passed. Previous 591-identity evidence remains bound to 410e926.",
     "diagnostic_review_correction": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction"
+  },
+  "issue_372_log_shutdown_completion": {
+    "new_declarations": 0,
+    "changed_test": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testConcurrentLogShutdownCallersAwaitSharedCompletion",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-shared-log-shutdown-completion-issue-372",
+    "historical_counts": "Unchanged; current core records 586, source declarations 1576 and host inventory 592."
   }
 }

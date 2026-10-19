@@ -6569,43 +6569,43 @@
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testConcurrentLogShutdownCallersAwaitSharedCompletion",
-      "line": 1294,
+      "line": 1302,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testBackgroundStyleFlushReturnsAtItsDeadline",
-      "line": 1327,
+      "line": 1359,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testBackgroundFlushAttemptsOneDrainWhileBackgrounded",
-      "line": 1350,
+      "line": 1382,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testWithdrawalCancelsAnActiveDownstreamExport",
-      "line": 1375,
+      "line": 1407,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testWithdrawalStopsNewSpansAndPurgesRetainedData",
-      "line": 1398,
+      "line": 1430,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration",
-      "line": 1421,
+      "line": 1453,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
       "name": "testRapidReenableExportsOnlyCleanGeneration",
-      "line": 1447,
+      "line": 1479,
       "language": "swift"
     },
     {

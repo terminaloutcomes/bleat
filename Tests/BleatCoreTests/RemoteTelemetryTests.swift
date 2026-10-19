@@ -1306,10 +1306,13 @@ final class RemoteTelemetryTests {
         )
         let firstCompletion = TestCompletionFlag()
         let secondCompletion = TestCompletionFlag()
+        let firstReturned = AuthTelemetryTestCompletion<Bool>()
+        let secondReturned = AuthTelemetryTestCompletion<Bool>()
 
         let first = Task {
             await exporter.shutdown(explicitTimeout: 2)
             firstCompletion.complete()
+            await firstReturned.complete(true)
         }
         #expect(
             await requireAuthTelemetrySignal(
@@ -1319,6 +1322,7 @@ final class RemoteTelemetryTests {
         let second = Task {
             await exporter.shutdown(explicitTimeout: 2)
             secondCompletion.complete()
+            await secondReturned.complete(true)
         }
         #expect(
             await requireAuthTelemetryCondition(
@@ -1332,6 +1336,17 @@ final class RemoteTelemetryTests {
         #expect(downstream.shutdownCount == 1)
 
         downstream.completeShutdown()
+        async let firstResult = requireAuthTelemetryCompletion(
+            firstReturned, stage: "first shared log shutdown caller returning")
+        async let secondResult = requireAuthTelemetryCompletion(
+            secondReturned, stage: "second shared log shutdown caller returning"
+        )
+        let returned = await (firstResult, secondResult)
+        guard returned.0 == true, returned.1 == true else {
+            first.cancel()
+            second.cancel()
+            return
+        }
         await first.value
         await second.value
         #expect(firstCompletion.isComplete)
