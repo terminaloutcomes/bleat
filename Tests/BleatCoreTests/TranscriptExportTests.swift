@@ -87,7 +87,7 @@ final class TranscriptExportTests {
     }
 
     @Test
-    func testCanonicalTranscriptExportHasSourceIndependentSemantics() throws {
+    func testCanonicalTranscriptExportIsRepeatable() throws {
         let canonical = [
             transcript(
                 chapterID: 1,
@@ -98,16 +98,16 @@ final class TranscriptExportTests {
             )
         ]
 
-        let locallyGenerated = try TranscriptExporter.export(
+        let firstExport = try TranscriptExporter.export(
             transcripts: canonical,
             format: .webVTT
         )
-        let imported = try TranscriptExporter.export(
+        let repeatedExport = try TranscriptExporter.export(
             transcripts: canonical,
             format: .webVTT
         )
 
-        #expect(locallyGenerated == imported)
+        #expect(firstExport == repeatedExport)
     }
 
     @Test

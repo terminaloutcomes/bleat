@@ -623,7 +623,7 @@
     "testWebVTTUsesWholeBookTimestampsAndEscapesCueText()",
     "testSubRipSortsSegmentsAndUsesSequentialCueIdentifiers()",
     "testWebVTTSeparatesAdjacentCueBlocks()",
-    "testCanonicalTranscriptExportHasSourceIndependentSemantics()",
+    "testCanonicalTranscriptExportIsRepeatable()",
     "testPartialCanonicalTranscriptCanBeExported()",
     "testCueTextCannotTerminateItsOwnCueWithBlankLines()",
     "testExportRejectsMissingAndInvalidSegments()"
