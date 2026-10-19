@@ -9134,87 +9134,139 @@ final class AppModelTests: XCTestCase {
     }
 
     func testNetworkRecoveryReplacesStaleBackgroundTransfer() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "BleatStaleRecovery-\(UUID().uuidString)",
-                isDirectory: true
+        for recoversAfterNetworkChange in [false, true] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatStaleRecovery-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+            let defaultsSuite = "StaleRecovery.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+            addTeardownBlock {
+                defaults.removePersistentDomain(forName: defaultsSuite)
+            }
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "item-1",
+                    title: "Stale transfer",
+                    libraryID: fixtureLibrary().id
+                )
             )
-        defer { try? FileManager.default.removeItem(at: root) }
-        let account = try fixtureAccount()
-        let detail = fixtureBookDetail(
-            item: fixtureBook(
-                id: "item-1",
-                title: "Stale transfer",
-                libraryID: fixtureLibrary().id
+            let (plan, storage) = try await prepareInterruptedDownload(
+                root: root,
+                account: account,
+                detail: detail,
+                downloadID: "stale-transfer",
+                committedByteCount: 5
             )
-        )
-        let (plan, _) = try await prepareInterruptedDownload(
-            root: root,
-            account: account,
-            detail: detail,
-            downloadID: "stale-transfer",
-            committedByteCount: 5
-        )
-        let authorizedRequest = URLRequest(
-            url: try XCTUnwrap(URL(string: "https://192.0.2.1/private-audio"))
-        )
-        let service = TestAppService(
-            activeAccount: .success(account),
-            downloadPlan: .failure(
-                .downloadPlan(.authenticatedRequest(.requestTransportFailed))
-            ),
-            authorizedDownloadRequest: .success(authorizedRequest)
-        )
-        let sessionIdentifier = backgroundSessionIdentifier("stale-recovery")
-        let model = DownloadModel(
-            service: service,
-            storageRootURL: root,
-            backgroundSessionIdentifier: sessionIdentifier
-        )
-        await model.start(accounts: [account])
-        XCTAssertEqual(
-            model.pendingRecoveryDownloadIDsForTesting,
-            [DownloadID(rawValue: "stale-transfer")]
-        )
+            let authorizedRequest = URLRequest(
+                url: try XCTUnwrap(
+                    URL(string: "https://192.0.2.1/private-audio"))
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .failure(
+                    .downloadPlan(
+                        .authenticatedRequest(.requestTransportFailed))
+                ),
+                authorizedDownloadRequest: .success(authorizedRequest)
+            )
+            let sessionIdentifier = backgroundSessionIdentifier(
+                "stale-recovery")
+            let model = DownloadModel(
+                service: service,
+                defaults: defaults,
+                storageRootURL: root,
+                backgroundSessionIdentifier: sessionIdentifier,
+                // Inspect scheduling independently of a real network's failure timing.
+                startDownloadTask: { _ in }
+            )
+            addTeardownBlock { @MainActor in await model.removeAll() }
+            await model.start(accounts: [account])
+            XCTAssertEqual(
+                model.pendingRecoveryDownloadIDsForTesting,
+                [DownloadID(rawValue: "stale-transfer")]
+            )
 
-        let staleIdentity = try DownloadTaskIdentity(
-            downloadID: DownloadID(rawValue: "stale-transfer"),
-            accountID: account.id,
-            itemID: detail.id,
-            track: plan.tracks[1]
-        )
-        let staleConfiguration = URLSessionConfiguration.background(
-            withIdentifier: sessionIdentifier
-        )
-        let staleSession = URLSession(configuration: staleConfiguration)
-        let staleTask = staleSession.downloadTask(with: authorizedRequest)
-        staleTask.taskDescription = try DownloadChunkTaskDescription(
-            identity: staleIdentity,
-            range: try DownloadByteRange(start: 0, endInclusive: 3),
-            validator: nil
-        ).encode()
+            let staleIdentity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "stale-transfer"),
+                accountID: account.id,
+                itemID: detail.id,
+                track: plan.tracks[1]
+            )
+            let staleSession = model.downloadSessionForTesting
+            let staleTask = staleSession.downloadTask(with: authorizedRequest)
+            staleTask.taskDescription = try DownloadChunkTaskDescription(
+                identity: staleIdentity,
+                range: try DownloadByteRange(start: 0, endInclusive: 3),
+                validator: nil
+            ).encode()
 
-        await service.setDownloadPlan(.success(plan))
-        await model.recoverAfterNetworkChange(for: [account])
+            await service.setDownloadPlan(.success(plan))
+            if recoversAfterNetworkChange {
+                await model.recoverAfterNetworkChange(for: [account])
+            } else {
+                await model.start(accounts: [account])
+            }
 
-        let descriptors = await model.scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        let descriptor = try XCTUnwrap(descriptors.first)
-        XCTAssertEqual(descriptor.range.start, 5)
-        XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
-        let requests = await service.authorizedDownloadRequestIdentities()
-        XCTAssertEqual(requests.map(\.trackIndex), [1])
-        staleSession.invalidateAndCancel()
-        await model.removeAll()
+            await assertEventually(
+                "native stale-task cancellation callback completed",
+                timeout: .seconds(5),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting > 0
+                })
+            // Deliver the retired task's cancellation again after replacement scheduling.
+            // This reproduces late/repeated framework delivery without a live network.
+            let callbackBaseline = model
+                .taskCompletionProcessingSequenceForTesting
+            await Task.detached {
+                model.urlSession(
+                    staleSession, task: staleTask,
+                    didCompleteWithError: URLError(.cancelled))
+            }.value
+            await assertEventually(
+                "late stale-task cancellation callback completed",
+                timeout: .seconds(5),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting
+                        > callbackBaseline
+                })
 
-        var remainingDescriptors =
-            await model.scheduledTransferDescriptorsForTesting()
-        for _ in 0..<200 where !remainingDescriptors.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-            remainingDescriptors =
+            let descriptors =
                 await model.scheduledTransferDescriptorsForTesting()
+            XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+            let descriptor = try XCTUnwrap(descriptors.first)
+            XCTAssertEqual(descriptor.range.start, 5)
+            XCTAssertEqual(descriptor.range.length, 3)
+            let staleDescriptor = try DownloadChunkTaskDescription.decode(
+                try XCTUnwrap(staleTask.taskDescription))
+            XCTAssertNotEqual(descriptor.transferID, staleDescriptor.transferID)
+            XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
+            XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
+            XCTAssertNil(model.failure)
+            let retainedBytes = try await storage.partialByteLength(
+                staleIdentity)
+            XCTAssertEqual(retainedBytes, 5)
+            let requests = await service.authorizedDownloadRequestIdentities()
+            XCTAssertEqual(requests.map(\.trackIndex), [1])
+            await model.removeAll()
+            await assertEventually(
+                "recovery task cleanup", timeout: .seconds(5),
+                observed: {
+                    "scheduled descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+                },
+                condition: {
+                    await model.scheduledTransferDescriptorsForTesting().isEmpty
+                })
         }
-        XCTAssertTrue(remainingDescriptors.isEmpty)
     }
 
     func testRepeatedNetworkRecoveryDoesNotDuplicateTransfers() async throws {
@@ -18611,6 +18663,205 @@ final class AppModelTests: XCTestCase {
             ]
         )
     }
+
+    #if os(iOS)
+        func testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry()
+            async throws
+        {
+            for retriesUpload in [false, true] {
+                let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+                defer { fixture.cleanUp() }
+                let account = try fixtureAccount(
+                    accountID: fixture.accountID.rawValue)
+                let detail = fixture.detail
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    libraries: .success([fixtureLibrary()]),
+                    firstPage: .success(
+                        fixturePage(libraryID: detail.libraryID)),
+                    bookDetail: .success(detail),
+                    metadataSave: .success(.saved(detail)),
+                    coverReplacement: retriesUpload
+                        ? .failure(.coverUpdate(.uploadRejected))
+                        : .success(detail)
+                )
+                let image = artworkTestImage(edge: 3, colour: .red)
+                let data = try XCTUnwrap(image.pngData())
+                let oldImage = artworkTestImage(edge: 2, colour: .blue)
+                let oldData = try XCTUnwrap(oldImage.pngData())
+                let loader = BookCoverImageLoader(
+                    diskCapacity: 0,
+                    fetch: { request in
+                        (
+                            request.url?.query?.contains("revision=") == true
+                                ? data : oldData,
+                            try XCTUnwrap(
+                                HTTPURLResponse(
+                                    url: try XCTUnwrap(request.url),
+                                    statusCode: 200,
+                                    httpVersion: nil, headerFields: nil))
+                        )
+                    })
+                let publisher = TestNowPlayingInfoPublisher()
+                let model = AppModel(
+                    service: service,
+                    localSessionStore: LocalPlaybackSessionStore(
+                        defaults: fixture.defaults),
+                    playbackPositionStore: PlaybackPositionStore(
+                        defaults: fixture.defaults),
+                    nowPlayingCoordinator: NowPlayingCoordinator(
+                        infoCenter: publisher, coverLoader: loader,
+                        registersRemoteCommands: false)
+                )
+                await model.start()
+                let playback = model.playback
+                let initialURL = try XCTUnwrap(
+                    BookCoverURL.make(
+                        server: account.server, itemID: detail.id,
+                        updatedAtMilliseconds: detail.updatedAtMilliseconds,
+                        width: 600, height: 600))
+                _ = await loader.image(for: initialURL, accountID: account.id)
+                await playback.startDownloaded(
+                    detail: detail, trackURLs: [fixture.audioURL],
+                    accountID: account.id, account: account)
+
+                await assertEventually(
+                    "downloaded playback is ready", timeout: .seconds(5),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: { playback.state == .playing })
+                let initialArtwork = await waitForNowPlayingArtwork(
+                    in: publisher)
+                XCTAssertEqual(
+                    initialArtwork?.image(at: oldImage.size)?.size,
+                    oldImage.size
+                )
+                // Exercise playing and paused saves; only paused positions admit exact equality.
+                if retriesUpload {
+                    playback.pause()
+                    await playback.seek(to: 5)
+                    XCTAssertEqual(playback.state, .paused)
+                    XCTAssertEqual(playback.currentTime, 5)
+                }
+                let originalURL = playback.coverURL
+                let position = playback.currentTime
+                let started = ContinuousClock.now
+                let state = playback.state
+                let runtime = playback.runtimeSnapshotForTesting
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: detail), baseline: detail,
+                    coverJPEGData: data)
+                if retriesUpload {
+                    XCTAssertEqual(playback.coverURL, originalURL)
+                    await service.setCoverReplacement(.success(detail))
+                    await model.retryBookCoverUpload()
+                }
+                XCTAssertNotEqual(playback.coverURL, originalURL)
+                XCTAssertEqual(playback.coverLoadPolicy, .allowNetwork)
+                let artwork = await waitForNowPlayingArtwork(in: publisher)
+                XCTAssertEqual(artwork?.image(at: image.size)?.size, image.size)
+                if retriesUpload {
+                    XCTAssertEqual(playback.currentTime, position)
+                } else {
+                    let elapsed = started.duration(to: .now).components
+                    let seconds =
+                        Double(elapsed.seconds) + Double(elapsed.attoseconds)
+                        / 1e18
+                    XCTAssertGreaterThanOrEqual(playback.currentTime, position)
+                    // Periodic AVPlayer sampling adds at most half a second of granularity.
+                    XCTAssertLessThanOrEqual(
+                        playback.currentTime - position, seconds + 0.5)
+                }
+                XCTAssertEqual(playback.state, state)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.itemStatus,
+                    runtime.itemStatus)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerRate,
+                    runtime.playerRate)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerIdentity,
+                    runtime.playerIdentity)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.queuedItemIdentities,
+                    runtime.queuedItemIdentities)
+                let refreshedURL = playback.coverURL
+                let other = fixtureBookDetail(
+                    item: fixtureBook(
+                        id: "another-book", title: "Other",
+                        libraryID: detail.libraryID))
+                playback.refreshCover(for: account, detail: other)
+                playback.refreshCover(
+                    for: try fixtureAccount(accountID: "other-account"),
+                    detail: detail)
+                XCTAssertEqual(playback.coverURL, refreshedURL)
+                await playback.stop()
+            }
+        }
+
+        func testLatestArtworkRejectsOlderImageCompletion() async throws {
+            let gate = AsyncGate()
+            let oldURL = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=old"))
+            let newURL = try XCTUnwrap(
+                URL(string: "https://books.example/cover?ts=new"))
+            let oldImage = artworkTestImage(edge: 2, colour: .blue)
+            let newImage = artworkTestImage(edge: 3, colour: .red)
+            let oldData = try XCTUnwrap(oldImage.pngData())
+            let newData = try XCTUnwrap(newImage.pngData())
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    if request.url == oldURL { await gate.enterAndWait() }
+                    return (
+                        request.url == oldURL ? oldData : newData,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200, httpVersion: nil,
+                                headerFields: nil))
+                    )
+                })
+            let publisher = TestNowPlayingInfoPublisher()
+            let coordinator = NowPlayingCoordinator(
+                infoCenter: publisher, coverLoader: loader,
+                registersRemoteCommands: false)
+            defer { coordinator.clear() }
+            coordinator.publish(
+                nowPlayingSnapshot(accountID: nil, coverURL: oldURL))
+            await gate.waitUntilEntered()
+            coordinator.publish(
+                nowPlayingSnapshot(accountID: nil, coverURL: newURL))
+            let artwork = await waitForNowPlayingArtwork(in: publisher)
+            XCTAssertEqual(
+                artwork?.image(at: newImage.size)?.size, newImage.size)
+            await gate.release()
+            await assertEventually(
+                "both artwork tasks completed", timeout: .seconds(3),
+                observed: {
+                    "completed: \(coordinator.artworkCompletionSequenceForTesting)"
+                },
+                condition: {
+                    coordinator.artworkCompletionSequenceForTesting == 2
+                })
+            let latest =
+                publisher.nowPlayingInfo?[MPMediaItemPropertyArtwork]
+                as? MPMediaItemArtwork
+            XCTAssertEqual(
+                latest?.image(at: newImage.size)?.size, newImage.size)
+        }
+        private func artworkTestImage(edge: CGFloat, colour: UIColor) -> UIImage
+        {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            return UIGraphicsImageRenderer(
+                size: CGSize(width: edge, height: edge), format: format
+            )
+            .image { context in
+                colour.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: edge, height: edge))
+            }
+        }
+    #endif
 
     func testBookEditRetainsSavedMetadataWhenCoverUploadFails()
         async throws

@@ -818,6 +818,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private var deferredAutomaticCacheCleanup:
         [DownloadID: DeferredAutomaticCacheCleanup] = [:]
     private var transferredBytesByTrack: [DownloadID: [Int: Int64]] = [:]
+    private let startDownloadTask: @MainActor @Sendable (URLSessionTask) -> Void
     private var networkPathState: AppNetworkPathState = .unknown
     private var automaticCleanupTask: Task<Void, Never>?
     @ObservationIgnored
@@ -1030,6 +1031,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             InactiveRemoteTelemetryDownloadLogger(),
         backgroundSessionIdentifier: String =
             bleatBackgroundDownloadSessionIdentifier,
+        startDownloadTask:
+            @escaping @MainActor @Sendable (URLSessionTask) -> Void = {
+                $0.resume()
+            },
         transferRetrySleep:
             @escaping @Sendable (Duration) async throws -> Void = {
                 try await Task.sleep(for: $0)
@@ -1059,6 +1064,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.remoteTelemetryTracer = remoteTelemetryTracer
         self.remoteTelemetryDownloadLogger = remoteTelemetryDownloadLogger
         self.backgroundSessionIdentifier = backgroundSessionIdentifier
+        self.startDownloadTask = startDownloadTask
         self.transferRetrySleep = transferRetrySleep
         self.replacementTaskStartCheckpoint = replacementTaskStartCheckpoint
         self.pauseOperationCheckpoint = pauseOperationCheckpoint
@@ -1121,6 +1127,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 ),
                 await taskDescriptorIsCurrent(descriptor, storage: storage)
             else {
+                // Retire the operation before cancellation can deliver callbacks.
+                if let description = task.taskDescription {
+                    invalidateTask(description)
+                }
                 task.cancel()
                 continue
             }
@@ -1525,6 +1535,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 ),
                 await taskDescriptorIsCurrent(descriptor, storage: storage)
             else {
+                // A rejected range/validator must not re-enter recovery via cancellation.
+                if let description = task.taskDescription {
+                    invalidateTask(description)
+                }
                 task.cancel()
                 continue
             }
@@ -1559,6 +1573,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         return descriptors.sorted { $0.key < $1.key }.map(\.descriptor)
     }
+
+    var downloadSessionForTesting: URLSession { session }
 
     var activeTransferAdmissionCountForTesting: Int {
         transferAdmission.activeTransferIDs.count
@@ -2074,7 +2090,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             !automaticDownloadIsBlocked(record),
             transferAdmission.admit(descriptor.transferID)
         else { return false }
-        task.resume()
+        startDownloadTask(task)
         playbackSuspendedDownloadIDs.remove(descriptor.identity.downloadID)
         return true
     }
@@ -3065,7 +3081,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
-            task.resume()
+            startDownloadTask(task)
             retainedAdmission = true
         }
         return true
@@ -5256,7 +5272,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         {
             playbackSuspendedDownloadIDs.insert(identity.downloadID)
         } else {
-            replacementTask.resume()
+            startDownloadTask(replacementTask)
             retainedAdmission = true
         }
         return true

@@ -980,6 +980,7 @@ Descriptions received from the server are untrusted rich text. Render a sanitize
 - Require both `permissions.update` and `permissions.upload`.
 - Treat `{ "success": true, "cover": <server cover path> }` as success.
 - Refetch the item after success because the cover response does not include the new item `updatedAt` used for cache busting.
+- After a successful cover upload/refetch (including retry), refresh the matching account/item in active playback with a fresh cover request, even if the server timestamp is unchanged. Update in-app and system Now Playing artwork without changing playback position, intent, or queue. Reject obsolete image completions.
 - Keep the previous cached cover until the server confirms success.
 - Fetch with `GET /api/items/<item-id>/cover`, optionally using `width`, `height`, `format`, and `ts=<updatedAt>`; the current server intentionally permits unauthenticated cover GETs.
 - Cache-bust with `ts=<updatedAt>` rather than appending bearer tokens to URLs.
@@ -1355,7 +1356,10 @@ Use `URLSessionConfiguration.background(withIdentifier:)` and bounded download
 tasks. Maintain one stable session identifier, but make Bleat-owned partial
 files the durable checkpoint. Transfer each track in 16 MiB HTTP range chunks,
 persist every validated completed chunk, and calculate continuation from the
-actual partial-file length after relaunch.
+actual partial-file length after relaunch. Obsolete range or validator tasks must
+be retired before cancellation during startup and network recovery. Late or
+repeated callbacks from those retired transfers must not re-arm recovery or
+change their replacements.
 
 All restored accounts must be registered with the download model before the
 background session is created or restoration can suspend and deliver callbacks.
