@@ -649,7 +649,8 @@
     "migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource()",
     "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection()",
     "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows()",
-    "malformedBookkeepingContentsRemainRetained()"
+    "malformedBookkeepingContentsRemainRetained()",
+    "ownedDefaultsAreRemovedOnSuccessAndThrowingExit(failure:)"
   ],
   "BleatCoreTests.BearerLogChildTests": [
     "successfulCaptureDrainsBeyondPipeCapacity()",
