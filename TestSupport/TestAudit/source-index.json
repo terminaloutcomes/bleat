@@ -4343,61 +4343,61 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
-      "line": 388,
+      "line": 435,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testConcurrentExportsUseProviderSafelyAndReuseOneClient",
-      "line": 407,
+      "line": 454,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationUnblocksTokenWaitAndShutsTransportOnce",
-      "line": 453,
+      "line": 500,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncTransportShutdownWaitsForClosureCompletion",
-      "line": 521,
+      "line": 568,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
-      "line": 558,
+      "line": 605,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
-      "line": 618,
+      "line": 665,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
-      "line": 679,
+      "line": 726,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
-      "line": 718,
+      "line": 765,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInExporterOrFailureDescriptions",
-      "line": 781,
+      "line": 828,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInCapturedProcessLogs",
-      "line": 835,
+      "line": 882,
       "language": "swift"
     },
     {

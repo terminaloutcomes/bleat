@@ -743,3 +743,11 @@ bounds four actual caller returns across two existing tests while retaining
 typed failure/later-success, exact token/client/invalidations and synthetic
 privacy-description assertions. Whole underlying task drainage and broader
 #372/#362 acceptance remain open.
+
+
+The [OTLP lifecycle-phase slice and timeout assessment](release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372)
+bounds six existing lifecycle calls in three ordered phases while retaining
+typed before/after state and exact shutdown counters. The separate 50 ms/500 ms
+timeout test remains unchanged and explicitly unresolved pending a controllable
+deadline strategy; passing runs do not establish scheduler-independent timing.
+Broader #372/#362 acceptance remains open.
