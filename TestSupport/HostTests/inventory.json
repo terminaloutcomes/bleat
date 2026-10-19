@@ -317,7 +317,9 @@
     "testRepositoryFailuresRemainTyped()",
     "testRepositoryCancellationMapsToCoordinatorCancellation()",
     "testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall()",
-    "testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall()"
+    "testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall()",
+    "testSearchSleeperCancellationAndRetirement(scenario:)",
+    "testCancellableRepositoryHoldCancellationAndRelease(scenario:)"
   ],
   "BleatCoreTests.LiveUpdatesTests": [
     "testConnectionAttemptReportsEndpointRoleAndTypedFailure()",

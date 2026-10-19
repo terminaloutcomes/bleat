@@ -5477,55 +5477,67 @@
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testDebouncesForConfiguredDurationBeforeSearching",
-      "line": 25,
+      "line": 36,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testNewQuerySupersedesPendingDebounce",
-      "line": 69,
+      "line": 87,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testAccountAndLibraryChangeCancelsInFlightSearch",
-      "line": 134,
+      "line": 167,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testCallerCancellationStopsPendingDebounce",
-      "line": 222,
+      "line": 271,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
-      "line": 260,
+      "line": 319,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall",
-      "line": 313,
+      "line": 383,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall",
-      "line": 382,
+      "line": 452,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testRepositoryFailuresRemainTyped",
-      "line": 433,
+      "line": 503,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testRepositoryCancellationMapsToCoordinatorCancellation",
-      "line": 475,
+      "line": 555,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+      "name": "testSearchSleeperCancellationAndRetirement",
+      "line": 602,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+      "name": "testCancellableRepositoryHoldCancellationAndRelease",
+      "line": 673,
       "language": "swift"
     },
     {

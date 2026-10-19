@@ -785,3 +785,11 @@ refresh/recovery/token/correlation behavior. Production authentication is
 unchanged; cancellation and fake release do not prove whole-task drainage.
 Seven neighboring advancing-clock startup assertions remain explicitly unresolved
 in the app audit and require independent initial-position forwarding oracles.
+
+The [search caller completion slice](release-evidence/test-reliability-core-followups.md#search-caller-completion-and-private-fixture-retirement-issue-372)
+adds bounded terminal observations and failure-safe private-fixture retirement to
+eight remaining coordinator cases while preserving debounce, supersession,
+context, cancellation and typed-error contracts. Two parameterized fixture
+contracts cover early/registered cancellation and cleanup. Production search and
+authentication are unchanged; whole task-graph drainage and seven independent
+startup-position oracles remain unresolved.
