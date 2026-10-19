@@ -371,7 +371,8 @@ final class TelemetryAuthenticationTests {
     func testCancellingOneWaiterPreservesRefreshForConcurrentWaiter()
         async throws
     {
-        let transport = FakeTelemetryTransport(tokenDelay: .milliseconds(100))
+        let responseGate = AuthTelemetryTestSignal()
+        let transport = FakeTelemetryTransport(tokenResponseGate: responseGate)
         let provider = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
             transport: transport,
@@ -384,30 +385,71 @@ final class TelemetryAuthenticationTests {
         )
         await provider.setEnabled(true)
 
-        let cancelledWaiter = Task { try await provider.currentToken() }
-        #expect(
-            await requireAuthTelemetrySignal(
-                transport.tokenEntrySignal,
-                stage: "first telemetry token transport entry"
-            ))
-        let survivingWaiter = Task { try await provider.currentToken() }
-        #expect(
-            await requireAuthTelemetryCondition(
-                stage: "second telemetry refresh waiter registration"
-            ) {
-                await provider.refreshWaiterCountForTesting == 2
-            })
-        cancelledWaiter.cancel()
-
-        await assertThrowsTelemetryError(.cancelled) {
-            try await cancelledWaiter.value
+        let cancelledResult = AuthTelemetryTestCompletion<
+            Result<String, TelemetryTokenProviderError>
+        >()
+        let survivingResult = AuthTelemetryTestCompletion<
+            Result<String, TelemetryTokenProviderError>
+        >()
+        let cancelledWaiter = Task {
+            await cancelledResult.complete(
+                await telemetryTokenResult(from: provider))
         }
-        let token = try await survivingWaiter.value
-        let tokenCount = await transport.tokenCount
-        let cancellationCount = await transport.tokenCancellationCount
-        #expect(token == "token-1")
-        #expect(tokenCount == 1)
-        #expect(cancellationCount == 0)
+        let survivingWaiter = Task {
+            await survivingResult.complete(
+                await telemetryTokenResult(from: provider))
+        }
+        try await withTestCleanup {
+            // Keep bounded cleanup runnable even if the test task is cancelled.
+            let cleanup = Task {
+                cancelledWaiter.cancel()
+                survivingWaiter.cancel()
+                await provider.setEnabled(false)
+                await transport.retireTokenResponse()
+                await cancelledWaiter.value
+                await survivingWaiter.value
+            }
+            await cleanup.value
+        } operation: {
+            try #require(
+                await requireAuthTelemetrySignal(
+                    transport.tokenEntrySignal,
+                    stage: "telemetry token transport entry"
+                ))
+            try #require(
+                await requireAuthTelemetryCondition(
+                    stage: "both telemetry refresh waiters registered"
+                ) {
+                    await provider.refreshWaiterCountForTesting == 2
+                })
+            cancelledWaiter.cancel()
+
+            let cancelled = try #require(
+                await requireAuthTelemetryCompletion(
+                    cancelledResult,
+                    stage: "cancelled telemetry waiter completion"
+                ))
+            try #require(cancelled == .failure(.cancelled))
+            try #require(
+                await requireAuthTelemetryCondition(
+                    stage: "surviving telemetry refresh waiter retained"
+                ) {
+                    await provider.refreshWaiterCountForTesting == 1
+                })
+            try Task.checkCancellation()
+            await responseGate.signal()
+
+            let surviving = try #require(
+                await requireAuthTelemetryCompletion(
+                    survivingResult,
+                    stage: "surviving telemetry waiter completion"
+                ))
+            #expect(try surviving.get() == "token-1")
+            #expect(await provider.refreshWaiterCountForTesting == 0)
+            #expect(await transport.tokenChallengeCount == 1)
+            #expect(await transport.tokenCount == 1)
+            #expect(await transport.tokenCancellationCount == 0)
+        }
     }
 
     @Test
@@ -694,6 +736,16 @@ extension TelemetryTokenProviderError {
     ]
 }
 
+private func telemetryTokenResult(
+    from provider: TelemetryTokenProvider
+) async -> Result<String, TelemetryTokenProviderError> {
+    do {
+        return .success(try await provider.currentToken())
+    } catch {
+        return .failure(error)
+    }
+}
+
 private func assertThrowsTelemetryError(
     _ expected: TelemetryTokenProviderError,
     operation: () async throws -> some Any
@@ -801,6 +853,11 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     nonisolated let tokenCancellationSignal = AuthTelemetryTestSignal()
     private let tokenLifetimes: [TimeInterval]
     private let tokenDelay: Duration?
+    private let tokenResponseGate: AuthTelemetryTestSignal?
+    private enum TokenResponseState {
+        case idle, waiting, finished, retired, retiredFinished
+    }
+    private var tokenResponseState = TokenResponseState.idle
     private let enrollmentFailure: TelemetryAuthenticationTransportError?
     private let tokenChallengeFailure: TelemetryAuthenticationTransportError?
     private let attestationChallengeFailure:
@@ -817,6 +874,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
             Date(timeIntervalSince1970: 2_000_000_000)),
         tokenLifetimes: [TimeInterval] = [600],
         tokenDelay: Duration? = nil,
+        tokenResponseGate: AuthTelemetryTestSignal? = nil,
         attestationChallengeFailures: Int = 0,
         attestationChallengeFailure: TelemetryAuthenticationTransportError =
             .temporarilyUnavailable,
@@ -826,6 +884,7 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
         self.clock = clock
         self.tokenLifetimes = tokenLifetimes
         self.tokenDelay = tokenDelay
+        self.tokenResponseGate = tokenResponseGate
         self.attestationChallengeFailure = attestationChallengeFailure
         self.enrollmentFailure = enrollmentFailure
         self.tokenChallengeFailure = tokenChallengeFailure
@@ -877,8 +936,39 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
     ) async throws(TelemetryAuthenticationTransportError)
         -> TelemetryBearerToken
     {
+        if tokenResponseGate != nil {
+            switch tokenResponseState {
+            case .retired, .retiredFinished:
+                throw .cancelled
+            case .idle, .waiting, .finished:
+                tokenResponseState = .waiting
+            }
+        }
+        defer {
+            if tokenResponseGate != nil {
+                tokenResponseState =
+                    tokenResponseState == .retired
+                    ? .retiredFinished : .finished
+            }
+        }
         tokenCount += 1
         await tokenEntrySignal.signal()
+        if let tokenResponseGate {
+            switch await tokenResponseGate.wait() {
+            case .signalled:
+                break
+            case .timedOut(let elapsed):
+                Issue.record(
+                    "Timed out waiting for telemetry token response release after \(elapsed)."
+                )
+                throw .temporarilyUnavailable
+            }
+            if Task.isCancelled {
+                tokenCancellationCount += 1
+                await tokenCancellationSignal.signal()
+                throw .cancelled
+            }
+        }
         if let tokenDelay {
             do {
                 try await Task.sleep(for: tokenDelay)
@@ -893,6 +983,19 @@ private actor FakeTelemetryTransport: TelemetryAuthenticationTransport {
             value: "token-\(tokenCount)",
             expiresAt: clock.now().addingTimeInterval(tokenLifetimes[index])
         )
+    }
+
+    func retireTokenResponse() async {
+        let previousState = tokenResponseState
+        tokenResponseState = .retired
+        await tokenResponseGate?.signal()
+        if previousState == .waiting {
+            await requireAuthTelemetryCondition(
+                stage: "retired telemetry token response exit"
+            ) {
+                await self.tokenResponseState == .retiredFinished
+            }
+        }
     }
 
     private func challenge(value: String) -> TelemetryChallenge {

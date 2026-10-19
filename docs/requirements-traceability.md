@@ -674,3 +674,8 @@ existing credentials and exact new-credential cleanup. See the
 [bounded coverage evidence](release-evidence/test-reliability-core-followups.md#accountstore-coverage-2026-10-19).
 These are deterministic test coverage improvements, not evidence of an observed
 production leak or new signed-device behavior.
+
+The separately authorized telemetry cancellation regression now gates its fake
+response until typed cancellation and survivor admission are observed, with
+bounded completion assertions and awaited cleanup on every exit. See the
+[telemetry response-gate evidence](release-evidence/test-reliability-core-followups.md#telemetry-response-gate-2026-10-19); production token-provider behavior is unchanged.
