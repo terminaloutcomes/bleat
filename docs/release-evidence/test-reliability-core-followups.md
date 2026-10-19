@@ -299,3 +299,40 @@ permission diagnostics came from intentional read-only fixtures; the cleanup
 regression recorded its declared known issue. No warning or crash was observed
 in the changed telemetry case. Final revision and CI outcomes are recorded in
 PR #387; no physical-device or live-server evidence is claimed.
+
+## OpenID cookie fixture (issue 372)
+
+This scoped follow-up addresses only the OpenID cookie-fixture trap row above
+under [#372](https://github.com/terminaloutcomes/bleat/issues/372). Historical
+audit records remain revision-specific; tracker reconciliation is separate.
+
+`HTTPTransportTests.testOpenIDTransportKeepsThenClearsSessionCookies` retains
+its redirect status/location, two-cookie, callback-cookie and explicit
+session-clear assertions. The shared test-only `OpenIDCookieFixture` throws
+typed missing-request-URL, invalid-response and unexpected-route failures;
+`URLProtocolStub` forwards them through `didFailWithError`. Adjacent response
+fixtures replace forced unwraps with throwing Swift Testing requirements.
+No production code changes.
+
+`testOpenIDTransportUnexpectedRouteThrowsAndCleansUp` first awaits the begin
+response and requires two stored cookies. It then awaits an unexpected route,
+checks the exact typed path failure at the caller, and verifies zero cookies
+and removal of the static handler. The fixture uses the existing `withTestCleanup` to await session clearing before
+returning or rethrowing; handler removal runs in `defer`. The serialized suite
+and lock-protected handler/recorder preserve ownership. There are no added
+background tasks, sleeps, polling windows or elapsed-time correctness conditions.
+These are deterministic Foundation/URLProtocol host fixtures, with no external
+identity provider, Simulator or device evidence.
+
+Validation status on 19 October 2026: **unrun**. Initial automatic approval
+review could not complete because its model was at capacity. After host-access
+confirmation, creation of branch `yaleman/issue-372-openid-cookie-fixture`
+succeeded from `209d8ade1bc0a35338370525cba48bfa64fe9aec` (merged PR #387).
+The focused Swift command then failed approval review twice by deadline,
+including the permitted retry; neither attempt executed. A later resumption
+was also rejected before execution because the review model was at capacity.
+Focused repetitions,
+the owning HTTPTransport suite, signed host validation, formatting lint and
+final-head CI remain unrun. `git diff --check` passed. The implementation
+disposition is therefore source-reviewed, validation blocked; no passing test
+execution evidence is claimed.

@@ -420,15 +420,16 @@ final class HTTPTransportTests {
     @Test
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: [
-                    "Content-Type": "application/json",
-                    "X-Contract": "pinned",
-                ]
-            )!
+            let response = try #require(
+                HTTPURLResponse(
+                    url: try #require(request.url),
+                    statusCode: 200,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: [
+                        "Content-Type": "application/json",
+                        "X-Contract": "pinned",
+                    ]
+                ))
             return (response, Data(#"{"ok":true}"#.utf8))
         }
         defer {
@@ -458,7 +459,7 @@ final class HTTPTransportTests {
     func testURLSessionTransportRejectsNonHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
             let response = URLResponse(
-                url: request.url!,
+                url: try #require(request.url),
                 mimeType: nil,
                 expectedContentLength: 0,
                 textEncodingName: nil
@@ -491,12 +492,13 @@ final class HTTPTransportTests {
     @Test
     func testURLSessionTransportRecordsTypedRequestOutcome() async throws {
         URLProtocolStub.setHandler { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 204,
-                httpVersion: "HTTP/1.1",
-                headerFields: nil
-            )!
+            let response = try #require(
+                HTTPURLResponse(
+                    url: try #require(request.url),
+                    statusCode: 204,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: nil
+                ))
             return (response, Data())
         }
         defer {
@@ -540,79 +542,74 @@ final class HTTPTransportTests {
 
     @Test
     func testOpenIDTransportKeepsThenClearsSessionCookies() async throws {
-        let recorder = CookieFlowRecorder()
-        URLProtocolStub.setHandler { request in
-            let url = request.url!
-            switch url.path {
-            case "/auth/openid":
-                let response = HTTPURLResponse(
-                    url: url,
-                    statusCode: 302,
-                    httpVersion: "HTTP/1.1",
-                    headerFields: [
-                        "Location":
-                            "https://identity.example/authorize?opaque=1",
-                        "Set-Cookie":
-                            "connect.sid=fixture-session; Path=/; Secure; HttpOnly, auth_method=openid-mobile; Path=/; Secure; HttpOnly",
-                    ]
-                )!
-                return (response, Data())
-            case "/auth/openid/callback":
-                recorder.recordCallbackCookie(
-                    request.value(forHTTPHeaderField: "Cookie")
-                )
-                let response = HTTPURLResponse(
-                    url: url,
-                    statusCode: 200,
-                    httpVersion: "HTTP/1.1",
-                    headerFields: nil
-                )!
-                return (response, Data(#"{"ok":true}"#.utf8))
-            default:
-                preconditionFailure("Unexpected URLProtocol test route")
-            }
-        }
-        defer {
-            URLProtocolStub.setHandler(nil)
-        }
+        let fixture = try OpenIDCookieFixture()
+        try await fixture.run { transport, recorder in
+            let beginURL = try #require(
+                URL(string: "https://example.com/auth/openid"))
+            let callbackURL = try #require(
+                URL(string: "https://example.com/auth/openid/callback"))
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [URLProtocolStub.self]
-        let cookieStorage = try #require(configuration.httpCookieStorage)
-        let transport = URLSessionOpenIDTransport(
-            configuration: configuration,
-            cookieStorage: cookieStorage
-        )
+            let beginResponse = try await transport.send(
+                TracedHTTPRequest(
+                    request: URLRequest(url: beginURL),
+                    endpoint: .openIDSession
+                )
+            )
+            #expect(beginResponse.statusCode == 302)
+            #expect(
+                beginResponse.header(named: "Location")
+                    == "https://identity.example/authorize?opaque=1")
+            #expect(transport.cookieCount == 2)
+
+            let callbackResponse = try await transport.send(
+                TracedHTTPRequest(
+                    request: URLRequest(url: callbackURL),
+                    endpoint: .openIDSession
+                )
+            )
+            #expect(callbackResponse.statusCode == 200)
+            let callbackCookie = try #require(recorder.callbackCookie())
+            #expect(callbackCookie.contains("connect.sid=fixture-session"))
+            #expect(callbackCookie.contains("auth_method=openid-mobile"))
+
+            await transport.clearSession()
+            #expect(transport.cookieCount == 0)
+        }
+        #expect(fixture.transport.cookieCount == 0)
+        #expect(!URLProtocolStub.hasHandler)
+    }
+
+    @Test
+    func testOpenIDTransportUnexpectedRouteThrowsAndCleansUp() async throws {
+        let fixture = try OpenIDCookieFixture()
         let beginURL = try #require(
             URL(string: "https://example.com/auth/openid"))
-        let callbackURL = try #require(
-            URL(string: "https://example.com/auth/openid/callback"))
+        let unexpectedURL = try #require(
+            URL(string: "https://example.com/unexpected-openid-route"))
 
-        let beginResponse = try await transport.send(
-            TracedHTTPRequest(
-                request: URLRequest(url: beginURL),
-                endpoint: .openIDSession
-            )
-        )
-        #expect(beginResponse.statusCode == 302)
-        #expect(
-            beginResponse.header(named: "Location")
-                == "https://identity.example/authorize?opaque=1")
-        #expect(transport.cookieCount == 2)
+        do {
+            try await fixture.run { transport, _ in
+                let response = try await transport.send(
+                    TracedHTTPRequest(
+                        request: URLRequest(url: beginURL),
+                        endpoint: .openIDSession))
+                #expect(response.statusCode == 302)
+                try #require(transport.cookieCount == 2)
 
-        let callbackResponse = try await transport.send(
-            TracedHTTPRequest(
-                request: URLRequest(url: callbackURL),
-                endpoint: .openIDSession
-            )
-        )
-        #expect(callbackResponse.statusCode == 200)
-        let callbackCookie = try #require(recorder.callbackCookie())
-        #expect(callbackCookie.contains("connect.sid=fixture-session"))
-        #expect(callbackCookie.contains("auth_method=openid-mobile"))
-
-        await transport.clearSession()
-        #expect(transport.cookieCount == 0)
+                _ = try await transport.send(
+                    TracedHTTPRequest(
+                        request: URLRequest(url: unexpectedURL),
+                        endpoint: .openIDSession))
+            }
+            Issue.record("Expected the fixture route failure to reach its caller")
+        } catch {
+            #expect(
+                error as? OpenIDCookieFixtureError
+                    == .unexpectedRoute(path: unexpectedURL.path))
+        }
+        // run awaits session cleanup before rethrowing; no scheduler delay is needed.
+        #expect(fixture.transport.cookieCount == 0)
+        #expect(!URLProtocolStub.hasHandler)
     }
 
     @Test
@@ -673,6 +670,10 @@ private final class URLProtocolStub: URLProtocol, @unchecked Sendable {
         }
     }
 
+    static var hasHandler: Bool {
+        handlerLock.withLock { handler != nil }
+    }
+
     override class func canInit(with request: URLRequest) -> Bool {
         true
     }
@@ -717,6 +718,70 @@ private final class URLProtocolStub: URLProtocol, @unchecked Sendable {
 
 private enum URLProtocolStubError: Error {
     case missingHandler
+}
+
+private enum OpenIDCookieFixtureError: Error, Equatable {
+    case missingRequestURL
+    case invalidResponse(path: String, statusCode: Int)
+    case unexpectedRoute(path: String)
+}
+
+private struct OpenIDCookieFixture {
+    let transport: URLSessionOpenIDTransport
+    private let recorder = CookieFlowRecorder()
+
+    init() throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        let cookieStorage = try #require(configuration.httpCookieStorage)
+        transport = URLSessionOpenIDTransport(
+            configuration: configuration, cookieStorage: cookieStorage)
+    }
+
+    func run(
+        _ body: (URLSessionOpenIDTransport, CookieFlowRecorder) async throws -> Void
+    ) async throws {
+        URLProtocolStub.setHandler { [recorder] request in
+            guard let url = request.url else {
+                throw OpenIDCookieFixtureError.missingRequestURL
+            }
+            let statusCode: Int
+            let headers: [String: String]?
+            let data: Data
+            switch url.path {
+            case "/auth/openid":
+                statusCode = 302
+                headers = [
+                    "Location": "https://identity.example/authorize?opaque=1",
+                    "Set-Cookie":
+                        "connect.sid=fixture-session; Path=/; Secure; HttpOnly, auth_method=openid-mobile; Path=/; Secure; HttpOnly",
+                ]
+                data = Data()
+            case "/auth/openid/callback":
+                recorder.recordCallbackCookie(
+                    request.value(forHTTPHeaderField: "Cookie"))
+                statusCode = 200
+                headers = nil
+                data = Data(#"{"ok":true}"#.utf8)
+            default:
+                throw OpenIDCookieFixtureError.unexpectedRoute(path: url.path)
+            }
+            guard let response = HTTPURLResponse(
+                url: url, statusCode: statusCode,
+                httpVersion: "HTTP/1.1", headerFields: headers)
+            else {
+                throw OpenIDCookieFixtureError.invalidResponse(
+                    path: url.path, statusCode: statusCode)
+            }
+            return (response, data)
+        }
+        defer { URLProtocolStub.setHandler(nil) }
+        try await withTestCleanup {
+            await transport.clearSession()
+        } operation: {
+            try await body(transport, recorder)
+        }
+    }
 }
 
 private final class CookieFlowRecorder: @unchecked Sendable {
