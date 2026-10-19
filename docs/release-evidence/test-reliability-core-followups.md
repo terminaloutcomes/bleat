@@ -1402,3 +1402,62 @@ outcome manifest use the `i372-otlp-remaining-` prefix. Raw framework/build logs
 stay private. Fresh independent exact-head review and CI are required. Broader
 #372/#362 lifecycle, configuration/device/live-server and unproven drainage
 criteria remain open; #400 cache implementation is separate.
+
+
+## OTLP retry and privacy caller bounds (issue #372)
+
+At merged base `8d31dd0d5666488f0d55a598a50581d04d39b52c`, two existing
+OTLP tests directly awaited public export/flush operations without final caller
+observation bounds:
+
+- `testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry` now
+  observes each of its two sequential exports independently before consuming
+  the original typed result. First failure, client/token counts one and empty
+  invalidations remain; the later epoch still requires success, client/token
+  counts two and no invalidation. The existing client's unauthenticated callback
+  and lifecycle cancellation action are unchanged.
+- `testBearerNeverAppearsInExporterOrFailureDescriptions` now separately
+  observes actual export and flush return before original result consumption.
+  Export failure and the existing synthetic-marker non-disclosure checks across
+  externally visible failure/configuration/flush descriptions and span
+  description remain unchanged. No observed production leak is alleged.
+
+Each operation owns an existing completion actor, signalled only after the
+actual call returns; typed results are forwarded unchanged through the task.
+Missing completion records a stage/source-located issue, cancels the owned
+caller and requests exporter cancellation, then returns without awaiting an
+unconfirmed task value or launching later work. Prior confirmed operations
+have already returned. There is no claim that all underlying production tasks
+are drained.
+
+Existing ten-second observation bounds, exporter timeout and fake responses
+remain unchanged. No readiness sleep, retry, latency success threshold, global
+output capture, new helper, production code, declaration or inventory identity.
+Only these two existing bodies plus scoped audit/evidence and required source
+locations change. Two records receive individual nine-rule reviews while older
+assessments stay revision-bound. Counts remain host593, source index1,577, core
+audit587 and owning suite20. Broader privacy/configuration acceptance remains
+separate from this caller-boundary change.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused executions: **2/2 each**, exact original identities,
+  zero failures/errors/skips.
+- Owning suite **20/20**, including original process-isolated bearer privacy and
+  controlled-token contract coverage, zero failures/errors/skips.
+- Complete supported signed host gate **593/593**, exact inventory identities,
+  zero failures/errors/skips; built discovery **593/593**.
+- Strict Swift lint, docs, exact two-body/audit-scope/source-index and final diff
+  checks passed.
+
+Focused serial command uses `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift
+test --disable-xctest --no-parallel --filter` with the two names above, report
+`.build/i372-otlp-retry-privacy-focused-1.xml`; repetitions add `--skip-build`
+and distinct `-2`/`-3` reports. Owning filter is
+`AuthenticatedOtlpSpanExporterTests`, report
+`.build/i372-otlp-retry-privacy-owning.xml`. Signed command is
+`mise exec -- ./scripts/test-host.sh`; discovery, signed-host log, lint/docs and
+outcome manifest use the `i372-otlp-retry-privacy-` prefix. Raw logs/build
+artifacts remain private. Fresh independent exact-head review and CI required.
+Broader #372/#362 lifecycle, configuration/device/live-server and unproven
+drainage criteria remain open; #400 implementation is separate.
