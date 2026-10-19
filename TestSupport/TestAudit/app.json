@@ -25121,8 +25121,8 @@
       "identifier": "AppModelTests/testTenKBooksLoadNextBooksPagePerformance",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 15278,
-        "endLineBeforeNextTest": 15449
+        "line": 16001,
+        "endLineBeforeNextTest": 16181
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -25132,107 +25132,111 @@
       ],
       "actions": [
         {
-          "line": 15350,
+          "line": 16077,
           "expression": "await model.start()"
         },
         {
-          "line": 15351,
+          "line": 16078,
           "expression": "guard case .loaded(let firstPage) = model.books else {"
         },
         {
-          "line": 15352,
+          "line": 16079,
           "expression": "XCTFail(\"first page must load during start()\")"
         },
         {
-          "line": 15366,
-          "expression": "defer { heartbeat.cancel() }"
+          "line": 16093,
+          "expression": "addTeardownBlock {"
         },
         {
-          "line": 15372,
+          "line": 16102,
           "expression": "while case .loaded(let current) = model.books, current.hasNextPage {"
         },
         {
-          "line": 15375,
+          "line": 16105,
           "expression": "await model.loadNextBooksPage()"
         },
         {
-          "line": 15382,
+          "line": 16112,
           "expression": "guard case .loaded(let after) = model.books,"
         },
         {
-          "line": 15387,
+          "line": 16117,
           "expression": "if case .loaded(let stuck) = model.books {"
         },
         {
-          "line": 15402,
+          "line": 16132,
           "expression": "guard case .loaded(let final) = model.books else {"
         },
         {
-          "line": 15406,
+          "line": 16136,
           "expression": "heartbeat.cancel()"
         }
       ],
       "assertions": [
         {
-          "line": 15352,
+          "line": 16009,
+          "expression": "try XCTUnwrap(AuthorID(rawValue: \"author-\\(index)\"), \"10k-book fixture author #\\(index) must have a valid ID\")"
+        },
+        {
+          "line": 16079,
           "expression": "XCTFail(\"first page must load during start()\")"
         },
         {
-          "line": 15355,
+          "line": 16082,
           "expression": "XCTAssertEqual(firstPage.items.count, pageLimit)"
         },
         {
-          "line": 15356,
+          "line": 16083,
           "expression": "XCTAssertEqual(firstPage.total, totalBooks)"
         },
         {
-          "line": 15392,
+          "line": 16122,
           "expression": "XCTFail("
         },
         {
-          "line": 15403,
+          "line": 16133,
           "expression": "XCTFail(\"books must remain loaded after sweep\")"
         },
         {
-          "line": 15409,
+          "line": 16139,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 15414,
+          "line": 16144,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 15419,
+          "line": 16149,
           "expression": "XCTAssertEqual(final.page, pageCount - 1)"
         },
         {
-          "line": 15420,
+          "line": 16150,
           "expression": "XCTAssertEqual(final.limit, pageLimit)"
         },
         {
-          "line": 15421,
+          "line": 16151,
           "expression": "XCTAssertFalse(final.hasNextPage)"
         },
         {
-          "line": 15422,
+          "line": 16152,
           "expression": "XCTAssertEqual(model.libraryPaginationState, .idle)"
         },
         {
-          "line": 15423,
+          "line": 16153,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 15428,
+          "line": 16158,
           "expression": "XCTAssertGreaterThan("
         },
         {
-          "line": 15433,
+          "line": 16163,
           "expression": "XCTAssertLessThan("
         }
       ],
       "synchronizationEvidence": [
         {
-          "line": 15362,
+          "line": 16089,
           "expression": "await Task.yield()"
         }
       ],
@@ -25246,21 +25250,21 @@
             "postcondition": "Exactly 10k unique IDs, final page/limit/no-next, 499 calls, heartbeat tick > 0, total elapsed < 30s, timings emitted."
           }
         ],
-        "timeoutAndToleranceRationale": "Direct awaited model operations; no synchronization timeout. The 10k sweep has a 30-second performance ceiling and sampled timings by design. The inverted observation checks use a 0.1-second observation window after awaited refresh.",
+        "timeoutAndToleranceRationale": "Direct awaited model operations; no condition-arrival polling. The unchanged 10k sweep measures wall time under a 30-second performance ceiling, with samples at calls 1, 250 and 499. Checked author-ID preflight and heartbeat teardown are outside the measured sweep.",
         "ruleAssessments": {
           "1": "The test asserts the requested content, typed state, request parameters or performance invariants directly.",
-          "2": "No condition-arrival polling is used; inverted observation expectations are awaited after the refresh call.",
+          "2": "Awaited model calls establish page completion. The yield heartbeat measures main-actor scheduling opportunities during the sweep; it is not a readiness barrier.",
           "3": "N/A except the performance baseline, which measures wall time but does not test playback.",
-          "4": "All provider calls are awaited; heartbeat task is cancelled and awaited before return.",
+          "4": "All provider/model calls are awaited. XCTest async teardown is registered immediately after heartbeat creation and cancels/joins it after every test exit, including stalled-page and unloaded-final-state guards; success also cancels/joins before reading ticks.",
           "5": "The test uses in-memory service/model state; no persistent user data is touched.",
           "6": "Generated deterministic 10k book pages via injected provider; real in-memory AppModel merger.",
-          "7": "Test fixture has a force unwrap for AuthorID construction; replace with nontrapping construction/checked failure. Record follow-up; all data invariants otherwise asserted.",
-          "8": "Exact state/value checks. In the performance test the 30-second ceiling is an explicit suite budget, not product latency guarantee.",
-          "9": "No skip condition; simulator outcome pending."
+          "7": "All eight immutable author IDs are preflighted with throwing XCTUnwrap before the nonthrowing Sendable provider and measured sweep. The original author distribution, generated data, overlap, assertions, samples and 30-second ceiling are unchanged.",
+          "8": "XCTUnwrap identifies the invalid author fixture index. Pagination failure identifies the call and observed item count; exact final values, sampled timings and elapsed budget remain.",
+          "9": "Focused independent repetitions and build-discovered owning-suite evidence are recorded in docs/release-evidence/test-reliability-app-followups.md; no skip condition."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "The test exercises main-actor responsiveness and de-duplicates overlapping pages, but force unwraps a test fixture ID and can trap before reporting failure."
+          "outcome": "keep",
+          "reason": "Checked fixture preflight replaces the forced AuthorID unwrap; registered async teardown cancels and joins the owned heartbeat on every exit. All 10k pagination, deduplication, responsiveness and performance assertions remain; production code is unchanged."
         }
       }
     },

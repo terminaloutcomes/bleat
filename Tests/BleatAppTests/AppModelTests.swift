@@ -16005,11 +16005,17 @@ final class AppModelTests: XCTestCase {
         let totalBooks = 10_000
         let pageLimit = 20
         let pageCount = totalBooks / pageLimit
+        let authorIDs = try (0..<8).map { index in
+            try XCTUnwrap(
+                AuthorID(rawValue: "author-\(index)"),
+                "10k-book fixture author #\(index) must have a valid ID"
+            )
+        }
 
         let makeBook: @Sendable (Int) -> LibraryBookSummary =
             { index in
                 let authorName = "Author \(index % 8)"
-                let authorID = AuthorID(rawValue: "author-\(index % 8)")!
+                let authorID = authorIDs[index % 8]
                 let years = ["1950", "1970", "1990", "2010", "2020"]
                 let baseMillis =
                     Int64(1_700_000_000_000)
@@ -16084,7 +16090,10 @@ final class AppModelTests: XCTestCase {
             }
             return ticks
         }
-        defer { heartbeat.cancel() }
+        addTeardownBlock {
+            heartbeat.cancel()
+            _ = await heartbeat.value
+        }
         let sampleIndices: Set<Int> = [1, pageCount / 2, pageCount - 1]
         var sampleTimings: [(call: Int, seconds: Double)] = []
         let sweepStart = CACurrentMediaTime()

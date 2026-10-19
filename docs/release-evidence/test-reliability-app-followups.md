@@ -22,7 +22,6 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testLateTransportFailureCannotRetryCompletedTrack` | Give the delegate callback path an awaitable completion/diagnostic signal, or another event tied to processing that callback; assert it before checking no retry was scheduled. | The test invokes the URL-session delegate and then yields 20 times. That only gives the main actor scheduling opportunities; it does not prove the callback's queued work finished. A retry could be accepted after the test's assertion. | Bleat maintainers |
 | `FrameworkCallbackTests/testRemotePlayAdmitsBootstrapSelectionAndClearInvalidatesIt`; `FrameworkCallbackTests/testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`; `FrameworkCallbackTests/testClearRejectsQueuedCommandsAndLateCallbacks` | Replace the `Task { @MainActor in expectation.fulfill() }` queue barrier with an awaitable drain/completion signal tied to the coordinator's admitted callback. Keep the semantic assertion that no retired command reaches the handler. | Main-actor task scheduling order is not a completion contract. The assertion can race a queued command, weakening stale-command rejection evidence. | Bleat maintainers |
 | `AppModelTests/testLiveProgressPatchesOneItemWithoutReloadingBrowsing`; `testLiveProgressRefreshesOnlyAffectedOpenDetail`; `testLiveRefreshStaysSuspendedAcrossBackgroundNetworkRecovery`; `testLiveRefreshCancelsQueuedCatalogChangeOnBackground`; `testLiveRefreshStopsInFlightCatalogCascadeOnBackground`; `testLiveProgressDoesNotReplaceNewlySelectedDetail`; `testLiveProgressDoesNotCancelInFlightCatalogRefresh`; `testLiveProgressInsertsReordersAndHidesContinueListeningItem`; `testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges`; `testLiveProgressClearsRemovedProgressFromOpenDetail`; `testLiveProgressEchoDoesNotRefreshStreamedPlayback`; `testLiveProgressSuppressionIsScopedToPlaybackAccount`; `testLiveProgressUpdatesFinishedStateImmediately` | Replace fixed 350–400ms post-event sleeps and yield-count readiness loops with bounded waits for the specific stream delivery, refresh completion, or model postcondition. | Scheduler delay does not prove the asynchronous live-update consumer or refresh cascade completed. Assertions may run before a late update/request. Keep exact request-count and playback-state checks after the new completion signal. | Bleat maintainers |
-| `AppModelTests/testTenKBooksLoadNextBooksPagePerformance` | Remove the force unwrap constructing `AuthorID` in generated fixture data; make fixture creation report a test failure instead of trapping. | A constructor change or malformed fixture input can terminate the test process before XCTest records a useful failure. | Bleat maintainers |
 | `AppModelTests/testSeriesPaginationCoalescesAnInFlightPageWithoutBlockingMainActor`; `testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion`; `testConfirmedSeriesSerializeSharedBookHandoffPerAccount` | Replace one `Task.yield()` used as a competing-task barrier with an explicit admission/queue signal before checking coalescing or request ordering. | Yield only schedules cooperatively and does not establish that the other task reached the intended state; request-count and order assertions can pass before the competing operation is admitted. | Bleat maintainers |
 | `AppModelTests/testSetFinishedNewerCommitRejectsOlderDetailReconciliation`; `testSetFinishedReconciliationDoesNotRestoreObsoleteSearch`; `testCompletedReconciliationDoesNotCancelLaterUserSearch`; `testCancelledReconciliationSearchPreservesLoadedResults` | Expose and await reconciliation/search completion (and propagate cancellation) instead of using swallowed `try?` sleeps or yield-count polling before asserting stale work was rejected. | A 100ms delay or up to 50 sleeps does not prove the reconciliation task finished; a late detail/search result could overwrite the assertion after the test returns. One polling loop also suppresses cancellation. | Bleat maintainers |
 
@@ -33,7 +32,7 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch`; `testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery`; `testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome`; `testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST`; `testPendingLocalSessionUploadDoesNotBlockLaunch` | Isolate defaults from `UserDefaults.standard`; replace break-only polling with asserted transition waits; on failure, release upload gates and cancel/join observer tasks. | Shared preferences can leak between parallel tests or survive abnormal teardown. Break-only loops can continue into assertions without proving the intended transition, and a blocked observer can outlive the test. | Bleat maintainers |
 | `AppModelTests/testBookDeletionSupersedesInFlightFailedPlaybackRetry`; `testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert`; `testSetFinishedUsesRemoteOnlyDetailReconciliation`; `testSetFinishedReconciliationFailuresRecordTypedDiagnostics` | Await the owned retry/reconciliation completion through a signal, then assert one exact request/session outcome and final committed state. | Deadline-bounded polling is better than an unbounded wait but does not establish that independent work finished; accepting a request-count range can hide a duplicate or missing path. | Bleat maintainers |
 | `AppModelTests/testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest`; `testCarPlayCellularReconnectAndDelayedPresentationKeepDecision`; `testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions`; `testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing`; `testCarPlaySearchNativeRowsSurviveCapacityChanges`; `testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchRetryAndNoMatchesRemainExplicit`; `testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback`; `testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork` | Use completion/admission signals for stale callbacks and queue transitions; replace artwork-render polling with an observable publication signal or an asserted bounded condition. | The current yield/sleep barriers do not prove the retired callback or artwork update has been processed. A late callback could mutate the next request after the test returns, while a short render poll gives weak failure evidence. | Bleat maintainers |
-| `AppModelTests/testTenKBooksLoadNextBooksPagePerformance`; `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`; `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`; `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`; `testCarPlaySearchAuthorUsesIndependentFilteredPage` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
+| `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`; `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`; `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`; `testCarPlaySearchAuthorUsesIndependentFilteredPage` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
 | `NetworkPathTests/testStaleProbeCannotPromoteEndpointOrReviveStoppedSubscription` | Ensure all probe gates and subscription tasks are released/cancelled and joined in `defer`, then assert the retired generation cannot be promoted. | A failed intermediate assertion can strand the probe task and contaminate later network tests; stale-generation rejection must remain the semantic postcondition. | Bleat maintainers |
 | `ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh`; `testCaptureRotatedTokens`; `testRemovePrivateCapture`; `testLogoutRemovedSessionCredentials`; `testPrivateCaptureRemainsRemovedAfterLogout` | Add failure-safe cleanup for the private capture directory and real Keychain test credentials, while preserving the cross-launch capture/rotation/logout sequence. | These tests deliberately use persistent host state across launches. An early assertion failure can leave sensitive test artifacts or credentials behind and affect a later run. Signed host evidence remains required. | Bleat maintainers |
 | `FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor`; `KeychainEntitlementTests/testApplicationHostCanPersistCredentialsInKeychain` | Replace queue-marker assumptions with a signal tied to the actual KVO callback or Keychain operation completion before reading final state. | Main-actor task ordering is not proof that the callback/operation finished; the assertion can race delivery and report a false pass. Preserve the off-main callback and application-host Keychain coverage. | Bleat maintainers |
@@ -281,3 +280,69 @@ being outside allowed build roots. They are retained in the class log as a
 tooling warning, not erased by the later warning-free owning execution. The
 class result still verified all five outcomes and no runtime warnings. No
 source/configuration workaround or test rerun was used to hide these warnings.
+
+## 10,000-book fixture and heartbeat cleanup (#374)
+
+`AppModelTests/testTenKBooksLoadNextBooksPagePerformance` now checks its eight
+immutable `AuthorID` values with throwing `XCTUnwrap` before creating the
+nonthrowing `@Sendable` book/provider closures and before the measured sweep.
+The original `author-0` through `author-7` IDs, corresponding author names,
+modulo-eight distribution and all generated book fields are preserved. Invalid
+fixture construction reports the author index through XCTest rather than
+trapping, returning a service error, or substituting data.
+
+Immediately after creating the main-actor heartbeat, the test registers XCTest
+async teardown that cancels and awaits it. Both early returns after creation
+(the stalled-page guard and unloaded-final-state guard) therefore join the owned
+task during teardown. Success still cancels and awaits the heartbeat before
+asserting its tick count. The earlier first-page guard runs before heartbeat
+creation. The yield loop measures responsiveness during the real awaited sweep;
+it is not used as a readiness barrier. No detached teardown or new helper is
+introduced.
+
+All 10,000-book uniqueness, overlapping-page deduplication, 499 pagination calls,
+final page/limit/no-next/idle state, main-actor responsiveness, timing samples
+and the 30-second ceiling remain unchanged. Fixture checks and cleanup remain
+outside the measured sweep. Adjacent fixture and pagination failure paths were
+inspected for traps and unjoined owned tasks. Production code, test identities,
+configuration and the performance contract are unchanged; no specification or
+host inventory update is needed. Only this test's audit record and matching
+open-item entries are reconciled; historical aggregate counts are retained.
+
+Validation on 2026-10-19 used base `935b5af24c701fa03fe0defa9747655209983f1d`,
+Xcode 27.1 (`27A9275`), iPhone 17 Pro and iOS Simulator 26.5:
+
+| Selection | Verified passed outcomes | Result bundle |
+| --- | --- | --- |
+| Exact performance test, fresh build | One identity | `.build/tenk-focused-1.xcresult` |
+| Exact performance test, native repetitions | Ten repetitions of one identity | `.build/tenk-focused-10.xcresult` |
+| `BleatAppTests/AppModelTests` | All 505 build-discovered identities | `.build/tenk-appmodel.xcresult` |
+| `BleatAppTests` | All 608 build-discovered identities | `.build/tenk-app-unit.xcresult` |
+
+Each bundle was inspected with `xcresulttool` and checked with the repository's
+`verify-test-results`: zero failures, expected failures, skips or runtime
+warnings. The owning selections were verified against flat JSON discovery of
+those exact built products in `.build/tenk-owning.discovery.json`, not historical
+count arithmetic. Every local test attempt passed; none was superseded.
+
+The runner was `mise exec -- xcodebuild -quiet -project Bleat.xcodeproj -scheme
+Bleat -configuration Debug -derivedDataPath .build/tenk-derived`, with the
+installed Simulator destination, `-parallel-testing-enabled NO`, the table's
+result path and exact `-only-testing:` selection. The fresh focused run used
+`test`; subsequent runs used `test-without-building`, with `-test-iterations 10`
+for the repetition selection. Logs use the same stems as their result bundles.
+Discovery used `-enumerate-tests -test-enumeration-style flat
+-test-enumeration-format json` on the same products; its log is
+`.build/tenk-discovery.log`.
+
+Strict changed-file lint, `mise run swift-lint`, `mise run docs:check` and
+`git diff --check` passed. The logs retain Xcode's
+`IDESchemeActionSDKRecord` diagnostic for host build `24A94232`
+(`invalidDigitCount(94232)`); all result bundles report no runtime warnings,
+and the build log contains no compiler or stale-file warnings. No shared build
+files were removed. The worktree's configured temporary build symlink and
+marker were preserved.
+
+This is app-hosted Simulator evidence. Signed-host, physical-device energy,
+external-server, full live journeys, configuration and release evidence remain
+separate; issues #374 and #362 remain open.
