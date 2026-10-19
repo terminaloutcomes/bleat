@@ -177,6 +177,7 @@ actor BookCoverImageLoader {
         accountID: AccountID?,
         policy: BookCoverLoadPolicy = .allowNetwork
     ) async -> PlatformImage? {
+        guard !Task.isCancelled else { return nil }
         guard let accountID else {
             guard policy == .allowNetwork else {
                 return nil
@@ -192,20 +193,36 @@ actor BookCoverImageLoader {
             )?.image
         }
         let key = BookCoverCacheKey(accountID: accountID, url: url)
+        let diskTimestamp = resourceTimestamp(for: key.resource)
+        let priorTimestamp = max(
+            diskTimestamp, latestRequested[key.resource] ?? 0)
+        let knownResource =
+            generations[key.resource] != nil || diskTimestamp > 0
+        var retryVisibleRequests = false
+        var knownObsolete = false
         let revision = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "revision" })?.value
         if let revision, requestedRevisions[key.resource] != revision {
+            retryVisibleRequests = inFlight.keys.contains {
+                $0.resource == key.resource
+            }
             retireRequests { $0 == key.resource }
             validated = validated.filter { $0.resource != key.resource }
             requestedRevisions[key.resource] = revision
         }
-        let timestamp = max(
-            Self.timestamp(url), resourceTimestamp(for: key.resource),
-            latestRequested[key.resource] ?? 0)
+        let timestamp = max(Self.timestamp(url), priorTimestamp)
         if timestamp > (latestRequested[key.resource] ?? 0) {
+            retryVisibleRequests =
+                retryVisibleRequests
+                || inFlight.keys.contains { $0.resource == key.resource }
+            knownObsolete = timestamp > priorTimestamp && knownResource
             retireRequests { $0 == key.resource }
             validated = validated.filter { $0.resource != key.resource }
             latestRequested[key.resource] = timestamp
+        }
+        if policy == .cacheOnly, retryVisibleRequests || knownObsolete {
+            await publishRetirement(
+                for: url, accountID: accountID, knownObsolete: knownObsolete)
         }
         if policy == .cacheOnly || validated.contains(key) {
             if let image = cachedImage(
@@ -216,10 +233,6 @@ actor BookCoverImageLoader {
             }
         }
         guard policy == .allowNetwork else { return nil }
-        if let active = inFlight[key], active.timestamp < timestamp {
-            retireRequests { $0 == key.resource }
-            validated = validated.filter { $0.resource != key.resource }
-        }
         let generation = generations[key.resource] ?? UUID()
         generations[key.resource] = generation
         let request: Request
@@ -243,6 +256,12 @@ actor BookCoverImageLoader {
                 task: task)
             inFlight[key] = request
             Self.logger.debug("cover_revalidation_started")
+        }
+        // Retiring a pending variant must also restart its visible consumer.
+        // Publish after registering the successor so those consumers can join it.
+        if retryVisibleRequests || knownObsolete {
+            await publishRetirement(
+                for: url, accountID: accountID, knownObsolete: knownObsolete)
         }
         let loaded = await request.task.value
         guard generations[key.resource] == request.generation else {
@@ -290,6 +309,17 @@ actor BookCoverImageLoader {
             return nil
         }
         return loaded.image
+    }
+
+    private func publishRetirement(
+        for url: URL, accountID: AccountID, knownObsolete: Bool
+    ) async {
+        await BookCoverRefresh.shared.refresh(
+            accountID: accountID,
+            itemID: knownObsolete
+                ? LibraryItemID(
+                    rawValue: url.deletingLastPathComponent().lastPathComponent)
+                : nil)
     }
 
     // Revalidation keeps offline bytes, whereas a confirmed replacement retires
@@ -363,7 +393,9 @@ actor BookCoverImageLoader {
     private func cachedImage(
         for key: BookCoverCacheKey, timestamp: Int64, legacyURL: URL
     ) -> PlatformImage? {
-        let timestamp = max(timestamp, resourceTimestamp(for: key.resource))
+        let timestamp = max(
+            timestamp, resourceTimestamp(for: key.resource),
+            latestRequested[key.resource] ?? 0)
         if let cachedTimestamp = memoryTimestamps[key],
             cachedTimestamp >= timestamp,
             let image = memory.object(forKey: key.memoryKey)

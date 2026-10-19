@@ -279,8 +279,16 @@ import XCTest
                 await loader.image(for: oldURL, accountID: account)
             }
             await fulfillment(of: [entered], timeout: 3)
+            let beforePromotion = BookCoverRefresh.shared.generation(
+                accountID: account, url: oldURL)
             let newer = await loader.image(for: newURL, accountID: account)
             XCTAssertEqual(newer?.size.width, 3)
+            let afterPromotion = BookCoverRefresh.shared.generation(
+                accountID: account, url: oldURL)
+            XCTAssertNotEqual(
+                beforePromotion[1], afterPromotion[1],
+                "Retired visible variants need a replacement generation to restart their requests"
+            )
             try await gate.release(data: old)
             let obsolete = await pending.value
             XCTAssertNil(obsolete)
@@ -293,6 +301,45 @@ import XCTest
             let count = await gate.count
             XCTAssertEqual(
                 count, 1, "old metadata must request the current timestamp")
+
+            let revisionURL = try self.url(item: "revision-item")
+            let enteredRevision = expectation(
+                description: "canonical variant held before forced refresh")
+            let revisionGate = CoverDeliveryGate(entered: enteredRevision)
+            let revisionFetcher = CoverMutableResponse(data: old)
+            await revisionFetcher.hold(revisionGate)
+            let revisionLoader = BookCoverImageLoader(
+                cacheRoot: root, fetch: { try await revisionFetcher.fetch($0) })
+            let pendingRevision = Task {
+                await revisionLoader.image(for: revisionURL, accountID: account)
+            }
+            await fulfillment(of: [enteredRevision], timeout: 3)
+            let beforeRevision = BookCoverRefresh.shared.generation(
+                accountID: account, url: revisionURL)
+            await revisionFetcher.set(fresh)
+            await revisionFetcher.hold(nil)
+            let revised = try XCTUnwrap(
+                URL(
+                    string: try self.url(item: "revision-item", size: 600)
+                        .absoluteString + "&revision=fixture-refresh"))
+            let revisionImage = await revisionLoader.image(
+                for: revised, accountID: account)
+            XCTAssertEqual(revisionImage?.size.width, 3)
+            let afterRevision = BookCoverRefresh.shared.generation(
+                accountID: account, url: revisionURL)
+            XCTAssertNotEqual(
+                beforeRevision[0], afterRevision[0],
+                "Routine supersession must notify pending visible requests to retry"
+            )
+            XCTAssertEqual(
+                beforeRevision[1], afterRevision[1],
+                "A refresh alone does not prove the displayed artwork obsolete")
+            try await revisionGate.release(data: old)
+            let retiredRevision = await pendingRevision.value
+            XCTAssertNil(retiredRevision)
+            let retriedVariant = await revisionLoader.image(
+                for: revisionURL, accountID: account)
+            XCTAssertEqual(retriedVariant?.size.width, 3)
         }
 
         func
@@ -510,7 +557,7 @@ import XCTest
         var data: Data
         init(data: Data) { self.data = data }
         func set(_ data: Data) { self.data = data }
-        func hold(_ gate: CoverDeliveryGate) { self.gate = gate }
+        func hold(_ gate: CoverDeliveryGate?) { self.gate = gate }
         func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
             if let gate { return try await gate.fetch(request) }
             return try response(data, request)

@@ -30,7 +30,10 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   use the latest cached variant without restoring obsolete timestamp buckets.
 - Online loads validate each variant once per process or refresh generation,
   before returning old disk bytes. Metadata timestamp advances retire older
-  requests. Concurrent callers join one owned request. Only the current owner
+  requests and publish a replacement generation to restart visible consumers.
+  A forced request revision that retires pending work publishes a routine retry
+  generation, retaining usable artwork. Successor work is registered before
+  notification so restarted consumers can join it. Concurrent callers join one owned request. Only the current owner
   may commit; retired generations cannot return or persist bytes. A caller
   cancelling its view does not cancel another waiter’s shared valid fetch.
 - Explicit library/detail refresh, live catalog catch-up and foreground catch-up
