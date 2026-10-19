@@ -1526,3 +1526,106 @@ log, lint/docs and outcome manifest use the `i372-otlp-lifecycle-` prefix. Raw l
 and build artifacts stay private. Fresh exact-head review and CI required.
 Broader #372/#362 drainage/configuration/device/live-server criteria remain
 open; #400 implementation is separate.
+
+
+## Controlled OTLP deadline and uncooperative provider (issue #372)
+
+At merged base `3a27e78f9ae55a02c31a2305751f02e1e289933e`, the public token
+timeout test requested 50 ms before provider entry and asserted return inside
+500 ms while a cancellation-ignoring fake polled for one second. That mixed a
+real deadline contract with scheduler latency and left the fake unretired. This
+slice replaces that particular source-assessed follow-up from #406; it does not
+widen the old threshold or claim a real-time scheduling guarantee.
+
+The explicitly approved production seam is internal `OtlpExportClock`, a
+Sendable pair of `now() -> Date` and cancellation-aware async throwing `sleep`.
+Live defaults remain `Date()` and native `Task.sleep(for:)`. Defaulted parameters
+are added only to the internal span-exporter initializer and existing `awaitTask`.
+The same injected clock reaches span deadline creation, remaining RPC budget,
+token acquisition and invalidation waits. Public APIs, log/runtime call sites and
+transport behavior stay unchanged. Remaining-budget calculation placement,
+Date semantics, first-result-wins actor and unstructured value/timeout observers
+are retained; this is no generic Clock or runtime rewrite. Live wall-clock
+adjustment behavior is unchanged and not newly verified.
+
+`testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider` remains an
+actual public-export integration with configured two-second ceiling and explicit
+0.05-second request. It now freezes logical time, positively observes provider
+entry and actual timeout continuation registration, and checks the recorded
+50 ms budget with floating-point precision tolerance only. It advances logical
+time and fires that timer while the provider stays held. Actual export return
+must be failure with zero RPCs; genuine token cancellation is acknowledged
+separately while provider exit count is still zero, before cleanup. No caller or
+lifecycle cancellation manufactures the asserted timeout result. The old 500 ms
+scheduler-speed assertion is removed, not widened. Existing ten-second waits
+are diagnostic failure bounds, not latency acceptance.
+
+The new actor fake acknowledges cancellation without releasing its checked
+continuation. Only retirement opens the hold; there is no natural fake expiry
+or polling/spin. Retirement latches before late entry, releases an installed
+continuation once, and positively observes logical body exit. The one-shot manual
+clock caches a single settlement across cancellation before/after continuation
+registration, resumes outside locks and rejects late entry after retirement.
+Its ready notification follows actual continuation installation; post-registration
+contract cases positively require one pending continuation before acting. Repeated
+fire/retire is safe. Cleanup releases owned controls and awaits entered fake/sleep
+body exits; whole production observer/task-graph drainage is not claimed.
+
+Four new identities provide direct contracts/boundaries:
+
+- `testCancellationIgnoringTokenProviderRequiresExplicitRetirement(mode:)`: four
+  cancellation/retirement cases before entry or after handler installation, exact
+  request/exit counts and typed cancellation. Acknowledged cancellation alone
+  must leave the body held.
+- `testManualOtlpClockSettlesSleepExactlyOnce(mode:)`: six pre/post registration
+  cancellation, firing and retirement cases, exact finished/resolution counts,
+  zero pending continuations and idempotent repeated operations.
+- `testSuccessfulTokenAcquisitionCancelsManualDeadlineSleeper`: public export
+  succeeds with one token/RPC; positively observes registered sleeper exit and
+  cancelled settlement without manually firing the timer.
+- `testExpiredControlledDeadlinePreventsRPC`: after provider and timer entry,
+  advances time to expiry without firing the timer, releases the token, and
+  requires public failure/zero RPC plus cancelled sleeper exit. This isolates
+  the remaining RPC-budget guard from timer/caller/lifecycle cancellation.
+
+Required negative evidence is retained for the exact final source: removing
+only timeout resolution (keeping token cancellation) fails caller completion;
+removing only deadline token cancellation fails its separate acknowledgement;
+using configured two seconds instead of explicit 50 ms fails the numerical budget;
+bypassing expired RPC budget fails zero-RPC/original failure assertions. Every
+mutation must fail its exact selected identity at that observation. Approved
+production bytes are restored exactly before final passing validation. Earlier
+passing/mutation evidence before the stronger continuation-registration witness
+is retained separately; final evidence is regenerated and bound to both source
+hashes. No observed production leak or unrelated runtime bug is alleged.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent final focused runs: **5/5 identities each**, including all
+  four provider and six manual-clock arguments (13 logical cases per run), zero
+  failures/errors/skips.
+- Owning suite **24/24**, including original process-isolated bearer, cancellation,
+  retry and live-default behavior; zero failures/errors/skips.
+- Shared `RemoteTelemetryTests` callers **39/39**, exact identities and zero
+  failures/errors/skips; log-exporter coverage is included in the owning suite.
+- Full supported signed gate **597/597**, exact inventory identities, zero
+  failures/errors/skips; built discovery **597/597**.
+- Four final mutations killed at their specified observations; strict Swift
+  lint, docs, exact inventory/argument/source-index/audit scope and final diff
+  checks passed. Inventory adds four identities; source index is 1,581 and core
+  audit 591. Each new/current record has an individual nine-rule review.
+
+Supported serial commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift
+test --disable-xctest --no-parallel --filter` selecting the five names above,
+report `.build/i372-otlp-clock-focused-1.xml`; independent repeats add
+`--skip-build` with `-2`/`-3`. Owning and shared-runtime filters are
+`AuthenticatedOtlpSpanExporterTests` and `RemoteTelemetryTests`, reports
+`.build/i372-otlp-clock-owning.xml` and `.build/i372-otlp-clock-shared-runtime.xml`.
+The final first focused run rebuilds restored source after mutations. Signed
+command is `mise exec -- ./scripts/test-host.sh`; final logs/discovery/lint/docs
+use `i372-otlp-clock-`. Mutation reports use the same prefix plus `mutation-`;
+`.build/i372-otlp-clock-mutation-verification.json` binds production/test hashes
+and failures, and `.build/i372-otlp-clock-verification.json` records final outcomes.
+Raw logs remain private. Fresh exact-head review and CI remain required; broader
+#372/#362 device/live/configuration and unproven drainage criteria stay open.
+#400 implementation is separate.

@@ -11,12 +11,24 @@ import Foundation
 @preconcurrency import OpenTelemetrySdk
 import SwiftProtobuf
 
+/// Internal timing boundary; live defaults preserve Date-based budget semantics.
+struct OtlpExportClock: Sendable {
+    let now: @Sendable () -> Date
+    let sleep: @Sendable (TimeInterval) async throws -> Void
+
+    static let live = Self(
+        now: { Date() },
+        sleep: { try await Task.sleep(for: .seconds($0)) }
+    )
+}
+
 func awaitTask<Result: Sendable>(
     _ task: Task<Result, Never>,
     until deadline: Date,
-    timeoutResult: Result
+    timeoutResult: Result,
+    clock: OtlpExportClock = .live
 ) async -> Result {
-    let remaining = deadline.timeIntervalSinceNow
+    let remaining = deadline.timeIntervalSince(clock.now())
     guard remaining > 0, !Task.isCancelled else {
         task.cancel()
         return timeoutResult
@@ -26,7 +38,7 @@ func awaitTask<Result: Sendable>(
         await result.resolve(task.value)
     }
     let timeoutTask = Task {
-        try? await Task.sleep(for: .seconds(remaining))
+        try? await clock.sleep(remaining)
         guard !Task.isCancelled else { return }
         task.cancel()
         await result.resolve(timeoutResult)
@@ -243,6 +255,7 @@ public final class AuthenticatedOtlpSpanExporter:
     private let tokenProvider: any TelemetryTokenProviding
     private let client: any RemoteTelemetryOtlpClient
     private let timeout: TimeInterval
+    private let clock: OtlpExportClock
     private let lock = NSLock()
     private var activeTokenRequests: [UInt64: @Sendable () -> Void] = [:]
     private var nextTokenRequestID: UInt64 = 0
@@ -266,11 +279,13 @@ public final class AuthenticatedOtlpSpanExporter:
     init(
         tokenProvider: any TelemetryTokenProviding,
         client: any RemoteTelemetryOtlpClient,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        clock: OtlpExportClock = .live
     ) {
         self.tokenProvider = tokenProvider
         self.client = client
         self.timeout = timeout
+        self.clock = clock
     }
 
     @available(*, deprecated, message: "Synchronous OTLP export is prohibited")
@@ -288,7 +303,7 @@ public final class AuthenticatedOtlpSpanExporter:
         guard !spans.isEmpty else { return .success }
         let allowedDuration = min(explicitTimeout ?? timeout, timeout)
         guard allowedDuration > 0, !Task.isCancelled else { return .failure }
-        let deadline = Date().addingTimeInterval(allowedDuration)
+        let deadline = clock.now().addingTimeInterval(allowedDuration)
         guard let generation = currentExportGeneration() else {
             return .failure
         }
@@ -392,7 +407,7 @@ public final class AuthenticatedOtlpSpanExporter:
         deadline: Date,
         generation: UInt64
     ) async -> RemoteTelemetryOtlpExportResult {
-        let remaining = deadline.timeIntervalSinceNow
+        let remaining = deadline.timeIntervalSince(clock.now())
         guard remaining > 0, !Task.isCancelled,
             isCurrent(generation: generation)
         else {
@@ -441,7 +456,8 @@ public final class AuthenticatedOtlpSpanExporter:
         let result = await awaitTask(
             task,
             until: deadline,
-            timeoutResult: .failure
+            timeoutResult: .failure,
+            clock: clock
         )
         removeTokenTask(requestID)
         guard !Task.isCancelled, isCurrent(generation: generation) else {
@@ -472,7 +488,8 @@ public final class AuthenticatedOtlpSpanExporter:
             task.cancel()
             return
         }
-        _ = await awaitTask(task, until: deadline, timeoutResult: false)
+        _ = await awaitTask(
+            task, until: deadline, timeoutResult: false, clock: clock)
         removeTokenTask(requestID)
     }
 
