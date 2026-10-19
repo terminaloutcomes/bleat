@@ -26,7 +26,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheReadsDoNotBlockTheMainActor` | Bound and diagnose the final `readsTask.value` wait, and retain the current observable start/finish probe. | The two 30-second loops are bounded, but after either expires the test still awaits the detached task without a bound. A stuck cache read can hang the process. Recheck the heartbeat observation window after adding a completion contract. |
 | `Tests/BleatCoreTests/DownloadStorageTests.swift::Fixture.removeRoot` (all 31 root-owning callers) | Implemented: awaited fixture scope reports deletion failures at the calling test and preserves the original operation failure. | See [scoped cleanup evidence](#downloadstorage-fixture-cleanup-issue-372); historical audit findings remain retained. |
 | `Tests/BleatCoreTests/PrivateCloudSyncTests.swift::CloudKitCancellationProbe.waitForEntry` (callers `testCallbackCancellationCompletesBeforeLifecycleAllowsRetry`, `testCallbackWatchdogCancellationEscapesDelegateTaskLocals`) | Add a bounded actor-entry notification with test-site timeout diagnostics; keep the cancellation release/drain ordering. | If cancellation never enters the probe, its checked continuation suspends indefinitely before either test can assert its lifecycle/watchdog outcome. |
-| `Tests/BleatCoreTests/RemoteTelemetryTests.swift::GatedShutdownLogExporter.waitUntilShutdownStarts` / `TestAsyncSignal.wait` (caller `testConcurrentLogShutdownCallersAwaitSharedCompletion`) | Add a bounded start signal that reports a test issue if downstream shutdown is never entered, and an arrival signal proving the second caller joined before releasing the shared shutdown. | The first wait currently suspends on an unbounded continuation; the second caller is only given 50 ms of sleep, so under load it may not have joined before the assertion/release. |
+| `Tests/BleatCoreTests/RemoteTelemetryTests.swift::testConcurrentLogShutdownCallersAwaitSharedCompletion` | Implemented: bounded per-caller return observations precede task-result awaits after the controlled downstream release. | Entry/join checks were already bounded at this slice's base; [scoped completion evidence](#bounded-shared-log-shutdown-completion-issue-372) records the remaining final-wait fix without re-claiming that earlier work. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift::CancellableBlockingSpanExporter.waitUntilStarted` and `waitUntilFinished` (caller `testWithdrawalCancelsAnActiveDownstreamExport`) | Replace synchronous semaphore waits inside the async test with bounded async notifications and source-located timeout failures. | The two calls can block the test executor for up to two seconds each; a missing stage is reported only as a semaphore result and can starve constrained test scheduling. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSynchronousSpanWitnessReturnsBeforePersistenceAndAsyncFlushWaits` | Add an explicit signal that the flush task reached its queued persistence wait before asserting it remains incomplete; preserve the semaphore-controlled queue and post-release persisted-file assertion. | The 50 ms sleep does not prove the flush task was scheduled before the incomplete assertion, so a scheduling delay can make that negative check pass without exercising the wait. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift` (temporary directory cleanup in test defers and `makeRecordedSpan`) | Route temporary telemetry directory deletion through checked cleanup support instead of suppressing errors with `try?`. | UUID paths isolate tests, but cleanup failures silently accumulate telemetry files and consume host disk. |
@@ -985,3 +985,61 @@ The added declaration is reviewed under all nine rules. The complete `410e926`
 CI run passed, including the unsigned host's sole named Keychain exclusion; its
 review/CI evidence does not clear this changed implementation. Fresh exact-head
 review and CI remain required. No merge or auto-merge is enabled.
+
+
+## Bounded shared log shutdown completion (issue #372)
+
+At merged base `1695a4071633ef43898d741213d9c37a378bd91c`, the concurrent
+log-shutdown test already had bounded downstream-entry and shared-join checks.
+After releasing the downstream fake, however, it awaited both task values
+without completion bounds. A lost caller response could hang before the final
+completion assertions. This source-verified gap is separate from the already
+delivered entry/join remediation; the historical source audit remains retained.
+
+Each caller now publishes to its own existing `AuthTelemetryTestCompletion`
+actor only after the actual queued exporter shutdown returns. The test observes
+both bounded values concurrently, using the existing ten-second failure budgets
+and separate source-located stage diagnostics. Only observed caller returns
+allow the existing task-value awaits. Timeout records the missing caller stage,
+cancels both task handles and returns without awaiting an unconfirmed caller.
+It does not claim that a genuinely stuck operation was drained on failure.
+
+The two pre-release incomplete flags, proven second-caller join, single downstream
+shutdown, explicit downstream release and final complete flags remain unchanged.
+There is no production change, new helper, new declaration, process-global
+mutation or sleep used as readiness. Each completion actor has one waiter; the
+controlled downstream one-shot gate retains its existing latch semantics.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused executions: **1/1 each**, exact original identity,
+  zero failures/errors/skips.
+- Owning `RemoteTelemetryTests`: **39/39**, exact inventory identities, zero
+  failures/errors/skips.
+- Supported complete signed host gate: **592/592**, exact inventory identities,
+  zero failures/errors/skips. Signing/entitlements/provisioning checked by the
+  gate; production LCOV exported. Existing upstream watchOS deprecation,
+  read-only Cocoa 513 diagnostics and three intentional cleanup known issues
+  remain retained; no new runtime warning or unexpected issue was observed.
+- Built discovery: **592/592** host declarations. Repository strict Swift lint,
+  documentation references and final diff/JSON checks passed. No unsuccessful
+  or zero-test validation attempt occurred for this slice.
+
+Focused command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+RemoteTelemetryTests.testConcurrentLogShutdownCallersAwaitSharedCompletion
+--xunit-output .build/i372-shutdown-focused-1.xml`. Independent repetitions add
+`--skip-build` and distinct outputs `-2` and `-3`; owning selection changes the
+filter to `RemoteTelemetryTests` and writes `.build/i372-shutdown-owning.xml`.
+The complete signed lane uses `mise exec -- ./scripts/test-host.sh`, retaining
+`.build/i372-shutdown-signed-host.log`. All XML files have matching log files.
+Discovery, lint, documentation and outcome summary are retained in
+`.build/i372-shutdown-discovery.txt`, `.build/i372-shutdown-lint.log`,
+`.build/i372-shutdown-docs.log` and `.build/i372-shutdown-verification.json`.
+
+One current test disposition is updated with a nine-rule completion review;
+source-index line locations follow the edited file. Inventory 592, source-index
+1,576 and core audit 586 counts remain unchanged, with no new identity or
+configuration/device/live-server acceptance claim. Broader #372/#362 criteria
+and unrelated telemetry cleanup findings remain open. Fresh exact-head source
+review and CI are required before merging this slice.

@@ -696,3 +696,9 @@ calling test, and preserves any original operation error. Success and forced
 missing-root failures are covered separately. See the
 [scoped cleanup evidence](release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372).
 This test-only disposition does not close broader reliability acceptance.
+
+
+The [bounded shared log-shutdown completion slice](release-evidence/test-reliability-core-followups.md#bounded-shared-log-shutdown-completion-issue-372)
+adds per-caller return proof before final task waits in the existing concurrent
+shutdown test. Earlier entry/join remediation and broader #372/#362 acceptance
+remain separately tracked.
