@@ -340,6 +340,32 @@ import XCTest
             let retriedVariant = await revisionLoader.image(
                 for: revisionURL, accountID: account)
             XCTAssertEqual(retriedVariant?.size.width, 3)
+
+            // An offline-restored legacy timestamp can be zero. The cache hit
+            // still establishes known artwork even before any network request.
+            let zeroURL = try self.url(item: "zero-timestamp", timestamp: 0)
+            let zeroSeed = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { request in try response(old, request) })
+            _ = await zeroSeed.image(for: zeroURL, accountID: account)
+            let zeroRestored = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { request in try response(fresh, request) })
+            let offlineZero = await zeroRestored.image(
+                for: zeroURL, accountID: account, policy: .cacheOnly)
+            XCTAssertEqual(offlineZero?.size.width, 2)
+            let beforeZero = BookCoverRefresh.shared.generation(
+                accountID: account, url: zeroURL)
+            let newerZeroURL = try self.url(
+                item: "zero-timestamp", size: 600, timestamp: 2)
+            let freshZero = await zeroRestored.image(
+                for: newerZeroURL, accountID: account)
+            XCTAssertEqual(freshZero?.size.width, 3)
+            let afterZero = BookCoverRefresh.shared.generation(
+                accountID: account, url: zeroURL)
+            XCTAssertNotEqual(
+                beforeZero[1], afterZero[1],
+                "Zero timestamps do not make restored artwork unknown")
         }
 
         func

@@ -198,6 +198,7 @@ actor BookCoverImageLoader {
             diskTimestamp, latestRequested[key.resource] ?? 0)
         let knownResource =
             generations[key.resource] != nil || diskTimestamp > 0
+            || memoryTimestamps.keys.contains { $0.resource == key.resource }
         var retryVisibleRequests = false
         var knownObsolete = false
         let revision = URLComponents(url: url, resolvingAgainstBaseURL: false)?
