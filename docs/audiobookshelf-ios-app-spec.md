@@ -1356,7 +1356,10 @@ Use `URLSessionConfiguration.background(withIdentifier:)` and bounded download
 tasks. Maintain one stable session identifier, but make Bleat-owned partial
 files the durable checkpoint. Transfer each track in 16 MiB HTTP range chunks,
 persist every validated completed chunk, and calculate continuation from the
-actual partial-file length after relaunch.
+actual partial-file length after relaunch. Obsolete range or validator tasks must
+be retired before cancellation during startup and network recovery. Late or
+repeated callbacks from those retired transfers must not re-arm recovery or
+change their replacements.
 
 All restored accounts must be registered with the download model before the
 background session is created or restoration can suspend and deliver callbacks.

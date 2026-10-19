@@ -9134,87 +9134,139 @@ final class AppModelTests: XCTestCase {
     }
 
     func testNetworkRecoveryReplacesStaleBackgroundTransfer() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "BleatStaleRecovery-\(UUID().uuidString)",
-                isDirectory: true
+        for recoversAfterNetworkChange in [false, true] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatStaleRecovery-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+            let defaultsSuite = "StaleRecovery.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+            addTeardownBlock {
+                defaults.removePersistentDomain(forName: defaultsSuite)
+            }
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "item-1",
+                    title: "Stale transfer",
+                    libraryID: fixtureLibrary().id
+                )
             )
-        defer { try? FileManager.default.removeItem(at: root) }
-        let account = try fixtureAccount()
-        let detail = fixtureBookDetail(
-            item: fixtureBook(
-                id: "item-1",
-                title: "Stale transfer",
-                libraryID: fixtureLibrary().id
+            let (plan, storage) = try await prepareInterruptedDownload(
+                root: root,
+                account: account,
+                detail: detail,
+                downloadID: "stale-transfer",
+                committedByteCount: 5
             )
-        )
-        let (plan, _) = try await prepareInterruptedDownload(
-            root: root,
-            account: account,
-            detail: detail,
-            downloadID: "stale-transfer",
-            committedByteCount: 5
-        )
-        let authorizedRequest = URLRequest(
-            url: try XCTUnwrap(URL(string: "https://192.0.2.1/private-audio"))
-        )
-        let service = TestAppService(
-            activeAccount: .success(account),
-            downloadPlan: .failure(
-                .downloadPlan(.authenticatedRequest(.requestTransportFailed))
-            ),
-            authorizedDownloadRequest: .success(authorizedRequest)
-        )
-        let sessionIdentifier = backgroundSessionIdentifier("stale-recovery")
-        let model = DownloadModel(
-            service: service,
-            storageRootURL: root,
-            backgroundSessionIdentifier: sessionIdentifier
-        )
-        await model.start(accounts: [account])
-        XCTAssertEqual(
-            model.pendingRecoveryDownloadIDsForTesting,
-            [DownloadID(rawValue: "stale-transfer")]
-        )
+            let authorizedRequest = URLRequest(
+                url: try XCTUnwrap(
+                    URL(string: "https://192.0.2.1/private-audio"))
+            )
+            let service = TestAppService(
+                activeAccount: .success(account),
+                downloadPlan: .failure(
+                    .downloadPlan(
+                        .authenticatedRequest(.requestTransportFailed))
+                ),
+                authorizedDownloadRequest: .success(authorizedRequest)
+            )
+            let sessionIdentifier = backgroundSessionIdentifier(
+                "stale-recovery")
+            let model = DownloadModel(
+                service: service,
+                defaults: defaults,
+                storageRootURL: root,
+                backgroundSessionIdentifier: sessionIdentifier,
+                // Inspect scheduling independently of a real network's failure timing.
+                startDownloadTask: { _ in }
+            )
+            addTeardownBlock { @MainActor in await model.removeAll() }
+            await model.start(accounts: [account])
+            XCTAssertEqual(
+                model.pendingRecoveryDownloadIDsForTesting,
+                [DownloadID(rawValue: "stale-transfer")]
+            )
 
-        let staleIdentity = try DownloadTaskIdentity(
-            downloadID: DownloadID(rawValue: "stale-transfer"),
-            accountID: account.id,
-            itemID: detail.id,
-            track: plan.tracks[1]
-        )
-        let staleConfiguration = URLSessionConfiguration.background(
-            withIdentifier: sessionIdentifier
-        )
-        let staleSession = URLSession(configuration: staleConfiguration)
-        let staleTask = staleSession.downloadTask(with: authorizedRequest)
-        staleTask.taskDescription = try DownloadChunkTaskDescription(
-            identity: staleIdentity,
-            range: try DownloadByteRange(start: 0, endInclusive: 3),
-            validator: nil
-        ).encode()
+            let staleIdentity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "stale-transfer"),
+                accountID: account.id,
+                itemID: detail.id,
+                track: plan.tracks[1]
+            )
+            let staleSession = model.downloadSessionForTesting
+            let staleTask = staleSession.downloadTask(with: authorizedRequest)
+            staleTask.taskDescription = try DownloadChunkTaskDescription(
+                identity: staleIdentity,
+                range: try DownloadByteRange(start: 0, endInclusive: 3),
+                validator: nil
+            ).encode()
 
-        await service.setDownloadPlan(.success(plan))
-        await model.recoverAfterNetworkChange(for: [account])
+            await service.setDownloadPlan(.success(plan))
+            if recoversAfterNetworkChange {
+                await model.recoverAfterNetworkChange(for: [account])
+            } else {
+                await model.start(accounts: [account])
+            }
 
-        let descriptors = await model.scheduledTransferDescriptorsForTesting()
-        XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
-        let descriptor = try XCTUnwrap(descriptors.first)
-        XCTAssertEqual(descriptor.range.start, 5)
-        XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
-        let requests = await service.authorizedDownloadRequestIdentities()
-        XCTAssertEqual(requests.map(\.trackIndex), [1])
-        staleSession.invalidateAndCancel()
-        await model.removeAll()
+            await assertEventually(
+                "native stale-task cancellation callback completed",
+                timeout: .seconds(5),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting > 0
+                })
+            // Deliver the retired task's cancellation again after replacement scheduling.
+            // This reproduces late/repeated framework delivery without a live network.
+            let callbackBaseline = model
+                .taskCompletionProcessingSequenceForTesting
+            await Task.detached {
+                model.urlSession(
+                    staleSession, task: staleTask,
+                    didCompleteWithError: URLError(.cancelled))
+            }.value
+            await assertEventually(
+                "late stale-task cancellation callback completed",
+                timeout: .seconds(5),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting
+                        > callbackBaseline
+                })
 
-        var remainingDescriptors =
-            await model.scheduledTransferDescriptorsForTesting()
-        for _ in 0..<200 where !remainingDescriptors.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-            remainingDescriptors =
+            let descriptors =
                 await model.scheduledTransferDescriptorsForTesting()
+            XCTAssertEqual(descriptors.map { $0.identity.trackIndex }, [1])
+            let descriptor = try XCTUnwrap(descriptors.first)
+            XCTAssertEqual(descriptor.range.start, 5)
+            XCTAssertEqual(descriptor.range.length, 3)
+            let staleDescriptor = try DownloadChunkTaskDescription.decode(
+                try XCTUnwrap(staleTask.taskDescription))
+            XCTAssertNotEqual(descriptor.transferID, staleDescriptor.transferID)
+            XCTAssertEqual(model.pendingRecoveryDownloadIDsForTesting, [])
+            XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 1)
+            XCTAssertNil(model.failure)
+            let retainedBytes = try await storage.partialByteLength(
+                staleIdentity)
+            XCTAssertEqual(retainedBytes, 5)
+            let requests = await service.authorizedDownloadRequestIdentities()
+            XCTAssertEqual(requests.map(\.trackIndex), [1])
+            await model.removeAll()
+            await assertEventually(
+                "recovery task cleanup", timeout: .seconds(5),
+                observed: {
+                    "scheduled descriptors=\(await model.scheduledTransferDescriptorsForTesting())"
+                },
+                condition: {
+                    await model.scheduledTransferDescriptorsForTesting().isEmpty
+                })
         }
-        XCTAssertTrue(remainingDescriptors.isEmpty)
     }
 
     func testRepeatedNetworkRecoveryDoesNotDuplicateTransfers() async throws {
