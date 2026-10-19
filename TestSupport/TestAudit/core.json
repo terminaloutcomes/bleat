@@ -10934,7 +10934,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testNewQuerySupersedesPendingDebounce",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 60
+        "line": 69
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -10980,7 +10980,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testAccountAndLibraryChangeCancelsInFlightSearch",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 105
+        "line": 134
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11026,7 +11026,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCallerCancellationStopsPendingDebounce",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 163
+        "line": 222
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11072,7 +11072,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 192
+        "line": 260
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11115,10 +11115,88 @@
       }
     },
     {
+      "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall",
+      "source": {
+        "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+        "line": 313
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retain two releases before caller creation, bounded call/blocked/completion observations, original typed success/remote source, another release and exact one service call. Failed observations return through scoped cancellation/release cleanup without unconfirmed task joins.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh existing SearchTestService(ignoreCancellationOnFirstCall:true), BoundedTestCounter, account a/library one context and book request.",
+        "action_postconditions": "Retain two releases before caller creation, bounded call/blocked/completion observations, original typed success/remote source, another release and exact one service call. Failed observations return through scoped cancellation/release cleanup without unconfirmed task joins."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Existing BoundedTestCounter entry and completion signals are retained. Producer increments completion only after the actual service call returns; each failed reached flag is a return guard before task consumption. No cleanup manufactures completion.",
+        "timeout_tolerance": "Existing counter failure bounds unchanged; no readiness sleep, new latency threshold or wait relaxation."
+      },
+      "compiler_skip_conditions": "No test-level compiler guard, opt-in or skip.",
+      "rules": {
+        "1": "Retain two releases before caller creation, bounded call/blocked/completion observations, original typed success/remote source, another release and exact one service call. Failed observations return through scoped cancellation/release cleanup without unconfirmed task joins.",
+        "2": "Existing BoundedTestCounter entry and completion signals are retained. Producer increments completion only after the actual service call returns; each failed reached flag is a return guard before task consumption. No cleanup manufactures completion.",
+        "3": "Existing counter failure bounds unchanged; no readiness sleep, new latency threshold or wait relaxation.",
+        "4": "Existing withTestCleanup is awaited on success, guard return and throw: cancel owned caller and await resumeBlockedCall. Existing release latch handles late entry and repeated release. No task.value/result await on missing completion; underlying task-graph drainage remains unproven.",
+        "5": "Fresh cancellation-ignoring SearchTestService, completion counter and synthetic context/request per test. No file/defaults/native session/process-global ownership.",
+        "6": "Host-local shared fake release-order contract, explicitly testing early or post-registration repeated release. Production search behavior/helper implementation unchanged.",
+        "7": "No retry-to-green or threshold widening. Original release order preserved and successful typed result/call-count postconditions explicit.",
+        "8": "Existing stage/elapsed/limit/source failure diagnostics remain; no raw search response or sensitive payload logging.",
+        "9": "Reviewed both existing bodies, producers and all failed-wait exits plus existing notRegistered/waiting/released helper state. Two already-inventoried declarations lacked index/audit rows; add only those accurate records. Focused repeats/owning/signed/discovery evidence linked."
+      },
+      "decision": "fix",
+      "reason": "Previously completion timeout could fall through to an unconfirmed task join; now every failed observation exits through awaited cancellation/release cleanup. Existing declaration newly indexed/reviewed, not a new test.",
+      "shared_helper_review": "Existing SearchTestService release state latches before entry and resumes installed continuation once; no helper change or full drainage claim. BoundedTestCounter and TestCleanup seams reused.",
+      "search_release_exit_review": {
+        "base_revision": "404175aed7d2dac50fb91f668f0ff653e37380cd",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-release-timeout-exits-and-missing-audit-records-issue-372",
+        "new_declaration": false,
+        "previous_record": "Absent from source index/core audit despite existing host inventory identity."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall",
+      "source": {
+        "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+        "line": 382
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retain call and blocked-registration observations before two releases, require bounded actual completion before typed task value, then remote source and exactly one service call. Failed observations return through scoped cancellation/release cleanup without unknown joins.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh existing SearchTestService(ignoreCancellationOnFirstCall:true), BoundedTestCounter, account a/library one context and book request.",
+        "action_postconditions": "Retain call and blocked-registration observations before two releases, require bounded actual completion before typed task value, then remote source and exactly one service call. Failed observations return through scoped cancellation/release cleanup without unknown joins."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Existing BoundedTestCounter entry and completion signals are retained. Producer increments completion only after the actual service call returns; each failed reached flag is a return guard before task consumption. No cleanup manufactures completion.",
+        "timeout_tolerance": "Existing counter failure bounds unchanged; no readiness sleep, new latency threshold or wait relaxation."
+      },
+      "compiler_skip_conditions": "No test-level compiler guard, opt-in or skip.",
+      "rules": {
+        "1": "Retain call and blocked-registration observations before two releases, require bounded actual completion before typed task value, then remote source and exactly one service call. Failed observations return through scoped cancellation/release cleanup without unknown joins.",
+        "2": "Existing BoundedTestCounter entry and completion signals are retained. Producer increments completion only after the actual service call returns; each failed reached flag is a return guard before task consumption. No cleanup manufactures completion.",
+        "3": "Existing counter failure bounds unchanged; no readiness sleep, new latency threshold or wait relaxation.",
+        "4": "Existing withTestCleanup is awaited on success, guard return and throw: cancel owned caller and await resumeBlockedCall. Existing release latch handles late entry and repeated release. No task.value/result await on missing completion; underlying task-graph drainage remains unproven.",
+        "5": "Fresh cancellation-ignoring SearchTestService, completion counter and synthetic context/request per test. No file/defaults/native session/process-global ownership.",
+        "6": "Host-local shared fake release-order contract, explicitly testing early or post-registration repeated release. Production search behavior/helper implementation unchanged.",
+        "7": "No retry-to-green or threshold widening. Original release order preserved and successful typed result/call-count postconditions explicit.",
+        "8": "Existing stage/elapsed/limit/source failure diagnostics remain; no raw search response or sensitive payload logging.",
+        "9": "Reviewed both existing bodies, producers and all failed-wait exits plus existing notRegistered/waiting/released helper state. Two already-inventoried declarations lacked index/audit rows; add only those accurate records. Focused repeats/owning/signed/discovery evidence linked."
+      },
+      "decision": "fix",
+      "reason": "Previously completion timeout could fall through to an unconfirmed task join; now every failed observation exits through awaited cancellation/release cleanup. Existing declaration newly indexed/reviewed, not a new test.",
+      "shared_helper_review": "Existing SearchTestService release state latches before entry and resumes installed continuation once; no helper change or full drainage claim. BoundedTestCounter and TestCleanup seams reused.",
+      "search_release_exit_review": {
+        "base_revision": "404175aed7d2dac50fb91f668f0ff653e37380cd",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-release-timeout-exits-and-missing-audit-records-issue-372",
+        "new_declaration": false,
+        "previous_record": "Absent from source index/core audit despite existing host inventory identity."
+      }
+    },
+    {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryFailuresRemainTyped",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 226
+        "line": 433
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -11164,7 +11242,7 @@
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepositoryCancellationMapsToCoordinatorCancellation",
       "source": {
         "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
-        "line": 259
+        "line": 475
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23370,5 +23448,21 @@
     ],
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
     "remaining_limits": "No real-time scheduler guarantee, wall-clock adjustment redesign, native/live/device acceptance or whole task-graph drainage claim."
+  },
+  "issue_372_search_release_timeout_exits": {
+    "base_revision": "404175aed7d2dac50fb91f668f0ff653e37380cd",
+    "changed_tests": [
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall",
+      "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall"
+    ],
+    "new_test_declarations": 0,
+    "existing_declarations_newly_indexed": 2,
+    "existing_declarations_newly_audited": 2,
+    "host_inventory_unchanged": 597,
+    "owning_identities": 10,
+    "source_index_rows": 1583,
+    "core_audit_records": 593,
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-release-timeout-exits-and-missing-audit-records-issue-372",
+    "remaining_limits": "Cancellation/release cleanup is observed; whole underlying task-graph drainage and unrelated search follow-ups remain unproven/open."
   }
 }

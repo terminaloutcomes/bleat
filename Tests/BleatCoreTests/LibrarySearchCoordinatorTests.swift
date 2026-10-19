@@ -338,47 +338,44 @@ final class LibrarySearchCoordinatorTests {
             await completion.increment()
             return result
         }
-        let callWait = await service.waitForFirstCall()
-        #expect(
-            callWait.reached,
-            "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
-        )
-        guard callWait.reached else {
+        try await withTestCleanup {
             task.cancel()
             await service.resumeBlockedCall()
-            _ = await task.result
-            return
-        }
-        let blockedWait = await service.waitForBlockedCall()
-        #expect(
-            blockedWait.reached,
-            "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
-        )
-        guard blockedWait.reached else {
-            task.cancel()
-            await service.resumeBlockedCall()
-            _ = await task.result
-            return
-        }
+        } operation: {
+            let callWait = await service.waitForFirstCall()
+            #expect(
+                callWait.reached,
+                "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
+            )
+            guard callWait.reached else {
+                return
+            }
+            let blockedWait = await service.waitForBlockedCall()
+            #expect(
+                blockedWait.reached,
+                "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+            )
+            guard blockedWait.reached else {
+                return
+            }
 
-        let completionWait = await completion.wait(untilAtLeast: 1)
-        #expect(
-            completionWait.reached,
-            "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
-        )
-        if !completionWait.reached {
-            task.cancel()
-            await service.resumeBlockedCall()
-        }
-        let result = await task.value
+            let completionWait = await completion.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = await task.value
 
-        guard case .success(let value) = result else {
-            Issue.record("Expected the cancellation-ignoring call to succeed")
-            return
+            guard case .success(let value) = result else {
+                Issue.record(
+                    "Expected the cancellation-ignoring call to succeed")
+                return
+            }
+            #expect(value.source == .remote)
+            await service.resumeBlockedCall()
+            #expect(await service.callCount() == 1)
         }
-        #expect(value.source == .remote)
-        await service.resumeBlockedCall()
-        #expect(await service.callCount() == 1)
     }
 
     @Test
@@ -397,41 +394,39 @@ final class LibrarySearchCoordinatorTests {
             await completion.increment()
             return result
         }
-        let callWait = await service.waitForFirstCall()
-        #expect(
-            callWait.reached,
-            "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
-        )
-        guard callWait.reached else {
+        try await withTestCleanup {
             task.cancel()
             await service.resumeBlockedCall()
-            _ = await task.result
-            return
-        }
-        let blockedWait = await service.waitForBlockedCall()
-        #expect(
-            blockedWait.reached,
-            "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
-        )
-        guard blockedWait.reached else {
-            task.cancel()
-            await service.resumeBlockedCall()
-            _ = await task.result
-            return
-        }
+        } operation: {
+            let callWait = await service.waitForFirstCall()
+            #expect(
+                callWait.reached,
+                "repository call timed out after \(callWait.elapsed), limit \(callWait.timeout)"
+            )
+            guard callWait.reached else {
+                return
+            }
+            let blockedWait = await service.waitForBlockedCall()
+            #expect(
+                blockedWait.reached,
+                "blocked-call registration timed out after \(blockedWait.elapsed), limit \(blockedWait.timeout)"
+            )
+            guard blockedWait.reached else {
+                return
+            }
 
-        await service.resumeBlockedCall()
-        await service.resumeBlockedCall()
-        let completionWait = await completion.wait(untilAtLeast: 1)
-        #expect(
-            completionWait.reached,
-            "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
-        )
-        if !completionWait.reached {
-            task.cancel()
             await service.resumeBlockedCall()
+            await service.resumeBlockedCall()
+            let completionWait = await completion.wait(untilAtLeast: 1)
+            #expect(
+                completionWait.reached,
+                "released repository call timed out after \(completionWait.elapsed), limit \(completionWait.timeout)"
+            )
+            guard completionWait.reached else { return }
+            let result = try await task.value
+            #expect(result.source == .remote)
+            #expect(await service.callCount() == 1)
         }
-        _ = await task.result
     }
 
     @Test
