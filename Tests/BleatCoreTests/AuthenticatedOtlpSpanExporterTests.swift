@@ -404,41 +404,49 @@ final class AuthenticatedOtlpSpanExporterTests {
     }
 
     @Test
-    func testConcurrentExportsUseProviderSafelyAndReuseOneClient() async {
+    func testConcurrentExportsUseProviderSafelyAndReuseOneClient() async throws
+    {
         let provider = SingleFlightTokenProvider(
-            token: "shared",
-            expectedWaiters: 8
-        )
+            token: "shared", expectedWaiters: 8)
         let client = RecordingOtlpClient(
-            results: Array(repeating: .success, count: 8)
-        )
+            results: Array(repeating: .success, count: 8))
         let exporter = exporter(provider: provider, client: client)
-
         let span = span()
-        await withTaskGroup(of: Bool.self) { group in
-            for _ in 0..<8 {
-                group.addTask {
-                    await exporter.export(spans: [span]) == .success
-                }
+        let callers = (0..<8).map { _ in
+            let returned = AuthTelemetryTestCompletion<Bool>()
+            let task = Task {
+                let success = await exporter.export(spans: [span]) == .success
+                await returned.complete(success)
             }
-            #expect(
+            return (task, returned)
+        }
+        try await withTestCleanup {
+            for (task, _) in callers { task.cancel() }
+            exporter.cancelActiveExports()
+            await provider.releaseToken()
+        } operation: {
+            try #require(
                 await requireAuthTelemetrySignal(
                     provider.allTokenWaitersArrived,
-                    stage: "eight concurrent telemetry token waiters"
-                ))
+                    stage: "eight concurrent telemetry token waiters"))
             await provider.releaseToken()
-            for await result in group {
-                #expect(result)
+            for (index, caller) in callers.enumerated() {
+                let success = try #require(
+                    await requireAuthTelemetryCompletion(
+                        caller.1,
+                        stage:
+                            "concurrent OTLP export caller \(index) returning"))
+                #expect(success)
+                await caller.0.value
             }
+            let refreshCount = await provider.refreshCount
+            #expect(refreshCount == 1)
+            #expect(client.exportCount == 8)
+            #expect(
+                Set(client.recordedMetadata.flatMap { $0.map(\.1) }) == [
+                    "Bearer shared"
+                ])
         }
-
-        let refreshCount = await provider.refreshCount
-        #expect(refreshCount == 1)
-        #expect(client.exportCount == 8)
-        #expect(
-            Set(client.recordedMetadata.flatMap { $0.map(\.1) }) == [
-                "Bearer shared"
-            ])
     }
 
     @Test
@@ -510,9 +518,10 @@ final class AuthenticatedOtlpSpanExporterTests {
     }
 
     @Test
-    func testAsyncTransportShutdownWaitsForClosureCompletion() async {
+    func testAsyncTransportShutdownWaitsForClosureCompletion() async throws {
         let gate = AsyncShutdownGate()
         let completion = AsyncCompletionState()
+        let returned = AuthTelemetryTestCompletion<Bool>()
         let session = URLSession(configuration: .ephemeral)
         let transport = URLSessionRemoteTelemetryHTTPTransport(
             session: session,
@@ -521,19 +530,28 @@ final class AuthenticatedOtlpSpanExporterTests {
                 session.invalidateAndCancel()
             }
         )
-
         let shutdown = Task {
             await transport.shutdown()
             await completion.markCompleted()
+            await returned.complete(true)
         }
-        #expect(await gate.waitUntilEntered())
-        let completedBeforeRelease = await completion.isCompleted
-        #expect(!(completedBeforeRelease))
-
-        await gate.release()
-        await shutdown.value
-        let completedAfterRelease = await completion.isCompleted
-        #expect(completedAfterRelease)
+        try await withTestCleanup {
+            shutdown.cancel()
+            await gate.release()
+            session.invalidateAndCancel()
+        } operation: {
+            try #require(await gate.waitUntilEntered())
+            let completedBeforeRelease = await completion.isCompleted
+            #expect(!(completedBeforeRelease))
+            await gate.release()
+            try #require(
+                await requireAuthTelemetryCompletion(
+                    returned, stage: "OTLP transport shutdown caller returning")
+                    == true)
+            await shutdown.value
+            let completedAfterRelease = await completion.isCompleted
+            #expect(completedAfterRelease)
+        }
     }
 
     @Test
