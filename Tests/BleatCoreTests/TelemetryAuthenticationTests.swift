@@ -144,26 +144,46 @@ final class TelemetryAuthenticationTests {
     }
 
     @Test
-    func testCachedTokenAvailabilityReportsActiveAcquisition() async {
-        let transport = FakeTelemetryTransport(tokenDelay: .seconds(5))
+    func testCachedTokenAvailabilityReportsActiveAcquisition() async throws {
+        let responseGate = AuthTelemetryTestSignal()
+        let transport = FakeTelemetryTransport(tokenResponseGate: responseGate)
         let provider = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
             transport: transport,
             store: MemoryEnrollmentStore()
         )
         await provider.setEnabled(true)
-        let acquisition = Task { try await provider.currentToken() }
-        #expect(
-            await requireAuthTelemetrySignal(
-                transport.tokenEntrySignal,
-                stage: "telemetry token transport entry"
-            ))
+        let callerReturned = AuthTelemetryTestCompletion<Bool>()
+        let acquisition = Task {
+            let result = await telemetryTokenResult(from: provider)
+            await callerReturned.complete(true)
+            return try result.get()
+        }
+        try await withTestCleanup {
+            acquisition.cancel()
+            await provider.setEnabled(false)
+            await transport.retireTokenResponse()
+        } operation: {
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.tokenEntrySignal,
+                    stage: "telemetry token transport entry"
+                ))
 
-        let availability = await provider.cachedTokenAvailability()
-        #expect(availability == .acquiring)
+            let availability = await provider.cachedTokenAvailability()
+            #expect(availability == .acquiring)
 
-        acquisition.cancel()
-        _ = try? await acquisition.value
+            acquisition.cancel()
+            guard
+                await requireAuthTelemetryCompletion(
+                    callerReturned,
+                    stage: "active telemetry acquisition returning") == true
+            else {
+                acquisition.cancel()
+                return
+            }
+            _ = try? await acquisition.value
+        }
     }
 
     @Test
@@ -333,8 +353,9 @@ final class TelemetryAuthenticationTests {
     }
 
     @Test
-    func testCancellingOnlyWaiterCancelsUnderlyingRefresh() async {
-        let transport = FakeTelemetryTransport(tokenDelay: .seconds(30))
+    func testCancellingOnlyWaiterCancelsUnderlyingRefresh() async throws {
+        let responseGate = AuthTelemetryTestSignal()
+        let transport = FakeTelemetryTransport(tokenResponseGate: responseGate)
         let provider = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
             transport: transport,
@@ -347,24 +368,51 @@ final class TelemetryAuthenticationTests {
         )
         await provider.setEnabled(true)
 
-        let waiter = Task { try await provider.currentToken() }
-        #expect(
-            await requireAuthTelemetrySignal(
-                transport.tokenEntrySignal,
-                stage: "telemetry token transport entry"
-            ))
-        waiter.cancel()
-
-        await assertThrowsTelemetryError(.cancelled) {
-            try await waiter.value
+        let callerReturned = AuthTelemetryTestCompletion<Bool>()
+        let waiter = Task {
+            let result = await telemetryTokenResult(from: provider)
+            await callerReturned.complete(true)
+            return try result.get()
         }
-        #expect(
-            await requireAuthTelemetrySignal(
-                transport.tokenCancellationSignal,
-                stage: "telemetry token transport cancellation"
-            ))
-        let cancellationCount = await transport.tokenCancellationCount
-        #expect(cancellationCount == 1)
+        try await withTestCleanup {
+            waiter.cancel()
+            await provider.setEnabled(false)
+            await transport.retireTokenResponse()
+        } operation: {
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.tokenEntrySignal,
+                    stage: "telemetry token transport entry"
+                ))
+            waiter.cancel()
+
+            guard
+                await requireAuthTelemetryCompletion(
+                    callerReturned,
+                    stage: "cancelled sole telemetry waiter returning") == true
+            else {
+                waiter.cancel()
+                return
+            }
+            await assertThrowsTelemetryError(.cancelled) {
+                try await waiter.value
+            }
+            #expect(
+                await requireAuthTelemetryCondition(
+                    stage:
+                        "sole telemetry waiter removed before response retirement"
+                ) {
+                    await provider.refreshWaiterCountForTesting == 0
+                })
+            await transport.retireTokenResponse()
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.tokenCancellationSignal,
+                    stage: "telemetry token transport cancellation"
+                ))
+            let cancellationCount = await transport.tokenCancellationCount
+            #expect(cancellationCount == 1)
+        }
     }
 
     @Test
@@ -575,7 +623,8 @@ final class TelemetryAuthenticationTests {
 
     @Test
     func testDisablingCancelsRefreshAndClearsMemoryToken() async throws {
-        let transport = FakeTelemetryTransport(tokenDelay: .seconds(5))
+        let responseGate = AuthTelemetryTestSignal()
+        let transport = FakeTelemetryTransport(tokenResponseGate: responseGate)
         let provider = TelemetryTokenProvider(
             attester: FakeTelemetryAttester(),
             transport: transport,
@@ -587,22 +636,41 @@ final class TelemetryAuthenticationTests {
             )
         )
         await provider.setEnabled(true)
-        let refresh = Task { try await provider.currentToken() }
-        #expect(
-            await requireAuthTelemetrySignal(
-                transport.tokenChallengeSignal,
-                stage: "telemetry token challenge"
-            ))
-        await provider.setEnabled(false)
-
-        do {
-            _ = try await refresh.value
-            Issue.record("cancelled refresh unexpectedly returned a token")
-        } catch let error as TelemetryTokenProviderError {
-            #expect(error == .cancelled || error == .disabled)
+        let callerReturned = AuthTelemetryTestCompletion<Bool>()
+        let refresh = Task {
+            let result = await telemetryTokenResult(from: provider)
+            await callerReturned.complete(true)
+            return try result.get()
         }
-        await assertThrowsTelemetryError(.disabled) {
-            try await provider.currentToken()
+        try await withTestCleanup {
+            refresh.cancel()
+            await provider.setEnabled(false)
+            await transport.retireTokenResponse()
+        } operation: {
+            #expect(
+                await requireAuthTelemetrySignal(
+                    transport.tokenChallengeSignal,
+                    stage: "telemetry token challenge"
+                ))
+            await provider.setEnabled(false)
+
+            guard
+                await requireAuthTelemetryCompletion(
+                    callerReturned,
+                    stage: "disabled telemetry refresh returning") == true
+            else {
+                refresh.cancel()
+                return
+            }
+            do {
+                _ = try await refresh.value
+                Issue.record("cancelled refresh unexpectedly returned a token")
+            } catch let error as TelemetryTokenProviderError {
+                #expect(error == .cancelled || error == .disabled)
+            }
+            await assertThrowsTelemetryError(.disabled) {
+                try await provider.currentToken()
+            }
         }
     }
 

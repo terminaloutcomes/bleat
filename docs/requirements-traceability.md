@@ -708,3 +708,9 @@ The [bounded in-flight refresh caller-outcome slice](release-evidence/test-relia
 adds completion proof before consuming six task outcomes across three existing
 authenticated-request tests, retaining typed failures and token/count semantics.
 Unconfirmed task drainage and broader #372/#362 criteria remain open.
+
+
+The [controlled telemetry token-response slice](release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372)
+replaces timed holds and unbounded caller consumption in three existing tests
+using existing response/retirement/completion seams. Cancellation checks remain
+before cleanup; whole-task drainage and broader #372/#362 criteria stay open.

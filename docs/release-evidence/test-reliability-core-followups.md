@@ -1109,3 +1109,73 @@ has a matching log. Complete signed validation uses
 `.build/i372-refresh-discovery.txt`, `.build/i372-refresh-lint.log`,
 `.build/i372-refresh-docs.log` and `.build/i372-refresh-verification.json`.
 Fresh exact-head source review and CI are required before merge.
+
+
+## Controlled telemetry token response lifecycles (issue #372)
+
+At merged base `20442b3d2ea6473f85c6f12bd7762adb267f9cd5`, three token-provider
+tests had bounded entry signals but used five/thirty-second fake delays to hold
+responses and consumed caller task values without final completion bounds:
+
+- `testCachedTokenAvailabilityReportsActiveAcquisition`
+- `testCancellingOnlyWaiterCancelsUnderlyingRefresh`
+- `testDisablingCancelsRefreshAndClearsMemoryToken`
+
+Each now uses the existing controlled response gate: acquiring state is observed
+while a response is explicitly held, rather than within a timed success window.
+Existing typed-result/completion helpers signal only after actual provider
+return/throw; bounded observations precede original task-value consumptions.
+Values/errors and availability, cancelled/disabled and cancellation assertions
+remain.
+
+Awaited `withTestCleanup` cancels the caller, disables the provider and retires
+the response on normal and throwing exits. Existing retirement rejects late
+entry and bounds observation of a response body already waiting. Cleanup never
+awaits an unconfirmed caller and does not establish termination of the whole
+underlying provider task graph. Unproven drainage remains open.
+
+The sole-waiter case observes removal through the existing actor property before
+retiring the response. Removal and underlying cancellation occur in one
+synchronous provider actor operation. Retirement releases without cancelling
+that task; the fake must observe its actual cancellation flag to emit the
+cancellation signal/count. Original cancellation assertions execute before scope
+cleanup disables the provider, so cleanup cannot manufacture the tested action.
+
+Existing ten-second helper deadlines are failure bounds, not timing tolerances
+or readiness sleeps. No helper/production implementation, new declaration or
+inventory change. Two methods become async throwing to propagate awaited cleanup
+failures; discovery identities remain unchanged. Three current dispositions have
+individual nine-rule reviews; historical notes remain retained. Inventory 592,
+source index 1,576 and core audit 586 counts are unchanged.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused executions: **3/3 each**, exact original identities,
+  zero failures/errors/skips.
+- Owning `TelemetryAuthenticationTests`: **18/18**, exact inventory identities,
+  zero failures/errors/skips.
+- Supported complete signed host gate: **592/592**, exact inventory identities,
+  zero failures/errors/skips. Signing/entitlements/provisioning verified by the
+  gate and production LCOV exported. Existing watchOS deprecation, read-only
+  Cocoa 513 diagnostics and three intentional cleanup known issues remain
+  retained; no new runtime warning or unexpected issue was observed.
+- Built discovery: **592/592** host declarations. Strict repository Swift lint,
+  documentation references and final diff/JSON checks passed.
+
+Supported serial Swift Testing commands use `mise exec -- env
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter`
+with the three exact names above prefixed by `TelemetryAuthenticationTests.` and
+joined by `|`, writing `.build/i372-token-focused-1.xml`. Repetitions add
+`--skip-build` and distinct `-2`/`-3` reports. Owning selection is
+`TelemetryAuthenticationTests`, writing `.build/i372-token-owning.xml`; each XML
+has a matching log. Complete signed validation uses
+`mise exec -- ./scripts/test-host.sh`, retaining
+`.build/i372-token-signed-host.log`. Discovery/lint/docs/outcome evidence is
+`.build/i372-token-discovery.txt`, `.build/i372-token-lint.log`,
+`.build/i372-token-docs.log` and `.build/i372-token-verification.json`.
+A transient m2 execution disconnect prevented the audit-update command from
+starting; a harmless read recovered connectivity. The already-running focused
+command exited zero and its exact 3/3 XML outcomes were independently verified.
+No failed/interrupted test is credited through that environment event.
+Broader lifecycle/configuration/device/live-server and file-backed cleanup
+acceptance remains open. Fresh exact-head source review and CI are required.
