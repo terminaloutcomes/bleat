@@ -2922,7 +2922,7 @@
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Bounded semaphore wait blocks async test thread; replace with async notification/continuation signal and retain explicit startup bound.",
+      "reason": "Bound actual public export caller return before task-value consumption. Cancel the active public export caller during token wait; retain failure and zero RPC assertions. Final caller waiting is bounded, but the existing timed token fake can expire naturally during a long scheduler pause; cancellation timing/provider drainage remain unproven.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -2930,13 +2930,34 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "otlp_cancel_outcome_review": {
+        "base_revision": "18a02ebfadb1f3797161584560526f98591b3e5e",
+        "previous_decision": "follow_up",
+        "historical_reason": "Bounded semaphore wait blocks async test thread; replace with async notification/continuation signal and retain explicit startup bound.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block assesses the current final caller-outcome observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Cancel the active public export caller during token wait; retain failure and zero RPC assertions. A dedicated completion actor is signaled only after actual export returns; original result is forwarded unchanged.",
+          "2": "Retain bounded token-request/RPC-registration entry signals and controlled release ordering. Observe bounded actual caller completion before each existing task-value await.",
+          "3": "Existing explicitTimeout 30 and fake holds remain unchanged. The existing ten-second completion deadline bounds waiting after cancellation; it neither timestamps earlier completion nor rules out natural fake expiry during a long scheduler pause. No new latency assertion/readiness sleep.",
+          "4": "Missing caller result records a stage issue, requests task/exporter cancellation and returns without unconfirmed value awaits. This does not prove underlying token/provider/export task drainage; those findings remain open.",
+          "5": "Fresh in-memory token providers and recording/gated fake clients; no file/defaults/native session ownership or global-output mutation.",
+          "6": "Host-local OTLP cancellation integration with fake clients; zero/one RPC and cancellation/request counts remain actual recorded fake observations.",
+          "7": "No retry-to-green or result/counter relaxation. Later-export regression keeps both epochs and original request-count assertion.",
+          "8": "Caller-stage/elapsed timeout diagnostics carry no token/span/result payloads. Result assertions remain on the original task value after observed return.",
+          "9": "Reviewed existing single-waiter completion helper, three producers, token-wait fake and registration release; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 19/19, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-otlp-cancellation-caller-outcomes-issue-372",
+        "remaining_follow_up": "Replace or independently observe the cancellation-cooperative timed token fake; current caller bound alone does not establish cancellation timing or whole-provider drainage."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 172
+        "line": 188
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -2968,7 +2989,7 @@
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Use async bounded started signal rather than blocking the test executor.",
+      "reason": "Bound actual public export caller return before task-value consumption. Cancel through exporter lifecycle during token wait; retain failure, zero RPC and exactly one client cancellation. Final caller waiting is bounded, but the existing timed token fake can expire naturally during a long scheduler pause; cancellation timing/provider drainage remain unproven.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -2976,6 +2997,27 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "otlp_cancel_outcome_review": {
+        "base_revision": "18a02ebfadb1f3797161584560526f98591b3e5e",
+        "previous_decision": "follow_up",
+        "historical_reason": "Use async bounded started signal rather than blocking the test executor.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block assesses the current final caller-outcome observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Cancel through exporter lifecycle during token wait; retain failure, zero RPC and exactly one client cancellation. A dedicated completion actor is signaled only after actual export returns; original result is forwarded unchanged.",
+          "2": "Retain bounded token-request/RPC-registration entry signals and controlled release ordering. Observe bounded actual caller completion before each existing task-value await.",
+          "3": "Existing explicitTimeout 30 and fake holds remain unchanged. The existing ten-second completion deadline bounds waiting after cancellation; it neither timestamps earlier completion nor rules out natural fake expiry during a long scheduler pause. No new latency assertion/readiness sleep.",
+          "4": "Missing caller result records a stage issue, requests task/exporter cancellation and returns without unconfirmed value awaits. This does not prove underlying token/provider/export task drainage; those findings remain open.",
+          "5": "Fresh in-memory token providers and recording/gated fake clients; no file/defaults/native session ownership or global-output mutation.",
+          "6": "Host-local OTLP cancellation integration with fake clients; zero/one RPC and cancellation/request counts remain actual recorded fake observations.",
+          "7": "No retry-to-green or result/counter relaxation. Later-export regression keeps both epochs and original request-count assertion.",
+          "8": "Caller-stage/elapsed timeout diagnostics carry no token/span/result payloads. Result assertions remain on the original task value after observed return.",
+          "9": "Reviewed existing single-waiter completion helper, three producers, token-wait fake and registration release; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 19/19, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-otlp-cancellation-caller-outcomes-issue-372",
+        "remaining_follow_up": "Replace or independently observe the cancellation-cooperative timed token fake; current caller bound alone does not establish cancellation timing or whole-provider drainage."
       }
     },
     {
@@ -3237,7 +3279,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 349
+        "line": 394
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3262,14 +3304,14 @@
         "8": "Typed result and semantic counts/state are asserted. Global stdout/stderr capture or readiness failure details require follow-up.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Gated client uses AsyncShutdownGate release continuation; first RPC-start notification is a bounded blocking semaphore, then test releases it.",
       "action_postconditions": "Wait for first RPC registration (2s semaphore); cancel exporter, release gate, await failure/no RPC; perform later export and assert success, one call, two token requests.",
       "synchronization": "Gated client uses AsyncShutdownGate release continuation; first RPC-start notification is a bounded blocking semaphore, then test releases it.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Use async bounded stage notifications, including gate entry; retain cancellation/replacement assertions.",
+      "reason": "Bound actual public export caller return before task-value consumption. Cancel after token completion/before RPC registration; retain first failure/zero RPC, later success/one RPC and two provider requests.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3277,6 +3319,26 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "otlp_cancel_outcome_review": {
+        "base_revision": "18a02ebfadb1f3797161584560526f98591b3e5e",
+        "previous_decision": "follow_up",
+        "historical_reason": "Use async bounded stage notifications, including gate entry; retain cancellation/replacement assertions.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block assesses the current final caller-outcome observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Cancel after token completion/before RPC registration; retain first failure/zero RPC, later success/one RPC and two provider requests. A dedicated completion actor is signaled only after actual export returns; original result is forwarded unchanged.",
+          "2": "Retain bounded token-request/RPC-registration entry signals and controlled release ordering. Observe bounded actual caller completion before each existing task-value await.",
+          "3": "Existing explicitTimeout 30 and fake holds remain unchanged. The existing ten-second completion deadline bounds waiting after cancellation; it neither timestamps earlier completion nor rules out natural fake expiry during a long scheduler pause. No new latency assertion/readiness sleep.",
+          "4": "Missing caller result records a stage issue, requests task/exporter cancellation and returns without unconfirmed value awaits. This does not prove underlying token/provider/export task drainage; those findings remain open.",
+          "5": "Fresh in-memory token providers and recording/gated fake clients; no file/defaults/native session ownership or global-output mutation.",
+          "6": "Host-local OTLP cancellation integration with fake clients; zero/one RPC and cancellation/request counts remain actual recorded fake observations.",
+          "7": "No retry-to-green or result/counter relaxation. Later-export regression keeps both epochs and original request-count assertion.",
+          "8": "Caller-stage/elapsed timeout diagnostics carry no token/span/result payloads. Result assertions remain on the original task value after observed return.",
+          "9": "Reviewed existing single-waiter completion helper, three producers, token-wait fake and registration release; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 19/19, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-otlp-cancellation-caller-outcomes-issue-372"
       }
     },
     {
@@ -22777,6 +22839,16 @@
       "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken"
     ],
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372",
+    "historical_counts": "Unchanged: host inventory 592, source declarations 1,576, core audit 586."
+  },
+  "issue_372_otlp_cancel_outcomes": {
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellingAsyncExportCancelsTokenWaitBeforeRPC",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-otlp-cancellation-caller-outcomes-issue-372",
     "historical_counts": "Unchanged: host inventory 592, source declarations 1,576, core audit 586."
   }
 }

@@ -4319,79 +4319,79 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC",
-      "line": 172,
+      "line": 188,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider",
-      "line": 194,
+      "line": 226,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncLifecycleMethodsPreserveShutdownState",
-      "line": 213,
+      "line": 245,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
-      "line": 248,
+      "line": 280,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testConcurrentExportsUseProviderSafelyAndReuseOneClient",
-      "line": 267,
+      "line": 299,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationUnblocksTokenWaitAndShutsTransportOnce",
-      "line": 296,
+      "line": 337,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncTransportShutdownWaitsForClosureCompletion",
-      "line": 322,
+      "line": 367,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
-      "line": 349,
+      "line": 394,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
-      "line": 378,
-      "language": "swift"
-    },
-    {
-      "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-      "name": "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "line": 439,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+      "name": "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
+      "line": 500,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
-      "line": 478,
+      "line": 539,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInExporterOrFailureDescriptions",
-      "line": 506,
+      "line": 567,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInCapturedProcessLogs",
-      "line": 554,
+      "line": 590,
       "language": "swift"
     },
     {

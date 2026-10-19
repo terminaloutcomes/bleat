@@ -714,3 +714,9 @@ The [controlled telemetry token-response slice](release-evidence/test-reliabilit
 replaces timed holds and unbounded caller consumption in three existing tests
 using existing response/retirement/completion seams. Cancellation checks remain
 before cleanup; whole-task drainage and broader #372/#362 criteria stay open.
+
+
+The [bounded OTLP cancellation-outcome slice](release-evidence/test-reliability-core-followups.md#bounded-otlp-cancellation-caller-outcomes-issue-372)
+adds actual caller-return proof to three existing cancellation tests, retaining
+result/RPC/cancellation/request assertions. Underlying drainage and broader
+#372/#362 criteria remain open; cache implementation is separate.
