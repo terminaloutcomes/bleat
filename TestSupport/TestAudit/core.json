@@ -4145,10 +4145,10 @@
       "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
     },
     {
-      "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSavedCredentialsMemoizesConclusiveFailure",
+      "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1031
+        "line": 1104
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4171,16 +4171,16 @@
         "6": "Deterministic host concurrency/authentication test with scripted actor transports; no live server.",
         "7": "No blind retries in the harness; repeated calls are explicit product behavior under test.",
         "8": "Typed errors and exact response/count/store state are asserted. No elapsed-time wait requires timeout reporting.",
-        "9": "Source review only; no per-test repetition run recorded."
+        "9": "2026-10-19: three independent exact-identity passes, owning suite 24/24 and signed host 577/577; zero failures/errors/skips. See docs/release-evidence/test-reliability-core-followups.md#refresh-status-test-identity-issue-372. Historical audit evidence remains tied to its original revision."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Two sends assert same unexpectedRefreshStatus; assert only initial request+one refresh+second initial request and reauth true.",
       "synchronization": "Scripted response fixture includes normal old tokens and no saved native login; no wait.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Test name says missing saved credentials, but fixture has refresh credentials and the asserted cause is unexpected refresh status 503. Rename to describe memoized conclusive refresh failure or alter scenario to actually omit saved credentials.",
+      "reason": "Renamed on 2026-10-19 under issue #372 to describe the existing conclusive refresh-status memoization scenario. Fixture inputs, typed errors, exact request paths and reauthentication assertions are unchanged; no new coverage is claimed.",
       "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups."
     },
     {

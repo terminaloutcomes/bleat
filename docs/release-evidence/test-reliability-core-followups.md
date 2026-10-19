@@ -16,7 +16,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion` | Bound the fake shutdown gate’s entry notification and report if the close closure is never entered. | `waitUntilEntered()` uses an unbounded continuation; the explicit release only happens after that wait returns. |
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs` | Capture output in a subprocess or enforce process-wide exclusive serialization, and restore both file descriptors through guaranteed cleanup. | `captureStandardOutput` redirects process-global stdout/stderr while other Swift Testing suites can execute concurrently; a restoration failure can also leave a descriptor redirected. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh`, `testTwentyUnauthorizedRequestsShareOneRejectedRefresh`, `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`, `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`, `testConcurrentRejectionJoinsFailingInFlightRefresh`, `testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery` | Add bounded, diagnostic arrival notifications to the concurrent HTTP fake barriers and staged refresh gates. | Count barriers currently suspend with checked continuations until all request calls arrive, and gated tests wait for refresh/save/initial-send states indefinitely. If a regression prevents a stage from occurring, the test process hangs rather than reporting which transition timed out. Preserve each cancellation/coalescing race scenario. |
-| `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSavedCredentialsMemoizesConclusiveFailure` | Rename to describe memoization of conclusive refresh status failure, or construct an actual missing-credentials fixture and assert that typed result. | The current fixture has old access/refresh tokens and the scripted refresh returns 503; it does not exercise missing credentials despite the test title. |
+| `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized` | Implemented: renamed to describe conclusive refresh-status failure memoization. | The existing old access/refresh credentials, 401/503/401 responses, two typed failure assertions, exact three request paths and reauthentication assertion are unchanged. Separate `testCredentialFailuresAreTyped` retains missing-credentials coverage. See [rename evidence](#refresh-status-test-identity-issue-372). |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterStreamsEveryServerConnectionPurpose` | Bound each `AsyncStream` event read and report the missing snapshot stage on timeout. | Three awaited `iterator.next()` calls have no deadline, so a missing initial/update yield can hang the suite. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportKeepsThenClearsSessionCookies` | Replace the test URLProtocol helper’s `preconditionFailure` for unexpected route with a captured typed test failure. | An unexpected adapter request currently traps the process instead of reporting the failing route as a test issue. |
 | `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testNativeBrowserCallbackAdapterRunsOffMainActor` | Bound the continuation awaiting the detached framework callback and report missing callback completion. | The test invokes the actual callback adapter off MainActor, but a regression that drops the callback leaves the test suspended indefinitely. Preserve all success/cancel/failure adapter cases. |
@@ -451,3 +451,59 @@ only domain/code; the earlier successful runs are superseded evidence
 `.build/download-storage-suite.xml`). No setup script exit status was exposed;
 configured environment loading and the marked temporary build link were
 verified before editing.
+
+## Refresh-status test identity (issue #372)
+
+On 2026-10-19, `AuthenticatedRequestTests.testMissingSavedCredentialsMemoizesConclusiveFailure`
+was renamed to `testConclusiveRefreshStatusFailureIsMemoized`. The fixture still
+uses synthetic old access/refresh tokens and responses 401, 503, 401. Both sends
+assert `.unexpectedRefreshStatus(503)`, the exact request paths remain
+`/api/libraries`, `/auth/refresh`, `/api/libraries`, and reauthentication remains
+required. `testCredentialFailuresAreTyped` separately covers `.missingCredentials`.
+Only the function identity changed in Swift; no production/helper or test-body
+change and no added coverage is claimed. Inventory and source-index declaration
+counts are unchanged; the renamed source location and active references match.
+This resolves only the misleading-name finding. Staged-gate/concurrency findings
+and issues #372/#362 remain open.
+
+Validation uses base `539e2926a5766b37f2fb1b887c373d0b01558332` plus this scoped
+rename, Xcode 27.1 (27A9275), macOS 26.6.2, Swift Testing 2084, serial order and
+fresh fixture state per invocation. Three independent unsigned invocations each
+passed the exact renamed identity (3/3 total); the owning suite passed all 24
+inventory identities. XML identity multisets and every individual outcome were
+checked with zero failures, errors or skips. Empty unselected SwiftPM suites
+are excluded from these counts. Artifacts: `.build/i372-refresh-identity/focused-1.xml`,
+`focused-2.xml`, `focused-3.xml` and `owning.xml` in that directory.
+
+Commands: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+'AuthenticatedRequestTests.testConclusiveRefreshStatusFailureIsMemoized'
+--xunit-output .build/i372-refresh-identity/focused-1.xml`; subsequent independent
+runs use `--skip-build` and separate output names. The owning invocation uses
+`--skip-build --filter AuthenticatedRequestTests` with its own XML path.
+
+Strict `mise run swift-lint` passed. The initial package build emitted the upstream
+OpenTelemetry deprecated watchOS minimum warning. The first `mise run docs:check`
+failed on this evidence section's not-yet-written anchor; that attempt is retained
+here. No test failure or zero-test attempt occurred. Host-only evidence adds no
+Simulator, live-server, physical-device, release or broader lifecycle claim.
+
+The complete signed owning-host gate, `mise exec -- ./scripts/test-host.sh`,
+passed **577/577 inventory identities**, zero failures/errors/skips, including
+the renamed identity. The count is unchanged from the base inventory; this is
+572 core plus five transcription identities. The repository verifier and a
+separate XML multiset/outcome check both accepted `.build/host-results/tests.xml`.
+Per-product XML remains in `.build/host-results/`; the full local log is
+`.build/i372-refresh-identity/signed-host.log`, and coverage is under
+`.build/coverage/swift-host/`. The gate verified the signed host's identity,
+Keychain entitlement and profile presence before execution.
+
+The signed log retains the upstream watchOS deprecation, nine deliberate
+read-only SwiftData save diagnostics (ChapterTranscriptionJob, PrivateCloudPersistence,
+PrivateCloudSync and StatisticsExploration failure fixtures), and three intentional
+known issues from DownloadStorage/TestCleanup cleanup-error regressions. Their
+owning tests passed; these diagnostics are expected failure-boundary coverage,
+not failures of the renamed test. Documentation checking passed after adding
+this section; `git diff --check` and scoped source/index/inventory checks passed.
+The adjacent refresh error mapping and fixture were inspected for typed error
+handling and process-terminating constructs; no production change was needed.
