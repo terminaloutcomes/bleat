@@ -24449,7 +24449,8 @@ final class AppModelTests: XCTestCase {
                 let account = try fixtureAccount()
                 let library = fixtureLibrary()
                 let author = LibrarySearchAuthorMatch(
-                    id: AuthorID(rawValue: "author")!, name: "Author")
+                    id: try XCTUnwrap(AuthorID(rawValue: "author")),
+                    name: "Author")
                 let service = TestAppService(
                     activeAccount: .success(account),
                     firstPage: .success(fixturePage(libraryID: library.id)),
@@ -24466,17 +24467,18 @@ final class AppModelTests: XCTestCase {
                         debounceDuration: .zero),
                     isCurrent: { true }, maximumItems: { state.capacity },
                     push: { pushed.append($0) }, play: { _ in })
+                defer { controller.invalidate() }
                 let rows = await carPlaySearchRows(controller, query: "Author")
                 let selected = expectation(description: "Author loaded")
                 controller.searchTemplate(
-                    controller.template, selectedResult: rows[0]
+                    controller.template,
+                    selectedResult: try XCTUnwrap(rows.first)
                 ) { selected.fulfill() }
                 await fulfillment(of: [selected], timeout: 2)
                 let list = try XCTUnwrap(pushed.last as? CPListTemplate)
                 state.capacity = 0
                 controller.updateLimits(keyboardAvailable: true)
                 XCTAssertTrue(list.sections.isEmpty)
-                controller.invalidate()
             }
         }
 
@@ -24485,7 +24487,7 @@ final class AppModelTests: XCTestCase {
             let account = try fixtureAccount()
             let library = fixtureLibrary()
             let author = LibrarySearchAuthorMatch(
-                id: AuthorID(rawValue: "author")!, name: "Author")
+                id: try XCTUnwrap(AuthorID(rawValue: "author")), name: "Author")
             let service = TestAppService(
                 activeAccount: .success(account),
                 firstPage: .failure(
@@ -24502,11 +24504,12 @@ final class AppModelTests: XCTestCase {
                 coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
                 isCurrent: { true }, maximumItems: { state.capacity },
                 push: { pushed.append($0) }, play: { _ in })
+            defer { controller.invalidate() }
             let rows = await carPlaySearchRows(controller, query: "Author")
             let selected = expectation(
                 description: "Failed author load completes")
             controller.searchTemplate(
-                controller.template, selectedResult: rows[0]
+                controller.template, selectedResult: try XCTUnwrap(rows.first)
             ) { selected.fulfill() }
             await fulfillment(of: [selected], timeout: 2)
             let list = try XCTUnwrap(pushed.last as? CPListTemplate)
@@ -24522,7 +24525,7 @@ final class AppModelTests: XCTestCase {
             controller.templateRemoved(ObjectIdentifier(list))
             let reopened = expectation(description: "Reopened author completes")
             controller.searchTemplate(
-                controller.template, selectedResult: rows[0]
+                controller.template, selectedResult: try XCTUnwrap(rows.first)
             ) { reopened.fulfill() }
             await fulfillment(of: [reopened], timeout: 2)
             let before = await service.pageRequests().count
@@ -24534,7 +24537,6 @@ final class AppModelTests: XCTestCase {
             await fulfillment(of: [stale], timeout: 2)
             let after = await service.pageRequests().count
             XCTAssertEqual(after, before)
-            controller.invalidate()
         }
 
         func testCarPlaySearchFailurePageReclampsToZeroCapacity() async throws {
@@ -24576,7 +24578,8 @@ final class AppModelTests: XCTestCase {
             let account = try fixtureAccount()
             let library = fixtureLibrary()
             let author = LibrarySearchAuthorMatch(
-                id: AuthorID(rawValue: "search-author")!, name: "An Author")
+                id: try XCTUnwrap(AuthorID(rawValue: "search-author")),
+                name: "An Author")
             let service = TestAppService(
                 activeAccount: .success(account),
                 firstPage: .success(fixturePage(libraryID: library.id)),
@@ -24590,6 +24593,7 @@ final class AppModelTests: XCTestCase {
                 coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
                 isCurrent: { true }, maximumItems: { 5 },
                 push: { pushed.append($0) }, play: { _ in })
+            defer { controller.invalidate() }
             let rows = await carPlaySearchRows(controller, query: "Author")
             let selected = expectation(
                 description: "Author selection completes once")
@@ -24606,7 +24610,6 @@ final class AppModelTests: XCTestCase {
                 selections.last?.filter, LibraryItemFilter(authorID: author.id))
             XCTAssertEqual(selections.last?.collapseSeries, false)
             XCTAssertEqual(model.books, .idle)
-            controller.invalidate()
         }
 
         func testCarPlaySearchRetryAndNoMatchesRemainExplicit() async throws {
