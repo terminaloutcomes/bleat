@@ -8724,10 +8724,10 @@
       "openid_cookie_fixture_followup": {
         "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
         "date": "2026-10-19",
-        "disposition": "implemented_validation_blocked",
+        "disposition": "verified",
         "source_review": "Shared OpenIDCookieFixture throws typed missing-URL, invalid-response and unexpected-route errors through URLProtocolStub. Awaited request completion orders cookie assertions; awaited clearSession runs before return or rethrow and defer removes the locked handler. Original redirect, two-cookie, callback-cookie and explicit session-clear assertions remain. Adjacent HTTP response fixtures use throwing requirements instead of forced unwraps.",
-        "regression": "HTTPTransportTests.testOpenIDTransportUnexpectedRouteThrowsAndCleansUp first establishes two session cookies, then awaits an unexpected route and checks the exact typed route failure at the caller, zero cookies and no installed handler after error cleanup.",
-        "execution": "Unrun: initial automatic approval review failed due to model capacity; after host-access confirmation, both focused-command approval attempts timed out before execution. Focused tests, repetitions, owning suite and signed host gate have not executed. See docs/release-evidence/test-reliability-core-followups.md#openid-cookie-fixture-issue-372."
+        "regression": "HTTPTransportTests.testOpenIDTransportUnexpectedRouteThrowsAndCleansUp first establishes two session cookies, then awaits an unexpected route and checks the typed NSError domain/code and structured route path at the caller, zero cookies and no installed handler after error cleanup.",
+        "execution": "Final-source verification: focused OpenID 3/3; three independent invocations each of five affected identities 15/15; HTTPTransport 19/19; signed host gate 574/574, all zero failures/errors/skips. All XML identities and outcomes checked. Initial compile, formatting and NSError-cast failures are retained separately; Foundation bridging is now explicit through CustomNSError. Signed gate emitted an upstream dependency deprecation, intentional read-only SwiftData failures and one deliberate TestCleanup known issue; affected tests had no unexpected warnings. See docs/release-evidence/test-reliability-core-followups.md#openid-cookie-fixture-issue-372."
       }
     },
     {

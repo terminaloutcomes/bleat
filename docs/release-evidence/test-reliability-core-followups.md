@@ -316,7 +316,7 @@ No production code changes.
 
 `testOpenIDTransportUnexpectedRouteThrowsAndCleansUp` first awaits the begin
 response and requires two stored cookies. It then awaits an unexpected route,
-checks the exact typed path failure at the caller, and verifies zero cookies
+checks the typed domain/code and structured path at the caller, and verifies zero cookies
 and removal of the static handler. The fixture uses the existing `withTestCleanup` to await session clearing before
 returning or rethrowing; handler removal runs in `defer`. The serialized suite
 and lock-protected handler/recorder preserve ownership. There are no added
@@ -324,15 +324,60 @@ background tasks, sleeps, polling windows or elapsed-time correctness conditions
 These are deterministic Foundation/URLProtocol host fixtures, with no external
 identity provider, Simulator or device evidence.
 
-Validation status on 19 October 2026: **unrun**. Initial automatic approval
-review could not complete because its model was at capacity. After host-access
-confirmation, creation of branch `yaleman/issue-372-openid-cookie-fixture`
-succeeded from `209d8ade1bc0a35338370525cba48bfa64fe9aec` (merged PR #387).
-The focused Swift command then failed approval review twice by deadline,
-including the permitted retry; neither attempt executed. A later resumption
-was also rejected before execution because the review model was at capacity.
-Focused repetitions,
-the owning HTTPTransport suite, signed host validation, formatting lint and
-final-head CI remain unrun. `git diff --check` passed. The implementation
-disposition is therefore source-reviewed, validation blocked; no passing test
-execution evidence is claimed.
+Final-source validation on 19 October 2026 used macOS 26.6.2, Xcode 27.1
+(27A9275), Swift 6.4 and Swift Testing 2084:
+
+- Focused OpenID selection: three exact identities passed, zero failures/errors/skips
+  (`.build/issue-372-openid-bridged.xml`).
+- Three independent invocations each of
+  `testOpenIDTransportKeepsThenClearsSessionCookies`,
+  `testOpenIDTransportUnexpectedRouteThrowsAndCleansUp`,
+  `testURLSessionTransportReturnsTypedHTTPResponse`,
+  `testURLSessionTransportRejectsNonHTTPResponse`, and
+  `testURLSessionTransportRecordsTypedRequestOutcome`: 15/15 exact single-identity
+  reports passed, zero failures/errors/skips
+  (`.build/issue-372-<test-name>-<1...3>.xml`).
+- Owning HTTPTransport suite: all 19 inventory identities passed, zero
+  failures/errors/skips (`.build/issue-372-http-suite-final.xml`).
+- `mise exec -- ./scripts/test-host.sh`: all 574 exact inventory identities passed,
+  zero failures/errors/skips, including all 19 HTTPTransport identities. The
+  signing/profile/Keychain entitlement and coverage checks passed. Reports:
+  `.build/host-results/tests.xml`, `.build/issue-372-signed-host-final.log`, and
+  `.build/coverage/swift-host/lcov.info`.
+- Strict Swift formatting lint on the changed file, `mise run docs:check` and
+  `git diff --check` passed.
+
+Every report was parsed for exact identities and individual outcomes, including
+all 15 single-test repetition reports. These are host/signed-host results;
+Simulator, disposable-server, external identity-provider and physical-device
+journeys were not run for this test-only change.
+
+Earlier attempts remain distinct from this evidence. Automatic approval review
+initially blocked commands before execution (capacity errors and deadlines).
+The first executed owning-suite build and initial PR head `fc8d540` failed
+because nested Swift Testing `#require` macros do not compile; its iOS lint job
+also rejected formatting. Separate URL/response requirements and Swift formatting
+resolve those failures. The next local focused selection executed three tests:
+two passed and the new regression failed because Foundation bridges the thrown
+Swift enum to `NSError`; a diagnostic single-test run confirmed the domain/code
+survived while the enum cast and route payload did not. Those failed reports
+remain `.build/issue-372-openid-final.xml` and
+`.build/issue-372-error-diagnostic.xml`. `CustomNSError` now explicitly preserves
+the typed failure domain, distinct case code and structured path/status metadata.
+The regression checks domain, case code and path without comparing descriptions.
+The subsequent clean repetitions are final-source evidence, not retries of an
+unchanged failing fixture.
+
+The signed gate emitted the pinned `opentelemetry-swift-core` watchOS-minimum
+deprecation warning. SwiftData code 513 messages came from the intentional
+read-only-store failure tests (`testReadOnlyCommitFailureRollsBackTranscriptAndCheckpoint`,
+`failedMigrationSaveRetainsLegacyPreferences`,
+`testFailedPendingStateSavesPreserveRetryState`, and
+`failedHistorySaveDoesNotReplaceObservedProgress`); each passed. The one known
+issue is deliberately recorded by
+`TestCleanupTests.retainsOperationFailureWhenCleanupAlsoFails`. No new runtime
+warning or unexpected skip was found in the affected tests.
+
+Final revision and final-head CI results are recorded in draft
+[PR #388](https://github.com/terminaloutcomes/bleat/pull/388). This disposition
+resolves only the cookie-fixture source finding and retains unrelated #372 work.

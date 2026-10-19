@@ -420,9 +420,10 @@ final class HTTPTransportTests {
     @Test
     func testURLSessionTransportReturnsTypedHTTPResponse() async throws {
         URLProtocolStub.setHandler { request in
+            let url = try #require(request.url)
             let response = try #require(
                 HTTPURLResponse(
-                    url: try #require(request.url),
+                    url: url,
                     statusCode: 200,
                     httpVersion: "HTTP/1.1",
                     headerFields: [
@@ -492,9 +493,10 @@ final class HTTPTransportTests {
     @Test
     func testURLSessionTransportRecordsTypedRequestOutcome() async throws {
         URLProtocolStub.setHandler { request in
+            let url = try #require(request.url)
             let response = try #require(
                 HTTPURLResponse(
-                    url: try #require(request.url),
+                    url: url,
                     statusCode: 204,
                     httpVersion: "HTTP/1.1",
                     headerFields: nil
@@ -601,11 +603,18 @@ final class HTTPTransportTests {
                         request: URLRequest(url: unexpectedURL),
                         endpoint: .openIDSession))
             }
-            Issue.record("Expected the fixture route failure to reach its caller")
+            Issue.record(
+                "Expected the fixture route failure to reach its caller")
         } catch {
+            // URLSession bridges handler errors to NSError, preserving domain/code/userInfo.
+            let received = error as NSError
+            let expected = OpenIDCookieFixtureError.unexpectedRoute(
+                path: unexpectedURL.path)
+            #expect(received.domain == OpenIDCookieFixtureError.errorDomain)
+            #expect(received.code == expected.errorCode)
             #expect(
-                error as? OpenIDCookieFixtureError
-                    == .unexpectedRoute(path: unexpectedURL.path))
+                received.userInfo["fixturePath"] as? String
+                    == unexpectedURL.path)
         }
         // run awaits session cleanup before rethrowing; no scheduler delay is needed.
         #expect(fixture.transport.cookieCount == 0)
@@ -720,10 +729,37 @@ private enum URLProtocolStubError: Error {
     case missingHandler
 }
 
-private enum OpenIDCookieFixtureError: Error, Equatable {
+private enum OpenIDCookieFixtureError: Error, CustomNSError {
     case missingRequestURL
     case invalidResponse(path: String, statusCode: Int)
     case unexpectedRoute(path: String)
+
+    static let errorDomain = "BleatTests.OpenIDCookieFixture"
+
+    var errorCode: Int {
+        switch self {
+        case .missingRequestURL: 1
+        case .invalidResponse: 2
+        case .unexpectedRoute: 3
+        }
+    }
+
+    var errorUserInfo: [String: Any] {
+        switch self {
+        case .missingRequestURL:
+            [NSLocalizedDescriptionKey: "OpenID fixture request has no URL"]
+        case .invalidResponse(let path, let statusCode):
+            [
+                NSLocalizedDescriptionKey: "Invalid OpenID fixture response",
+                "fixturePath": path, "fixtureStatusCode": statusCode,
+            ]
+        case .unexpectedRoute(let path):
+            [
+                NSLocalizedDescriptionKey: "Unexpected OpenID fixture route",
+                "fixturePath": path,
+            ]
+        }
+    }
 }
 
 private struct OpenIDCookieFixture {
@@ -739,7 +775,8 @@ private struct OpenIDCookieFixture {
     }
 
     func run(
-        _ body: (URLSessionOpenIDTransport, CookieFlowRecorder) async throws -> Void
+        _ body: (URLSessionOpenIDTransport, CookieFlowRecorder) async throws ->
+            Void
     ) async throws {
         URLProtocolStub.setHandler { [recorder] request in
             guard let url = request.url else {
@@ -766,9 +803,10 @@ private struct OpenIDCookieFixture {
             default:
                 throw OpenIDCookieFixtureError.unexpectedRoute(path: url.path)
             }
-            guard let response = HTTPURLResponse(
-                url: url, statusCode: statusCode,
-                httpVersion: "HTTP/1.1", headerFields: headers)
+            guard
+                let response = HTTPURLResponse(
+                    url: url, statusCode: statusCode,
+                    httpVersion: "HTTP/1.1", headerFields: headers)
             else {
                 throw OpenIDCookieFixtureError.invalidResponse(
                     path: url.path, statusCode: statusCode)
