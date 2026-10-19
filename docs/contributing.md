@@ -79,6 +79,32 @@ edits. Website checks install locked frontend dependencies and generate ignored
 CSS; live gates create and remove their disposable resources. Use read-only
 `swift-lint` and `cargo fmt --all -- --check` when formatting must not edit files.
 
+## Codex validation permissions
+
+The four command prefixes in `.codex/rules/bleat-validation.rules` allow host
+execution outside the sandbox: unsigned Swift package tests through mise,
+the host-test script through mise, strict Swift lint, and the documentation
+checker. Prefix matching permits arbitrary remaining arguments. These commands
+can execute repository code and access host resources, including signing state
+where the selected workflow uses it; the rules are not a filesystem boundary.
+
+Codex loads project-local rules at startup only when the project's `.codex`
+configuration layer is trusted. Restart Codex after adding or updating the file.
+New worktrees based on a commit containing it inherit the file and use their own
+`.codex` layer; existing chats do not retroactively load it. More restrictive
+rules or managed policy can still require approval or deny execution. Compound
+shell commands and redirection may not match these prefixes. See the
+[Codex rules documentation](https://learn.chatgpt.com/docs/agent-configuration/rules).
+
+Check syntax and matching without executing the validation command:
+
+```sh
+codex execpolicy check --pretty --rules .codex/rules/bleat-validation.rules -- mise run docs:check
+```
+
+This checks the supplied rules file only; it does not demonstrate live loading
+or guarantee that a running chat will execute without a prompt.
+
 ## Focused tests and evidence
 
 Unsigned package tests use Swift Testing rather than XCTest discovery:
