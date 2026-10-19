@@ -769,3 +769,11 @@ failed observations, preserves release ordering and typed success, and records
 their previously missing index/audit entries. Production/helpers/inventory stay
 unchanged; cancellation is a request plus observed control release, not proof
 of whole task-graph drainage. Other #372/#362 acceptance stays open.
+
+
+The [cached-window paused seek correction](release-evidence/test-reliability-app-followups.md#cached-window-paused-seek-observation-pr-408)
+retains incomplete/manual versus complete/automatic-cache source selection and
+playback-start intent while checking awaited seek precision with paused state
+and zero native player rate. It addresses the advancing-clock assertion in the
+retained failed #408 CI run without changing production behavior or tolerance;
+independent initial-position forwarding is not claimed.

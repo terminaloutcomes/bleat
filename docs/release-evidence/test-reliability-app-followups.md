@@ -420,3 +420,51 @@ This is app-hosted Simulator evidence only. Signed-host, physical CarPlay,
 iOS 27 input/head-unit, live-server and release evidence remain separate.
 `mise run docs:check` and `git diff --check` passed after the final evidence update.
 Issues #374 and #362 remain open.
+
+
+## Cached-window paused seek observation (PR #408)
+
+CI run `39313500827` on `74d2884beca770f0c1ec238b97dd4d65aaa6609d`
+reported the sole Simulator failure in
+`AppModelTests/testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow`:
+`0.805220208` versus `0.75 +/- 0.01`. The retained result bundle reports
+609 passes, one failure and no skips. This failed run is not passing evidence.
+
+Both streamed and downloaded starts call `play` before returning; this test
+then awaited service observations before reading `currentTime`. Source therefore
+supports an advancing-clock observation defect. No production change or observed
+production regression is claimed. The two download-purpose/completeness cases,
+initial absolute-position request, typed source outcome, one open request and
+absence of detail requests remain. An explicit playback-request assertion retains
+startup intent coverage. The test pauses, confirms paused state, no playback
+request and zero native rate, awaits a seek to 0.75 seconds, reconfirms those
+states and checks position with the unchanged 0.01-second precision tolerance.
+This exact position check covers the paused seek; it does not independently prove
+that startup forwarded its initial position. There is no timing sleep, tolerance
+increase or unchanged-CI rerun.
+
+Only this app audit disposition/navigation record and its source-index location
+are refreshed; other stale app locations/dispositions are outside this correction.
+Validation on m2, Xcode 27.1 / 27A9275, iPhone 17 Pro iOS 26.5 Simulator:
+
+- Supported `xcode-test-runner xctest` with the exact app test selector and fresh
+  `i408-paused-seek-focused-{1,2,3}.xcresult` bundles: **1/1 each**, zero skips.
+- Supported `ci-smoke` app/Simulator owning gate: **610/610**, zero failures,
+  expected failures or skips. Bundle `.build/ci-smoke/77944-1792441186727.xcresult`;
+  canonical discovery/result verification plus independent exact target outcome
+  check passed.
+- Fresh supported signed `./scripts/test-host.sh`: **597/597** exact inventory,
+  zero failures/errors/skips; retained XML in
+  `.build/i408-paused-seek-signed-results`.
+- Strict Swift lint, docs, source/audit scope and diff checks passed. The initial
+  lint caught two new long lines; both were formatted before final repetitions.
+  Xcode emitted SDK/stale-build warnings; no warning suppression was added.
+
+Commands use `mise exec -- cargo run --quiet --locked --package scripts --bin`
+with `xcode-test-runner -- xctest --test-id
+BleatAppTests/AppModelTests/testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow
+--result-bundle ...`, or `ci-smoke --` for the owning gate. Verification manifest
+`.build/i408-paused-seek-verification.json` binds the final Swift source hash,
+exact identities, retained bundles and signed inventory. Private raw logs remain
+local. Original failed CI bundle stays under `.build/i408-failed-ci-smoke`.
+Fresh changed-head CI and independent review remain required before merge.

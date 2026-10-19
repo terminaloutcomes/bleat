@@ -22477,6 +22477,19 @@ final class AppModelTests: XCTestCase {
                         ? .downloaded : .streamed
                 )
             )
+            XCTAssertTrue(model.playback.isPlaybackRequested)
+
+            // Exact position belongs to a completed seek with a stopped clock.
+            model.playback.pause()
+            XCTAssertEqual(model.playback.state, .paused)
+            XCTAssertFalse(model.playback.isPlaybackRequested)
+            XCTAssertEqual(
+                model.playback.runtimeSnapshotForTesting.playerRate, 0)
+            await model.playback.seek(to: 0.75)
+            XCTAssertEqual(model.playback.state, .paused)
+            XCTAssertFalse(model.playback.isPlaybackRequested)
+            XCTAssertEqual(
+                model.playback.runtimeSnapshotForTesting.playerRate, 0)
             XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
             XCTAssertEqual(playbackRequests.count, 1)
             XCTAssertTrue(detailRequests.isEmpty)
