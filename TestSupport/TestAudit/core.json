@@ -13926,7 +13926,18 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "file_root_lifetime_investigation": {
+        "base_revision": "47f9af5b72676cae18b7d90bc17319f1a6153bbe",
+        "status": "open_blocked",
+        "observed_owner_release": {
+          "writable_container": true,
+          "read_only_container": false,
+          "sync_store": true
+        },
+        "assessment": "Scoped awaited operation and lexical exit did not release the read-only container after actual metadataWriteFailed. ModelContainer has no public close API; existing test seams do not establish this lifetime. Candidate restored; original typed failure and retained-source assertions unchanged. No new coverage delivered.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#read-only-migration-fixture-lifetime-blocker-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",

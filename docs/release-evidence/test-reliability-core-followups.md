@@ -32,7 +32,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift` (temporary directory cleanup in test defers and `makeRecordedSpan`) | Route temporary telemetry directory deletion through checked cleanup support instead of suppressing errors with `try?`. | UUID paths isolate tests, but cleanup failures silently accumulate telemetry files and consume host disk. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` (caller `cancelledMigrationRetainsCommittedProgressAndCoalescesCallers`) | Add a bounded checkpoint-entry notification preserving the exact 200-row commit boundary and coalesced-cancellation checks. | If migration never reaches the checkpoint, the checked continuation suspends indefinitely and the cancellation/recovery assertions never run. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::fixture` | Implemented: caller-scoped ownership retains and removes exact data/configuration domains, including restored/restarted/read-only stores and throwing exits. | See [scoped defaults evidence](#private-cloud-defaults-lifecycle-issue-372). File-backed root deletion and historical synchronization findings remain separate. |
-| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences`, `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` | The file-backed fixture cleanup also uses best-effort `try?`; use checked cleanup reporting after closing the read-only ModelContainer. | A failed temporary store removal can silently leave a large persistent test database and invalidate the cleanup claim. |
+| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences` | **Open, blocked within this slice:** establish the read-only container lifetime before checked root removal. SwiftData exposes no close API; a scoped-operation experiment still retained that container after the actual failed migration. | Best-effort `try?` removal remains. [Lifetime investigation](#read-only-migration-fixture-lifetime-blocker-issue-372) records the failed candidate and precise remaining boundary; checkpoint synchronization is tracked separately above. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`, `boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`, `observationHistoryAndPresentationAreAccountScoped` | Replace awaited AsyncStream iterator reads with bounded, source-located update/termination waits that assert the expected revision or close event. | If repository publication or termination regresses, `iterator.next()` suspends indefinitely instead of reporting which update was missing. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar` | Avoid changing process-global `NSTimeZone.default` while unrelated test suites may run concurrently; inject a calendar/time-zone or otherwise serialize the global mutation across all tests. | `.serialized` only orders this suite; other suites can observe the temporary Brisbane/Los Angeles process setting and become order-sensitive. |
 
@@ -682,3 +682,129 @@ identity/audit declaration, unchanged unrelated inventory/index entries, and
 preserved checkpoint/sentinel constants. The `.envrc` link and marked temporary
 build link remain intact. Strict repository lint, docs and `git diff --check`
 passed; no production, generated project or environment files changed.
+
+## Read-only migration fixture lifetime blocker (issue 372)
+
+Investigation base: `47f9af5b72676cae18b7d90bc17319f1a6153bbe` (merged
+PR #396). This is an evidence-only checkpoint under #372/#362; the cleanup
+finding remains **open**. No test/helper, host inventory, source index or
+production code changes are delivered. Prior revision-bound counts above are
+unchanged.
+
+Supported app worktree setup supplied `.envrc` and a `.build` symlink to a
+marked temporary build directory. Mise confirmed required application/signing
+configuration presence without printing its values. The worktree began detached
+at independently verified remote main, then a scoped named branch was created
+before edits. No numeric setup exit is exposed by the app. Main checkout,
+other worktrees, configuration and security settings were preserved.
+
+The candidate used the existing `withTestCleanup` pattern and a separate async
+operation scope. It created the initial writable ModelContainer in a nested
+synchronous scope, then the read-only container, separate owned defaults domains
+and PrivateCloudSyncStore. The operation awaited `prepareStorage()` and kept
+all original assertions: typed `metadataWriteFailed`, exact
+`NSCocoaErrorDomain`/`NSFileWriteNoPermissionError`, retained legacy metadata,
+and incomplete migration. Defaults cleanup remained registered before allocation.
+Before root removal, weak references checked release of both containers and the
+sync store. This checked ownership, not explicit framework-store closure.
+
+A new four-case diagnostic regression exercised normal/typed-throw operation
+exit crossed with successful/missing-root removal. Missing-root injection ran
+only after owner-release checks, removed the owned root and attempted a second
+removal; it did not change permissions or silently accept a missing root.
+Caller-located issues retained only native domain/code in a dedicated error
+struct. Matching required `NSCocoaErrorDomain`/4 and the exact caller location;
+when operation and cleanup both failed, the original typed operation error
+was preserved. All four argument cases passed in the candidate experiment,
+including its two intentional known cleanup issues. This is diagnostic evidence
+for the abandoned candidate, not delivered coverage or inventory additions.
+
+The actual migration failure **did not pass the lifetime requirement**:
+
+- Writable ModelContainer released: **true**.
+- PrivateCloudSyncStore released: **true**.
+- Read-only ModelContainer released: **false**.
+
+The candidate withheld directory removal and failed at the caller's location.
+The original migration assertions passed before this failure. The expected
+SwiftData Cocoa 513 diagnostic was retained locally. This establishes retention
+at the cleanup boundary, not its internal cause or eventual duration. Source
+inspection confirms `prepareStorage()` awaits its migration task and clears its
+task handle on both exits. The installed SwiftData ModelContainer public
+interface exposes `deinit` and destructive `erase()`, but no close/shutdown API.
+No existing repository seam establishes the retained container's completion.
+Erasing this read-only store is not a supported substitute for closing it.
+
+The requested implementation cannot safely be completed within the existing
+APIs/seams established here. A follow-up needs an evidenced framework lifetime
+boundary or a separately reviewed isolation/seam change before claiming checked
+cleanup after resource release. No arbitrary sleep, polling, process-global
+output redirection, production redesign or weakened persistence assertion was
+introduced. Broader callback/checkpoint, configuration, device and epic
+acceptance remain open.
+
+Retained local investigation artifacts:
+
+- `.build/i372-root-candidate.swift` and `.build/i372-root-candidate.patch`:
+  final diagnostic candidate, excluded from the committed source.
+- `.build/i372-root-focused-1.log`: initial compile failure (missing `try` at
+  the throwing `withKnownIssue` call); zero tests executed, no coverage credit.
+  A preceding formatter parse error from an incomplete closing brace was
+  corrected before this build; it is not test evidence.
+- `.build/i372-root-focused-2.xml` and matching `.log`: exactly two function
+  identities, one passed (four argument cases) and one failed (lifetime check),
+  zero XML errors/skips. The two known cleanup issues are not test failures.
+- `.build/i372-root-lifetime.xml` and matching `.log`: exactly the original
+  migration identity, one failure, zero XML errors/skips; diagnostic separates
+  the three owner-release results above.
+
+Both diagnostic processes exited before a separate checked cleanup removed
+only their two UUID roots identified by their read-only-store diagnostics.
+No deletion occurred while either diagnostic process was alive. Raw framework
+logs containing temporary store paths remain local and must not be published.
+The candidate source, inventory and source-index changes were restored exactly
+to the base after retaining the experiment; no new regression is delivered.
+
+Restored-baseline validation (Xcode 27.1 / 27A9275, macOS 26.6.2):
+
+- Three independent unsigned, serial executions of
+  `PrivateCloudPersistenceTests.failedMigrationSaveRetainsLegacyPreferences`:
+  **3/3** exact outcomes, zero failures/errors/skips. XML/log pairs are
+  `.build/i372-root-baseline-focused-1` through
+  `.build/i372-root-baseline-focused-3` with `.xml`/`.log` extensions.
+- Unsigned owning `PrivateCloudPersistenceTests`: **13/13** exact inventory
+  identities, zero failures/errors/skips, in
+  `.build/i372-root-baseline-owning.xml` and matching `.log`. The three-case
+  existing defaults regression remains present; the full sentinel test ran.
+- `mise exec -- ./scripts/test-host.sh`: **578/578** exact signed host inventory
+  identities, zero failures/errors/skips, independently compared as an XML
+  identity multiset. Signed host identity, Keychain entitlement and provisioning
+  profile were verified by the supported gate. Reports remain in
+  `.build/host-results/`, with log
+  `.build/i372-root-baseline-signed-host.log` and production LCOV under
+  `.build/coverage/swift-host/`. Duplicate aggregate/product XML is not extra
+  execution. These passes validate the restored baseline, not the candidate.
+
+Focused command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+PrivateCloudPersistenceTests.failedMigrationSaveRetainsLegacyPreferences
+--xunit-output .build/i372-root-baseline-focused-1.xml`. Repetitions add
+`--skip-build` with distinct outputs. Owning selection changes the filter to
+`PrivateCloudPersistenceTests`. Candidate runs used the same runner and their
+recorded distinct output paths; the first executable candidate selected the
+original identity plus `readOnlyMigrationFixtureCleansUpAfterExit`.
+
+Baseline logs retain the upstream OpenTelemetry watchOS minimum deprecation,
+expected read-only SwiftData Cocoa 513 diagnostics (nine in the complete signed
+gate), and the three existing intentional known cleanup issues in the signed
+gate. No new runtime warning, unexpected skip or unhandled failure occurred in
+baseline validation. Strict repository Swift lint and documentation checking
+passed (`.build/i372-root-swift-lint.log`, `.build/i372-root-docs.log`); final
+diff/JSON checks confirm only the owning audit record and linked evidence/
+traceability changed. Fixture source, inventory and source index exactly match
+the base; historical counts are preserved. Built discovery exactly matches all
+578 inventory identities (`.build/i372-root-baseline-discovery.txt`); the
+independent outcome summary is `.build/i372-root-verification.json`. No new
+discovery identity is claimed.
+Simulator, live-server and physical-device gates were not run for this
+evidence-only change; they cannot resolve the observed local owner retention.
