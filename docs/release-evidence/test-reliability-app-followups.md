@@ -33,7 +33,7 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch`; `testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery`; `testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome`; `testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST`; `testPendingLocalSessionUploadDoesNotBlockLaunch` | Isolate defaults from `UserDefaults.standard`; replace break-only polling with asserted transition waits; on failure, release upload gates and cancel/join observer tasks. | Shared preferences can leak between parallel tests or survive abnormal teardown. Break-only loops can continue into assertions without proving the intended transition, and a blocked observer can outlive the test. | Bleat maintainers |
 | `AppModelTests/testBookDeletionSupersedesInFlightFailedPlaybackRetry`; `testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert`; `testSetFinishedUsesRemoteOnlyDetailReconciliation`; `testSetFinishedReconciliationFailuresRecordTypedDiagnostics` | Await the owned retry/reconciliation completion through a signal, then assert one exact request/session outcome and final committed state. | Deadline-bounded polling is better than an unbounded wait but does not establish that independent work finished; accepting a request-count range can hide a duplicate or missing path. | Bleat maintainers |
 | `AppModelTests/testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest`; `testCarPlayCellularReconnectAndDelayedPresentationKeepDecision`; `testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions`; `testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing`; `testCarPlaySearchNativeRowsSurviveCapacityChanges`; `testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchRetryAndNoMatchesRemainExplicit`; `testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback`; `testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork` | Use completion/admission signals for stale callbacks and queue transitions; replace artwork-render polling with an observable publication signal or an asserted bounded condition. | The current yield/sleep barriers do not prove the retired callback or artwork update has been processed. A late callback could mutate the next request after the test returns, while a short render poll gives weak failure evidence. | Bleat maintainers |
-| `AppModelTests/testTenKBooksLoadNextBooksPagePerformance`; `DeepLinkTests/testParserRejectsMalformedOrAmbiguousLinks`; `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`; `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`; `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`; `testCarPlaySearchAuthorUsesIndependentFilteredPage` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
+| `AppModelTests/testTenKBooksLoadNextBooksPagePerformance`; `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`; `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`; `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`; `testCarPlaySearchAuthorUsesIndependentFilteredPage` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
 | `NetworkPathTests/testStaleProbeCannotPromoteEndpointOrReviveStoppedSubscription` | Ensure all probe gates and subscription tasks are released/cancelled and joined in `defer`, then assert the retired generation cannot be promoted. | A failed intermediate assertion can strand the probe task and contaminate later network tests; stale-generation rejection must remain the semantic postcondition. | Bleat maintainers |
 | `ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh`; `testCaptureRotatedTokens`; `testRemovePrivateCapture`; `testLogoutRemovedSessionCredentials`; `testPrivateCaptureRemainsRemovedAfterLogout` | Add failure-safe cleanup for the private capture directory and real Keychain test credentials, while preserving the cross-launch capture/rotation/logout sequence. | These tests deliberately use persistent host state across launches. An early assertion failure can leave sensitive test artifacts or credentials behind and affect a later run. Signed host evidence remains required. | Bleat maintainers |
 | `FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor`; `KeychainEntitlementTests/testApplicationHostCanPersistCredentialsInKeychain` | Replace queue-marker assumptions with a signal tied to the actual KVO callback or Keychain operation completion before reading final state. | Main-actor task ordering is not proof that the callback/operation finished; the assertion can race delivery and report a false pass. Preserve the off-main callback and application-host Keychain coverage. | Bleat maintainers |
@@ -226,3 +226,58 @@ All assertions were unchanged; no timing sleep, tolerance increase, or product
 workaround was added. `.envrc` retained its original checksum. This is local
 Simulator evidence; the earlier macOS compile blocker and lack of physical-device
 validation remain explicit.
+
+## Deep-link invalid-route fixture construction (#374)
+
+`DeepLinkTests/testParserRejectsMalformedOrAmbiguousLinks` now throws and
+constructs each URL with `try XCTUnwrap` before entering `XCTAssertThrowsError`.
+All 14 literal inputs and parser-rejection assertions remain. Both assertion
+messages identify the input, so fixture construction failure is an XCTest
+setup failure and cannot be mistaken for parser rejection. Production parser
+and navigation code are unchanged. The scoped nine-rule disposition in
+`TestSupport/TestAudit/app.json` is updated; historical aggregate counts and
+unrelated follow-ups are retained.
+
+The adjacent parser and navigation paths were inspected for recoverable traps
+and executor assumptions; this synchronous fixture change introduces no
+callback or cancellation boundary. No specification, public route contract,
+host-test inventory or test identity changes are needed. Broader #374 and
+#362 acceptance, signed-host, live-server and physical-device evidence remain
+separate.
+
+Validation on 2026-10-19 used the configured m2 worktree based on `c12bdc68`,
+Xcode 27.1 (`27A9275`), iPhone 17 Pro and iOS Simulator 26.5:
+
+| Selection | Verified passed outcomes | Result bundle |
+| --- | --- | --- |
+| `BleatAppTests/DeepLinkTests/testParserRejectsMalformedOrAmbiguousLinks` | 10 repetitions of one identity | `.build/deeplink-focused-10.xcresult` |
+| `BleatAppTests/DeepLinkTests` | All five identities | `.build/deeplink-suite.xcresult` |
+| `BleatAppTests` | All 608 build-discovered identities | `.build/deeplink-owning.xcresult` |
+
+Every bundle's summary and test tree were inspected with `xcresulttool` and
+strictly verified using `verify-test-results`: zero skips, failures, expected
+failures or runtime warnings. The owning inventory was enumerated from the
+built products into `.build/deeplink-owning.discovery.json`; no historical
+suite-count arithmetic was used. The five class identities are canonical-route
+round-trip, invalid-route rejection, latest-valid-link queueing, startup-inbox
+queueing and the Settings shortcut.
+
+The focused command was the contributor-guide `mise exec -- xcodebuild
+-project Bleat.xcodeproj -scheme Bleat` app runner with the installed Simulator
+destination, `-derivedDataPath .build/deeplink-derived`, the table's result path,
+the exact `-only-testing:` selector, `-test-iterations 10`,
+`-parallel-testing-enabled NO` and `test`. The class run used its class selector
+without repetitions. The owning run used `test-without-building` and the bundle
+selector after flat JSON enumeration of those same built products. Logs are
+retained beside the bundles as `.build/deeplink-focused-10.log`,
+`.build/deeplink-suite.log` and `.build/deeplink-owning.log`.
+
+The first strict-lint attempt failed on one new assertion line exceeding 80
+columns; splitting the arguments fixed it, and `mise run swift-lint` passed.
+`mise run docs:check` and `git diff --check` passed. The focused and owning
+logs contain no build warnings. The intervening class rebuild emitted 1,608
+Xcode stale-file warnings for paths through the configured `.build` symlink
+being outside allowed build roots. They are retained in the class log as a
+tooling warning, not erased by the later warning-free owning execution. The
+class result still verified all five outcomes and no runtime warnings. No
+source/configuration workaround or test rerun was used to hide these warnings.

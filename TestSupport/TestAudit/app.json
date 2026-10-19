@@ -43332,7 +43332,7 @@
       "source": {
         "path": "Tests/BleatAppTests/DeepLinkTests.swift",
         "line": 39,
-        "endLineBeforeNextTest": 61
+        "endLineBeforeNextTest": 67
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [],
@@ -43340,7 +43340,11 @@
       "assertions": [
         {
           "line": 58,
-          "expression": "XCTAssertThrowsError(try DeepLinkParser.parse(URL(string: value)!))"
+          "expression": "let url = try XCTUnwrap(URL(string: value), \"Invalid URL fixture: \\(value)\")"
+        },
+        {
+          "line": 61,
+          "expression": "XCTAssertThrowsError(try DeepLinkParser.parse(url), \"Expected parser rejection: \\(value)\")"
         }
       ],
       "synchronizationEvidence": [],
@@ -43350,24 +43354,24 @@
         "purpose": "Deterministic table-driven parser inputs.",
         "timeoutAndToleranceRationale": "No temporal wait or approximate playback assertion; timing/tolerance is N/A for this deterministic case.",
         "ruleAssessments": {
-          "1": "Static test-owned string inputs.",
-          "2": "No async.",
-          "3": "Each parse is expected to throw, but URL construction currently has process-trapping precondition.",
-          "4": "No playback.",
-          "5": "No async work.",
-          "6": "No persistent state.",
-          "7": "Pure parser test.",
-          "8": "Current failure reports throwing parser assertion; malformed URL constructor trap loses XCTest context.",
-          "9": "No timeout."
+          "1": "All 14 original inputs retain parser-rejection assertions; throwing URL setup is completed outside XCTAssertThrowsError so fixture failure cannot count as parser rejection.",
+          "2": "N/A: synchronous parser; no condition wait.",
+          "3": "N/A: no playback, clock, seek or timing tolerance.",
+          "4": "N/A: no async work, callbacks, observers or owned tasks.",
+          "5": "Literal fixtures are owned by this test; no persistent or shared state.",
+          "6": "Deterministic Foundation URL and app parser boundary; no live server or device prerequisite.",
+          "7": "The source defect was a forced fixture unwrap; no assertion removal, timing adjustment or retry-to-green is introduced.",
+          "8": "Both XCTUnwrap setup and parser rejection failures identify the exact input at the assertion site.",
+          "9": "Focused repetitions and full DeepLink/owning-app execution evidence are recorded in docs/release-evidence/test-reliability-app-followups.md; no temporal wait requires a test-local timeout."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "The test covers invalid routes, but an allegedly malformed URL is force-unwrapped before parser execution and can trap instead of recording an XCTest failure."
+          "outcome": "keep",
+          "reason": "Throwing XCTUnwrap records fixture failure before parser execution; each of the 14 unchanged inputs must still be rejected by the parser. Production behavior is unchanged."
         },
         "actionPostconditions": [
           {
             "action": "Reject malformed/ambiguous deep-link forms.",
-            "postcondition": "Every invalid URL parses to the typed rejection result; a force-unwrapped URL fixture is a test trap risk."
+            "postcondition": "Each fixture first constructs a URL through XCTUnwrap, then parsing that URL throws; failure diagnostics distinguish setup from rejection."
           }
         ]
       }

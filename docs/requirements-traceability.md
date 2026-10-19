@@ -663,6 +663,15 @@ app outcomes, with zero skips/failures/runtime warnings. A prior SpringBoard
 Busy launch failure executed no actual test cases and is retained separately;
 explicit boot readiness and installation preceded the successful owning run.
 
+The bounded deep-link fixture slice under #374 preserves all 14 invalid-route
+inputs and requires throwing URL construction before parser-rejection
+assertions. Local Simulator validation verified ten focused repetitions, all
+five DeepLink identities and all 608 discovered app identities, with zero
+skips/failures/runtime warnings; retained class rebuild warnings and exact
+artifacts are recorded in the
+[scoped evidence](release-evidence/test-reliability-app-followups.md#deep-link-invalid-route-fixture-construction-374).
+This does not close the broader #362 or #374 acceptance criteria.
+
 ### AccountStore coverage evidence (2026-10-19)
 
 `AccountStoreTests.testCorruptStoredProfileIsRejectedWithoutLeakingPayload`
