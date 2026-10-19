@@ -1179,3 +1179,68 @@ command exited zero and its exact 3/3 XML outcomes were independently verified.
 No failed/interrupted test is credited through that environment event.
 Broader lifecycle/configuration/device/live-server and file-backed cleanup
 acceptance remains open. Fresh exact-head source review and CI are required.
+
+
+## Bounded OTLP cancellation caller outcomes (issue #372)
+
+At merged base `18a02ebfadb1f3797161584560526f98591b3e5e`, three memory-only
+OTLP cancellation tests had bounded phase-entry signals but awaited their final
+export task values without caller-completion bounds:
+
+- `testCancellingAsyncExportCancelsTokenWaitBeforeRPC`
+- `testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC`
+- `testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport`
+
+Each now signals its own existing completion actor only after the actual public
+export returns, forwards that result unchanged, and observes the bounded signal
+before consuming the task value. Missing completion records a caller-specific
+source-located failure, requests task/exporter cancellation and returns without
+awaiting unconfirmed work. This does not prove underlying token/provider/export
+task termination; asynchronous drainage remains open when unproven.
+
+Original cancellation actions and phase-entry/release ordering remain. Direct
+caller cancellation still requires failure and zero RPC; lifecycle cancellation
+still requires failure, zero RPC and one client cancellation. The post-token
+registration case still releases its controlled registration gate before result
+observation, then requires first failure/zero RPC, later success/one RPC and two
+provider requests. The gate is already released before the new failure guard.
+
+Existing thirty-second operation/fake settings remain unchanged. The ten-second
+completion deadline bounds waiting after cancellation, but does not timestamp
+completion or rule out natural fake expiry during a long scheduler pause. The
+two token-wait cases therefore retain follow-up dispositions for that timing/
+provider-cancellation ambiguity. No new elapsed-time assertion or readiness sleep.
+Providers/clients are fresh memory fakes, with no file or native-session fixture
+here. No helper/production code, new declaration or inventory change. Three
+records gain scoped nine-rule reviews while historical notes remain retained.
+Inventory 592, source index 1,576 and core audit 586 counts remain unchanged.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused executions: **3/3 each**, exact original identities,
+  zero failures/errors/skips.
+- Owning `AuthenticatedOtlpSpanExporterTests`: **19/19**, exact inventory
+  identities, zero failures/errors/skips; the original bearer privacy scenario
+  remains present and executed.
+- Complete supported signed host gate: **592/592**, exact inventory identities,
+  zero failures/errors/skips. Signing/entitlements/provisioning verified by the
+  gate and production LCOV exported. Existing watchOS deprecation, read-only
+  Cocoa 513 diagnostics and three intentional cleanup known issues remain
+  retained; no new runtime warning or unexpected issue was observed.
+- Built discovery: **592/592** host declarations. Strict repository Swift lint,
+  documentation references and final diff/JSON checks passed. No unsuccessful
+  or zero-test validation attempt occurred for this slice.
+
+Supported serial Swift Testing commands use `mise exec -- env
+BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter`
+with the three names above prefixed by `AuthenticatedOtlpSpanExporterTests.` and
+joined by `|`, writing `.build/i372-otlp-focused-1.xml`. Repetitions add
+`--skip-build` and distinct `-2`/`-3` reports. Owning selection is
+`AuthenticatedOtlpSpanExporterTests`, writing `.build/i372-otlp-owning.xml`; each
+XML has a matching log. Complete signed validation uses
+`mise exec -- ./scripts/test-host.sh`, retaining
+`.build/i372-otlp-signed-host.log`. Discovery/lint/docs/outcome evidence is
+`.build/i372-otlp-discovery.txt`, `.build/i372-otlp-lint.log`,
+`.build/i372-otlp-docs.log` and `.build/i372-otlp-verification.json`.
+Broader lifecycle, drainage, configuration/device/live-server and file-backed
+cleanup acceptance remains open. Fresh exact-head source review and CI required.
