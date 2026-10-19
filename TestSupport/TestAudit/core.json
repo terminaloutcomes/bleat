@@ -20351,14 +20351,14 @@
         "8": "Assert typed provider errors/availability and exact counts; polling failure lacks timeout diagnostics and is tracked.",
         "9": "Inspected all bodies and TestClock, attester, memory store, fake transport, tracer and typed-error assertion helper. No individual repetition recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh provider and actor fakes; deterministic injected clock for timing contracts; no real attestation/network service.",
       "action_postconditions": "Start provider token task with fake token delay five seconds; poll actor tokenCount using unbounded Task.yield loop, assert acquiring, cancel, and consume task result.",
       "synchronization": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
       "timeout_tolerance": "Wait for fake state currently lacks a bounded time budget; see follow-up.",
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
-      "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+      "reason": "Observe acquiring availability while an explicitly held token response is pending, then bound actual acquisition return.",
       "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -20366,6 +20366,26 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "token_response_lifecycle_review": {
+        "base_revision": "20442b3d2ea6473f85c6f12bd7762adb267f9cd5",
+        "previous_decision": "follow_up",
+        "historical_reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block reviews the current controlled-response/caller-observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Observe acquiring availability while an explicitly held token response is pending, then bound actual acquisition return. Original availability, typed-error and cancellation-count assertions remain.",
+          "2": "Existing entry/challenge signals, controlled response, bounded caller completion and retirement replace timed holds. Existing actor count proves sole-waiter removal before retirement.",
+          "3": "Remove five/thirty-second success-capable fake holds from these cases. Existing ten-second deadlines report missing transition/release/exit; no latency assertion or readiness sleep.",
+          "4": "Await existing withTestCleanup on normal/throwing exits: cancel caller, disable provider, retire response. Task values require actual caller-result proof; cleanup never awaits unconfirmed handles. Whole underlying graph drainage is not claimed.",
+          "5": "Fresh fake attester, memory enrollment store, provider, response gate and separate single-waiter completion actor; synthetic data only.",
+          "6": "Host fake transport integration. Retirement releases the response and checks actual Task.isCancelled; retirement itself does not cancel that task.",
+          "7": "Measure genuine cancellation before cleanup disables the provider; no retry-to-green or relaxed error criteria.",
+          "8": "Source-located caller completion and existing retirement diagnostics; the typed-result helper preserves values/errors without adding token payloads to new diagnostics.",
+          "9": "Reviewed existing result/completion/cleanup/retirement helpers, synchronous waiter removal/cancel ordering, and all three callers; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 18/18, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372"
       }
     },
     {
@@ -20567,7 +20587,7 @@
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOnlyWaiterCancelsUnderlyingRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
-        "line": 334
+        "line": 356
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -20592,14 +20612,14 @@
         "8": "Assert typed provider errors/availability and exact counts; polling failure lacks timeout diagnostics and is tracked.",
         "9": "Inspected all bodies and TestClock, attester, memory store, fake transport, tracer and typed-error assertion helper. No individual repetition recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh provider and actor fakes; deterministic injected clock for timing contracts; no real attestation/network service.",
       "action_postconditions": "Start waiter with 30s fake delay; unbounded yield loops await token entry and cancellation count; cancel task, assert typed cancelled, then one underlying cancellation.",
       "synchronization": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
       "timeout_tolerance": "Wait for fake state currently lacks a bounded time budget; see follow-up.",
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
-      "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+      "reason": "Retain exact cancelled error, genuine transport cancellation signal and cancellation count 1; observe last-waiter removal before response retirement and measure cancellation before cleanup disables the provider.",
       "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -20607,6 +20627,26 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "token_response_lifecycle_review": {
+        "base_revision": "20442b3d2ea6473f85c6f12bd7762adb267f9cd5",
+        "previous_decision": "follow_up",
+        "historical_reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block reviews the current controlled-response/caller-observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Retain exact cancelled error, genuine transport cancellation signal and cancellation count 1; observe last-waiter removal before response retirement and measure cancellation before cleanup disables the provider. Original availability, typed-error and cancellation-count assertions remain.",
+          "2": "Existing entry/challenge signals, controlled response, bounded caller completion and retirement replace timed holds. Existing actor count proves sole-waiter removal before retirement.",
+          "3": "Remove five/thirty-second success-capable fake holds from these cases. Existing ten-second deadlines report missing transition/release/exit; no latency assertion or readiness sleep.",
+          "4": "Await existing withTestCleanup on normal/throwing exits: cancel caller, disable provider, retire response. Task values require actual caller-result proof; cleanup never awaits unconfirmed handles. Whole underlying graph drainage is not claimed.",
+          "5": "Fresh fake attester, memory enrollment store, provider, response gate and separate single-waiter completion actor; synthetic data only.",
+          "6": "Host fake transport integration. Retirement releases the response and checks actual Task.isCancelled; retirement itself does not cancel that task.",
+          "7": "Measure genuine cancellation before cleanup disables the provider; no retry-to-green or relaxed error criteria.",
+          "8": "Source-located caller completion and existing retirement diagnostics; the typed-result helper preserves values/errors without adding token payloads to new diagnostics.",
+          "9": "Reviewed existing result/completion/cleanup/retirement helpers, synchronous waiter removal/cancel ordering, and all three callers; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 18/18, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372"
       }
     },
     {
@@ -20815,7 +20855,7 @@
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken",
       "source": {
         "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
-        "line": 524
+        "line": 625
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -20840,14 +20880,14 @@
         "8": "Assert typed provider errors/availability and exact counts; polling failure lacks timeout diagnostics and is tracked.",
         "9": "Inspected all bodies and TestClock, attester, memory store, fake transport, tracer and typed-error assertion helper. No individual repetition recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "Fresh provider and actor fakes; deterministic injected clock for timing contracts; no real attestation/network service.",
       "action_postconditions": "Start delayed token task; unbounded yield until token challenge, disable, await and accept cancelled/disabled task result, assert later currentToken disabled.",
       "synchronization": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
       "timeout_tolerance": "Wait for fake state currently lacks a bounded time budget; see follow-up.",
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
-      "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+      "reason": "Retain cancelled-or-disabled refresh outcome and subsequent disabled-token rejection; bound caller return and retire entered/late fake response on scope exit.",
       "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -20855,6 +20895,26 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "token_response_lifecycle_review": {
+        "base_revision": "20442b3d2ea6473f85c6f12bd7762adb267f9cd5",
+        "previous_decision": "follow_up",
+        "historical_reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
+        "historical_assessment": "Original notes remain revision-bound; this nine-rule block reviews the current controlled-response/caller-observation slice.",
+        "decision": "fix",
+        "rules": {
+          "1": "Retain cancelled-or-disabled refresh outcome and subsequent disabled-token rejection; bound caller return and retire entered/late fake response on scope exit. Original availability, typed-error and cancellation-count assertions remain.",
+          "2": "Existing entry/challenge signals, controlled response, bounded caller completion and retirement replace timed holds. Existing actor count proves sole-waiter removal before retirement.",
+          "3": "Remove five/thirty-second success-capable fake holds from these cases. Existing ten-second deadlines report missing transition/release/exit; no latency assertion or readiness sleep.",
+          "4": "Await existing withTestCleanup on normal/throwing exits: cancel caller, disable provider, retire response. Task values require actual caller-result proof; cleanup never awaits unconfirmed handles. Whole underlying graph drainage is not claimed.",
+          "5": "Fresh fake attester, memory enrollment store, provider, response gate and separate single-waiter completion actor; synthetic data only.",
+          "6": "Host fake transport integration. Retirement releases the response and checks actual Task.isCancelled; retirement itself does not cancel that task.",
+          "7": "Measure genuine cancellation before cleanup disables the provider; no retry-to-green or relaxed error criteria.",
+          "8": "Source-located caller completion and existing retirement diagnostics; the typed-result helper preserves values/errors without adding token payloads to new diagnostics.",
+          "9": "Reviewed existing result/completion/cleanup/retirement helpers, synchronous waiter removal/cancel ordering, and all three callers; execution evidence linked."
+        },
+        "execution": "Three independent focused passes 3/3 each, owning 18/18, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372"
       }
     },
     {
@@ -22707,6 +22767,16 @@
       "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh"
     ],
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372",
+    "historical_counts": "Unchanged: host inventory 592, source declarations 1,576, core audit 586."
+  },
+  "issue_372_token_response_lifecycle": {
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityReportsActiveAcquisition",
+      "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOnlyWaiterCancelsUnderlyingRefresh",
+      "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-telemetry-token-response-lifecycles-issue-372",
     "historical_counts": "Unchanged: host inventory 592, source declarations 1,576, core audit 586."
   }
 }

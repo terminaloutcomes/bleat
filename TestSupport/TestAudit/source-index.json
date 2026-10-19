@@ -6977,91 +6977,91 @@
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testConsentEnablementIsLazyAndFirstTokenEnrolls",
-      "line": 168,
+      "line": 190,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testUnsupportedAttesterPerformsNoWork",
-      "line": 215,
+      "line": 237,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly",
-      "line": 234,
+      "line": 256,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testTokenWithinRefreshWindowIsRenewedWithoutReenrollment",
-      "line": 270,
+      "line": 292,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testConcurrentRefreshIsSingleFlight",
-      "line": 302,
+      "line": 324,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testCancellingOnlyWaiterCancelsUnderlyingRefresh",
-      "line": 334,
+      "line": 356,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testCancellingOneWaiterPreservesRefreshForConcurrentWaiter",
-      "line": 365,
+      "line": 419,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testInvalidStoredKeyClearsEnrollmentAndRestartsOnce",
-      "line": 403,
+      "line": 504,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testServerRejectionDoesNotReplaceDisabledInstallation",
-      "line": 428,
+      "line": 529,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testEnrollmentRejectionStopsRetriesUntilReenabled",
-      "line": 460,
+      "line": 561,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testInvalidationOnlyClearsTheTokenThatWasRejected",
-      "line": 496,
+      "line": 597,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testDisablingCancelsRefreshAndClearsMemoryToken",
-      "line": 524,
+      "line": 625,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testTransientFailureAppliesBoundedLazyBackoff",
-      "line": 555,
+      "line": 678,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testRateLimitRetryAfterDelaysTheNextChallengeAttempt",
-      "line": 592,
+      "line": 715,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift",
       "name": "testErrorsContainNoChallengeKeyOrTokenMaterial",
-      "line": 626,
+      "line": 749,
       "language": "swift"
     },
     {
