@@ -747,7 +747,17 @@ privacy-description assertions. Whole underlying task drainage and broader
 
 The [OTLP lifecycle-phase slice and timeout assessment](release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372)
 bounds six existing lifecycle calls in three ordered phases while retaining
-typed before/after state and exact shutdown counters. The separate 50 ms/500 ms
-timeout test remains unchanged and explicitly unresolved pending a controllable
-deadline strategy; passing runs do not establish scheduler-independent timing.
+typed before/after state and exact shutdown counters. At that revision, the
+separate 50 ms/500 ms timeout test was unchanged and explicitly unresolved;
+the controlled deadline slice below supersedes that specific finding.
 Broader #372/#362 acceptance remains open.
+
+
+The [controlled OTLP deadline slice](release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372)
+adds an internal live-default now/sleep seam while preserving Date budgets and
+public APIs. The actual public timeout test now proves the semantic 50 ms budget
+and caller failure before a held provider exits, without a scheduler-speed
+threshold. Four helper/boundary identities and four killed mutations cover
+registration cancellation, retirement, token-success sleeper cancellation and
+expired RPC budget. Live wall-clock adjustment semantics and whole production
+task-graph drainage are unchanged/unproven; broader #372/#362 remains open.

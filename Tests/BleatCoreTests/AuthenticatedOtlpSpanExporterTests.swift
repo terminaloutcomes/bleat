@@ -332,21 +332,339 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     @Test
     func testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider()
-        async
+        async throws
     {
         let provider = CancellationIgnoringTokenProvider()
+        let manualClock = ManualOtlpClock()
         let client = RecordingOtlpClient(results: [.success])
-        let exporter = exporter(provider: provider, client: client)
-        let started = ContinuousClock.now
+        let exporter = AuthenticatedOtlpSpanExporter(
+            tokenProvider: provider, client: client, timeout: 2,
+            clock: manualClock.clock)
+        let span = span()
+        let returned = AuthTelemetryTestCompletion<Bool>()
+        let exportTask = Task {
+            let result = await exporter.export(
+                spans: [span], explicitTimeout: 0.05)
+            await returned.complete(true)
+            return result
+        }
+        try await withTestCleanup {
+            exportTask.cancel()
+            exporter.cancelActiveExports()
+            await provider.retire()
+            await manualClock.retire()
+        } operation: {
+            try #require(
+                await requireAuthTelemetrySignal(
+                    provider.waitingSignal,
+                    stage: "uncooperative token wait installed"))
+            try #require(
+                await requireAuthTelemetrySignal(
+                    manualClock.registeredSignal,
+                    stage: "token deadline sleeper registered"))
+            let budget = try #require(
+                manualClock.budgets.count == 1 ? manualClock.budgets.first : nil
+            )
+            let expectedBudget = 0.05
+            // Floating-point precision only; this is not a wall-clock tolerance.
+            #expect(abs(budget - expectedBudget) <= expectedBudget.ulp * 4)
+            #expect(await provider.requestCount == 1)
+            #expect(await provider.exitCount == 0)
+            manualClock.advance(by: expectedBudget)
+            manualClock.fire()
+            try #require(
+                await requireAuthTelemetryCompletion(
+                    returned,
+                    stage: "controlled token deadline export caller returning")
+                    == true)
+            let result = await exportTask.value
+            #expect(result == .failure)
+            #expect(client.exportCount == 0)
+            try #require(
+                await requireAuthTelemetrySignal(
+                    provider.cancellationSignal,
+                    stage: "deadline token cancellation acknowledged"))
+            #expect(await provider.exitCount == 0)
+            #expect(manualClock.settlements == [.released])
+        }
+    }
 
-        let result = await exporter.export(
-            spans: [span()],
-            explicitTimeout: 0.05
-        )
+    private enum UncooperativeTokenMode: Sendable {
+        case cancelBeforeEntry, cancelWhileWaiting, retireBeforeEntry,
+            retireWhileWaiting
+    }
 
-        #expect(result == .failure)
-        #expect(started.duration(to: .now) < .milliseconds(500))
-        #expect(client.exportCount == 0)
+    @Test(arguments: [
+        UncooperativeTokenMode.cancelBeforeEntry, .cancelWhileWaiting,
+        .retireBeforeEntry, .retireWhileWaiting,
+    ])
+    private func
+        testCancellationIgnoringTokenProviderRequiresExplicitRetirement(
+            mode: UncooperativeTokenMode
+        ) async throws
+    {
+        let provider = CancellationIgnoringTokenProvider()
+        let start = AuthTelemetryTestSignal()
+        let returned = AuthTelemetryTestCompletion<
+            Result<String, TelemetryTokenProviderError>
+        >()
+        let caller = Task {
+            guard case .signalled = await start.wait() else {
+                Issue.record(
+                    "Uncooperative token contract start was not released")
+                return
+            }
+            let result: Result<String, TelemetryTokenProviderError>
+            do throws(TelemetryTokenProviderError) {
+                result = .success(try await provider.currentToken())
+            } catch { result = .failure(error) }
+            await returned.complete(result)
+        }
+        try await withTestCleanup {
+            caller.cancel()
+            await start.signal()
+            await provider.retire()
+        } operation: {
+            switch mode {
+            case .cancelBeforeEntry:
+                caller.cancel()
+                await start.signal()
+            case .cancelWhileWaiting:
+                await start.signal()
+                try #require(
+                    await requireAuthTelemetrySignal(
+                        provider.waitingSignal,
+                        stage: "uncooperative token handler installed"))
+                caller.cancel()
+            case .retireBeforeEntry:
+                await provider.retire()
+                await start.signal()
+            case .retireWhileWaiting:
+                await start.signal()
+                try #require(
+                    await requireAuthTelemetrySignal(
+                        provider.waitingSignal,
+                        stage: "uncooperative token handler installed"))
+                await provider.retire()
+            }
+            if mode == .cancelBeforeEntry || mode == .cancelWhileWaiting {
+                try #require(
+                    await requireAuthTelemetrySignal(
+                        provider.cancellationSignal,
+                        stage: "uncooperative token cancellation acknowledged"))
+                #expect(await provider.exitCount == 0)
+                await provider.retire()
+            }
+            let result = try #require(
+                await requireAuthTelemetryCompletion(
+                    returned,
+                    stage: "retired uncooperative token caller returning"))
+            #expect(result == .failure(.cancelled))
+            await caller.value
+            #expect(
+                await provider.requestCount
+                    == (mode == .retireBeforeEntry ? 0 : 1))
+            #expect(
+                await provider.exitCount == (mode == .retireBeforeEntry ? 0 : 1)
+            )
+        }
+    }
+
+    private enum ManualClockMode: Equatable, Sendable {
+        case cancelBeforeEntry, cancelWhileSleeping, fireBeforeEntry,
+            fireWhileSleeping, retireBeforeEntry, retireWhileSleeping
+    }
+
+    private enum ManualClockOutcome: Equatable, Sendable {
+        case completed, cancelled, unexpected
+    }
+
+    @Test(arguments: [
+        ManualClockMode.cancelBeforeEntry, .cancelWhileSleeping,
+        .fireBeforeEntry,
+        .fireWhileSleeping, .retireBeforeEntry, .retireWhileSleeping,
+    ])
+    private func testManualOtlpClockSettlesSleepExactlyOnce(
+        mode: ManualClockMode
+    )
+        async throws
+    {
+        let manualClock = ManualOtlpClock()
+        let start = AuthTelemetryTestSignal()
+        let returned = AuthTelemetryTestCompletion<ManualClockOutcome>()
+        let caller = Task {
+            guard case .signalled = await start.wait() else {
+                Issue.record("Manual clock contract start was not released")
+                return
+            }
+            let outcome: ManualClockOutcome
+            do {
+                try await manualClock.clock.sleep(0.05)
+                outcome = .completed
+            } catch is CancellationError {
+                outcome = .cancelled
+            } catch {
+                Issue.record("Manual clock produced an unexpected error type")
+                outcome = .unexpected
+            }
+            await returned.complete(outcome)
+        }
+        try await withTestCleanup {
+            caller.cancel()
+            await start.signal()
+            await manualClock.retire()
+        } operation: {
+            switch mode {
+            case .cancelBeforeEntry:
+                caller.cancel()
+                await start.signal()
+            case .fireBeforeEntry:
+                manualClock.advance(by: 0.05)
+                manualClock.fire()
+                manualClock.fire()
+                await start.signal()
+            case .retireBeforeEntry:
+                await manualClock.retire()
+                await manualClock.retire()
+                await start.signal()
+            case .cancelWhileSleeping, .fireWhileSleeping, .retireWhileSleeping:
+                await start.signal()
+                try #require(
+                    await requireAuthTelemetrySignal(
+                        manualClock.registeredSignal,
+                        stage: "manual sleeper registered"))
+                #expect(manualClock.pendingCount == 1)
+                #expect(manualClock.pendingContinuationCount == 1)
+                switch mode {
+                case .cancelWhileSleeping: caller.cancel()
+                case .fireWhileSleeping:
+                    manualClock.advance(by: 0.05)
+                    manualClock.fire()
+                    manualClock.fire()
+                case .retireWhileSleeping:
+                    await manualClock.retire()
+                    await manualClock.retire()
+                default: Issue.record("Unexpected clock contract branch")
+                }
+            }
+            let outcome = try #require(
+                await requireAuthTelemetryCompletion(
+                    returned, stage: "manual clock sleep caller returning"))
+            let fired = mode == .fireBeforeEntry || mode == .fireWhileSleeping
+            #expect(outcome == (fired ? .completed : .cancelled))
+            await caller.value
+            let expectedCount = mode == .retireBeforeEntry ? 0 : 1
+            #expect(manualClock.budgets.count == expectedCount)
+            #expect(manualClock.finishedCount == expectedCount)
+            #expect(manualClock.pendingCount == 0)
+            #expect(manualClock.pendingContinuationCount == 0)
+            #expect(
+                manualClock.resolutionCounts
+                    == Array(repeating: 1, count: expectedCount))
+            manualClock.fire()
+            manualClock.fire()
+            await manualClock.retire()
+            await manualClock.retire()
+            #expect(manualClock.finishedCount == expectedCount)
+            #expect(
+                manualClock.resolutionCounts
+                    == Array(repeating: 1, count: expectedCount))
+        }
+    }
+
+    @Test
+    func testSuccessfulTokenAcquisitionCancelsManualDeadlineSleeper()
+        async throws
+    {
+        let manualClock = ManualOtlpClock()
+        let provider = SequenceTokenProvider(tokens: ["controlled"])
+        let client = RecordingOtlpClient(results: [.success])
+        let exporter = AuthenticatedOtlpSpanExporter(
+            tokenProvider: provider, client: client, timeout: 2,
+            clock: manualClock.clock)
+        let span = span()
+        let returned = AuthTelemetryTestCompletion<Bool>()
+        let caller = Task {
+            let result = await exporter.export(
+                spans: [span], explicitTimeout: 0.05)
+            await returned.complete(true)
+            return result
+        }
+        try await withTestCleanup {
+            caller.cancel()
+            exporter.cancelActiveExports()
+            await manualClock.retire()
+        } operation: {
+            try #require(
+                await requireAuthTelemetryCompletion(
+                    returned,
+                    stage: "successful controlled-clock export returning")
+                    == true)
+            #expect(await caller.value == .success)
+            try #require(
+                await requireAuthTelemetrySignal(
+                    manualClock.registeredSignal,
+                    stage: "successful export timer registered"))
+            try #require(
+                await requireAuthTelemetrySignal(
+                    manualClock.finishedSignal,
+                    stage: "cancelled success timer exited"))
+            #expect(client.exportCount == 1)
+            #expect(await provider.requestCount == 1)
+            #expect(manualClock.settlements == [.cancelled])
+            #expect(manualClock.finishedCount == 1)
+            #expect(manualClock.pendingCount == 0)
+            #expect(!manualClock.hasFired)
+        }
+    }
+
+    @Test
+    func testExpiredControlledDeadlinePreventsRPC() async throws {
+        let manualClock = ManualOtlpClock()
+        let provider = SingleFlightTokenProvider(
+            token: "controlled", expectedWaiters: 1)
+        let client = RecordingOtlpClient(results: [.success])
+        let exporter = AuthenticatedOtlpSpanExporter(
+            tokenProvider: provider, client: client, timeout: 2,
+            clock: manualClock.clock)
+        let span = span()
+        let returned = AuthTelemetryTestCompletion<Bool>()
+        let caller = Task {
+            let result = await exporter.export(
+                spans: [span], explicitTimeout: 0.05)
+            await returned.complete(true)
+            return result
+        }
+        try await withTestCleanup {
+            caller.cancel()
+            exporter.cancelActiveExports()
+            await provider.releaseToken()
+            await manualClock.retire()
+        } operation: {
+            try #require(
+                await requireAuthTelemetrySignal(
+                    provider.allTokenWaitersArrived,
+                    stage: "held token provider entered"))
+            try #require(
+                await requireAuthTelemetrySignal(
+                    manualClock.registeredSignal,
+                    stage: "held token deadline registered"))
+            manualClock.advance(by: 0.05)
+            await provider.releaseToken()
+            try #require(
+                await requireAuthTelemetryCompletion(
+                    returned, stage: "expired RPC budget export returning")
+                    == true)
+            #expect(await caller.value == .failure)
+            #expect(client.exportCount == 0)
+            #expect(await provider.refreshCount == 1)
+            try #require(
+                await requireAuthTelemetrySignal(
+                    manualClock.finishedSignal,
+                    stage: "expired RPC budget timer exited"))
+            #expect(manualClock.settlements == [.cancelled])
+            #expect(!manualClock.hasFired)
+        }
     }
 
     @Test
@@ -1094,18 +1412,219 @@ private actor SuspendedTokenProvider: TelemetryTokenProviding {
     }
 }
 
-private final class CancellationIgnoringTokenProvider:
-    TelemetryTokenProviding, @unchecked Sendable
-{
+private actor CancellationIgnoringTokenProvider: TelemetryTokenProviding {
+    nonisolated let waitingSignal = AuthTelemetryTestSignal()
+    nonisolated let cancellationSignal = AuthTelemetryTestSignal()
+    private var released = false
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private let exitedSignal = AuthTelemetryTestSignal()
+    private var retired = false
+    private(set) var requestCount = 0
+    private(set) var exitCount = 0
+
     func currentToken() async throws(TelemetryTokenProviderError) -> String {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(1))
-        while ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
+        guard !retired else { throw .cancelled }
+        guard requestCount == 0 else {
+            Issue.record("One-shot uncooperative token fake was reused")
+            throw .cancelled
         }
+        requestCount += 1
+        let waiting = waitingSignal
+        let cancellation = cancellationSignal
+        await withTaskCancellationHandler {
+            await waiting.signal()
+            await waitForRelease()
+        } onCancel: {
+            // Acknowledge actual cancellation without releasing the held body.
+            Task { await cancellation.signal() }
+        }
+        exitCount += 1
+        await exitedSignal.signal()
         throw .cancelled
     }
 
+    private func waitForRelease() async {
+        guard !released else { return }
+        await withCheckedContinuation { releaseContinuation = $0 }
+    }
+
     func invalidateToken(ifCurrent token: String) async {}
+
+    func retire(sourceLocation: SourceLocation = #_sourceLocation) async {
+        retired = true
+        released = true
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+        if requestCount != 0 {
+            await requireAuthTelemetrySignal(
+                exitedSignal, stage: "retired uncooperative token fake exit",
+                sourceLocation: sourceLocation)
+        }
+    }
+}
+
+private enum ManualSleepSettlement: Equatable, Sendable {
+    case released, cancelled
+}
+
+/// Fresh one-shot clock per test; all time movement and timer release is explicit.
+private final class ManualOtlpClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current = Date(timeIntervalSinceReferenceDate: 0)
+    private var retired = false
+    private var fired = false
+    private var entries: [ManualOtlpSleep] = []
+    private var recordedBudgets: [TimeInterval] = []
+    private var completedSleeps = 0
+    let registeredSignal = AuthTelemetryTestSignal()
+    let finishedSignal = AuthTelemetryTestSignal()
+
+    var clock: OtlpExportClock {
+        OtlpExportClock(
+            now: { self.lock.withLock { self.current } },
+            sleep: { try await self.sleep($0) })
+    }
+    var budgets: [TimeInterval] { lock.withLock { recordedBudgets } }
+    var finishedCount: Int { lock.withLock { completedSleeps } }
+    var hasFired: Bool { lock.withLock { fired } }
+    var pendingCount: Int {
+        lock.withLock { entries.filter { $0.settlement == nil }.count }
+    }
+    var pendingContinuationCount: Int {
+        lock.withLock { entries.filter(\.hasContinuation).count }
+    }
+    var settlements: [ManualSleepSettlement?] {
+        lock.withLock { entries.map(\.settlement) }
+    }
+    var resolutionCounts: [Int] {
+        lock.withLock { entries.map(\.resolutionCount) }
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.withLock { current = current.addingTimeInterval(interval) }
+    }
+
+    func fire() {
+        let waiting = lock.withLock { () -> [ManualOtlpSleep] in
+            guard !retired else { return [] }
+            fired = true
+            return entries
+        }
+        for waiter in waiting { waiter.resolve(.released) }
+    }
+
+    private func register(_ waiter: ManualOtlpSleep, budget: TimeInterval)
+        -> Bool
+    {
+        let state = lock.withLock { () -> (accepted: Bool, fired: Bool) in
+            guard !retired else { return (false, false) }
+            entries.append(waiter)
+            recordedBudgets.append(budget)
+            return (true, fired)
+        }
+        if state.fired { waiter.resolve(.released) }
+        return state.accepted
+    }
+
+    private func sleep(_ budget: TimeInterval) async throws {
+        let waiter = ManualOtlpSleep(registeredSignal: registeredSignal)
+        do {
+            try await withTaskCancellationHandler {
+                guard register(waiter, budget: budget) else {
+                    throw CancellationError()
+                }
+                try await waiter.wait()
+            } onCancel: {
+                waiter.resolve(.cancelled)
+            }
+            await finish(waiter)
+        } catch {
+            await finish(waiter)
+            throw error
+        }
+    }
+
+    private func finish(_ waiter: ManualOtlpSleep) async {
+        let owned = lock.withLock { () -> Bool in
+            guard entries.contains(where: { $0 === waiter }) else {
+                return false
+            }
+            completedSleeps += 1
+            return true
+        }
+        if owned {
+            await waiter.exitedSignal.signal()
+            await finishedSignal.signal()
+        }
+    }
+
+    func retire(sourceLocation: SourceLocation = #_sourceLocation) async {
+        let waiting = lock.withLock {
+            retired = true
+            return entries
+        }
+        for waiter in waiting { waiter.resolve(.cancelled) }
+        for waiter in waiting {
+            await requireAuthTelemetrySignal(
+                waiter.exitedSignal,
+                stage: "retired controlled deadline sleep exit",
+                sourceLocation: sourceLocation)
+        }
+    }
+}
+
+private final class ManualOtlpSleep: @unchecked Sendable {
+    private let lock = NSLock()
+    private var result: ManualSleepSettlement?
+    private var resolutions = 0
+    private var continuation: CheckedContinuation<Void, any Error>?
+    let exitedSignal = AuthTelemetryTestSignal()
+    private let registeredSignal: AuthTelemetryTestSignal
+
+    init(registeredSignal: AuthTelemetryTestSignal) {
+        self.registeredSignal = registeredSignal
+    }
+
+    var settlement: ManualSleepSettlement? { lock.withLock { result } }
+    var resolutionCount: Int { lock.withLock { resolutions } }
+    var hasContinuation: Bool { lock.withLock { continuation != nil } }
+
+    func wait() async throws {
+        let registered = registeredSignal
+        try await withCheckedThrowingContinuation { continuation in
+            let settled: ManualSleepSettlement? = lock.withLock {
+                if let result { return result }
+                self.continuation = continuation
+                return nil
+            }
+            if let settled { resume(continuation, with: settled) }
+            // Acknowledge only after the continuation was installed or settled.
+            Task { await registered.signal() }
+        }
+    }
+
+    func resolve(_ settled: ManualSleepSettlement) {
+        let waiting = lock.withLock {
+            () -> CheckedContinuation<Void, any Error>? in
+            guard result == nil else { return nil }
+            result = settled
+            resolutions += 1
+            let waiting = continuation
+            continuation = nil
+            return waiting
+        }
+        if let waiting { resume(waiting, with: settled) }
+    }
+
+    private func resume(
+        _ continuation: CheckedContinuation<Void, any Error>,
+        with settled: ManualSleepSettlement
+    ) {
+        switch settled {
+        case .released: continuation.resume()
+        case .cancelled: continuation.resume(throwing: CancellationError())
+        }
+    }
 }
 
 private final class RecordingOtlpClient:

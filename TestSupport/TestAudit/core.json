@@ -104,6 +104,16 @@
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "symbol": "SuspendedTokenProvider",
       "assessment": "Controlled one-shot actor replaces timed sleep; cancellation handler opens release, genuine Task.isCancelled increments observed counter, retirement releases/observes logical exit without manufacturing cancellation. Four argument contract covers cancellation/retirement before entry and while handler installed. See docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372 Revised provider captures monotonic cancellation observation; three lifecycle tests require it before a lower-bound deadline established before export. Fixture accepts timeout default2, overridden30 only in those cases."
+    },
+    {
+      "path": "Sources/BleatCore/AuthenticatedOtlpSpanExporter.swift",
+      "symbol": "OtlpExportClock / awaitTask",
+      "assessment": "Approved internal Sendable now/sleep seam. Live Date and native cancellation-aware throwing Task.sleep defaults retain remaining-budget calculation placement, Date semantics, first-result-wins actor and unstructured value/timeout observers. Same clock reaches span deadline/RPC budget/acquisition/invalidation; public API and log/runtime source callers keep live defaults. Shared owning/runtime gates included."
+    },
+    {
+      "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+      "symbol": "CancellationIgnoringTokenProvider / ManualOtlpClock / ManualOtlpSleep",
+      "assessment": "One-shot actor provider ignores acknowledged cancellation until explicit continuation release; retirement latches late entry and awaits logical exit. Manual clock protects synchronous data with locks, caches one settlement across pre/post registration cancellation and resumes outside locks; retirement rejects late entry, releases all known entries and positively observes logical exits. Four provider and six clock contract arguments plus public token-success cancellation/RPC-expiry cases. No global timing, real readiness sleep or natural provider expiry."
     }
   ],
   "tests": [
@@ -3132,14 +3142,14 @@
         "8": "Typed result and semantic counts/state are asserted. Elapsed timeout bound is explicitly asserted where applicable.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "follow_up",
+      "decision": "fix",
       "dependencies_and_setup": "ContinuousClock measures call; cancellation-ignoring provider has 10ms sleep loop ending at one second; 500ms upper bound is six times requested timeout.",
       "action_postconditions": "Provider waits one real second; export timeout is 50ms; assert failure, measured duration <500ms, zero RPC.",
       "synchronization": "ContinuousClock measures call; cancellation-ignoring provider has 10ms sleep loop ending at one second; 500ms upper bound is six times requested timeout.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic timeout/cancellation test using real clock; provider deliberately ignores cancellation.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "50ms deadline can race provider entry;500ms elapsed upper assertion depends on scheduling and fake polls for one second after caller cancellation. Controlled public deadline strategy and awaited fake retirement remain unresolved; source unchanged.",
+      "reason": "Use actual public span exporter with configured2s ceiling and explicit0.05s request. Confirm held provider entry and timer registration, assert50ms semantic budget using floating-point precision only, advance logical time/fire timer while provider stays held, require actual caller failure/zero RPC and separately acknowledge genuine token cancellation before provider retirement. Remove500ms scheduler-speed check rather than widen it; replace polling fake with explicit awaited retirement.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "otlp_timeout_design_review": {
         "base_revision": "36da41d8921046f0cada2ac1a208cad0ec42a7d2",
@@ -3160,13 +3170,189 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372",
         "status": "source_assessed_not_remediated",
         "required_strategy": "Controllable deadline/clock seam for public integration, or explicit narrower helper test alongside retained integration; no blanket timing tolerance increase."
+      },
+      "controlled_deadline_review": {
+        "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+        "previous_decision": "follow_up",
+        "historical_reason": "50ms deadline can race provider entry;500ms elapsed upper assertion depends on scheduling and fake polls for one second after caller cancellation. Controlled public deadline strategy and awaited fake retirement remain unresolved; source unchanged.",
+        "supersedes": "Prior otlp_timeout_design_review readiness/elapsed finding is superseded for this test by controlled now/sleep plus continuation-held provider; historical notes stay revision-bound.",
+        "decision": "fix",
+        "rules": {
+          "1": "Use actual public span exporter with configured2s ceiling and explicit0.05s request. Confirm held provider entry and timer registration, assert50ms semantic budget using floating-point precision only, advance logical time/fire timer while provider stays held, require actual caller failure/zero RPC and separately acknowledge genuine token cancellation before provider retirement.",
+          "2": "Await independent provider-ready and timer-registered signals before manual fire; only then bound actual public return, then positive cancellation acknowledgement while provider remains held.",
+          "3": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency.",
+          "4": "Await scoped cleanup on all operation exits: request owned caller/exporter cancellation where applicable, latch/release provider and clock controls, and positively observe logical entered-body exits. Never await unconfirmed caller values. Unstructured production observers remain unchanged; no whole task-graph drainage claim.",
+          "5": "Fresh test-local memory controls, fake clients and completions. NSLock protects only synchronous clock/continuation data; no lock across await, blocked IO, global clock override, file/native session or process-global output mutation.",
+          "6": "Host-local deterministic public integration or explicit helper contracts as individually described. Public export coverage is retained; no helper-only substitution for it.",
+          "7": "No retry-to-green or budget widening. Exact outcome/count and settlement assertions preserved/added; four required mutations must fail and production bytes must restore exactly before final passing gates.",
+          "8": "Bounded stage/source diagnostics contain no token/span/result payload. Semantic budget failure is numerical precision at fixed time, not elapsed scheduler delay.",
+          "9": "Reviewed live clock defaults, shared helper callers, one-shot continuations, cancellation registration races, retirement latches and positive exits. Execution/mutation evidence linked; new identities inventoried."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "remaining_limits": "Live Date/wall-clock adjustment semantics remain unchanged; no real-time scheduling/latency guarantee or whole graph drainage claim."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationIgnoringTokenProviderRequiresExplicitRetirement",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 402
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Four contract cases distinguish cancellation before/after provider handler installation from retirement before entry/while held. Cancellation acknowledgement must leave exit count zero until explicit retirement; exact request/exit counts and typed cancelled result are required.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh uncooperative provider, controlled caller start and typed completion per argument; actor retirement latches late entry and releases its one continuation.",
+        "action_postconditions": "Four contract cases distinguish cancellation before/after provider handler installation from retirement before entry/while held. Cancellation acknowledgement must leave exit count zero until explicit retirement; exact request/exit counts and typed cancelled result are required."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Start gate plus installed-handler/cancellation acknowledgement signals order pre-entry and held cancellation; retirement alone releases body; bounded actual caller completion and logical exit observations.",
+        "timeout_tolerance": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency."
+      },
+      "compiler_skip_conditions": "No test-level guard, opt-in condition or skip.",
+      "rules": {
+        "1": "Four contract cases distinguish cancellation before/after provider handler installation from retirement before entry/while held. Cancellation acknowledgement must leave exit count zero until explicit retirement; exact request/exit counts and typed cancelled result are required.",
+        "2": "Start gate plus installed-handler/cancellation acknowledgement signals order pre-entry and held cancellation; retirement alone releases body; bounded actual caller completion and logical exit observations.",
+        "3": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency.",
+        "4": "Await scoped cleanup on all operation exits: request owned caller/exporter cancellation where applicable, latch/release provider and clock controls, and positively observe logical entered-body exits. Never await unconfirmed caller values. Unstructured production observers remain unchanged; no whole task-graph drainage claim.",
+        "5": "Fresh test-local memory controls, fake clients and completions. NSLock protects only synchronous clock/continuation data; no lock across await, blocked IO, global clock override, file/native session or process-global output mutation.",
+        "6": "Host-local deterministic public integration or explicit helper contracts as individually described. Public export coverage is retained; no helper-only substitution for it.",
+        "7": "No retry-to-green or budget widening. Exact outcome/count and settlement assertions preserved/added; four required mutations must fail and production bytes must restore exactly before final passing gates.",
+        "8": "Bounded stage/source diagnostics contain no token/span/result payload. Semantic budget failure is numerical precision at fixed time, not elapsed scheduler delay.",
+        "9": "Reviewed live clock defaults, shared helper callers, one-shot continuations, cancellation registration races, retirement latches and positive exits. Execution/mutation evidence linked; new identities inventoried."
+      },
+      "decision": "keep",
+      "reason": "Direct controlled lifecycle/budget contract with exact semantic postconditions.",
+      "shared_helper_review": "Fresh uncooperative provider, controlled caller start and typed completion per argument; actor retirement latches late entry and releases its one continuation. Reviewed cancellation before/after registration, release/retire idempotence and logical exit ownership.",
+      "controlled_deadline_review": {
+        "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+        "decision": "keep",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "remaining_limits": "No whole production task-graph drainage claim."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testManualOtlpClockSettlesSleepExactlyOnce",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 487
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Six clock contract cases exercise cancellation, explicit firing and retirement before/after sleep registration; require expected success/cancellation, zero pending sleeps, exact finished/resolution counts, and idempotence under repeated fire/retire.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh manual clock, controlled caller start and completion per argument; private locked sleeper caches one settlement before/after continuation registration and resumes outside lock.",
+        "action_postconditions": "Six clock contract cases exercise cancellation, explicit firing and retirement before/after sleep registration; require expected success/cancellation, zero pending sleeps, exact finished/resolution counts, and idempotence under repeated fire/retire."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Controlled start plus post-register signal order all six modes. Handler caches cancellation even before register; one continuation is resumed exactly once outside locks, with bounded caller/exit observations.",
+        "timeout_tolerance": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency."
+      },
+      "compiler_skip_conditions": "No test-level guard, opt-in condition or skip.",
+      "rules": {
+        "1": "Six clock contract cases exercise cancellation, explicit firing and retirement before/after sleep registration; require expected success/cancellation, zero pending sleeps, exact finished/resolution counts, and idempotence under repeated fire/retire.",
+        "2": "Controlled start plus post-register signal order all six modes. Handler caches cancellation even before register; one continuation is resumed exactly once outside locks, with bounded caller/exit observations.",
+        "3": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency.",
+        "4": "Await scoped cleanup on all operation exits: request owned caller/exporter cancellation where applicable, latch/release provider and clock controls, and positively observe logical entered-body exits. Never await unconfirmed caller values. Unstructured production observers remain unchanged; no whole task-graph drainage claim.",
+        "5": "Fresh test-local memory controls, fake clients and completions. NSLock protects only synchronous clock/continuation data; no lock across await, blocked IO, global clock override, file/native session or process-global output mutation.",
+        "6": "Host-local deterministic public integration or explicit helper contracts as individually described. Public export coverage is retained; no helper-only substitution for it.",
+        "7": "No retry-to-green or budget widening. Exact outcome/count and settlement assertions preserved/added; four required mutations must fail and production bytes must restore exactly before final passing gates.",
+        "8": "Bounded stage/source diagnostics contain no token/span/result payload. Semantic budget failure is numerical precision at fixed time, not elapsed scheduler delay.",
+        "9": "Reviewed live clock defaults, shared helper callers, one-shot continuations, cancellation registration races, retirement latches and positive exits. Execution/mutation evidence linked; new identities inventoried."
+      },
+      "decision": "keep",
+      "reason": "Direct controlled lifecycle/budget contract with exact semantic postconditions.",
+      "shared_helper_review": "Fresh manual clock, controlled caller start and completion per argument; private locked sleeper caches one settlement before/after continuation registration and resumes outside lock. Reviewed cancellation before/after registration, release/retire idempotence and logical exit ownership.",
+      "controlled_deadline_review": {
+        "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+        "decision": "keep",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "remaining_limits": "No whole production task-graph drainage claim."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testSuccessfulTokenAcquisitionCancelsManualDeadlineSleeper",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 576
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Real successful public export must cancel its registered controlled timeout sleeper. Require original success/one RPC/one token request and positive sleep exit, one cancelled settlement, zero pending sleeps and no manual deadline firing.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh immediate sequence provider, manual clock, recording client, real span exporter and actual-return completion.",
+        "action_postconditions": "Real successful public export must cancel its registered controlled timeout sleeper. Require original success/one RPC/one token request and positive sleep exit, one cancelled settlement, zero pending sleeps and no manual deadline firing."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Bound actual export return, then require timer registration and positive logical exit; cancelled settlement proves the losing timeout sleeper was cancelled even if cancellation precedes its registration.",
+        "timeout_tolerance": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency."
+      },
+      "compiler_skip_conditions": "No test-level guard, opt-in condition or skip.",
+      "rules": {
+        "1": "Real successful public export must cancel its registered controlled timeout sleeper. Require original success/one RPC/one token request and positive sleep exit, one cancelled settlement, zero pending sleeps and no manual deadline firing.",
+        "2": "Bound actual export return, then require timer registration and positive logical exit; cancelled settlement proves the losing timeout sleeper was cancelled even if cancellation precedes its registration.",
+        "3": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency.",
+        "4": "Await scoped cleanup on all operation exits: request owned caller/exporter cancellation where applicable, latch/release provider and clock controls, and positively observe logical entered-body exits. Never await unconfirmed caller values. Unstructured production observers remain unchanged; no whole task-graph drainage claim.",
+        "5": "Fresh test-local memory controls, fake clients and completions. NSLock protects only synchronous clock/continuation data; no lock across await, blocked IO, global clock override, file/native session or process-global output mutation.",
+        "6": "Host-local deterministic public integration or explicit helper contracts as individually described. Public export coverage is retained; no helper-only substitution for it.",
+        "7": "No retry-to-green or budget widening. Exact outcome/count and settlement assertions preserved/added; four required mutations must fail and production bytes must restore exactly before final passing gates.",
+        "8": "Bounded stage/source diagnostics contain no token/span/result payload. Semantic budget failure is numerical precision at fixed time, not elapsed scheduler delay.",
+        "9": "Reviewed live clock defaults, shared helper callers, one-shot continuations, cancellation registration races, retirement latches and positive exits. Execution/mutation evidence linked; new identities inventoried."
+      },
+      "decision": "keep",
+      "reason": "Direct controlled lifecycle/budget contract with exact semantic postconditions.",
+      "shared_helper_review": "Fresh immediate sequence provider, manual clock, recording client, real span exporter and actual-return completion. Reviewed cancellation before/after registration, release/retire idempotence and logical exit ownership.",
+      "controlled_deadline_review": {
+        "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+        "decision": "keep",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "remaining_limits": "No whole production task-graph drainage claim."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testExpiredControlledDeadlinePreventsRPC",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 622
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "After both token provider and timeout sleeper enter, advance logical time to deadline without firing the timer, release token, and require public failure/zero RPC. Timer must settle by cancellation and no deadline fire; isolates remaining RPC budget guard.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh existing single-flight provider with one expected waiter, manual clock, recording client, real exporter and actual-return completion.",
+        "action_postconditions": "After both token provider and timeout sleeper enter, advance logical time to deadline without firing the timer, release token, and require public failure/zero RPC. Timer must settle by cancellation and no deadline fire; isolates remaining RPC budget guard."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Require token wait and timer registration before advancing clock, release token without firing timer, then bound actual return and observe cancelled timer exit.",
+        "timeout_tolerance": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency."
+      },
+      "compiler_skip_conditions": "No test-level guard, opt-in condition or skip.",
+      "rules": {
+        "1": "After both token provider and timeout sleeper enter, advance logical time to deadline without firing the timer, release token, and require public failure/zero RPC. Timer must settle by cancellation and no deadline fire; isolates remaining RPC budget guard.",
+        "2": "Require token wait and timer registration before advancing clock, release token without firing timer, then bound actual return and observe cancelled timer exit.",
+        "3": "No wall-clock speed assertion or widened latency tolerance. Public deadline keeps0.05s request/configured2s ceiling; fixed logical time makes tiny arithmetic tolerance precision-only. Existing ten-second stage waits bound failures, not success latency.",
+        "4": "Await scoped cleanup on all operation exits: request owned caller/exporter cancellation where applicable, latch/release provider and clock controls, and positively observe logical entered-body exits. Never await unconfirmed caller values. Unstructured production observers remain unchanged; no whole task-graph drainage claim.",
+        "5": "Fresh test-local memory controls, fake clients and completions. NSLock protects only synchronous clock/continuation data; no lock across await, blocked IO, global clock override, file/native session or process-global output mutation.",
+        "6": "Host-local deterministic public integration or explicit helper contracts as individually described. Public export coverage is retained; no helper-only substitution for it.",
+        "7": "No retry-to-green or budget widening. Exact outcome/count and settlement assertions preserved/added; four required mutations must fail and production bytes must restore exactly before final passing gates.",
+        "8": "Bounded stage/source diagnostics contain no token/span/result payload. Semantic budget failure is numerical precision at fixed time, not elapsed scheduler delay.",
+        "9": "Reviewed live clock defaults, shared helper callers, one-shot continuations, cancellation registration races, retirement latches and positive exits. Execution/mutation evidence linked; new identities inventoried."
+      },
+      "decision": "keep",
+      "reason": "Direct controlled lifecycle/budget contract with exact semantic postconditions.",
+      "shared_helper_review": "Fresh existing single-flight provider with one expected waiter, manual clock, recording client, real exporter and actual-return completion. Reviewed cancellation before/after registration, release/retire idempotence and logical exit ownership.",
+      "controlled_deadline_review": {
+        "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+        "decision": "keep",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "remaining_limits": "No whole production task-graph drainage claim."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncLifecycleMethodsPreserveShutdownState",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 353
+        "line": 671
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3224,7 +3410,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 435
+        "line": 753
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3263,7 +3449,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 454
+        "line": 772
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3329,7 +3515,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationUnblocksTokenWaitAndShutsTransportOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 500
+        "line": 818
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3395,7 +3581,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 568
+        "line": 886
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3461,7 +3647,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 605
+        "line": 923
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3546,7 +3732,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 665
+        "line": 983
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3585,7 +3771,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 726
+        "line": 1044
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3624,7 +3810,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 765
+        "line": 1083
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3683,7 +3869,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 828
+        "line": 1146
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3742,7 +3928,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 882
+        "line": 1200
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23157,5 +23343,32 @@
       "core_audit_records": 587
     },
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-lifecycle-phase-bounds-and-timeout-follow-up-issue-372"
+  },
+  "issue_372_controlled_otlp_deadline": {
+    "base_revision": "3a27e78f9ae55a02c31a2305751f02e1e289933e",
+    "changed_test": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider",
+    "new_declarations": 4,
+    "new_tests": [
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationIgnoringTokenProviderRequiresExplicitRetirement",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testManualOtlpClockSettlesSleepExactlyOnce",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testSuccessfulTokenAcquisitionCancelsManualDeadlineSleeper",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testExpiredControlledDeadlinePreventsRPC"
+    ],
+    "production_scope": "Internal now/sleep clock and defaulted span/awaitTask seams only; public API/log/runtime callers unchanged; Date semantics/observer ownership retained.",
+    "current_counts": {
+      "host_inventory": 597,
+      "source_declarations": 1581,
+      "core_audit_records": 591,
+      "owning": 24,
+      "shared_runtime": 39
+    },
+    "required_mutations": [
+      "timeout resolution removed",
+      "deadline token cancellation removed",
+      "explicit50ms budget ignored",
+      "expired RPC budget guard bypassed"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+    "remaining_limits": "No real-time scheduler guarantee, wall-clock adjustment redesign, native/live/device acceptance or whole task-graph drainage claim."
   }
 }
