@@ -24,597 +24,607 @@ final class DownloadStorageTests {
     func testCancellationPersistsIntentAndDiscardsPartialBytes()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let secondTrack = DownloadTrackPlan(
-            index: 1,
-            inode: "102",
-            expectedByteLength: 4,
-            mimeType: "audio/mpeg",
-            safeExtension: .mp3,
-            destinationEntry: "00001.mp3"
-        )
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: fixture.plan.tracks + [secondTrack]
-        )
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail
-        )
-        let completedIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
-        let incompleteIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: secondTrack
-        )
-        let completedChunk = fixture.rootURL.appendingPathComponent(
-            "cancel-complete.chunk"
-        )
-        try Data([1, 2, 3, 4]).write(to: completedChunk)
-        _ = try fixture.layout.placeCompleteTestFile(
-            from: completedChunk,
-            identity: completedIdentity
-        )
-        _ = try await fixture.storage.markComplete(
-            completedIdentity,
-            observedByteLength: 4
-        )
-        let chunk = fixture.rootURL.appendingPathComponent(
-            "cancel-partial.chunk"
-        )
-        try Data([1, 2]).write(to: chunk)
-        _ = try fixture.layout.appendChunk(
-            from: chunk,
-            identity: incompleteIdentity,
-            expectedOffset: 0,
-            expectedChunkLength: 2
-        )
-        _ = try await fixture.storage.markDownloading(
-            incompleteIdentity,
-            observedByteLength: 2,
-            validator: nil
-        )
+        try await withFixture { fixture in
+            let secondTrack = DownloadTrackPlan(
+                index: 1,
+                inode: "102",
+                expectedByteLength: 4,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: "00001.mp3"
+            )
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: fixture.plan.tracks + [secondTrack]
+            )
+            let record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail
+            )
+            let completedIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[0]
+            )
+            let incompleteIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: secondTrack
+            )
+            let completedChunk = fixture.rootURL.appendingPathComponent(
+                "cancel-complete.chunk"
+            )
+            try Data([1, 2, 3, 4]).write(to: completedChunk)
+            _ = try fixture.layout.placeCompleteTestFile(
+                from: completedChunk,
+                identity: completedIdentity
+            )
+            _ = try await fixture.storage.markComplete(
+                completedIdentity,
+                observedByteLength: 4
+            )
+            let chunk = fixture.rootURL.appendingPathComponent(
+                "cancel-partial.chunk"
+            )
+            try Data([1, 2]).write(to: chunk)
+            _ = try fixture.layout.appendChunk(
+                from: chunk,
+                identity: incompleteIdentity,
+                expectedOffset: 0,
+                expectedChunkLength: 2
+            )
+            _ = try await fixture.storage.markDownloading(
+                incompleteIdentity,
+                observedByteLength: 2,
+                validator: nil
+            )
 
-        _ = try await fixture.storage.cancelIncompleteTracks(in: record)
+            _ = try await fixture.storage.cancelIncompleteTracks(in: record)
 
-        let recreated = DownloadStorage(layout: fixture.layout)
-        let recreatedRecords = try await recreated.records()
-        let cancelled = try #require(recreatedRecords.first)
-        let partialByteLength = try await recreated.partialByteLength(
-            incompleteIdentity
-        )
-        #expect(cancelled.manifest.state == .cancelled)
-        #expect(cancelled.manifest.entries[0].state == .complete)
-        #expect(cancelled.manifest.entries[1].state == .cancelled)
-        #expect(partialByteLength == 0)
-        #expect(
-            FileManager.default.fileExists(
-                atPath: fixture.layout.destinationURL(
-                    for: completedIdentity
-                ).path
-            ))
+            let recreated = DownloadStorage(layout: fixture.layout)
+            let recreatedRecords = try await recreated.records()
+            let cancelled = try #require(recreatedRecords.first)
+            let partialByteLength = try await recreated.partialByteLength(
+                incompleteIdentity
+            )
+            #expect(cancelled.manifest.state == .cancelled)
+            #expect(cancelled.manifest.entries[0].state == .complete)
+            #expect(cancelled.manifest.entries[1].state == .cancelled)
+            #expect(partialByteLength == 0)
+            #expect(
+                FileManager.default.fileExists(
+                    atPath: fixture.layout.destinationURL(
+                        for: completedIdentity
+                    ).path
+                ))
 
-        _ = try await recreated.prepareCancelledRetry(cancelled)
-        let retryRecords = try await recreated.records()
-        let retried = try #require(retryRecords.first)
-        #expect(retried.manifest.state == .queued)
-        #expect(retried.manifest.entries.map(\.state) == [.complete, .queued])
+            _ = try await recreated.prepareCancelledRetry(cancelled)
+            let retryRecords = try await recreated.records()
+            let retried = try #require(retryRecords.first)
+            #expect(retried.manifest.state == .queued)
+            #expect(
+                retried.manifest.entries.map(\.state) == [.complete, .queued])
+        }
     }
 
     @Test
     func testLateCancellationCleanupCannotDiscardRetriedBytes()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        _ = try await fixture.storage.cancelIncompleteTracks(in: record)
-        _ = try await fixture.storage.markDownloading(
-            identity,
-            observedByteLength: 0,
-            validator: nil
-        )
-        let retryChunk = fixture.rootURL.appendingPathComponent(
-            "retry-after-cancel.chunk"
-        )
-        try Data([1, 2]).write(to: retryChunk)
-        _ = try fixture.layout.appendChunk(
-            from: retryChunk,
-            identity: identity,
-            expectedOffset: 0,
-            expectedChunkLength: 2
-        )
+        try await withFixture { fixture in
+            let record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            _ = try await fixture.storage.cancelIncompleteTracks(in: record)
+            _ = try await fixture.storage.markDownloading(
+                identity,
+                observedByteLength: 0,
+                validator: nil
+            )
+            let retryChunk = fixture.rootURL.appendingPathComponent(
+                "retry-after-cancel.chunk"
+            )
+            try Data([1, 2]).write(to: retryChunk)
+            _ = try fixture.layout.appendChunk(
+                from: retryChunk,
+                identity: identity,
+                expectedOffset: 0,
+                expectedChunkLength: 2
+            )
 
-        let discarded = try await fixture.storage
-            .discardFilesForPersistedCancellation(in: record)
-        let records = try await fixture.storage.records()
-        let current = try #require(records.first)
-        let partialByteLength = try await fixture.storage.partialByteLength(
-            identity
-        )
+            let discarded = try await fixture.storage
+                .discardFilesForPersistedCancellation(in: record)
+            let records = try await fixture.storage.records()
+            let current = try #require(records.first)
+            let partialByteLength = try await fixture.storage.partialByteLength(
+                identity
+            )
 
-        #expect(!(discarded))
-        #expect(current.manifest.state == .downloading)
-        #expect(partialByteLength == 2)
+            #expect(!(discarded))
+            #expect(current.manifest.state == .downloading)
+            #expect(partialByteLength == 2)
+        }
     }
 
     @Test
     func testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        _ = try await fixture.storage.markDownloading(identity)
-        let retryNotBefore = Date(timeIntervalSince1970: 2_000_000_000)
-        _ = try await fixture.storage.deferRetry(
-            identity,
-            until: retryNotBefore,
-            retryCount: 1
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            _ = try await fixture.storage.markDownloading(identity)
+            let retryNotBefore = Date(timeIntervalSince1970: 2_000_000_000)
+            _ = try await fixture.storage.deferRetry(
+                identity,
+                until: retryNotBefore,
+                retryCount: 1
+            )
 
-        let recreated = DownloadStorage(layout: fixture.layout)
-        let deferredRecords = try await recreated.records()
-        let deferredRecord = try #require(deferredRecords.first)
-        #expect(
-            deferredRecord.manifest.entries.first?.retryNotBefore
-                == retryNotBefore)
-        #expect(deferredRecord.manifest.entries.first?.transferRetryCount == 1)
+            let recreated = DownloadStorage(layout: fixture.layout)
+            let deferredRecords = try await recreated.records()
+            let deferredRecord = try #require(deferredRecords.first)
+            #expect(
+                deferredRecord.manifest.entries.first?.retryNotBefore
+                    == retryNotBefore)
+            #expect(
+                deferredRecord.manifest.entries.first?.transferRetryCount == 1)
 
-        _ = try await recreated.markDownloading(identity)
-        let scheduledRecords = try await recreated.records()
-        let scheduledRecord = try #require(scheduledRecords.first)
-        #expect(scheduledRecord.manifest.entries.first?.retryNotBefore == nil)
-        #expect(scheduledRecord.manifest.entries.first?.transferRetryCount == 1)
+            _ = try await recreated.markDownloading(identity)
+            let scheduledRecords = try await recreated.records()
+            let scheduledRecord = try #require(scheduledRecords.first)
+            #expect(
+                scheduledRecord.manifest.entries.first?.retryNotBefore == nil)
+            #expect(
+                scheduledRecord.manifest.entries.first?.transferRetryCount == 1)
 
-        _ = try await recreated.resetTransferRetryBudget(scheduledRecord)
-        let resetStorage = DownloadStorage(layout: fixture.layout)
-        let resetRecords = try await resetStorage.records()
-        let resetRecord = try #require(resetRecords.first)
-        #expect(resetRecord.manifest.entries.first?.retryNotBefore == nil)
-        #expect(resetRecord.manifest.entries.first?.transferRetryCount == nil)
+            _ = try await recreated.resetTransferRetryBudget(scheduledRecord)
+            let resetStorage = DownloadStorage(layout: fixture.layout)
+            let resetRecords = try await resetStorage.records()
+            let resetRecord = try #require(resetRecords.first)
+            #expect(resetRecord.manifest.entries.first?.retryNotBefore == nil)
+            #expect(
+                resetRecord.manifest.entries.first?.transferRetryCount == nil)
+        }
     }
 
     @Test
     func testCompletedTrackRejectsAndRepairsRetryState() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent(
-            "completed-retry"
-        )
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
-        _ = try await fixture.storage.markComplete(
-            identity,
-            observedByteLength: observed
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "completed-retry"
+            )
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
+            let observed = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            _ = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
 
-        let deferred = try await fixture.storage.deferRetryIfIncomplete(
-            identity,
-            until: Date(timeIntervalSince1970: 2_000_000_000),
-            retryCount: 2
-        )
-        #expect(deferred == nil)
-        let restarted = try await fixture.storage.markDownloadingIfIncomplete(
-            identity,
-            observedByteLength: observed,
-            validator: nil
-        )
-        #expect(restarted == nil)
+            let deferred = try await fixture.storage.deferRetryIfIncomplete(
+                identity,
+                until: Date(timeIntervalSince1970: 2_000_000_000),
+                retryCount: 2
+            )
+            #expect(deferred == nil)
+            let restarted = try await fixture.storage
+                .markDownloadingIfIncomplete(
+                    identity,
+                    observedByteLength: observed,
+                    validator: nil
+                )
+            #expect(restarted == nil)
 
-        let recordURL = fixture.layout.recordURL(
-            accountID: fixture.accountID,
-            itemID: fixture.itemID
-        )
-        var object = try #require(
-            JSONSerialization.jsonObject(
-                with: Data(contentsOf: recordURL)
-            ) as? [String: Any])
-        var manifest = try #require(object["manifest"] as? [String: Any])
-        var entries = try #require(manifest["entries"] as? [[String: Any]])
-        entries[0]["retryNotBefore"] = 800_000_000.0
-        entries[0]["transferRetryCount"] = 2
-        manifest["entries"] = entries
-        object["manifest"] = manifest
-        try JSONSerialization.data(withJSONObject: object).write(
-            to: recordURL,
-            options: .atomic
-        )
+            let recordURL = fixture.layout.recordURL(
+                accountID: fixture.accountID,
+                itemID: fixture.itemID
+            )
+            var object = try #require(
+                JSONSerialization.jsonObject(
+                    with: Data(contentsOf: recordURL)
+                ) as? [String: Any])
+            var manifest = try #require(object["manifest"] as? [String: Any])
+            var entries = try #require(manifest["entries"] as? [[String: Any]])
+            entries[0]["retryNotBefore"] = 800_000_000.0
+            entries[0]["transferRetryCount"] = 2
+            manifest["entries"] = entries
+            object["manifest"] = manifest
+            try JSONSerialization.data(withJSONObject: object).write(
+                to: recordURL,
+                options: .atomic
+            )
 
-        let repairedRecords = try await fixture.storage.records()
-        let repaired = try #require(repairedRecords.first)
-        #expect(repaired.manifest.state == .complete)
-        #expect(repaired.manifest.entries[0].retryNotBefore == nil)
-        #expect(repaired.manifest.entries[0].transferRetryCount == nil)
+            let repairedRecords = try await fixture.storage.records()
+            let repaired = try #require(repairedRecords.first)
+            #expect(repaired.manifest.state == .complete)
+            #expect(repaired.manifest.entries[0].retryNotBefore == nil)
+            #expect(repaired.manifest.entries[0].transferRetryCount == nil)
+        }
     }
 
     @Test
     func testConditionalFailureDoesNotOverwritePauseOrContinueState()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        _ = try await fixture.storage.markDownloading(identity)
-        _ = try await fixture.storage.markPaused(
-            identity,
-            observedByteLength: 0
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            _ = try await fixture.storage.markDownloading(identity)
+            _ = try await fixture.storage.markPaused(
+                identity,
+                observedByteLength: 0
+            )
 
-        let ignoredFailure = try await fixture.storage
-            .markFailedIfDownloading(identity)
-        let pausedRecords = try await fixture.storage.records()
-        #expect(ignoredFailure == nil)
-        #expect(pausedRecords.first?.manifest.state == .paused)
+            let ignoredFailure = try await fixture.storage
+                .markFailedIfDownloading(identity)
+            let pausedRecords = try await fixture.storage.records()
+            #expect(ignoredFailure == nil)
+            #expect(pausedRecords.first?.manifest.state == .paused)
 
-        _ = try await fixture.storage.markDownloading(identity)
-        let failed = try await fixture.storage.markFailedIfDownloading(
-            identity
-        )
-        #expect(failed?.manifest.state == .failed)
+            _ = try await fixture.storage.markDownloading(identity)
+            let failed = try await fixture.storage.markFailedIfDownloading(
+                identity
+            )
+            #expect(failed?.manifest.state == .failed)
+        }
     }
 
     @Test
     func testAccountIdentityMigrationMovesManifestAndMedia() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let legacyIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let chunk = fixture.rootURL.appendingPathComponent("migration.chunk")
-        try Data([1, 2]).write(to: chunk)
-        _ = try fixture.layout.appendChunk(
-            from: chunk,
-            identity: legacyIdentity,
-            expectedOffset: 0,
-            expectedChunkLength: 2
-        )
-        _ = try await fixture.storage.markPaused(
-            legacyIdentity,
-            observedByteLength: 2
-        )
-        let canonicalID = AccountID(rawValue: "account-canonical")
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let legacyIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let chunk = fixture.rootURL.appendingPathComponent(
+                "migration.chunk")
+            try Data([1, 2]).write(to: chunk)
+            _ = try fixture.layout.appendChunk(
+                from: chunk,
+                identity: legacyIdentity,
+                expectedOffset: 0,
+                expectedChunkLength: 2
+            )
+            _ = try await fixture.storage.markPaused(
+                legacyIdentity,
+                observedByteLength: 2
+            )
+            let canonicalID = AccountID(rawValue: "account-canonical")
 
-        try await fixture.storage.migrateAccountIdentity(
-            from: fixture.accountID,
-            to: canonicalID
-        )
+            try await fixture.storage.migrateAccountIdentity(
+                from: fixture.accountID,
+                to: canonicalID
+            )
 
-        let records = try await fixture.storage.records()
-        let migrated = try #require(records.first)
-        #expect(migrated.manifest.accountID == canonicalID)
-        let canonicalIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: canonicalID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        #expect(
-            try fixture.layout.partialByteLength(for: canonicalIdentity) == 2)
-        #expect(
-            !(FileManager.default.fileExists(
-                atPath: fixture.layout.recordURL(
-                    accountID: fixture.accountID,
-                    itemID: fixture.itemID
-                ).path
-            )))
+            let records = try await fixture.storage.records()
+            let migrated = try #require(records.first)
+            #expect(migrated.manifest.accountID == canonicalID)
+            let canonicalIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: canonicalID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            #expect(
+                try fixture.layout.partialByteLength(for: canonicalIdentity)
+                    == 2)
+            #expect(
+                !(FileManager.default.fileExists(
+                    atPath: fixture.layout.recordURL(
+                        accountID: fixture.accountID,
+                        itemID: fixture.itemID
+                    ).path
+                )))
+        }
     }
 
     @Test
     func testAccountIdentityMigrationResumesAfterDirectoryMove() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let canonicalID = AccountID(rawValue: "account-canonical")
-        let source = fixture.layout.bookDirectory(
-            accountID: fixture.accountID,
-            itemID: fixture.itemID
-        )
-        let destination = fixture.layout.bookDirectory(
-            accountID: canonicalID,
-            itemID: fixture.itemID
-        )
-        try FileManager.default.createDirectory(
-            at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try FileManager.default.moveItem(at: source, to: destination)
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let canonicalID = AccountID(rawValue: "account-canonical")
+            let source = fixture.layout.bookDirectory(
+                accountID: fixture.accountID,
+                itemID: fixture.itemID
+            )
+            let destination = fixture.layout.bookDirectory(
+                accountID: canonicalID,
+                itemID: fixture.itemID
+            )
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.moveItem(at: source, to: destination)
 
-        try await fixture.storage.migrateAccountIdentity(
-            from: fixture.accountID,
-            to: canonicalID
-        )
+            try await fixture.storage.migrateAccountIdentity(
+                from: fixture.accountID,
+                to: canonicalID
+            )
 
-        let records = try await fixture.storage.records()
-        #expect(records.map(\.manifest.accountID) == [canonicalID])
+            let records = try await fixture.storage.records()
+            #expect(records.map(\.manifest.accountID) == [canonicalID])
+        }
     }
 
     @Test
     func testFinalizedLateTrackKeepsRemainingTracksPaused() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let secondTrack = DownloadTrackPlan(
-            index: 1,
-            inode: "102",
-            expectedByteLength: 4,
-            mimeType: "audio/mpeg",
-            safeExtension: .mp3,
-            destinationEntry: "00001.mp3"
-        )
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: fixture.plan.tracks + [secondTrack]
-        )
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail
-        )
-        let firstIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
-        let secondIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: secondTrack
-        )
-        _ = try await fixture.storage.markPaused(
-            firstIdentity,
-            observedByteLength: 0
-        )
-        _ = try await fixture.storage.markPaused(
-            secondIdentity,
-            observedByteLength: 0
-        )
-        let chunk = fixture.rootURL.appendingPathComponent("late.chunk")
-        try Data([1, 2, 3, 4]).write(to: chunk)
-        _ = try fixture.layout.appendChunk(
-            from: chunk,
-            identity: firstIdentity,
-            expectedOffset: 0,
-            expectedChunkLength: 4
-        )
-        _ = try fixture.layout.finalizePartial(firstIdentity)
+        try await withFixture { fixture in
+            let secondTrack = DownloadTrackPlan(
+                index: 1,
+                inode: "102",
+                expectedByteLength: 4,
+                mimeType: "audio/mpeg",
+                safeExtension: .mp3,
+                destinationEntry: "00001.mp3"
+            )
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: fixture.plan.tracks + [secondTrack]
+            )
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail
+            )
+            let firstIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[0]
+            )
+            let secondIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: secondTrack
+            )
+            _ = try await fixture.storage.markPaused(
+                firstIdentity,
+                observedByteLength: 0
+            )
+            _ = try await fixture.storage.markPaused(
+                secondIdentity,
+                observedByteLength: 0
+            )
+            let chunk = fixture.rootURL.appendingPathComponent("late.chunk")
+            try Data([1, 2, 3, 4]).write(to: chunk)
+            _ = try fixture.layout.appendChunk(
+                from: chunk,
+                identity: firstIdentity,
+                expectedOffset: 0,
+                expectedChunkLength: 4
+            )
+            _ = try fixture.layout.finalizePartial(firstIdentity)
 
-        let updated = try await fixture.storage.recordCommittedChunk(
-            firstIdentity,
-            committedByteLength: 4,
-            validator: nil,
-            finalized: true
-        )
+            let updated = try await fixture.storage.recordCommittedChunk(
+                firstIdentity,
+                committedByteLength: 4,
+                validator: nil,
+                finalized: true
+            )
 
-        #expect(updated.manifest.state == .paused)
-        #expect(
-            updated.manifest.entries.first(where: { $0.trackIndex == 1 })?
-                .state == .paused)
+            #expect(updated.manifest.state == .paused)
+            #expect(
+                updated.manifest.entries.first(where: { $0.trackIndex == 1 })?
+                    .state == .paused)
+        }
     }
 
     @Test
     func testDurableChunksSurviveRecreationAndFinalizeAtExactLength()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let first = fixture.rootURL.appendingPathComponent("first.chunk")
-        try Data([1, 2]).write(to: first)
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let first = fixture.rootURL.appendingPathComponent("first.chunk")
+            try Data([1, 2]).write(to: first)
 
-        let committed = try fixture.layout.appendChunk(
-            from: first,
-            identity: identity,
-            expectedOffset: 0,
-            expectedChunkLength: 2
-        )
-        _ = try await fixture.storage.markPaused(
-            identity,
-            observedByteLength: committed
-        )
-
-        let relaunched = DownloadStorage(layout: fixture.layout)
-        let relaunchedRecords = try await relaunched.records()
-        let paused = try #require(relaunchedRecords.first)
-        let relaunchedPartialLength = try await relaunched.partialByteLength(
-            identity
-        )
-        #expect(paused.manifest.state == .paused)
-        #expect(paused.manifest.storedByteLength == 2)
-        #expect(relaunchedPartialLength == 2)
-
-        let second = fixture.rootURL.appendingPathComponent("second.chunk")
-        try Data([3, 4]).write(to: second)
-        #expect(
-            try fixture.layout.appendChunk(
-                from: second,
+            let committed = try fixture.layout.appendChunk(
+                from: first,
                 identity: identity,
-                expectedOffset: 2,
+                expectedOffset: 0,
                 expectedChunkLength: 2
-            ) == 4)
-        #expect(try fixture.layout.finalizePartial(identity) == 4)
-        #expect(
-            try Data(contentsOf: fixture.layout.destinationURL(for: identity))
-                == Data([1, 2, 3, 4]))
+            )
+            _ = try await fixture.storage.markPaused(
+                identity,
+                observedByteLength: committed
+            )
+
+            let relaunched = DownloadStorage(layout: fixture.layout)
+            let relaunchedRecords = try await relaunched.records()
+            let paused = try #require(relaunchedRecords.first)
+            let relaunchedPartialLength =
+                try await relaunched.partialByteLength(
+                    identity
+                )
+            #expect(paused.manifest.state == .paused)
+            #expect(paused.manifest.storedByteLength == 2)
+            #expect(relaunchedPartialLength == 2)
+
+            let second = fixture.rootURL.appendingPathComponent("second.chunk")
+            try Data([3, 4]).write(to: second)
+            #expect(
+                try fixture.layout.appendChunk(
+                    from: second,
+                    identity: identity,
+                    expectedOffset: 2,
+                    expectedChunkLength: 2
+                ) == 4)
+            #expect(try fixture.layout.finalizePartial(identity) == 4)
+            #expect(
+                try Data(
+                    contentsOf: fixture.layout.destinationURL(for: identity))
+                    == Data([1, 2, 3, 4]))
+        }
     }
 
     @Test
     func testChunkAppendRejectsWrongOffsetAndOversizedResult() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let chunk = fixture.rootURL.appendingPathComponent("chunk")
-        try Data([1, 2, 3]).write(to: chunk)
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let chunk = fixture.rootURL.appendingPathComponent("chunk")
+            try Data([1, 2, 3]).write(to: chunk)
 
-        if let error = #expect(
-            throws: (any Error).self,
-            performing: {
-                try fixture.layout.appendChunk(
-                    from: chunk,
-                    identity: identity,
-                    expectedOffset: 1,
-                    expectedChunkLength: 3
-                )
-            })
-        {
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try fixture.layout.appendChunk(
+                        from: chunk,
+                        identity: identity,
+                        expectedOffset: 1,
+                        expectedChunkLength: 3
+                    )
+                })
+            {
+                #expect(
+                    error as? DownloadStorageError
+                        == .invalidPartialOffset(expected: 1, observed: 0))
+            }
+            _ = try fixture.layout.appendChunk(
+                from: chunk,
+                identity: identity,
+                expectedOffset: 0,
+                expectedChunkLength: 3
+            )
             #expect(
-                error as? DownloadStorageError
-                    == .invalidPartialOffset(expected: 1, observed: 0))
+                throws: (any Error).self,
+                performing: {
+                    try fixture.layout.appendChunk(
+                        from: chunk,
+                        identity: identity,
+                        expectedOffset: 3,
+                        expectedChunkLength: 3
+                    )
+                })
         }
-        _ = try fixture.layout.appendChunk(
-            from: chunk,
-            identity: identity,
-            expectedOffset: 0,
-            expectedChunkLength: 3
-        )
-        #expect(
-            throws: (any Error).self,
-            performing: {
-                try fixture.layout.appendChunk(
-                    from: chunk,
-                    identity: identity,
-                    expectedOffset: 3,
-                    expectedChunkLength: 3
-                )
-            })
     }
 
     @Test
     func testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure()
-        throws
+        async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let requirement = try DownloadStorageRequirement(
-            plan: fixture.plan
-        )
+        try await withFixture { fixture in
+            let requirement = try DownloadStorageRequirement(
+                plan: fixture.plan
+            )
 
-        #expect(requirement.expectedBytes == 4)
-        #expect(
-            requirement.safetyMarginBytes
-                == DownloadStorageRequirement.minimumSafetyMarginBytes)
-        #expect(
-            requirement.requiredBytes == 4
-                + DownloadStorageRequirement.minimumSafetyMarginBytes)
-        #expect(
-            throws: Never.self,
-            performing: {
-                try requirement.validate(
-                    availableBytes: requirement.requiredBytes
-                )
-            })
-        if let error = #expect(
-            throws: (any Error).self,
-            performing: {
-                try requirement.validate(
-                    availableBytes: requirement.requiredBytes - 1
-                )
-            })
-        {
+            #expect(requirement.expectedBytes == 4)
             #expect(
-                error as? DownloadStorageError
-                    == .insufficientSpace(
-                        requiredBytes: requirement.requiredBytes,
+                requirement.safetyMarginBytes
+                    == DownloadStorageRequirement.minimumSafetyMarginBytes)
+            #expect(
+                requirement.requiredBytes == 4
+                    + DownloadStorageRequirement.minimumSafetyMarginBytes)
+            #expect(
+                throws: Never.self,
+                performing: {
+                    try requirement.validate(
+                        availableBytes: requirement.requiredBytes
+                    )
+                })
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try requirement.validate(
                         availableBytes: requirement.requiredBytes - 1
-                    ))
+                    )
+                })
+            {
+                #expect(
+                    error as? DownloadStorageError
+                        == .insufficientSpace(
+                            requiredBytes: requirement.requiredBytes,
+                            availableBytes: requirement.requiredBytes - 1
+                        ))
+            }
+            let emptyRepair = try DownloadStorageRequirement(tracks: [])
+            #expect(emptyRepair.requiredBytes == 0)
         }
-        let emptyRepair = try DownloadStorageRequirement(tracks: [])
-        #expect(emptyRepair.requiredBytes == 0)
     }
 
     @Test
@@ -648,151 +658,152 @@ final class DownloadStorageTests {
 
     @Test
     func testStoragePreflightReadsCapacityFromVolume() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
+        try await withFixture { fixture in
 
-        let requirement = try await fixture.storage.preflight(
-            plan: fixture.plan
-        )
+            let requirement = try await fixture.storage.preflight(
+                plan: fixture.plan
+            )
 
-        #expect(requirement.expectedBytes == 4)
-        #expect(requirement.requiredBytes > 4)
+            #expect(requirement.expectedBytes == 4)
+            #expect(requirement.requiredBytes > 4)
+        }
     }
 
     @Test
     func testFinalizedFilesAndManifestSurviveStoreRecreation()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent(
-            "temporary"
-        )
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
+        try await withFixture { fixture in
+            let record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "temporary"
+            )
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
 
-        let observed = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
-        let completed = try await fixture.storage.markComplete(
-            identity,
-            observedByteLength: observed
-        )
-        let relaunched = DownloadStorage(layout: fixture.layout)
-        let records = try await relaunched.records()
-        let urls = try await relaunched.localTrackURLs(for: completed)
+            let observed = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            let completed = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
+            let relaunched = DownloadStorage(layout: fixture.layout)
+            let records = try await relaunched.records()
+            let urls = try await relaunched.localTrackURLs(for: completed)
 
-        #expect(record.manifest.state == .queued)
-        #expect(completed.manifest.state == .complete)
-        #expect(completed.manifest.expectedByteLength == 4)
-        #expect(completed.manifest.storedByteLength == 4)
-        #expect(records == [completed])
-        #expect(urls.count == 1)
-        #expect(try Data(contentsOf: urls[0]) == Data([1, 2, 3, 4]))
-        #expect(!(urls[0].path.contains(fixture.accountID.rawValue)))
-        #expect(!(urls[0].path.contains(fixture.itemID.rawValue)))
+            #expect(record.manifest.state == .queued)
+            #expect(completed.manifest.state == .complete)
+            #expect(completed.manifest.expectedByteLength == 4)
+            #expect(completed.manifest.storedByteLength == 4)
+            #expect(records == [completed])
+            #expect(urls.count == 1)
+            #expect(try Data(contentsOf: urls[0]) == Data([1, 2, 3, 4]))
+            #expect(!(urls[0].path.contains(fixture.accountID.rawValue)))
+            #expect(!(urls[0].path.contains(fixture.itemID.rawValue)))
+        }
     }
 
     @Test
     func testRejectsWrongLengthBeforeFinalPlacement() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent(
-            "temporary"
-        )
-        try Data([1, 2]).write(to: temporaryURL)
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "temporary"
+            )
+            try Data([1, 2]).write(to: temporaryURL)
 
-        if let error = #expect(
-            throws: (any Error).self,
-            performing: {
-                try fixture.layout.placeCompleteTestFile(
-                    from: temporaryURL,
-                    identity: identity
-                )
-            })
-        {
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try fixture.layout.placeCompleteTestFile(
+                        from: temporaryURL,
+                        identity: identity
+                    )
+                })
+            {
+                #expect(
+                    error as? DownloadStorageError
+                        == .byteLengthMismatch(expected: 4, observed: 2))
+            }
             #expect(
-                error as? DownloadStorageError
-                    == .byteLengthMismatch(expected: 4, observed: 2))
+                !(FileManager.default.fileExists(
+                    atPath: fixture.layout.destinationURL(
+                        for: identity
+                    ).path
+                )))
         }
-        #expect(
-            !(FileManager.default.fileExists(
-                atPath: fixture.layout.destinationURL(
-                    for: identity
-                ).path
-            )))
     }
 
     @Test
     func testMissingCompletedFileBecomesRepairablePartial()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent(
-            "temporary"
-        )
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
-        let completed = try await fixture.storage.markComplete(
-            identity,
-            observedByteLength: observed
-        )
-        try FileManager.default.removeItem(
-            at: fixture.layout.destinationURL(for: identity)
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "temporary"
+            )
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
+            let observed = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            let completed = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
+            try FileManager.default.removeItem(
+                at: fixture.layout.destinationURL(for: identity)
+            )
 
-        let records = try await fixture.storage.records()
+            let records = try await fixture.storage.records()
 
-        let repaired = try #require(records.first)
-        #expect(repaired.manifest.state == .partial)
-        #expect(repaired.manifest.entries[0].state == .partial)
-        #expect(repaired.manifest.entries[0].observedByteLength == 0)
-        #expect(repaired.manifest.entries[0].placement == .temporary)
-        do {
-            _ = try await fixture.storage.localTrackURLs(for: completed)
-            Issue.record("Expected the stale complete record to require repair")
-        } catch {
-            #expect(error == .invalidStoredRecord)
+            let repaired = try #require(records.first)
+            #expect(repaired.manifest.state == .partial)
+            #expect(repaired.manifest.entries[0].state == .partial)
+            #expect(repaired.manifest.entries[0].observedByteLength == 0)
+            #expect(repaired.manifest.entries[0].placement == .temporary)
+            do {
+                _ = try await fixture.storage.localTrackURLs(for: completed)
+                Issue.record(
+                    "Expected the stale complete record to require repair")
+            } catch let error as DownloadStorageError {
+                #expect(error == .invalidStoredRecord)
+            }
         }
     }
 
@@ -800,236 +811,237 @@ final class DownloadStorageTests {
     func testCorruptCompletedFileBecomesRepairablePartial()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent(
-            "temporary"
-        )
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
-        _ = try await fixture.storage.markComplete(
-            identity,
-            observedByteLength: observed
-        )
-        try Data([1, 2]).write(
-            to: fixture.layout.destinationURL(for: identity)
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent(
+                "temporary"
+            )
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
+            let observed = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            _ = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
+            try Data([1, 2]).write(
+                to: fixture.layout.destinationURL(for: identity)
+            )
 
-        let records = try await fixture.storage.records()
+            let records = try await fixture.storage.records()
 
-        let repaired = try #require(records.first)
-        #expect(repaired.manifest.state == .partial)
-        #expect(repaired.manifest.entries[0].state == .partial)
-        #expect(repaired.manifest.entries[0].observedByteLength == 0)
-        #expect(
-            !(FileManager.default.fileExists(
-                atPath: fixture.layout.destinationURL(for: identity).path
-            )))
+            let repaired = try #require(records.first)
+            #expect(repaired.manifest.state == .partial)
+            #expect(repaired.manifest.entries[0].state == .partial)
+            #expect(repaired.manifest.entries[0].observedByteLength == 0)
+            #expect(
+                !(FileManager.default.fileExists(
+                    atPath: fixture.layout.destinationURL(for: identity).path
+                )))
+        }
     }
 
     @Test
     func testFinalizedFileCompletesManifestAfterInterruptedPersistence()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent("chunk")
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        _ = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent("chunk")
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
+            _ = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
 
-        let records = try await fixture.storage.records()
-        let record = try #require(records.first)
+            let records = try await fixture.storage.records()
+            let record = try #require(records.first)
 
-        #expect(record.manifest.state == .complete)
-        #expect(record.manifest.entries[0].state == .complete)
-        #expect(record.manifest.entries[0].placement == .finalized)
+            #expect(record.manifest.state == .complete)
+            #expect(record.manifest.entries[0].state == .complete)
+            #expect(record.manifest.entries[0].placement == .finalized)
+        }
     }
 
     @Test
     func testRemainingPreflightCountsOnlyMissingPartialBytes()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent("partial")
-        try Data([1, 2]).write(to: temporaryURL)
-        _ = try fixture.layout.appendChunk(
-            from: temporaryURL,
-            identity: identity,
-            expectedOffset: 0,
-            expectedChunkLength: 2
-        )
+        try await withFixture { fixture in
+            let record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent("partial")
+            try Data([1, 2]).write(to: temporaryURL)
+            _ = try fixture.layout.appendChunk(
+                from: temporaryURL,
+                identity: identity,
+                expectedOffset: 0,
+                expectedChunkLength: 2
+            )
 
-        let requirement = try await fixture.storage.preflightRemaining(
-            record: record,
-            tracks: fixture.plan.tracks
-        )
+            let requirement = try await fixture.storage.preflightRemaining(
+                record: record,
+                tracks: fixture.plan.tracks
+            )
 
-        #expect(requirement.expectedBytes == 2)
+            #expect(requirement.expectedBytes == 2)
+        }
     }
 
     @Test
     func testOversizedPartialFailsOnlyItsOwnRecord() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let partial = fixture.layout.partialURL(for: identity)
-        try FileManager.default.createDirectory(
-            at: partial.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try Data([1, 2, 3, 4, 5]).write(to: partial)
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let partial = fixture.layout.partialURL(for: identity)
+            try FileManager.default.createDirectory(
+                at: partial.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data([1, 2, 3, 4, 5]).write(to: partial)
 
-        let otherItemID = LibraryItemID(rawValue: "other-item")
-        let otherPlan = DownloadPlan(
-            itemID: otherItemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "other-inode",
-                    expectedByteLength: 1,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
-                )
-            ]
-        )
-        let otherDetail = LibraryBookDetail(
-            id: otherItemID,
-            libraryID: fixture.detail.libraryID,
-            bookID: BookID(rawValue: "other-book"),
-            title: "Other Book",
-            subtitle: nil,
-            authors: [],
-            narrators: [],
-            series: [],
-            genres: [],
-            tags: [],
-            publishedYear: nil,
-            publishedDate: nil,
-            publisher: nil,
-            descriptionPlain: nil,
-            isbn: nil,
-            asin: nil,
-            language: nil,
-            duration: 1,
-            trackCount: 1,
-            audioFileCount: 1,
-            chapters: [],
-            addedAtMilliseconds: 1,
-            updatedAtMilliseconds: 1,
-            isExplicit: false,
-            isAbridged: false,
-            progress: nil
-        )
-        _ = try await fixture.storage.create(
-            downloadID: DownloadID(rawValue: "other-download"),
-            accountID: fixture.accountID,
-            plan: otherPlan,
-            detail: otherDetail
-        )
+            let otherItemID = LibraryItemID(rawValue: "other-item")
+            let otherPlan = DownloadPlan(
+                itemID: otherItemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "other-inode",
+                        expectedByteLength: 1,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3"
+                    )
+                ]
+            )
+            let otherDetail = LibraryBookDetail(
+                id: otherItemID,
+                libraryID: fixture.detail.libraryID,
+                bookID: BookID(rawValue: "other-book"),
+                title: "Other Book",
+                subtitle: nil,
+                authors: [],
+                narrators: [],
+                series: [],
+                genres: [],
+                tags: [],
+                publishedYear: nil,
+                publishedDate: nil,
+                publisher: nil,
+                descriptionPlain: nil,
+                isbn: nil,
+                asin: nil,
+                language: nil,
+                duration: 1,
+                trackCount: 1,
+                audioFileCount: 1,
+                chapters: [],
+                addedAtMilliseconds: 1,
+                updatedAtMilliseconds: 1,
+                isExplicit: false,
+                isAbridged: false,
+                progress: nil
+            )
+            _ = try await fixture.storage.create(
+                downloadID: DownloadID(rawValue: "other-download"),
+                accountID: fixture.accountID,
+                plan: otherPlan,
+                detail: otherDetail
+            )
 
-        let records = try await fixture.storage.records()
+            let records = try await fixture.storage.records()
 
-        #expect(records.count == 2)
-        let repaired = try #require(
-            records.first { $0.manifest.downloadID == fixture.downloadID })
-        #expect(repaired.manifest.entries[0].state == .failed)
-        #expect(repaired.manifest.entries[0].observedByteLength == 0)
-        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+            #expect(records.count == 2)
+            let repaired = try #require(
+                records.first { $0.manifest.downloadID == fixture.downloadID })
+            #expect(repaired.manifest.entries[0].state == .failed)
+            #expect(repaired.manifest.entries[0].observedByteLength == 0)
+            #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+        }
     }
 
     @Test
     func testMalformedRecordIsQuarantinedWithoutHidingHealthyRecords()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let invalidDirectory = fixture.rootURL
-            .appendingPathComponent("invalid-account", isDirectory: true)
-            .appendingPathComponent("invalid-book", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: invalidDirectory,
-            withIntermediateDirectories: true
-        )
-        let retainedMedia = invalidDirectory.appendingPathComponent("00000.mp3")
-        try Data([1, 2, 3, 4]).write(to: retainedMedia)
-        try Data("not-json".utf8).write(
-            to: invalidDirectory.appendingPathComponent("record.json")
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let invalidDirectory = fixture.rootURL
+                .appendingPathComponent("invalid-account", isDirectory: true)
+                .appendingPathComponent("invalid-book", isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: invalidDirectory,
+                withIntermediateDirectories: true
+            )
+            let retainedMedia = invalidDirectory.appendingPathComponent(
+                "00000.mp3")
+            try Data([1, 2, 3, 4]).write(to: retainedMedia)
+            try Data("not-json".utf8).write(
+                to: invalidDirectory.appendingPathComponent("record.json")
+            )
 
-        let records = try await fixture.storage.records()
+            let records = try await fixture.storage.records()
 
-        #expect(records.map(\.manifest.downloadID) == [fixture.downloadID])
-        #expect(try Data(contentsOf: retainedMedia) == Data([1, 2, 3, 4]))
-        let quarantined = try FileManager.default.contentsOfDirectory(
-            at: invalidDirectory, includingPropertiesForKeys: nil
-        )
-        .filter { $0.lastPathComponent.hasPrefix("record.invalid-") }
-        #expect(quarantined.count == 1)
-        #expect(
-            try Data(contentsOf: #require(quarantined.first))
-                == Data("not-json".utf8))
-        #expect(try await fixture.storage.records() == records)
+            #expect(records.map(\.manifest.downloadID) == [fixture.downloadID])
+            #expect(try Data(contentsOf: retainedMedia) == Data([1, 2, 3, 4]))
+            let quarantined = try FileManager.default.contentsOfDirectory(
+                at: invalidDirectory, includingPropertiesForKeys: nil
+            )
+            .filter { $0.lastPathComponent.hasPrefix("record.invalid-") }
+            #expect(quarantined.count == 1)
+            #expect(
+                try Data(contentsOf: #require(quarantined.first))
+                    == Data("not-json".utf8))
+            #expect(try await fixture.storage.records() == records)
+        }
     }
 
     @Test(arguments: [true, false], [true, false])
@@ -1038,307 +1050,311 @@ final class DownloadStorageTests {
     )
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: fixture.plan.tracks + [
-                DownloadTrackPlan(
-                    index: 1, inode: "102", expectedByteLength: 4,
-                    mimeType: "audio/mpeg", safeExtension: .mp3,
-                    destinationEntry: "00001.mp3")
-            ])
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID, plan: plan, detail: fixture.detail)
-        let healthyIndex = invalidEntryFirst ? 1 : 0
-        let invalidIndex = invalidEntryFirst ? 0 : 1
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID, itemID: fixture.itemID,
-            track: plan.tracks[healthyIndex])
-        let chunk = fixture.rootURL.appendingPathComponent("healthy.chunk")
-        let bytes = Data([1, 2, 3, 4])
-        try bytes.write(to: chunk)
-        _ = try fixture.layout.placeCompleteTestFile(
-            from: chunk, identity: identity)
-        _ = try await fixture.storage.markComplete(
-            identity, observedByteLength: 4)
-        let recordURL = fixture.layout.recordURL(
-            accountID: fixture.accountID, itemID: fixture.itemID)
-        var object = try #require(
-            JSONSerialization.jsonObject(with: Data(contentsOf: recordURL))
-                as? [String: Any])
-        var manifest = try #require(object["manifest"] as? [String: Any])
-        var entries = try #require(manifest["entries"] as? [[String: Any]])
-        if missingInode {
-            entries[invalidIndex].removeValue(forKey: "inode")
-        } else {
-            entries[invalidIndex]["inode"] = ""
-        }
-        manifest["entries"] = entries
-        object["manifest"] = manifest
-        try JSONSerialization.data(withJSONObject: object).write(
-            to: recordURL, options: .atomic)
-        // A legacy entry's unverified bytes must also survive quarantine.
-        let invalidBytesURL = fixture.layout.bookDirectory(
-            accountID: fixture.accountID, itemID: fixture.itemID
-        )
-        .appendingPathComponent(plan.tracks[invalidIndex].destinationEntry)
-        try Data([9, 8]).write(to: invalidBytesURL)
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: fixture.plan.tracks + [
+                    DownloadTrackPlan(
+                        index: 1, inode: "102", expectedByteLength: 4,
+                        mimeType: "audio/mpeg", safeExtension: .mp3,
+                        destinationEntry: "00001.mp3")
+                ])
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID, plan: plan, detail: fixture.detail
+            )
+            let healthyIndex = invalidEntryFirst ? 1 : 0
+            let invalidIndex = invalidEntryFirst ? 0 : 1
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID, itemID: fixture.itemID,
+                track: plan.tracks[healthyIndex])
+            let chunk = fixture.rootURL.appendingPathComponent("healthy.chunk")
+            let bytes = Data([1, 2, 3, 4])
+            try bytes.write(to: chunk)
+            _ = try fixture.layout.placeCompleteTestFile(
+                from: chunk, identity: identity)
+            _ = try await fixture.storage.markComplete(
+                identity, observedByteLength: 4)
+            let recordURL = fixture.layout.recordURL(
+                accountID: fixture.accountID, itemID: fixture.itemID)
+            var object = try #require(
+                JSONSerialization.jsonObject(with: Data(contentsOf: recordURL))
+                    as? [String: Any])
+            var manifest = try #require(object["manifest"] as? [String: Any])
+            var entries = try #require(manifest["entries"] as? [[String: Any]])
+            if missingInode {
+                entries[invalidIndex].removeValue(forKey: "inode")
+            } else {
+                entries[invalidIndex]["inode"] = ""
+            }
+            manifest["entries"] = entries
+            object["manifest"] = manifest
+            try JSONSerialization.data(withJSONObject: object).write(
+                to: recordURL, options: .atomic)
+            // A legacy entry's unverified bytes must also survive quarantine.
+            let invalidBytesURL = fixture.layout.bookDirectory(
+                accountID: fixture.accountID, itemID: fixture.itemID
+            )
+            .appendingPathComponent(plan.tracks[invalidIndex].destinationEntry)
+            try Data([9, 8]).write(to: invalidBytesURL)
 
-        let records = try await fixture.storage.records()
-        let record = try #require(records.first)
-        #expect(record.manifest.entries[healthyIndex].state == .complete)
-        #expect(record.manifest.entries[invalidIndex].state == .failed)
-        #expect(
-            record.manifest.entries[invalidIndex].reconciliationFailure
-                == (missingInode ? .missingInode : .invalidTaskIdentity))
-        #expect(!record.manifest.isFullBookComplete)
-        let urls = try await fixture.storage.localTrackURLs(
-            for: record, trackIndexes: [healthyIndex])
-        #expect(try Data(contentsOf: #require(urls[healthyIndex])) == bytes)
-        #expect(try Data(contentsOf: invalidBytesURL) == Data([9, 8]))
-        #expect(try await fixture.storage.records() == records)
-        let recreated = DownloadStorage(layout: fixture.layout)
-        #expect(try await recreated.records() == records)
+            let records = try await fixture.storage.records()
+            let record = try #require(records.first)
+            #expect(record.manifest.entries[healthyIndex].state == .complete)
+            #expect(record.manifest.entries[invalidIndex].state == .failed)
+            #expect(
+                record.manifest.entries[invalidIndex].reconciliationFailure
+                    == (missingInode ? .missingInode : .invalidTaskIdentity))
+            #expect(!record.manifest.isFullBookComplete)
+            let urls = try await fixture.storage.localTrackURLs(
+                for: record, trackIndexes: [healthyIndex])
+            #expect(try Data(contentsOf: #require(urls[healthyIndex])) == bytes)
+            #expect(try Data(contentsOf: invalidBytesURL) == Data([9, 8]))
+            #expect(try await fixture.storage.records() == records)
+            let recreated = DownloadStorage(layout: fixture.layout)
+            #expect(try await recreated.records() == records)
+        }
     }
 
     @Test
     func testCompletedLegacyRecordWithoutInodeIsPreserved()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let temporaryURL = fixture.rootURL.appendingPathComponent("legacy")
-        try Data([1, 2, 3, 4]).write(to: temporaryURL)
-        let observed = try fixture.layout.placeCompleteTestFile(
-            from: temporaryURL,
-            identity: identity
-        )
-        _ = try await fixture.storage.markComplete(
-            identity,
-            observedByteLength: observed
-        )
+        try await withFixture { fixture in
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let temporaryURL = fixture.rootURL.appendingPathComponent("legacy")
+            try Data([1, 2, 3, 4]).write(to: temporaryURL)
+            let observed = try fixture.layout.placeCompleteTestFile(
+                from: temporaryURL,
+                identity: identity
+            )
+            _ = try await fixture.storage.markComplete(
+                identity,
+                observedByteLength: observed
+            )
 
-        let recordURL = fixture.layout.recordURL(
-            accountID: fixture.accountID,
-            itemID: fixture.itemID
-        )
-        var object = try #require(
-            JSONSerialization.jsonObject(
-                with: Data(contentsOf: recordURL)
-            ) as? [String: Any])
-        var manifest = try #require(object["manifest"] as? [String: Any])
-        var entries = try #require(manifest["entries"] as? [[String: Any]])
-        entries[0].removeValue(forKey: "inode")
-        manifest["entries"] = entries
-        object["manifest"] = manifest
-        try JSONSerialization.data(withJSONObject: object).write(
-            to: recordURL,
-            options: .atomic
-        )
+            let recordURL = fixture.layout.recordURL(
+                accountID: fixture.accountID,
+                itemID: fixture.itemID
+            )
+            var object = try #require(
+                JSONSerialization.jsonObject(
+                    with: Data(contentsOf: recordURL)
+                ) as? [String: Any])
+            var manifest = try #require(object["manifest"] as? [String: Any])
+            var entries = try #require(manifest["entries"] as? [[String: Any]])
+            entries[0].removeValue(forKey: "inode")
+            manifest["entries"] = entries
+            object["manifest"] = manifest
+            try JSONSerialization.data(withJSONObject: object).write(
+                to: recordURL,
+                options: .atomic
+            )
 
-        let records = try await fixture.storage.records()
-        let record = try #require(records.first)
+            let records = try await fixture.storage.records()
+            let record = try #require(records.first)
 
-        #expect(record.manifest.state == .complete)
-        #expect(record.manifest.entries[0].inode == nil)
-        let urls = try await fixture.storage.localTrackURLs(for: record)
-        #expect(urls.count == 1)
+            #expect(record.manifest.state == .complete)
+            #expect(record.manifest.entries[0].inode == nil)
+            let urls = try await fixture.storage.localTrackURLs(for: record)
+            #expect(urls.count == 1)
+        }
     }
 
     @Test
     func testAutomaticCacheMetadataAndFullBookPromotionPersist()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "101",
-                    expectedByteLength: 4,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3",
-                    startOffset: 0,
-                    duration: 60
-                ),
-                DownloadTrackPlan(
-                    index: 1,
-                    inode: "102",
-                    expectedByteLength: 2,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00001.mp3",
-                    startOffset: 60,
-                    duration: 60
-                ),
-            ]
-        )
-        var record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail,
-            purpose: .automaticCache,
-            automaticTargetTrackIndexes: [1]
-        )
-        let staleCache = record
-        let finishedAt = Date(timeIntervalSince1970: 123)
-        record = try await fixture.storage.markBookFinished(
-            record,
-            at: finishedAt
-        )
-        #expect(record.manifest.purpose == .automaticCache)
-        #expect(record.manifest.bookFinishedAt == finishedAt)
-        #expect(record.manifest.automaticTargetTrackIndexes == [1])
-
-        for (track, data) in [
-            (plan.tracks[1], Data([5, 6])),
-            (plan.tracks[0], Data([1, 2, 3, 4])),
-        ] {
-            let identity = try DownloadTaskIdentity(
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "101",
+                        expectedByteLength: 4,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3",
+                        startOffset: 0,
+                        duration: 60
+                    ),
+                    DownloadTrackPlan(
+                        index: 1,
+                        inode: "102",
+                        expectedByteLength: 2,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00001.mp3",
+                        startOffset: 60,
+                        duration: 60
+                    ),
+                ]
+            )
+            var record = try await fixture.storage.create(
                 downloadID: fixture.downloadID,
                 accountID: fixture.accountID,
-                itemID: fixture.itemID,
-                track: track
+                plan: plan,
+                detail: fixture.detail,
+                purpose: .automaticCache,
+                automaticTargetTrackIndexes: [1]
             )
-            let temporaryURL = fixture.rootURL.appendingPathComponent(
-                "temporary-\(track.index)"
+            let staleCache = record
+            let finishedAt = Date(timeIntervalSince1970: 123)
+            record = try await fixture.storage.markBookFinished(
+                record,
+                at: finishedAt
             )
-            try data.write(to: temporaryURL)
-            let observed = try fixture.layout.placeCompleteTestFile(
-                from: temporaryURL,
-                identity: identity
-            )
-            record = try await fixture.storage.markComplete(
-                identity,
-                observedByteLength: observed
-            )
-            if track.index == 1 {
-                #expect(record.manifest.entries[1].startOffset == 60)
-                #expect(record.manifest.entries[1].duration == 60)
-                // A complete cached track plus queued missing work is
-                // actionable download work, so the aggregate remains queued.
-                #expect(record.manifest.state == .queued)
-                #expect(!(record.manifest.isFullBookComplete))
-                #expect(record.manifest.automaticCacheState == .cached)
-                #expect(record.manifest.automaticExpectedByteLength == 2)
-                #expect(record.manifest.automaticStoredByteLength == 2)
-                let localChapterFiles =
-                    try await fixture.storage.localTrackURLs(
-                        for: record,
-                        trackIndexes: [1]
-                    )
-                #expect(localChapterFiles.keys.sorted() == [1])
-                do {
-                    _ = try await fixture.storage.localTrackURLs(
-                        for: record,
-                        trackIndexes: [0, 1]
-                    )
-                    Issue.record("Expected the missing track to be rejected")
-                } catch {
-                    #expect(error == .invalidStoredRecord)
-                }
-                record = try await fixture.storage.updateAutomaticWindow(
-                    record,
-                    targetTrackIndexes: [0, 1]
-                )
-                #expect(record.manifest.automaticCacheState == .queued)
-                #expect(record.manifest.automaticExpectedByteLength == 6)
-            }
-        }
-        #expect(record.manifest.state == .complete)
-        #expect(record.manifest.isFullBookComplete)
-        #expect(record.manifest.purpose == .manual)
-        #expect(record.manifest.automaticWindow == nil)
-        #expect(record.manifest.automaticCacheState == nil)
-        #expect(record.manifest.bookFinishedAt == nil)
+            #expect(record.manifest.purpose == .automaticCache)
+            #expect(record.manifest.bookFinishedAt == finishedAt)
+            #expect(record.manifest.automaticTargetTrackIndexes == [1])
 
-        let afterCleanup = try await fixture.storage.removeCompletedTracks(
-            from: staleCache,
-            trackIndexes: [0, 1]
-        )
-        #expect(afterCleanup == record)
-        let localFiles = try await fixture.storage.localTrackURLs(
-            for: afterCleanup,
-            trackIndexes: [0, 1]
-        )
-        #expect(localFiles.keys.sorted() == [0, 1])
-        let records = try await fixture.storage.records()
-        #expect(records == [record])
+            for (track, data) in [
+                (plan.tracks[1], Data([5, 6])),
+                (plan.tracks[0], Data([1, 2, 3, 4])),
+            ] {
+                let identity = try DownloadTaskIdentity(
+                    downloadID: fixture.downloadID,
+                    accountID: fixture.accountID,
+                    itemID: fixture.itemID,
+                    track: track
+                )
+                let temporaryURL = fixture.rootURL.appendingPathComponent(
+                    "temporary-\(track.index)"
+                )
+                try data.write(to: temporaryURL)
+                let observed = try fixture.layout.placeCompleteTestFile(
+                    from: temporaryURL,
+                    identity: identity
+                )
+                record = try await fixture.storage.markComplete(
+                    identity,
+                    observedByteLength: observed
+                )
+                if track.index == 1 {
+                    #expect(record.manifest.entries[1].startOffset == 60)
+                    #expect(record.manifest.entries[1].duration == 60)
+                    // A complete cached track plus queued missing work is
+                    // actionable download work, so the aggregate remains queued.
+                    #expect(record.manifest.state == .queued)
+                    #expect(!(record.manifest.isFullBookComplete))
+                    #expect(record.manifest.automaticCacheState == .cached)
+                    #expect(record.manifest.automaticExpectedByteLength == 2)
+                    #expect(record.manifest.automaticStoredByteLength == 2)
+                    let localChapterFiles =
+                        try await fixture.storage.localTrackURLs(
+                            for: record,
+                            trackIndexes: [1]
+                        )
+                    #expect(localChapterFiles.keys.sorted() == [1])
+                    do {
+                        _ = try await fixture.storage.localTrackURLs(
+                            for: record,
+                            trackIndexes: [0, 1]
+                        )
+                        Issue.record(
+                            "Expected the missing track to be rejected")
+                    } catch let error as DownloadStorageError {
+                        #expect(error == .invalidStoredRecord)
+                    }
+                    record = try await fixture.storage.updateAutomaticWindow(
+                        record,
+                        targetTrackIndexes: [0, 1]
+                    )
+                    #expect(record.manifest.automaticCacheState == .queued)
+                    #expect(record.manifest.automaticExpectedByteLength == 6)
+                }
+            }
+            #expect(record.manifest.state == .complete)
+            #expect(record.manifest.isFullBookComplete)
+            #expect(record.manifest.purpose == .manual)
+            #expect(record.manifest.automaticWindow == nil)
+            #expect(record.manifest.automaticCacheState == nil)
+            #expect(record.manifest.bookFinishedAt == nil)
+
+            let afterCleanup = try await fixture.storage.removeCompletedTracks(
+                from: staleCache,
+                trackIndexes: [0, 1]
+            )
+            #expect(afterCleanup == record)
+            let localFiles = try await fixture.storage.localTrackURLs(
+                for: afterCleanup,
+                trackIndexes: [0, 1]
+            )
+            #expect(localFiles.keys.sorted() == [0, 1])
+            let records = try await fixture.storage.records()
+            #expect(records == [record])
+        }
     }
 
     @Test
     func testReconciledFullCacheSurvivesStaleChapterCleanup() async throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let cached = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail,
-            purpose: .automaticCache,
-            automaticTargetTrackIndexes: [0]
-        )
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: fixture.plan.tracks[0]
-        )
-        let staged = fixture.rootURL.appendingPathComponent("staged")
-        try Data([1, 2, 3, 4]).write(to: staged)
-        _ = try fixture.layout.placeCompleteTestFile(
-            from: staged,
-            identity: identity
-        )
-        let reconciled = try await fixture.storage.records()
-        let promoted = try #require(reconciled.first)
-        #expect(promoted.manifest.purpose == .manual)
-        let afterCleanup = try await fixture.storage.removeCompletedTracks(
-            from: cached,
-            trackIndexes: [0]
-        )
-        #expect(afterCleanup == promoted)
-        #expect(
-            try Data(contentsOf: fixture.layout.destinationURL(for: identity))
-                == Data([1, 2, 3, 4]))
+        try await withFixture { fixture in
+            let cached = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail,
+                purpose: .automaticCache,
+                automaticTargetTrackIndexes: [0]
+            )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: fixture.plan.tracks[0]
+            )
+            let staged = fixture.rootURL.appendingPathComponent("staged")
+            try Data([1, 2, 3, 4]).write(to: staged)
+            _ = try fixture.layout.placeCompleteTestFile(
+                from: staged,
+                identity: identity
+            )
+            let reconciled = try await fixture.storage.records()
+            let promoted = try #require(reconciled.first)
+            #expect(promoted.manifest.purpose == .manual)
+            let afterCleanup = try await fixture.storage.removeCompletedTracks(
+                from: cached,
+                trackIndexes: [0]
+            )
+            #expect(afterCleanup == promoted)
+            #expect(
+                try Data(
+                    contentsOf: fixture.layout.destinationURL(for: identity))
+                    == Data([1, 2, 3, 4]))
+        }
     }
 
     @Test
-    func testLegacyManifestDefaultsToManualPurpose() throws {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        var object = try #require(
-            JSONSerialization.jsonObject(
-                with: JSONEncoder().encode(
-                    try DownloadManifest(
-                        downloadID: fixture.downloadID,
-                        accountID: fixture.accountID,
-                        plan: fixture.plan
+    func testLegacyManifestDefaultsToManualPurpose() async throws {
+        try await withFixture { fixture in
+            var object = try #require(
+                JSONSerialization.jsonObject(
+                    with: JSONEncoder().encode(
+                        try DownloadManifest(
+                            downloadID: fixture.downloadID,
+                            accountID: fixture.accountID,
+                            plan: fixture.plan
+                        )
                     )
-                )
-            ) as? [String: Any])
-        object["purpose"] = nil
-        object["bookFinishedAt"] = nil
-        object["entries"] = try #require(object["entries"] as? [[String: Any]])
+                ) as? [String: Any])
+            object["purpose"] = nil
+            object["bookFinishedAt"] = nil
+            object["entries"] = try #require(
+                object["entries"] as? [[String: Any]]
+            )
             .map { entry in
                 var legacyEntry = entry
                 legacyEntry["retryNotBefore"] = nil
@@ -1346,387 +1362,448 @@ final class DownloadStorageTests {
                 return legacyEntry
             }
 
-        let decoded = try JSONDecoder().decode(
-            DownloadManifest.self,
-            from: JSONSerialization.data(withJSONObject: object)
-        )
+            let decoded = try JSONDecoder().decode(
+                DownloadManifest.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
 
-        #expect(decoded.purpose == .manual)
-        #expect(decoded.bookFinishedAt == nil)
-        #expect(
-            decoded.entries.allSatisfy {
-                $0.retryNotBefore == nil && $0.transferRetryCount == nil
-            })
+            #expect(decoded.purpose == .manual)
+            #expect(decoded.bookFinishedAt == nil)
+            #expect(
+                decoded.entries.allSatisfy {
+                    $0.retryNotBefore == nil && $0.transferRetryCount == nil
+                })
+        }
     }
 
     @Test
     func testAutomaticWindowValidationPromotionAndLegacyDetection()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
+        try await withFixture { fixture in
 
-        if let error = #expect(
-            throws: (any Error).self,
-            performing: {
-                try DownloadManifest(
+            if let error = #expect(
+                throws: (any Error).self,
+                performing: {
+                    try DownloadManifest(
+                        downloadID: fixture.downloadID,
+                        accountID: fixture.accountID,
+                        plan: fixture.plan,
+                        purpose: .automaticCache
+                    )
+                })
+            {
+                #expect(
+                    error as? DownloadManifestError == .invalidAutomaticWindow)
+            }
+
+            do {
+                _ = try await fixture.storage.create(
                     downloadID: fixture.downloadID,
                     accountID: fixture.accountID,
                     plan: fixture.plan,
+                    detail: fixture.detail,
                     purpose: .automaticCache
                 )
-            })
-        {
-            #expect(error as? DownloadManifestError == .invalidAutomaticWindow)
-        }
+                Issue.record("Expected an automatic cache window")
+            } catch let error as DownloadStorageError {
+                #expect(error == .invalidAutomaticWindow)
+            }
 
-        do {
-            _ = try await fixture.storage.create(
+            let record = try await fixture.storage.create(
                 downloadID: fixture.downloadID,
                 accountID: fixture.accountID,
                 plan: fixture.plan,
                 detail: fixture.detail,
-                purpose: .automaticCache
+                purpose: .automaticCache,
+                automaticTargetTrackIndexes: [0]
             )
-            Issue.record("Expected an automatic cache window")
-        } catch {
-            #expect(error == .invalidAutomaticWindow)
+            let promoted = try await fixture.storage.promoteToManual(record)
+
+            #expect(promoted.manifest.purpose == .manual)
+            #expect(promoted.manifest.automaticWindow == nil)
+            #expect(promoted.manifest.automaticCacheState == nil)
+
+            let current = try DownloadManifest(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                purpose: .automaticCache,
+                automaticTargetTrackIndexes: [0]
+            )
+            var legacyObject = try #require(
+                JSONSerialization.jsonObject(
+                    with: JSONEncoder().encode(current)
+                ) as? [String: Any])
+            legacyObject["automaticWindow"] = nil
+            let decoded = try JSONDecoder().decode(
+                DownloadManifest.self,
+                from: JSONSerialization.data(withJSONObject: legacyObject)
+            )
+            #expect(decoded.isLegacyAutomaticCache)
         }
-
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail,
-            purpose: .automaticCache,
-            automaticTargetTrackIndexes: [0]
-        )
-        let promoted = try await fixture.storage.promoteToManual(record)
-
-        #expect(promoted.manifest.purpose == .manual)
-        #expect(promoted.manifest.automaticWindow == nil)
-        #expect(promoted.manifest.automaticCacheState == nil)
-
-        let current = try DownloadManifest(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            purpose: .automaticCache,
-            automaticTargetTrackIndexes: [0]
-        )
-        var legacyObject = try #require(
-            JSONSerialization.jsonObject(
-                with: JSONEncoder().encode(current)
-            ) as? [String: Any])
-        legacyObject["automaticWindow"] = nil
-        let decoded = try JSONDecoder().decode(
-            DownloadManifest.self,
-            from: JSONSerialization.data(withJSONObject: legacyObject)
-        )
-        #expect(decoded.isLegacyAutomaticCache)
     }
 
     @Test
     func testAutomaticWindowIgnoresNonTargetCorruption()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "101",
-                    expectedByteLength: 4,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
-                ),
-                DownloadTrackPlan(
-                    index: 1,
-                    inode: "102",
-                    expectedByteLength: 2,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00001.mp3"
-                ),
-            ]
-        )
-        var record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail,
-            purpose: .automaticCache,
-            automaticTargetTrackIndexes: [1]
-        )
-        for (track, data) in [
-            (plan.tracks[1], Data([5, 6]))
-        ] {
-            let identity = try DownloadTaskIdentity(
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "101",
+                        expectedByteLength: 4,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3"
+                    ),
+                    DownloadTrackPlan(
+                        index: 1,
+                        inode: "102",
+                        expectedByteLength: 2,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00001.mp3"
+                    ),
+                ]
+            )
+            var record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail,
+                purpose: .automaticCache,
+                automaticTargetTrackIndexes: [1]
+            )
+            for (track, data) in [
+                (plan.tracks[1], Data([5, 6]))
+            ] {
+                let identity = try DownloadTaskIdentity(
+                    downloadID: fixture.downloadID,
+                    accountID: fixture.accountID,
+                    itemID: fixture.itemID,
+                    track: track
+                )
+                let temporaryURL = fixture.rootURL.appendingPathComponent(
+                    "corruption-\(track.index)"
+                )
+                try data.write(to: temporaryURL)
+                let observed = try fixture.layout.placeCompleteTestFile(
+                    from: temporaryURL,
+                    identity: identity
+                )
+                record = try await fixture.storage.markComplete(
+                    identity,
+                    observedByteLength: observed
+                )
+            }
+
+            let firstIdentity = try DownloadTaskIdentity(
                 downloadID: fixture.downloadID,
                 accountID: fixture.accountID,
                 itemID: fixture.itemID,
-                track: track
+                track: plan.tracks[0]
             )
-            let temporaryURL = fixture.rootURL.appendingPathComponent(
-                "corruption-\(track.index)"
+            try Data([1]).write(
+                to: fixture.layout.destinationURL(for: firstIdentity)
             )
-            try data.write(to: temporaryURL)
-            let observed = try fixture.layout.placeCompleteTestFile(
-                from: temporaryURL,
-                identity: identity
+            let recordsAfterNonTargetCorruption =
+                try await fixture.storage.records()
+            record = try #require(recordsAfterNonTargetCorruption.first)
+            #expect(record.manifest.state == .queued)
+            #expect(record.manifest.automaticCacheState == .cached)
+
+            let secondIdentity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[1]
             )
-            record = try await fixture.storage.markComplete(
-                identity,
-                observedByteLength: observed
+            try Data([5]).write(
+                to: fixture.layout.destinationURL(for: secondIdentity)
             )
+            let recordsAfterTargetCorruption =
+                try await fixture.storage.records()
+            record = try #require(recordsAfterTargetCorruption.first)
+            #expect(record.manifest.automaticCacheState == .failed)
         }
-
-        let firstIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
-        try Data([1]).write(
-            to: fixture.layout.destinationURL(for: firstIdentity)
-        )
-        let recordsAfterNonTargetCorruption =
-            try await fixture.storage.records()
-        record = try #require(recordsAfterNonTargetCorruption.first)
-        #expect(record.manifest.state == .queued)
-        #expect(record.manifest.automaticCacheState == .cached)
-
-        let secondIdentity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[1]
-        )
-        try Data([5]).write(
-            to: fixture.layout.destinationURL(for: secondIdentity)
-        )
-        let recordsAfterTargetCorruption =
-            try await fixture.storage.records()
-        record = try #require(recordsAfterTargetCorruption.first)
-        #expect(record.manifest.automaticCacheState == .failed)
     }
 
     @Test
     func testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let record = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: fixture.plan,
-            detail: fixture.detail
-        )
-        let sibling = fixture.rootURL.appendingPathComponent("keep")
-        try Data([1]).write(to: sibling)
+        try await withFixture { fixture in
+            let record = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: fixture.plan,
+                detail: fixture.detail
+            )
+            let sibling = fixture.rootURL.appendingPathComponent("keep")
+            try Data([1]).write(to: sibling)
 
-        try await fixture.storage.remove(record)
+            try await fixture.storage.remove(record)
 
-        let remaining = try await fixture.storage.records()
-        #expect(remaining == [])
-        #expect(FileManager.default.fileExists(atPath: sibling.path))
+            let remaining = try await fixture.storage.records()
+            #expect(remaining == [])
+            #expect(FileManager.default.fileExists(atPath: sibling.path))
+        }
     }
 
     @Test
     func testRemoveTrackFilesDeletesPartialAndFinalFiles()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "101",
-                    expectedByteLength: 4,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
-                ),
-                DownloadTrackPlan(
-                    index: 1,
-                    inode: "102",
-                    expectedByteLength: 2,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00001.mp3"
-                ),
-            ]
-        )
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail
-        )
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "101",
+                        expectedByteLength: 4,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3"
+                    ),
+                    DownloadTrackPlan(
+                        index: 1,
+                        inode: "102",
+                        expectedByteLength: 2,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00001.mp3"
+                    ),
+                ]
+            )
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail
+            )
 
-        let identity0 = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
-        let identity1 = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[1]
-        )
+            let identity0 = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[0]
+            )
+            let identity1 = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[1]
+            )
 
-        let tempURL0 = fixture.rootURL.appendingPathComponent("temp0")
-        let tempURL1 = fixture.rootURL.appendingPathComponent("temp1")
-        try Data([1, 2, 3, 4]).write(to: tempURL0)
-        try Data([5, 6]).write(to: tempURL1)
+            let tempURL0 = fixture.rootURL.appendingPathComponent("temp0")
+            let tempURL1 = fixture.rootURL.appendingPathComponent("temp1")
+            try Data([1, 2, 3, 4]).write(to: tempURL0)
+            try Data([5, 6]).write(to: tempURL1)
 
-        let observed0 = try fixture.layout.placeCompleteTestFile(
-            from: tempURL0,
-            identity: identity0
-        )
-        let observed1 = try fixture.layout.placeCompleteTestFile(
-            from: tempURL1,
-            identity: identity1
-        )
+            let observed0 = try fixture.layout.placeCompleteTestFile(
+                from: tempURL0,
+                identity: identity0
+            )
+            let observed1 = try fixture.layout.placeCompleteTestFile(
+                from: tempURL1,
+                identity: identity1
+            )
 
-        _ = try await fixture.storage.markComplete(
-            identity0,
-            observedByteLength: observed0
-        )
-        _ = try await fixture.storage.markComplete(
-            identity1,
-            observedByteLength: observed1
-        )
+            _ = try await fixture.storage.markComplete(
+                identity0,
+                observedByteLength: observed0
+            )
+            _ = try await fixture.storage.markComplete(
+                identity1,
+                observedByteLength: observed1
+            )
 
-        let destination0 = fixture.layout.destinationURL(for: identity0)
-        let destination1 = fixture.layout.destinationURL(for: identity1)
-        let partial0 = destination0.deletingPathExtension()
-            .appendingPathExtension("mp3.partial")
-        let partial1 = destination1.deletingPathExtension()
-            .appendingPathExtension("mp3.partial")
+            let destination0 = fixture.layout.destinationURL(for: identity0)
+            let destination1 = fixture.layout.destinationURL(for: identity1)
+            let partial0 = destination0.deletingPathExtension()
+                .appendingPathExtension("mp3.partial")
+            let partial1 = destination1.deletingPathExtension()
+                .appendingPathExtension("mp3.partial")
 
-        #expect(FileManager.default.fileExists(atPath: destination0.path))
-        #expect(FileManager.default.fileExists(atPath: destination1.path))
-        #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
-        #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
+            #expect(FileManager.default.fileExists(atPath: destination0.path))
+            #expect(FileManager.default.fileExists(atPath: destination1.path))
+            #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
+            #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
 
-        try await fixture.storage.removeTrackFiles(identity0)
+            try await fixture.storage.removeTrackFiles(identity0)
 
-        #expect(!(FileManager.default.fileExists(atPath: destination0.path)))
-        #expect(FileManager.default.fileExists(atPath: destination1.path))
-        #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
-        #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
+            #expect(
+                !(FileManager.default.fileExists(atPath: destination0.path)))
+            #expect(FileManager.default.fileExists(atPath: destination1.path))
+            #expect(!(FileManager.default.fileExists(atPath: partial0.path)))
+            #expect(!(FileManager.default.fileExists(atPath: partial1.path)))
 
-        let record = try await fixture.storage.records().first!
-        #expect(record.manifest.entries[1].state == .complete)
+            let record = try await fixture.storage.records().first!
+            #expect(record.manifest.entries[1].state == .complete)
+        }
     }
 
     @Test
     func testRemoveTrackFilesDeletesPartialFileWhenDownloadInProgress()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "101",
-                    expectedByteLength: 4,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
-                )
-            ]
-        )
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail
-        )
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "101",
+                        expectedByteLength: 4,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3"
+                    )
+                ]
+            )
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail
+            )
 
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[0]
+            )
 
-        let directory = fixture.layout.bookDirectory(
-            accountID: identity.accountID,
-            itemID: identity.itemID
-        )
-        let partial = directory.appendingPathComponent(
-            identity.destinationEntry + ".partial",
-            isDirectory: false
-        )
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        try Data([1, 2]).write(to: partial)
+            let directory = fixture.layout.bookDirectory(
+                accountID: identity.accountID,
+                itemID: identity.itemID
+            )
+            let partial = directory.appendingPathComponent(
+                identity.destinationEntry + ".partial",
+                isDirectory: false
+            )
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            try Data([1, 2]).write(to: partial)
 
-        let destination = fixture.layout.destinationURL(for: identity)
-        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
-        #expect(FileManager.default.fileExists(atPath: partial.path))
+            let destination = fixture.layout.destinationURL(for: identity)
+            #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+            #expect(FileManager.default.fileExists(atPath: partial.path))
 
-        try await fixture.storage.removeTrackFiles(identity)
+            try await fixture.storage.removeTrackFiles(identity)
 
-        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
-        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+            #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+            #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+        }
     }
 
     @Test
     func testRemoveTrackFilesIgnoresMissingFiles()
         async throws
     {
-        let fixture = try Fixture()
-        defer { fixture.removeRoot() }
-        let plan = DownloadPlan(
-            itemID: fixture.itemID,
-            tracks: [
-                DownloadTrackPlan(
-                    index: 0,
-                    inode: "101",
-                    expectedByteLength: 4,
-                    mimeType: "audio/mpeg",
-                    safeExtension: .mp3,
-                    destinationEntry: "00000.mp3"
-                )
-            ]
-        )
-        _ = try await fixture.storage.create(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            plan: plan,
-            detail: fixture.detail
-        )
+        try await withFixture { fixture in
+            let plan = DownloadPlan(
+                itemID: fixture.itemID,
+                tracks: [
+                    DownloadTrackPlan(
+                        index: 0,
+                        inode: "101",
+                        expectedByteLength: 4,
+                        mimeType: "audio/mpeg",
+                        safeExtension: .mp3,
+                        destinationEntry: "00000.mp3"
+                    )
+                ]
+            )
+            _ = try await fixture.storage.create(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                plan: plan,
+                detail: fixture.detail
+            )
 
-        let identity = try DownloadTaskIdentity(
-            downloadID: fixture.downloadID,
-            accountID: fixture.accountID,
-            itemID: fixture.itemID,
-            track: plan.tracks[0]
-        )
+            let identity = try DownloadTaskIdentity(
+                downloadID: fixture.downloadID,
+                accountID: fixture.accountID,
+                itemID: fixture.itemID,
+                track: plan.tracks[0]
+            )
 
-        try await fixture.storage.removeTrackFiles(identity)
+            try await fixture.storage.removeTrackFiles(identity)
 
-        let destination = fixture.layout.destinationURL(for: identity)
-        let partial = destination.deletingPathExtension()
-            .appendingPathExtension("mp3.partial")
-        #expect(!(FileManager.default.fileExists(atPath: destination.path)))
-        #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+            let destination = fixture.layout.destinationURL(for: identity)
+            let partial = destination.deletingPathExtension()
+                .appendingPathExtension("mp3.partial")
+            #expect(!(FileManager.default.fileExists(atPath: destination.path)))
+            #expect(!(FileManager.default.fileExists(atPath: partial.path)))
+        }
     }
+
+    private enum FixtureFailure: Error { case operation }
+
+    @Test
+    func testFixtureCleanupRemovesRootAfterSuccess() async throws {
+        let root = try await withFixture { fixture in
+            #expect(
+                FileManager.default.fileExists(atPath: fixture.rootURL.path))
+            return fixture.rootURL
+        }
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+    }
+
+    @Test
+    func testFixtureCleanupRemovesRootAfterOperationFailure() async {
+        var root: URL?
+        await #expect(throws: FixtureFailure.operation) {
+            try await withFixture { fixture in
+                root = fixture.rootURL
+                throw FixtureFailure.operation
+            }
+        }
+        guard let root else {
+            Issue.record("Fixture operation never entered")
+            return
+        }
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+    }
+
+    @Test(arguments: [false, true])
+    func testFixtureCleanupReportsDeletionFailure(operationFails: Bool)
+        async throws
+    {
+        var root: URL?
+        let caller = #_sourceLocation
+        await withKnownIssue("The second removal must report a cleanup error") {
+            do {
+                try await withFixture(sourceLocation: caller) { fixture in
+                    root = fixture.rootURL
+                    try fixture.removeRoot()
+                    if operationFails { throw FixtureFailure.operation }
+                }
+                #expect(!operationFails)
+            } catch {
+                #expect(operationFails)
+                #expect(error as? FixtureFailure == .operation)
+            }
+        } matching: { issue in
+            issue.sourceLocation == caller
+                && (issue.error as? FixtureCleanupFailure)
+                    == FixtureCleanupFailure(
+                        domain: NSCocoaErrorDomain,
+                        code: CocoaError.fileNoSuchFile.rawValue)
+        }
+        let removedRoot = try #require(root)
+        #expect(!FileManager.default.fileExists(atPath: removedRoot.path))
+    }
+
 }
 
 private struct Fixture {
@@ -1791,7 +1868,33 @@ private struct Fixture {
         )
     }
 
-    func removeRoot() {
-        try? FileManager.default.removeItem(at: rootURL)
+    func removeRoot() throws {
+        try FileManager.default.removeItem(at: rootURL)
     }
+}
+
+private func withFixture<T>(
+    sourceLocation: SourceLocation = #_sourceLocation,
+    operation: (Fixture) async throws -> T
+) async throws -> T {
+    let fixture = try Fixture()
+    return try await withTestCleanup {
+        do {
+            try fixture.removeRoot()
+        } catch {
+            Issue.record(
+                FixtureCleanupFailure(
+                    domain: (error as NSError).domain,
+                    code: (error as NSError).code),
+                "Download fixture cleanup failed",
+                sourceLocation: sourceLocation)
+        }
+    } operation: {
+        try await operation(fixture)
+    }
+}
+
+private struct FixtureCleanupFailure: Error, Equatable {
+    let domain: String
+    let code: Int
 }

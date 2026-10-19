@@ -231,7 +231,10 @@
     "testRemovingRecordDeletesOnlyItsOpaqueBookDirectory()",
     "testRemoveTrackFilesDeletesPartialAndFinalFiles()",
     "testRemoveTrackFilesDeletesPartialFileWhenDownloadInProgress()",
-    "testRemoveTrackFilesIgnoresMissingFiles()"
+    "testRemoveTrackFilesIgnoresMissingFiles()",
+    "testFixtureCleanupRemovesRootAfterSuccess()",
+    "testFixtureCleanupRemovesRootAfterOperationFailure()",
+    "testFixtureCleanupReportsDeletionFailure(operationFails:)"
   ],
   "BleatCoreTests.HTTPTransportTests": [
     "testEndpointRouterUsesLocalServerAndPreservesPathPrefix()",
