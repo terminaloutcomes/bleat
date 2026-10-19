@@ -3610,21 +3610,41 @@
         "8": "Typed result and semantic counts/state are asserted. Elapsed timeout bound is explicitly asserted where applicable.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "keep",
+      "decision": "fix",
       "dependencies_and_setup": "Fake client invokes explicit Sendable callback during first result; exporter cancellation is exercised at boundary.",
       "action_postconditions": "Assert first fails/one RPC/one token request/no invalidation; second succeeds/two calls/two requests/no invalidation.",
       "synchronization": "Fake client invokes explicit Sendable callback during first result; exporter cancellation is exercised at boundary.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic cancellation race test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "reason": "Preserve two export epochs: first unauthenticated-triggered lifecycle cancellation requires original failure, client/token counts one and empty invalidations; later export requires original success, client/token counts two and still empty invalidations. Observe actual caller return independently for each epoch. Missing actual caller completion now fails within the existing observation bound.",
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "otlp_retry_privacy_caller_review": {
+        "base_revision": "8d31dd0d5666488f0d55a598a50581d04d39b52c",
+        "previous_decision": "keep",
+        "historical_reason": "Specific request/result/state postconditions cover the contract.",
+        "historical_assessment": "Original assessment remains revision-bound; this scoped review adds final actual caller-return bounds.",
+        "decision": "fix",
+        "rules": {
+          "1": "Preserve two export epochs: first unauthenticated-triggered lifecycle cancellation requires original failure, client/token counts one and empty invalidations; later export requires original success, client/token counts two and still empty invalidations. Observe actual caller return independently for each epoch.",
+          "2": "Dedicated existing completion actors signal only after each actual export/flush returns; observe bounded completion before consuming each original typed task result. Sequential epoch ordering is unchanged.",
+          "3": "Existing ten-second observation failure bounds; existing exporter timeout and client/provider behavior unchanged. No new readiness sleep, latency success threshold or retry.",
+          "4": "Missing completion records stage/source failure, cancels that owned caller and requests exporter cancellation, then returns without awaiting unknown task values. Prior confirmed callers have already returned. Underlying production task-graph drainage remains unproven.",
+          "5": "Fresh memory-only sequence provider, recording/cancellation client, exporter and per-operation completion actors; synthetic privacy marker unchanged. No filesystem/native session/global output capture.",
+          "6": "Deterministic host-local exporter behavior/privacy tests with unchanged fake responses and original typed outcomes, exact counters/invalidations and non-disclosure checks.",
+          "7": "No retry-to-green, count/result relaxation or new timing success budget. Later epoch is created only after first original assertions.",
+          "8": "Bounded diagnostic stages carry no token, result or span payload; original privacy semantics retained without new raw output publication.",
+          "9": "Individually reviewed four actual caller producers, all missing-result guards and unchanged assertions; focused repeats, owning/full signed/discovery evidence linked."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-retry-and-privacy-caller-bounds-issue-372",
+        "remaining_limits": "No claim of whole underlying task drainage, observed production leak or broader privacy/configuration acceptance."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 746
+        "line": 781
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3649,21 +3669,41 @@
         "8": "Typed result and semantic counts/state are asserted. Elapsed timeout bound is explicitly asserted where applicable.",
         "9": "Source review only; no repetition run recorded."
       },
-      "decision": "keep",
+      "decision": "fix",
       "dependencies_and_setup": "Synthetic secret token and recording local client.",
       "action_postconditions": "Export fails; flush; assert secret omitted from runtime/config/flush descriptions and span description.",
       "synchronization": "Synthetic secret token and recording local client.",
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic privacy test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "reason": "Observe actual privacy-scenario export and flush caller returns independently, forward typed results unchanged, retain export failure and original non-disclosure checks across externally visible descriptions and span description. Missing actual caller completion now fails within the existing observation bound.",
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "otlp_retry_privacy_caller_review": {
+        "base_revision": "8d31dd0d5666488f0d55a598a50581d04d39b52c",
+        "previous_decision": "keep",
+        "historical_reason": "Specific request/result/state postconditions cover the contract.",
+        "historical_assessment": "Original assessment remains revision-bound; this scoped review adds final actual caller-return bounds.",
+        "decision": "fix",
+        "rules": {
+          "1": "Observe actual privacy-scenario export and flush caller returns independently, forward typed results unchanged, retain export failure and original non-disclosure checks across externally visible descriptions and span description.",
+          "2": "Dedicated existing completion actors signal only after each actual export/flush returns; observe bounded completion before consuming each original typed task result. Sequential epoch ordering is unchanged.",
+          "3": "Existing ten-second observation failure bounds; existing exporter timeout and client/provider behavior unchanged. No new readiness sleep, latency success threshold or retry.",
+          "4": "Missing completion records stage/source failure, cancels that owned caller and requests exporter cancellation, then returns without awaiting unknown task values. Prior confirmed callers have already returned. Underlying production task-graph drainage remains unproven.",
+          "5": "Fresh memory-only sequence provider, recording/cancellation client, exporter and per-operation completion actors; synthetic privacy marker unchanged. No filesystem/native session/global output capture.",
+          "6": "Deterministic host-local exporter behavior/privacy tests with unchanged fake responses and original typed outcomes, exact counters/invalidations and non-disclosure checks.",
+          "7": "No retry-to-green, count/result relaxation or new timing success budget. Later epoch is created only after first original assertions.",
+          "8": "Bounded diagnostic stages carry no token, result or span payload; original privacy semantics retained without new raw output publication.",
+          "9": "Individually reviewed four actual caller producers, all missing-result guards and unchanged assertions; focused repeats, owning/full signed/discovery evidence linked."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-retry-and-privacy-caller-bounds-issue-372",
+        "remaining_limits": "No claim of whole underlying task drainage, observed production leak or broader privacy/configuration acceptance."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 769
+        "line": 835
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23050,5 +23090,19 @@
       "core_audit_records": 587
     },
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372"
+  },
+  "issue_372_otlp_retry_privacy_caller_bounds": {
+    "base_revision": "8d31dd0d5666488f0d55a598a50581d04d39b52c",
+    "new_declarations": 0,
+    "changed_tests": [
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
+      "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions"
+    ],
+    "counts_unchanged": {
+      "host_inventory": 593,
+      "source_declarations": 1577,
+      "core_audit_records": 587
+    },
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#otlp-retry-and-privacy-caller-bounds-issue-372"
   }
 }

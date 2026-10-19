@@ -725,7 +725,24 @@ final class AuthenticatedOtlpSpanExporterTests {
             exporter?.cancelActiveExports()
         }
 
-        var exportResult = await exporter.export(spans: [span()])
+        let firstReturned = AuthTelemetryTestCompletion<Bool>()
+        let firstSpan = span()
+        let firstExport = Task {
+            let result = await exporter.export(spans: [firstSpan])
+            await firstReturned.complete(true)
+            return result
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                firstReturned,
+                stage: "unauthenticated cancellation export caller returning")
+                == true
+        else {
+            firstExport.cancel()
+            exporter.cancelActiveExports()
+            return
+        }
+        var exportResult = await firstExport.value
         #expect(exportResult == .failure)
         #expect(client.exportCount == 1)
         var requestCount = await provider.requestCount
@@ -733,7 +750,25 @@ final class AuthenticatedOtlpSpanExporterTests {
         #expect(requestCount == 1)
         #expect(invalidatedTokens.isEmpty)
 
-        exportResult = await exporter.export(spans: [span()])
+        let laterReturned = AuthTelemetryTestCompletion<Bool>()
+        let laterSpan = span()
+        let laterExport = Task {
+            let result = await exporter.export(spans: [laterSpan])
+            await laterReturned.complete(true)
+            return result
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                laterReturned,
+                stage:
+                    "later export after unauthenticated cancellation returning")
+                == true
+        else {
+            laterExport.cancel()
+            exporter.cancelActiveExports()
+            return
+        }
+        exportResult = await laterExport.value
         #expect(exportResult == .success)
         #expect(client.exportCount == 2)
         requestCount = await provider.requestCount
@@ -749,8 +784,39 @@ final class AuthenticatedOtlpSpanExporterTests {
         let client = RecordingOtlpClient(results: [.failure])
         let exporter = exporter(provider: provider, client: client)
 
-        let exportResult = await exporter.export(spans: [span()])
-        let flushResult = await exporter.flush()
+        let exportedSpan = span()
+        let exportReturned = AuthTelemetryTestCompletion<Bool>()
+        let exportTask = Task {
+            let result = await exporter.export(spans: [exportedSpan])
+            await exportReturned.complete(true)
+            return result
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                exportReturned,
+                stage: "privacy scenario export caller returning") == true
+        else {
+            exportTask.cancel()
+            exporter.cancelActiveExports()
+            return
+        }
+        let exportResult = await exportTask.value
+        let flushReturned = AuthTelemetryTestCompletion<Bool>()
+        let flushTask = Task {
+            let result = await exporter.flush()
+            await flushReturned.complete(true)
+            return result
+        }
+        guard
+            await requireAuthTelemetryCompletion(
+                flushReturned,
+                stage: "privacy scenario flush caller returning") == true
+        else {
+            flushTask.cancel()
+            exporter.cancelActiveExports()
+            return
+        }
+        let flushResult = await flushTask.value
         #expect(exportResult == .failure)
         let externallyVisible = [
             String(describing: RemoteTelemetryRuntimeFailure.exportFailed),

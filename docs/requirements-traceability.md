@@ -736,3 +736,10 @@ adds per-caller return proof for eight concurrent exports and final transport
 shutdown, retaining original success/count/metadata and before/after release
 assertions. Cleanup releases owned controls; native session termination and
 whole underlying task drainage remain unproven. Broader #372/#362 stays open.
+
+
+The [OTLP retry/privacy caller-bound slice](release-evidence/test-reliability-core-followups.md#otlp-retry-and-privacy-caller-bounds-issue-372)
+bounds four actual caller returns across two existing tests while retaining
+typed failure/later-success, exact token/client/invalidations and synthetic
+privacy-description assertions. Whole underlying task drainage and broader
+#372/#362 acceptance remain open.
