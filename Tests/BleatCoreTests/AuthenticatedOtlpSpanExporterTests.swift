@@ -221,9 +221,12 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     @Test
     func testCancellingAsyncExportCancelsTokenWaitBeforeRPC() async throws {
+        // Bound observation independently of the production timeout. Capturing
+        // before export establishes a lower bound on its possible deadline.
+        let earliestDeadline = ContinuousClock.now.advanced(by: .seconds(30))
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [.success])
-        let exporter = exporter(provider: provider, client: client)
+        let exporter = exporter(provider: provider, client: client, timeout: 30)
         let span = span()
 
         let callerReturned = AuthTelemetryTestCompletion<Bool>()
@@ -264,15 +267,21 @@ final class AuthenticatedOtlpSpanExporterTests {
                     provider.cancelledSignal,
                     stage: "token provider observed actual task cancellation"))
             #expect(await provider.cancellationCount == 1)
+            let cancellationObservedAt = try #require(
+                await provider.cancellationObservedAt)
+            #expect(cancellationObservedAt < earliestDeadline)
             #expect(client.exportCount == 0)
         }
     }
 
     @Test
     func testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC() async throws {
+        // Bound observation independently of the production timeout. Capturing
+        // before export establishes a lower bound on its possible deadline.
+        let earliestDeadline = ContinuousClock.now.advanced(by: .seconds(30))
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [.success])
-        let exporter = exporter(provider: provider, client: client)
+        let exporter = exporter(provider: provider, client: client, timeout: 30)
         let span = span()
 
         let callerReturned = AuthTelemetryTestCompletion<Bool>()
@@ -313,6 +322,9 @@ final class AuthenticatedOtlpSpanExporterTests {
                     provider.cancelledSignal,
                     stage: "token provider observed actual task cancellation"))
             #expect(await provider.cancellationCount == 1)
+            let cancellationObservedAt = try #require(
+                await provider.cancellationObservedAt)
+            #expect(cancellationObservedAt < earliestDeadline)
             #expect(client.exportCount == 0)
             #expect(client.cancelCount == 1)
         }
@@ -431,9 +443,12 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     @Test
     func testCancellationUnblocksTokenWaitAndShutsTransportOnce() async throws {
+        // Bound observation independently of the production timeout. Capturing
+        // before export establishes a lower bound on its possible deadline.
+        let earliestDeadline = ContinuousClock.now.advanced(by: .seconds(30))
         let provider = SuspendedTokenProvider()
         let client = RecordingOtlpClient(results: [])
-        let exporter = exporter(provider: provider, client: client)
+        let exporter = exporter(provider: provider, client: client, timeout: 30)
         let span = span()
 
         let callerReturned = AuthTelemetryTestCompletion<Bool>()
@@ -468,6 +483,9 @@ final class AuthenticatedOtlpSpanExporterTests {
                     provider.cancelledSignal,
                     stage: "token provider observed actual task cancellation"))
             #expect(await provider.cancellationCount == 1)
+            let cancellationObservedAt = try #require(
+                await provider.cancellationObservedAt)
+            #expect(cancellationObservedAt < earliestDeadline)
 
             let shutdownReturned = AuthTelemetryTestCompletion<Bool>()
             let shutdown = Task {
@@ -785,12 +803,13 @@ final class AuthenticatedOtlpSpanExporterTests {
 
     private func exporter(
         provider: any TelemetryTokenProviding,
-        client: any RemoteTelemetryOtlpClient
+        client: any RemoteTelemetryOtlpClient,
+        timeout: TimeInterval = 2
     ) -> AuthenticatedOtlpSpanExporter {
         AuthenticatedOtlpSpanExporter(
             tokenProvider: provider,
             client: client,
-            timeout: 2
+            timeout: timeout
         )
     }
 
@@ -900,6 +919,7 @@ private actor SuspendedTokenProvider: TelemetryTokenProviding {
     private var retired = false
     private(set) var requestCount = 0
     private(set) var cancellationCount = 0
+    private(set) var cancellationObservedAt: ContinuousClock.Instant?
 
     func currentToken() async throws(TelemetryTokenProviderError) -> String {
         guard !retired else { throw .cancelled }
@@ -921,6 +941,7 @@ private actor SuspendedTokenProvider: TelemetryTokenProviding {
             Issue.record("Token fake control event missing after \(elapsed)")
         }
         if Task.isCancelled {
+            cancellationObservedAt = ContinuousClock.now
             cancellationCount += 1
             await cancelledSignal.signal()
         }

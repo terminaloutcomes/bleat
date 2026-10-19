@@ -103,7 +103,7 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "symbol": "SuspendedTokenProvider",
-      "assessment": "Controlled one-shot actor replaces timed sleep; cancellation handler opens release, genuine Task.isCancelled increments observed counter, retirement releases/observes logical exit without manufacturing cancellation. Four argument contract covers cancellation/retirement before entry and while handler installed. See docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372"
+      "assessment": "Controlled one-shot actor replaces timed sleep; cancellation handler opens release, genuine Task.isCancelled increments observed counter, retirement releases/observes logical exit without manufacturing cancellation. Four argument contract covers cancellation/retirement before entry and while handler installed. See docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372 Revised provider captures monotonic cancellation observation; three lifecycle tests require it before a lower-bound deadline established before export. Fixture accepts timeout default2, overridden30 only in those cases."
     }
   ],
   "tests": [
@@ -2965,7 +2965,7 @@
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Cancel the actual export task after provider entry; assert original export failure, actual provider cancellation count one and zero RPCs before cleanup. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked.",
+      "reason": "Cancel the actual export task after provider entry; assert original export failure, actual provider cancellation count one and zero RPCs before cleanup. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked. Actual cancellation is required before the earliest possible operation deadline, with unchanged bounded failure exits.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3002,24 +3002,25 @@
         "rules": {
           "1": "Cancel the actual export task after provider entry; assert original export failure, actual provider cancellation count one and zero RPCs before cleanup.",
           "2": "Use actor-backed requested/waiting/release/exited signals; cancellation handler releases the controlled wait. Existing ten-second signals/completions bound phase and actual caller return. No readiness sleep or blocked executor.",
-          "3": "Ten-second waits are failure bounds, not latency tolerances. No playback/seek or elapsed-time acceptance assertion. Old thirty-second fake sleep removed; timeout records an issue and cannot satisfy the genuine-cancellation assertion.",
+          "3": "Lifecycle fixture and explicit export timeout are both30 seconds; ten-second observation failure bounds are unchanged. A monotonic lower-bound deadline is captured before export starts, and actual provider cancellation observation must precede it. This excludes ordinary deadline cancellation rather than treating any eventual cancellation as success; scheduler delay can fail conservatively. No playback/seek tolerance or wall-clock speed threshold.",
           "4": "Await withTestCleanup retirement on all operation exits. Retirement latches rejection of late entry, releases owned waiters and observes logical fake-body exit. Observe actual caller completion before task value. Whole production task graph drainage remains unproven.",
           "5": "Fresh memory-only actor provider, signals, completion actors, recording client and exporter per case. No filesystem, native session or process-global output ownership.",
           "6": "Deterministic host-local cancellation/lifecycle tests with controlled fakes; the new parameterized contract separately covers pre-entry and installed-handler cancellation versus noncancelling retirement.",
           "7": "No retry-to-green or threshold relaxation. Original typed outcomes and RPC/cancellation/request/shutdown counters retained; actual provider cancellation is asserted before cleanup may cancel.",
           "8": "Bounded failures identify stages/source locations without token/span payloads. Contract asserts typed result and exact semantic counts; no raw output redirection.",
-          "9": "Reviewed one-shot actor, cancellation handler registration, early cancellation, retirement-before-entry and waiting retirement; repeated focused/owning/full signed results recorded in linked evidence."
+          "9": "Revised source review addresses P2 deadline causality; separate lifecycle/caller cancellation mutations retain ordinary awaitTask deadline cancellation and must make selected tests fail. Restored exact-source repeated/owning/signed evidence is linked."
         },
         "decision": "fix",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372",
-        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained."
+        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained.",
+        "deadline_causality": "The default fixture2-second timeout previously masked broken cancellation within10-second observation; these three cases now explicitly configure30 seconds and assert monotonic cancellation precedes the earliest deadline."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 272
+        "line": 278
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3051,7 +3052,7 @@
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Call cancelActiveExports after provider entry; assert original failure, genuine provider cancellation count one, zero RPCs and client cancellation count one before cleanup. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked.",
+      "reason": "Call cancelActiveExports after provider entry; assert original failure, genuine provider cancellation count one, zero RPCs and client cancellation count one before cleanup. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked. Actual cancellation is required before the earliest possible operation deadline, with unchanged bounded failure exits.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3088,24 +3089,25 @@
         "rules": {
           "1": "Call cancelActiveExports after provider entry; assert original failure, genuine provider cancellation count one, zero RPCs and client cancellation count one before cleanup.",
           "2": "Use actor-backed requested/waiting/release/exited signals; cancellation handler releases the controlled wait. Existing ten-second signals/completions bound phase and actual caller return. No readiness sleep or blocked executor.",
-          "3": "Ten-second waits are failure bounds, not latency tolerances. No playback/seek or elapsed-time acceptance assertion. Old thirty-second fake sleep removed; timeout records an issue and cannot satisfy the genuine-cancellation assertion.",
+          "3": "Lifecycle fixture and explicit export timeout are both30 seconds; ten-second observation failure bounds are unchanged. A monotonic lower-bound deadline is captured before export starts, and actual provider cancellation observation must precede it. This excludes ordinary deadline cancellation rather than treating any eventual cancellation as success; scheduler delay can fail conservatively. No playback/seek tolerance or wall-clock speed threshold.",
           "4": "Await withTestCleanup retirement on all operation exits. Retirement latches rejection of late entry, releases owned waiters and observes logical fake-body exit. Observe actual caller completion before task value. Whole production task graph drainage remains unproven.",
           "5": "Fresh memory-only actor provider, signals, completion actors, recording client and exporter per case. No filesystem, native session or process-global output ownership.",
           "6": "Deterministic host-local cancellation/lifecycle tests with controlled fakes; the new parameterized contract separately covers pre-entry and installed-handler cancellation versus noncancelling retirement.",
           "7": "No retry-to-green or threshold relaxation. Original typed outcomes and RPC/cancellation/request/shutdown counters retained; actual provider cancellation is asserted before cleanup may cancel.",
           "8": "Bounded failures identify stages/source locations without token/span payloads. Contract asserts typed result and exact semantic counts; no raw output redirection.",
-          "9": "Reviewed one-shot actor, cancellation handler registration, early cancellation, retirement-before-entry and waiting retirement; repeated focused/owning/full signed results recorded in linked evidence."
+          "9": "Revised source review addresses P2 deadline causality; separate lifecycle/caller cancellation mutations retain ordinary awaitTask deadline cancellation and must make selected tests fail. Restored exact-source repeated/owning/signed evidence is linked."
         },
         "decision": "fix",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372",
-        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained."
+        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained.",
+        "deadline_causality": "The default fixture2-second timeout previously masked broken cancellation within10-second observation; these three cases now explicitly configure30 seconds and assert monotonic cancellation precedes the earliest deadline."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 322
+        "line": 334
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3144,7 +3146,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncLifecycleMethodsPreserveShutdownState",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 341
+        "line": 353
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3183,7 +3185,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 376
+        "line": 388
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3222,7 +3224,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 395
+        "line": 407
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3268,7 +3270,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationUnblocksTokenWaitAndShutsTransportOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 433
+        "line": 445
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3300,7 +3302,7 @@
       "timeout_tolerance": "Documented only for async token timeout test: 50ms requested; <500ms upper bound vs fake provider 1s delay; no playback tolerance.",
       "classification": "Deterministic host exporter/client test with controlled local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
-      "reason": "Cancel active export after provider entry, require original failure and genuine provider cancellation; bound both coalesced shutdown calls then retain client cancel two, shutdown one, sync zero and async one. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked.",
+      "reason": "Cancel active export after provider entry, require original failure and genuine provider cancellation; bound both coalesced shutdown calls then retain client cancel two, shutdown one, sync zero and async one. Controlled token wait cannot pass via natural timed expiry; broader production drainage remains separately tracked. Actual cancellation is required before the earliest possible operation deadline, with unchanged bounded failure exits.",
       "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
       "timing_batch": {
         "date": "2026-10-16",
@@ -3316,24 +3318,25 @@
         "rules": {
           "1": "Cancel active export after provider entry, require original failure and genuine provider cancellation; bound both coalesced shutdown calls then retain client cancel two, shutdown one, sync zero and async one.",
           "2": "Use actor-backed requested/waiting/release/exited signals; cancellation handler releases the controlled wait. Existing ten-second signals/completions bound phase and actual caller return. No readiness sleep or blocked executor.",
-          "3": "Ten-second waits are failure bounds, not latency tolerances. No playback/seek or elapsed-time acceptance assertion. Old thirty-second fake sleep removed; timeout records an issue and cannot satisfy the genuine-cancellation assertion.",
+          "3": "Lifecycle fixture and explicit export timeout are both30 seconds; ten-second observation failure bounds are unchanged. A monotonic lower-bound deadline is captured before export starts, and actual provider cancellation observation must precede it. This excludes ordinary deadline cancellation rather than treating any eventual cancellation as success; scheduler delay can fail conservatively. No playback/seek tolerance or wall-clock speed threshold.",
           "4": "Await withTestCleanup retirement on all operation exits. Retirement latches rejection of late entry, releases owned waiters and observes logical fake-body exit. Observe actual caller completion before task value. Whole production task graph drainage remains unproven.",
           "5": "Fresh memory-only actor provider, signals, completion actors, recording client and exporter per case. No filesystem, native session or process-global output ownership.",
           "6": "Deterministic host-local cancellation/lifecycle tests with controlled fakes; the new parameterized contract separately covers pre-entry and installed-handler cancellation versus noncancelling retirement.",
           "7": "No retry-to-green or threshold relaxation. Original typed outcomes and RPC/cancellation/request/shutdown counters retained; actual provider cancellation is asserted before cleanup may cancel.",
           "8": "Bounded failures identify stages/source locations without token/span payloads. Contract asserts typed result and exact semantic counts; no raw output redirection.",
-          "9": "Reviewed one-shot actor, cancellation handler registration, early cancellation, retirement-before-entry and waiting retirement; repeated focused/owning/full signed results recorded in linked evidence."
+          "9": "Revised source review addresses P2 deadline causality; separate lifecycle/caller cancellation mutations retain ordinary awaitTask deadline cancellation and must make selected tests fail. Restored exact-source repeated/owning/signed evidence is linked."
         },
         "decision": "fix",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372",
-        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained."
+        "remaining_limits": "Logical controlled fake exit is observed; no claim that every underlying production/export task has drained.",
+        "deadline_causality": "The default fixture2-second timeout previously masked broken cancellation within10-second observation; these three cases now explicitly configure30 seconds and assert monotonic cancellation precedes the earliest deadline."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncTransportShutdownWaitsForClosureCompletion",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 495
+        "line": 513
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3379,7 +3382,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 522
+        "line": 540
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3464,7 +3467,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 582
+        "line": 600
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3503,7 +3506,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 643
+        "line": 661
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3542,7 +3545,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 682
+        "line": 700
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3581,7 +3584,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInExporterOrFailureDescriptions",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 710
+        "line": 728
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3620,7 +3623,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
-        "line": 733
+        "line": 751
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22986,6 +22989,12 @@
       "core_audit_records": 587
     },
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372",
-    "remaining_limits": "Whole production task graph drainage and unrelated lifecycle cases remain open."
+    "remaining_limits": "Whole production task graph drainage and unrelated lifecycle cases remain open.",
+    "deadline_causality_review": {
+      "reviewed_head": "d5d940f5d00c44206d5d028ee7d9dc237fea9cf0",
+      "finding": "P2: default2-second fixture deadline could manufacture provider cancellation inside10-second observation.",
+      "remediation": "Explicit30-second lifecycle fixture timeout plus captured monotonic pre-deadline cancellation proof; separate lifecycle and caller mutations retain ordinary deadline cancellation.",
+      "production_changes": "none; temporary mutations restored byte-for-byte"
+    }
   }
 }

@@ -1285,10 +1285,31 @@ the typed cancelled result and exact request/cancellation counts: retirement
 alone must leave cancellation zero. The controlled start and installed-handler
 signals make both registration orderings explicit. Every parameter owns its own
 fake and awaits cleanup. Existing ten-second bounds fail missing transitions;
-there is no readiness sleep or elapsed-time success threshold.
+there is no readiness sleep.
 
-Only the four existing test bodies, this shared fake and its local contract
-test change. Five records receive individual nine-rule reviews, while historical
+Independent review of initial head `d5d940f5d00c44206d5d028ee7d9dc237fea9cf0`
+found a P2 causality gap: the default fixture timeout was two seconds and clamped
+`explicitTimeout: 30`, so ordinary deadline cancellation could satisfy the
+provider observation within ten seconds. The three lifecycle cases now explicitly
+configure thirty seconds as well as requesting thirty seconds. Before starting
+export, each captures a monotonic lower bound on the possible operation deadline;
+the fake records the monotonic instant when it actually observes cancellation.
+That instant must precede the lower bound. The ten-second failure bounds are
+unchanged. This proves deadline exclusion for a passing run rather than accepting
+any eventual cancellation; a long scheduler delay fails conservatively instead
+of turning deadline cancellation into success. No wall-clock speed assertion.
+
+Two temporary production mutations retain ordinary `awaitTask` timeout
+cancellation: one removes span lifecycle callback invocation and rejection-path
+cancellation; the other removes caller cancellation propagation (including the
+early-cancel guard). The lifecycle mutation must fail both lifecycle-cancel and
+shutdown identities; the caller mutation must fail the direct-caller identity.
+Mutation XML/logs and `.build/i372-otlp-control-mutation-verification.json` retain
+exact failed identities and outcomes. Production bytes are restored exactly before
+post-mutation passing validation; no mutation enters the commit.
+
+Only the four existing test bodies, this shared fake, its local contract
+test and the fixture timeout parameter change. Five records receive individual nine-rule reviews, while historical
 assessments stay revision-bound. The two timed-fake follow-ups are superseded
 by observed genuine cancellation; whole production task-graph drainage is not
 claimed. Inventory is now 593 identities, source index 1,577 declarations, core
@@ -1307,6 +1328,9 @@ Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
   checks passed. Initial compilation found a typed-catch inference error in the
   new test; it was corrected with typed `do throws(...)` before any test ran.
   That unsuccessful build remains retained and is not credited as execution.
+
+Revised validation uses the `i372-otlp-control-revised-` prefix for focused,
+owning, discovery, signed-host, lint/docs and outcome records.
 
 Focused serial command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift
 test --disable-xctest --no-parallel --filter` selecting the five names above,
