@@ -2681,7 +2681,7 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow",
-      "line": 21420,
+      "line": 22411,
       "language": "swift"
     },
     {
@@ -5477,37 +5477,49 @@
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testNewQuerySupersedesPendingDebounce",
-      "line": 60,
+      "line": 69,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testAccountAndLibraryChangeCancelsInFlightSearch",
-      "line": 105,
+      "line": 134,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testCallerCancellationStopsPendingDebounce",
-      "line": 163,
+      "line": 222,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testCancelledOperationCannotPublishWhenDependencyIgnoresIt",
-      "line": 192,
+      "line": 260,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+      "name": "testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall",
+      "line": 313,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
+      "name": "testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall",
+      "line": 382,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testRepositoryFailuresRemainTyped",
-      "line": 226,
+      "line": 433,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift",
       "name": "testRepositoryCancellationMapsToCoordinatorCancellation",
-      "line": 259,
+      "line": 475,
       "language": "swift"
     },
     {

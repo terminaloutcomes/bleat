@@ -1629,3 +1629,59 @@ and failures, and `.build/i372-otlp-clock-verification.json` records final outco
 Raw logs remain private. Fresh exact-head review and CI remain required; broader
 #372/#362 device/live/configuration and unproven drainage criteria stay open.
 #400 implementation is separate.
+
+
+## Search release timeout exits and missing audit records (issue #372)
+
+At merged base `404175aed7d2dac50fb91f668f0ff653e37380cd`, two existing
+`LibrarySearchCoordinatorTests` helper contracts had bounded call/registration/
+completion observations but joined unconfirmed tasks on failed observations:
+
+- `testEarlyAndRepeatedReleaseDoesNotStrandCancellationIgnoringCall`
+- `testRepeatedReleaseAfterCallRegistrationCompletesBlockedCall`
+
+Both now guard every failed observation before task-value consumption and use
+existing awaited `withTestCleanup` for success, guard return and throw. Cleanup
+requests owned caller cancellation and awaits `resumeBlockedCall`; it does not
+pretend cancellation alone terminates the intentionally uncooperative service.
+The existing release latch handles late entry and repeated release. Unknown
+task values/results are never joined on a failed wait; whole underlying task
+graph drainage remains unproven.
+
+The first case retains two releases before caller creation, its original typed
+success/remote-source assertion, another release and exact one service call.
+The second retains positive call/blocked registration before two releases,
+observes actual completion, and now explicitly consumes successful typed value
+with remote-source/one-call assertions. Producers increment the completion counter
+only after actual service return; cleanup never manufactures completion. Helper
+implementation, production code and existing failure bounds are unchanged. No
+readiness sleep, new latency threshold or retry-to-green.
+
+These are existing host-inventory identities, not new tests. Both were absent
+from the source index and core audit; add exactly their two declaration rows and
+individual nine-rule records. Refresh only required source locations in this
+changed file, preserving other dispositions. Host inventory stays 597, owning
+suite 10; source-index rows rise from 1,581 to 1,583 and core audit from 591 to
+593 by repairing those omissions. No broad tracker/index reconciliation.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused runs: **2/2 each**, exact existing identities, zero
+  failures/errors/skips.
+- Owning `LibrarySearchCoordinatorTests`: **10/10**, exact inventory, zero
+  failures/errors/skips.
+- Supported full signed host gate **597/597**, exact inventory, zero
+  failures/errors/skips; built discovery **597/597**.
+- Strict Swift lint, docs, exact two-body/helper/production/audit scope and final
+  diff checks passed. No new declaration or inventory change.
+
+Focused serial command uses `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift
+test --disable-xctest --no-parallel --filter` selecting the two names above,
+report `.build/i372-search-release-focused-1.xml`; independent repeats add
+`--skip-build` with distinct `-2`/`-3`. Owning filter is
+`LibrarySearchCoordinatorTests`, report `.build/i372-search-release-owning.xml`.
+Signed command is `mise exec -- ./scripts/test-host.sh`; discovery, signed-host
+log, lint/docs and verified outcome manifest use the `i372-search-release-`
+prefix. Raw framework/build logs remain private. Fresh independent exact-head
+review and CI required. Other search follow-ups and broader #372/#362 lifecycle/
+drainage/configuration/device/live criteria remain open. #400 is separate.

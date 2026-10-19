@@ -35457,8 +35457,8 @@
       "identifier": "AppModelTests/testPlaybackStartExcludesIncompleteAndUsesAutomaticCachedWindow",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 21416,
-        "endLineBeforeNextTest": 21491
+        "line": 22411,
+        "endLineBeforeNextTest": 22499
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -35469,63 +35469,99 @@
       ],
       "actions": [
         {
-          "line": 21436,
+          "line": 22429,
           "expression": "defer { try? FileManager.default.removeItem(at: root) }"
         },
         {
-          "line": 21453,
+          "line": 22446,
           "expression": "playbackPreparation("
         },
         {
-          "line": 21466,
+          "line": 22459,
           "expression": "await model.start()"
         },
         {
-          "line": 21468,
+          "line": 22461,
           "expression": "let outcome = await model.startPlayback("
         },
         {
-          "line": 21474,
+          "line": 22467,
           "expression": "await service.playbackOpenRequests().count == 1"
         },
         {
-          "line": 21477,
+          "line": 22470,
           "expression": "let playbackRequests = await service.playbackOpenRequests()"
         },
         {
-          "line": 21482,
+          "line": 22475,
           "expression": ".started("
         },
         {
-          "line": 21490,
+          "line": 22483,
+          "expression": "model.playback.pause()"
+        },
+        {
+          "line": 22488,
+          "expression": "await model.playback.seek(to: 0.75)"
+        },
+        {
+          "line": 22496,
           "expression": "await model.playback.stop()"
         }
       ],
       "assertions": [
         {
-          "line": 21476,
+          "line": 22469,
           "expression": "XCTAssertTrue(requestedPlayback)"
         },
         {
-          "line": 21480,
+          "line": 22473,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 21487,
+          "line": 22480,
+          "expression": "XCTAssertTrue(model.playback.isPlaybackRequested)"
+        },
+        {
+          "line": 22484,
+          "expression": "XCTAssertEqual(model.playback.state, .paused)"
+        },
+        {
+          "line": 22485,
+          "expression": "XCTAssertFalse(model.playback.isPlaybackRequested)"
+        },
+        {
+          "line": 22486,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 22489,
+          "expression": "XCTAssertEqual(model.playback.state, .paused)"
+        },
+        {
+          "line": 22490,
+          "expression": "XCTAssertFalse(model.playback.isPlaybackRequested)"
+        },
+        {
+          "line": 22491,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 22493,
           "expression": "XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)"
         },
         {
-          "line": 21488,
+          "line": 22494,
           "expression": "XCTAssertEqual(playbackRequests.count, 1)"
         },
         {
-          "line": 21489,
+          "line": 22495,
           "expression": "XCTAssertTrue(detailRequests.isEmpty)"
         }
       ],
       "synchronizationEvidence": [
         {
-          "line": 21473,
+          "line": 22466,
           "expression": "let requestedPlayback = await waitUntil(timeout: .seconds(2)) {"
         }
       ],
@@ -35535,25 +35571,25 @@
         "purpose": "Two temporary download roots with manual incomplete and automatic cache variants.",
         "actionPostconditions": [
           {
-            "action": "For each case start exact position; bounded wait for open request; inspect source.",
-            "postcondition": "Manual incomplete streams; complete automatic cache starts downloaded; one playback request and no detail request."
+            "action": "Start each source at the requested position and inspect typed source plus playback intent; pause, confirm zero player rate, then await a seek to 0.75 seconds.",
+            "postcondition": "Manual incomplete streams; complete automatic cache starts downloaded; one playback request and no detail request. The completed seek retains paused state, no playback request and zero player rate before the 0.01-second position check."
           }
         ],
-        "timeoutAndToleranceRationale": "All gates/tasks awaited; bounded waitUntil is asserted where used. Playback position uses 0.01s floating-point tolerance where applicable.",
+        "timeoutAndToleranceRationale": "The bounded two-second request observation is retained. Exact media time is checked only after pause and awaited seek, with paused state, no playback request and zero native player rate. The existing 0.01-second media precision tolerance is unchanged; it does not accommodate live clock advancement.",
         "ruleAssessments": {
-          "1": "Typed playback outcome and resulting identity/source/session are asserted directly.",
-          "2": "Gated diagnostic and preparation operations use explicit entry/release; task completion is awaited.",
-          "3": "N/A: no playback clock assertion beyond requested position; explicit media time uses 0.01 tolerance where present.",
-          "4": "Service and diagnostic boundaries are injected; all tasks and gates are joined.",
+          "1": "Assert typed source outcome, playback-start intent, one open request and no detail requests for both source cases; independently assert completed paused seek.",
+          "2": "Await startPlayback and seek. Assert bounded two-second request observation, paused state, no playback request and zero native player rate before position sampling.",
+          "3": "Pause and confirm paused state plus zero native player rate before awaiting seek; reconfirm paused state, no playback request and zero rate before exact position assertion.",
+          "4": "Start and seek calls are awaited and playback stop is awaited after each case; no new background task or observer ownership.",
           "5": "Temporary download roots and position stores are test-isolated and cleaned.",
           "6": "No physical audio route/server; media/download behavior uses local fixtures.",
-          "7": "No retry-to-green; source selection and failure behavior are explicit.",
-          "8": "Waits are bounded and asserted; media time tolerance reflects floating point.",
-          "9": "No skip; app simulator outcome pending."
+          "7": "CI run 39313500827 at 74d2884 reported 0.805220208 while expecting 0.75 +/- 0.01. Source starts playback before returning; additional awaited service observations sample an advancing clock. Correct observation state without widening tolerance or retrying unchanged CI.",
+          "8": "Exact-position assertion is preceded by explicit readiness state, playback-intent and native-rate assertions.",
+          "9": "Three independent focused Simulator runs passed 1/1 exact identity each; full app/Simulator smoke gate passed 610/610 with no failures or skips; fresh signed host gate passed exact 597/597 inventory. Original failed CI retained separately; fresh changed-head review and CI required."
         },
         "decision": {
           "outcome": "keep",
-          "reason": "The source choice, typed failure, account/item identity, and stale-operation fencing are directly asserted."
+          "reason": "Corrected advancing-clock observation; preserves both download-selection cases, typed start outcome, playback intent and request counts. Exact position now proves an awaited paused seek, not independent initial-position forwarding."
         }
       }
     },

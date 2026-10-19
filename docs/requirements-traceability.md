@@ -761,3 +761,19 @@ threshold. Four helper/boundary identities and four killed mutations cover
 registration cancellation, retirement, token-success sleeper cancellation and
 expired RPC budget. Live wall-clock adjustment semantics and whole production
 task-graph drainage are unchanged/unproven; broader #372/#362 remains open.
+
+
+The [search-release timeout-exit slice](release-evidence/test-reliability-core-followups.md#search-release-timeout-exits-and-missing-audit-records-issue-372)
+prevents two existing helper contracts from joining unconfirmed tasks after
+failed observations, preserves release ordering and typed success, and records
+their previously missing index/audit entries. Production/helpers/inventory stay
+unchanged; cancellation is a request plus observed control release, not proof
+of whole task-graph drainage. Other #372/#362 acceptance stays open.
+
+
+The [cached-window paused seek correction](release-evidence/test-reliability-app-followups.md#cached-window-paused-seek-observation-pr-408)
+retains incomplete/manual versus complete/automatic-cache source selection and
+playback-start intent while checking awaited seek precision with paused state
+and zero native player rate. It addresses the advancing-clock assertion in the
+retained failed #408 CI run without changing production behavior or tolerance;
+independent initial-position forwarding is not claimed.
