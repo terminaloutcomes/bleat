@@ -501,7 +501,7 @@
       "purpose": "Reject malformed persisted profile containing credential-like marker strings.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-        "action_postconditions": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID)."
+        "action_postconditions": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
@@ -509,24 +509,24 @@
       },
       "compiler_skip_conditions": "No test-level compiler condition, opt-in variable, or skip applies.",
       "rules": {
-        "1": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID).",
+        "1": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations.",
         "2": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
         "3": "N/A: no active playback/seek or position measurement.",
         "4": "Async store/transport operations are awaited; scoped fixture or URLProtocol cleanup is completed by the test. No detached tasks remain.",
         "5": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
         "6": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
         "7": "No blind retry or wait relaxation.",
-        "8": "Typed errors/states and semantic output are asserted. Add explicit privacy-safe error/diagnostic assertion proving the profile payload marker is absent.",
-        "9": "Source review only; no individual repetition run is recorded."
+        "8": "Synthetic markers are checked in each error representation without process-global output capture.",
+        "9": "See AccountStore coverage evidence dated 2026-10-19 in docs/release-evidence/test-reliability-core-followups.md."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-      "action_postconditions": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID).",
+      "action_postconditions": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations.",
       "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
       "timeout_tolerance": "N/A: no numeric time tolerance.",
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
-      "reason": "Typed corruption rejection is asserted, but the test title promises non-disclosure and no error/diagnostic text is checked for the inserted marker.",
+      "reason": "Typed corruption rejection and explicit error-representation non-disclosure are asserted; AccountStore decode emits no diagnostic event.",
       "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
     },
     {
@@ -618,7 +618,7 @@
       "purpose": "Rollback credentials generated for duplicate remote identity.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-        "action_postconditions": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged."
+        "action_postconditions": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
@@ -626,24 +626,24 @@
       },
       "compiler_skip_conditions": "No test-level compiler condition, opt-in variable, or skip applies.",
       "rules": {
-        "1": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged.",
+        "1": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred.",
         "2": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
         "3": "N/A: no active playback/seek or position measurement.",
         "4": "Async store/transport operations are awaited; scoped fixture or URLProtocol cleanup is completed by the test. No detached tasks remain.",
         "5": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
         "6": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
         "7": "No blind retry or wait relaxation.",
-        "8": "Typed errors/states and semantic output are asserted. Seed existing credential sentinel and assert rollback retains it, or narrow the claim.",
-        "9": "Source review only; no individual repetition run is recorded."
+        "8": "Typed duplicate failure, retained token equality and exact new-credential cleanup are asserted.",
+        "9": "See AccountStore coverage evidence dated 2026-10-19 in docs/release-evidence/test-reliability-core-followups.md."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-      "action_postconditions": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged.",
+      "action_postconditions": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred.",
       "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
       "timeout_tolerance": "N/A: no numeric time tolerance.",
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
-      "reason": "Current assertions show the generated credential is removed and existing account row remains, but do not seed/assert that a pre-existing unrelated credential survives; title overstates coverage.",
+      "reason": "Rollback directly proves preservation of seeded existing credentials and removal of credentials observed before failure.",
       "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
     },
     {

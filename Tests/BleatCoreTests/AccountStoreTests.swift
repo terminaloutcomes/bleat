@@ -369,13 +369,18 @@ final class AccountStoreTests {
         async throws
     {
         let fixture = try StoreFixture()
+        let payloadMarkers = [
+            "synthetic-profile-access-token",
+            "synthetic-profile-refresh-token",
+            "synthetic-profile-password",
+        ]
         let context = ModelContext(fixture.container)
         context.insert(
             ServerAccountRecord(
                 accountID: "corrupt",
                 serverURL: "https://example.com",
                 remoteUserID: "user",
-                profileData: Data("access-token refresh-token".utf8),
+                profileData: Data(payloadMarkers.joined(separator: " ").utf8),
                 isActiveBrowsingAccount: true
             ))
         try context.save()
@@ -389,6 +394,17 @@ final class AccountStoreTests {
                     == .invalidStoredAccount(
                         AccountID(rawValue: "corrupt")
                     ))
+            let representations = [
+                String(describing: error),
+                String(reflecting: error),
+                error.localizedDescription,
+                String(reflecting: error as NSError),
+            ]
+            for representation in representations {
+                for marker in payloadMarkers {
+                    #expect(!representation.contains(marker))
+                }
+            }
         }
     }
 
@@ -528,7 +544,25 @@ final class AccountStoreTests {
         )
         try await fixture.store.save(existing)
         let newID = AccountID(rawValue: "new")
+        let canonicalID = AccountID.canonical(
+            server: existing.server,
+            userID: existing.user.id
+        )
+        #expect(canonicalID != existing.id)
+        let existingTokens = try AuthenticationTokens(
+            accessToken: "synthetic-existing-access",
+            refreshToken: "synthetic-existing-refresh"
+        )
+        let expectedNewTokens = try AuthenticationTokens(
+            accessToken: "access-token",
+            refreshToken: "refresh-token"
+        )
         let credentialStore = OnboardingCredentialStore()
+        await credentialStore.save(existingTokens, for: existing.id)
+        #expect(
+            await credentialStore.credentials(for: existing.id)
+                == existingTokens)
+        #expect(await credentialStore.credentials(for: canonicalID) == nil)
         let coordinator = AuthCoordinator(
             transport: OnboardingTransport(),
             credentialStore: credentialStore
@@ -540,7 +574,15 @@ final class AccountStoreTests {
                 discoveredServer: try Self.discoveredServer(),
                 username: "reader",
                 password: "correct",
-                accountStore: fixture.store
+                accountStore: fixture.store,
+                onAuthenticationCompleted: {
+                    #expect(
+                        await credentialStore.credentials(for: canonicalID)
+                            == expectedNewTokens)
+                    #expect(
+                        await credentialStore.credentials(for: existing.id)
+                            == existingTokens)
+                }
             )
             Issue.record("Expected duplicate account persistence failure")
         } catch {
@@ -553,10 +595,9 @@ final class AccountStoreTests {
                     ))
         }
 
-        let canonicalID = AccountID.canonical(
-            server: existing.server,
-            userID: existing.user.id
-        )
+        let retainedCredentials = await credentialStore.credentials(
+            for: existing.id)
+        #expect(retainedCredentials == existingTokens)
         let newCredentials = await credentialStore.credentials(for: canonicalID)
         let deleteCount = await credentialStore.deleteCount()
         let accounts = try await fixture.store.accounts()

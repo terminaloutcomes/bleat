@@ -18,8 +18,6 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs` | Capture output in a subprocess or enforce process-wide exclusive serialization, and restore both file descriptors through guaranteed cleanup. | `captureStandardOutput` redirects process-global stdout/stderr while other Swift Testing suites can execute concurrently; a restoration failure can also leave a descriptor redirected. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh`, `testTwentyUnauthorizedRequestsShareOneRejectedRefresh`, `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`, `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`, `testConcurrentRejectionJoinsFailingInFlightRefresh`, `testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery` | Add bounded, diagnostic arrival notifications to the concurrent HTTP fake barriers and staged refresh gates. | Count barriers currently suspend with checked continuations until all request calls arrive, and gated tests wait for refresh/save/initial-send states indefinitely. If a regression prevents a stage from occurring, the test process hangs rather than reporting which transition timed out. Preserve each cancellation/coalescing race scenario. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSavedCredentialsMemoizesConclusiveFailure` | Rename to describe memoization of conclusive refresh status failure, or construct an actual missing-credentials fixture and assert that typed result. | The current fixture has old access/refresh tokens and the scripted refresh returns 503; it does not exercise missing credentials despite the test title. |
-| `Tests/BleatCoreTests/AccountStoreTests.swift::testCorruptStoredProfileIsRejectedWithoutLeakingPayload` | Assert that the typed error/diagnostic representation omits the marker stored in malformed profile bytes. | The test injects credential-like sentinel text and checks only `invalidStoredAccount`; the title’s non-disclosure claim is not directly verified. |
-| `Tests/BleatCoreTests/AccountStoreTests.swift::testDuplicateOnboardingRollsBackOnlyNewCredentials` | Seed a pre-existing credential for another account and assert it survives failed duplicate onboarding rollback, or narrow the test’s claim. | Existing assertions prove one credential deletion and preservation of the existing account row, but do not prove rollback preserves existing credentials. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterStreamsEveryServerConnectionPurpose` | Bound each `AsyncStream` event read and report the missing snapshot stage on timeout. | Three awaited `iterator.next()` calls have no deadline, so a missing initial/update yield can hang the suite. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportKeepsThenClearsSessionCookies` | Replace the test URLProtocol helper’s `preconditionFailure` for unexpected route with a captured typed test failure. | An unexpected adapter request currently traps the process instead of reporting the failing route as a test issue. |
 | `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testNativeBrowserCallbackAdapterRunsOffMainActor` | Bound the continuation awaiting the detached framework callback and report missing callback completion. | The test invokes the actual callback adapter off MainActor, but a regression that drops the callback leaves the test suspended indefinitely. Preserve all success/cancel/failure adapter cases. |
@@ -191,3 +189,54 @@ installation warning remains unresolved and no Simulator validation is claimed.
 SwiftData permission error 513 messages occurred inside existing deliberately
 read-only store tests, whose expected rollback/failure assertions passed.
 No live-server, app/device or release-validation claim follows from this change.
+
+## AccountStore coverage 2026-10-19
+
+Bounded follow-up under [#372](https://github.com/terminaloutcomes/bleat/issues/372),
+reviewed against `90d5471ce7ed3577a2d8e9ee90f0ad8ddae66e9a`:
+
+- `AccountStoreTests.testCorruptStoredProfileIsRejectedWithoutLeakingPayload`
+  retains the typed `invalidStoredAccount` assertion and checks three synthetic
+  credential markers against error description, reflection, localized description
+  and NSError reflection. The current decode boundary emits no diagnostic event;
+  this tests exposed error representations without process-global log capture.
+- `AccountStoreTests.testDuplicateOnboardingRollsBackOnlyNewCredentials` seeds
+  existing-account token sentinels, verifies the canonical destination is empty,
+  observes the new login tokens through the existing awaited authentication
+  callback, then proves duplicate failure preserves existing credentials and the
+  account row while removing new credentials with exactly one deletion.
+
+Only these two dispositions in `TestSupport/TestAudit/core.json` change to
+`keep`. There is no production credential change or observed production leak.
+The existing in-memory SwiftData fixture and actor credential fake isolate state;
+no sleeps, tasks, callbacks requiring teardown, or global output redirection were
+added. Adjacent decode and rollback paths retain typed errors with awaited
+credential deletion and no process-terminating constructs.
+
+Focused unsigned validation used SwiftPM Swift Testing with `--disable-xctest
+--no-parallel`, first selecting both identities (2 passed), then selecting each
+identity separately in three independent invocations (6 passes total). All exact
+identities were checked in `.build/account-store-focused-1.xml` and
+`.build/account-store-<identity>-<1...3>.xml`; zero failures, errors or skips.
+An earlier `--repetitions 3` attempt was rejected as an unknown option before
+execution and supplies no test evidence. No identities were added or renamed.
+
+`mise exec -- ./scripts/test-host.sh` passed the complete signed owning-host
+suite: 573 exact identities, zero failures/errors/skips, including all 18
+AccountStore identities and both changed tests. The gate verified signing,
+profile and Keychain entitlements, inventory completeness, and executed coverage
+in both libraries. Reports: `.build/host-results/tests.xml`, per-product XML,
+and `.build/coverage/swift-host/lcov.info`.
+
+Retained diagnostics: the upstream OpenTelemetry package manifest warns about a
+deprecated watchOS deployment version. SwiftData permission errors belong to
+intentional read-only save-failure fixtures (transcript checkpoint, migration,
+pending progress, and history); each owning test passed. The cleanup regression
+`retainsOperationFailureWhenCleanupAlsoFails` intentionally records one known
+issue through `withKnownIssue`; it passed. No unexpected warning or crash was
+observed in the changed cases.
+
+`mise run docs:check`, strict Swift formatting lint for the changed file, and
+`git diff --check` passed. Validation platform: macOS 26.6.2 arm64, Apple Swift
+6.4. The final revision is recorded in the pull request. Simulator, live server
+and physical-device validation are outside this test-only change.
