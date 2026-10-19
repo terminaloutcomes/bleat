@@ -10858,35 +10858,35 @@
       "review_status": "source_reviewed",
       "purpose": "Run a search with default sleep implementation and zero debounce.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
-        "action_postconditions": "Await result and assert remote source."
+        "setup": "Fresh LibrarySearchCoordinator with its native default sleep implementation and zero debounce, SearchTestService with both hold modes disabled, BoundedTestCounter, fixed local context/request values. No SearchTestSleeper is constructed or injected.",
+        "action_postconditions": "Run the actual native-default zero-duration search in an owned caller, observe actual coordinator return/throw with the bounded counter, consume only after positive completion and assert remote result source."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
-        "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold."
+        "synchronization": "The counter increments only after coordinator.search actually returns or throws. A five-second terminal observation is asserted and guarded before task.value.get(). This case has no injected-sleeper registration observation.",
+        "timeout_tolerance": "Zero debounce is the semantic input to the real default sleeper. The five-second caller-completion budget allows instrumented host scheduling and diagnoses missing return; no 300 ms policy check, elapsed-time performance assertion or numeric tolerance is claimed."
       },
       "compiler_skip_conditions": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
       "rules": {
-        "1": "Await result and assert remote source.",
-        "2": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
+        "1": "Run the actual native-default zero-duration search in an owned caller, observe actual coordinator return/throw with the bounded counter, consume only after positive completion and assert remote result source.",
+        "2": "The counter increments only after coordinator.search actually returns or throws. A five-second terminal observation is asserted and guarded before task.value.get(). This case has no injected-sleeper registration observation.",
         "3": "N/A: no actively advancing player, seek, or playback-position measurement.",
-        "4": "Owned callers are cancelled, the sleeper is permanently retired and service latches released on every exit. Late entries observe retirement/release without retaining continuations. Native cancellation callbacks hop to their private actors. No unknown task result is joined on failed observation; no whole production-task graph drainage claim.",
-        "5": "Fresh local transport/store/coordinator/router/cache and scripted actors are created per test; only explicit disk-reopen scenarios share storage within the test.",
-        "6": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
-        "7": "No readiness sleep, widened timeout or retry-to-green. The deliberate thirty-second cancellable fake hold is replaced with an explicit controlled continuation; default zero-duration native-sleeper coverage and configured debounce argument checks remain.",
-        "8": "Registration and terminal failures retain caller source location, action, elapsed time and limit; typed results and exact existing counts/order/durations remain asserted.",
-        "9": "Final-source focused repetitions, owning suite, complete signed inventory and expected-failing mutations are recorded separately in scoped evidence."
+        "4": "Existing withTestCleanup cancels the owned caller and awaits service.resumeBlockedCall() on normal return, guard return and throw. It does not construct, register or permanently retire a custom sleeper. Failed terminal observation returns without joining an unknown task result; whole production-task graph drainage remains unproven.",
+        "5": "Fresh coordinator, private immediate service and counter per test; fixed value-type context/request. No storage, router/cache, custom sleeper or shared personal state.",
+        "6": "Host concurrency/runtime boundary using actual default native zero-duration sleep and a fake repository operation; no injected clock/sleeper, live network or device claim.",
+        "7": "No readiness sleep, widened timeout or retry-to-green. Preserve actual native default zero-duration coverage. The controlled thirty-second-hold replacement and injected-sleeper retirement are other cases, not evidence supplied by this identity.",
+        "8": "The terminal failure reports zero-duration search return, observed reached state, elapsed time and limit at the caller source location. The semantic assertion is remote result source; no registration/count/order/duration assertions are invented.",
+        "9": "This identity passed in three focused runs, the twelve-identity owning suite and signed600 inventory. Omitting its actual terminal witness failed the intended bounded assertion; restored-source execution passed. Other private-fixture lifecycle mutations are separate evidence."
       },
       "decision": "keep",
-      "dependencies_and_setup": "New coordinator, SearchTestSleeper and SearchTestService actors per test; context/request IDs are fixed.",
-      "action_postconditions": "Await result and assert remote source.",
-      "synchronization": "Existing bounded registration observations plus five-second per-caller terminal witnesses, emitted only after the actual coordinator API returns or throws. Guard failure exits before task.value/result joins; existing withTestCleanup handles normal, guard and throwing exits.",
-      "timeout_tolerance": "Exact 300 ms requested debounce policy remains where applicable; it is not elapsed-time coverage. Five-second failure budgets match existing fixture registration bounds, allowing instrumented host scheduling without a performance threshold.",
-      "classification": "Deterministic concurrency test with injected sleeper and fake repository; no live network.",
+      "dependencies_and_setup": "Fresh LibrarySearchCoordinator with its native default sleep implementation and zero debounce, SearchTestService with both hold modes disabled, BoundedTestCounter, fixed local context/request values. No SearchTestSleeper is constructed or injected.",
+      "action_postconditions": "Run the actual native-default zero-duration search in an owned caller, observe actual coordinator return/throw with the bounded counter, consume only after positive completion and assert remote result source.",
+      "synchronization": "The counter increments only after coordinator.search actually returns or throws. A five-second terminal observation is asserted and guarded before task.value.get(). This case has no injected-sleeper registration observation.",
+      "timeout_tolerance": "Zero debounce is the semantic input to the real default sleeper. The five-second caller-completion budget allows instrumented host scheduling and diagnoses missing return; no 300 ms policy check, elapsed-time performance assertion or numeric tolerance is claimed.",
+      "classification": "Host concurrency/runtime test with native default zero-duration sleep and private fake repository; no injected sleeper or live network.",
       "compiler_skip": "No conditional compilation or skip/opt-in guard applies; host Swift Testing discovery.",
-      "reason": "Actual coordinator return/throw is bounded before caller task consumption; failed readiness/completion observations return without unknown joins. Awaited cleanup cancels owned callers, retires the private sleeper and releases controlled repository holds. Original semantic postconditions remain. This is not whole production-task graph drainage.",
-      "shared_helper_review": "Private SearchTestSleeper has a final retirement latch separate from ordinary per-generation resume; registration checks cancellation/retirement. Private SearchTestService uses controlled cancellable and cancellation-ignoring holds with detach-before-resume. Two parameterized lifecycle contracts cover cancellation/cleanup before entry and after registration.",
-      "prior_search_caller_finding": "Semantic result and cancellation postconditions are explicit, but helper continuation waits are not time bounded."
+      "reason": "Keep the real default-sleeper zero-duration behavior and remote-result assertion, adding bounded actual caller completion. Cleanup cancels the caller and releases service state only. Custom sleeper registration/retirement and whole production-task drainage are not claimed.",
+      "shared_helper_review": "performSearchForTest observes the actual coordinator outcome before incrementing BoundedTestCounter. withTestCleanup cancels this caller and awaits the immediate service release. There is no SearchTestSleeper instance or retireAll call in this case; separate helper contracts cover those fixtures.",
+      "prior_search_caller_finding": "Previously this case directly awaited coordinator.search with the native default zero-duration sleeper and no bounded terminal observation; generic injected-sleeper wording was inapplicable."
     },
     {
       "identifier": "Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift::testDebouncesForConfiguredDurationBeforeSearching",
