@@ -21342,10 +21342,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[1]))
         XCTAssertTrue(model.playback.isPlaybackRequested)
 
-        let didContinue = await waitUntil(timeout: .seconds(2)) {
-            model.playback.coverLoadPolicy == .allowNetwork
-        }
-        XCTAssertTrue(didContinue)
+        let continued = expectation(
+            description: "Prepared remote track owns playback after cached seek"
+        )
+        Self.fulfillStreamingContinuation(
+            continued, when: model.playback,
+            using: root.appendingPathComponent("source.wav"))
+        await fulfillment(of: [continued], timeout: 2)
+        XCTAssertEqual(
+            model.playback.audioFiles.map(\.url),
+            [root.appendingPathComponent("source.wav")])
+        XCTAssertEqual(model.playback.cachedContinuationPhase, .inactive)
         let openRequests = await service.playbackOpenRequests()
         XCTAssertEqual(openRequests.count, 1)
         XCTAssertFalse(isFailed(model.playback.state))
@@ -21417,10 +21424,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.state, .paused)
         model.playback.play()
 
-        let didRetry = await waitUntil(timeout: .seconds(4)) {
-            model.playback.coverLoadPolicy == .allowNetwork
-        }
-        XCTAssertTrue(didRetry)
+        let retried = expectation(
+            description:
+                "Retried remote track owns playback after cached boundary")
+        Self.fulfillStreamingContinuation(
+            retried, when: model.playback,
+            using: root.appendingPathComponent("source.wav"))
+        await fulfillment(of: [retried], timeout: 4)
+        XCTAssertEqual(
+            model.playback.audioFiles.map(\.url),
+            [root.appendingPathComponent("source.wav")])
+        XCTAssertEqual(model.playback.cachedContinuationPhase, .inactive)
         let openRequests = await service.playbackOpenRequests()
         XCTAssertEqual(openRequests.count, 2)
         XCTAssertFalse(isFailed(model.playback.state))
@@ -27115,6 +27129,28 @@ final class AppModelTests: XCTestCase {
     private func playbackDiagnostic(_ playback: PlaybackModel) -> String {
         "state=\(playback.state), requested=\(playback.isPlaybackRequested), "
             + "snapshot=\(playback.runtimeSnapshotForTesting)"
+    }
+
+    private static func fulfillStreamingContinuation(
+        _ expectation: XCTestExpectation, when playback: PlaybackModel,
+        using trackURL: URL
+    ) {
+        if playback.audioFiles.map(\.url) == [trackURL],
+            playback.cachedContinuationPhase == .inactive
+        {
+            expectation.fulfill()
+            return
+        }
+        withObservationTracking {
+            _ = playback.audioFiles
+            _ = playback.cachedContinuationPhase
+        } onChange: { [weak playback] in
+            Task { @MainActor in
+                guard let playback else { return }
+                Self.fulfillStreamingContinuation(
+                    expectation, when: playback, using: trackURL)
+            }
+        }
     }
 
     private static func fulfill(
