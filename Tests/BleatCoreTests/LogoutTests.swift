@@ -248,22 +248,52 @@ final class LogoutTests {
                 )
             }
         }
+        let overlapLogoutCompleted = BoundedTestCounter()
+        let overlapRequestCompleted = BoundedTestCounter()
+        var overlapLogout: Task<Result<LogoutResult, any Error>, Never>?
+        var overlapRequest: Task<Result<HTTPResponse, any Error>, Never>?
         try await withTestCleanup {
             firstLogout.cancel()
+            overlapLogout?.cancel()
+            overlapRequest?.cancel()
             await transport.completeLogout()
             if await requireLogoutCaller(
                 firstLogoutCompleted, stage: "firstLogout cleanup")
             {
                 _ = await firstLogout.value
             }
+            if let overlapLogout,
+                await requireLogoutCaller(
+                    overlapLogoutCompleted, stage: "overlapLogout cleanup")
+            {
+                _ = await overlapLogout.value
+            }
+            if let overlapRequest,
+                await requireLogoutCaller(
+                    overlapRequestCompleted, stage: "overlapRequest cleanup")
+            {
+                _ = await overlapRequest.value
+            }
+            #expect(await transport.pendingRequestCount() == 0)
         } operation: {
             guard await transport.waitUntilLogoutStarts() else { return }
 
+            let overlapLogoutTask = Task {
+                await performLogoutTestCall(completed: overlapLogoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapLogout = overlapLogoutTask
+            guard
+                await requireLogoutCaller(
+                    overlapLogoutCompleted,
+                    stage: "overlapLogout rejected while original gate held")
+            else { return }
             await assertThrowsErrorAsync(
-                try await coordinator.logout(
-                    accountID: accountID,
-                    server: server
-                )
+                try await overlapLogoutTask.value.get()
             ) { error in
                 #expect(error as? LogoutError == .accountOperationInProgress)
             }
@@ -272,19 +302,32 @@ final class LogoutTests {
                 url: try AudiobookshelfRouteBuilder(server: server)
                     .url(for: .libraries)
             )
+            let overlapRequestTask = Task {
+                await performLogoutTestCall(completed: overlapRequestCompleted)
+                {
+                    try await coordinator.sendAuthenticated(
+                        librariesRequest,
+                        route: .libraries,
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapRequest = overlapRequestTask
+            guard
+                await requireLogoutCaller(
+                    overlapRequestCompleted,
+                    stage: "overlapRequest rejected while original gate held")
+            else { return }
             await assertThrowsErrorAsync(
-                try await coordinator.sendAuthenticated(
-                    librariesRequest,
-                    route: .libraries,
-                    accountID: accountID,
-                    server: server
-                )
+                try await overlapRequestTask.value.get()
             ) { error in
                 #expect(
                     error as? AuthenticatedRequestError
                         == .accountOperationInProgress)
             }
 
+            #expect(await transport.admissionCount() == 1)
             await transport.completeLogout()
             guard
                 await requireLogoutCaller(
@@ -316,37 +359,79 @@ final class LogoutTests {
                 )
             }
         }
+        let overlapLogoutCompleted = BoundedTestCounter()
+        let overlapLoginCompleted = BoundedTestCounter()
+        var overlapLogout: Task<Result<LogoutResult, any Error>, Never>?
+        var overlapLogin: Task<Result<AuthenticatedAccount, any Error>, Never>?
         try await withTestCleanup {
             login.cancel()
+            overlapLogout?.cancel()
+            overlapLogin?.cancel()
             await transport.rejectLogin()
             if await requireLogoutCaller(loginCompleted, stage: "login cleanup")
             {
                 _ = await login.value
             }
+            if let overlapLogout,
+                await requireLogoutCaller(
+                    overlapLogoutCompleted, stage: "overlapLogout cleanup")
+            {
+                _ = await overlapLogout.value
+            }
+            if let overlapLogin,
+                await requireLogoutCaller(
+                    overlapLoginCompleted, stage: "overlapLogin cleanup")
+            {
+                _ = await overlapLogin.value
+            }
+            #expect(await transport.pendingRequestCount() == 0)
         } operation: {
             guard await transport.waitUntilLoginStarts() else { return }
 
+            let overlapLogoutTask = Task {
+                await performLogoutTestCall(completed: overlapLogoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapLogout = overlapLogoutTask
+            guard
+                await requireLogoutCaller(
+                    overlapLogoutCompleted,
+                    stage: "overlapLogout rejected while original gate held")
+            else { return }
             await assertThrowsErrorAsync(
-                try await coordinator.logout(
-                    accountID: accountID,
-                    server: server
-                )
+                try await overlapLogoutTask.value.get()
             ) { error in
                 #expect(error as? LogoutError == .accountOperationInProgress)
             }
+            let overlapLoginTask = Task {
+                await performLogoutTestCall(completed: overlapLoginCompleted) {
+                    try await coordinator.login(
+                        accountID: accountID,
+                        server: server,
+                        username: "reader",
+                        password: "password"
+                    )
+                }
+            }
+            overlapLogin = overlapLoginTask
+            guard
+                await requireLogoutCaller(
+                    overlapLoginCompleted,
+                    stage: "overlapLogin rejected while original gate held")
+            else { return }
             await assertThrowsErrorAsync(
-                try await coordinator.login(
-                    accountID: accountID,
-                    server: server,
-                    username: "reader",
-                    password: "password"
-                )
+                try await overlapLoginTask.value.get()
             ) { error in
                 #expect(
                     error as? LocalAuthenticationError
                         == .accountOperationInProgress)
             }
 
+            #expect(await transport.admissionCount() == 1)
             await transport.rejectLogin()
             guard
                 await requireLogoutCaller(
@@ -707,7 +792,7 @@ final class LogoutTests {
                 await transport.completeInitial(
                     statusCode: statusCode == 200 ? 401 : 200)
             },
-            hasPending: { await transport.hasPendingInitialRequest() }
+            pendingCount: { await transport.pendingInitialRequestCount() }
         )
         #expect(await transport.deliveredInitialStatusCode() == statusCode)
     }
@@ -733,7 +818,7 @@ final class LogoutTests {
                 send: { await transport.send(request) },
                 release: { await transport.completeLogout() },
                 repeatRelease: { await transport.completeLogout() },
-                hasPending: { await transport.hasPendingRequest() }
+                pendingCount: { await transport.pendingRequestCount() }
             )
         case .login:
             let transport = BlockingLoginTransport()
@@ -742,7 +827,7 @@ final class LogoutTests {
                 send: { await transport.send(request) },
                 release: { await transport.rejectLogin() },
                 repeatRelease: { await transport.rejectLogin() },
-                hasPending: { await transport.hasPendingRequest() }
+                pendingCount: { await transport.pendingRequestCount() }
             )
         case .refresh:
             let transport = RefreshRaceTransport()
@@ -751,8 +836,48 @@ final class LogoutTests {
                 send: { await transport.send(request) },
                 release: { await transport.completeRefresh() },
                 repeatRelease: { await transport.completeRefresh() },
-                hasPending: { await transport.hasPendingRequest() }
+                pendingCount: { await transport.pendingRequestCount() }
             )
+        }
+    }
+
+    @Test(arguments: LogoutOverlapFixtureScenario.all)
+    func testOverlapTransportsRetireEveryUnexpectedCaller(
+        scenario: LogoutOverlapFixtureScenario
+    ) async throws {
+        let request = TracedHTTPRequest(
+            request: URLRequest(
+                url: try #require(URL(string: "https://example.com/logout"))),
+            endpoint: .logout
+        )
+        switch scenario.kind {
+        case .logout:
+            let transport = BlockingLogoutTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: scenario.beforeEntry,
+                cancelled: scenario.cancelled,
+                statusCode: 200, callerCount: 2,
+                send: { await transport.send(request) },
+                release: { await transport.completeLogout() },
+                repeatRelease: { await transport.completeLogout() },
+                pendingCount: { await transport.pendingRequestCount() }
+            )
+            #expect(await transport.admissionCount() == 2)
+        case .login:
+            let transport = BlockingLoginTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: scenario.beforeEntry,
+                cancelled: scenario.cancelled,
+                statusCode: 401, callerCount: 2,
+                send: { await transport.send(request) },
+                release: { await transport.rejectLogin() },
+                repeatRelease: { await transport.rejectLogin() },
+                pendingCount: { await transport.pendingRequestCount() }
+            )
+            #expect(await transport.admissionCount() == 2)
+        case .refresh:
+            Issue.record(
+                "Overlap fixture scenarios must select logout or login")
         }
     }
 
@@ -904,18 +1029,24 @@ private actor LogoutScriptedTransport: HTTPTransport {
 }
 
 private actor BlockingLogoutTransport: HTTPTransport {
-    private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var logoutContinuations:
+        [CheckedContinuation<HTTPResponse, Never>] = []
+    private var admitted = 0
     nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var started = false
     private var completionReleased = false
 
     func hasPendingRequest() -> Bool {
-        logoutContinuation != nil
+        !logoutContinuations.isEmpty
     }
+
+    func pendingRequestCount() -> Int { logoutContinuations.count }
+    func admissionCount() -> Int { admitted }
 
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
+        admitted += 1
         started = true
         await logoutStartedSignal.signal()
         return await withCheckedContinuation { continuation in
@@ -924,7 +1055,7 @@ private actor BlockingLogoutTransport: HTTPTransport {
                     returning: .init(data: Data(), statusCode: 200)
                 )
             } else {
-                logoutContinuation = continuation
+                logoutContinuations.append(continuation)
             }
         }
     }
@@ -942,27 +1073,35 @@ private actor BlockingLogoutTransport: HTTPTransport {
 
     func completeLogout() {
         completionReleased = true
-        let continuation = logoutContinuation
-        logoutContinuation = nil
-        continuation?.resume(
-            returning: .init(data: Data(), statusCode: 200)
-        )
+        let continuations = logoutContinuations
+        logoutContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume(
+                returning: .init(data: Data(), statusCode: 200)
+            )
+        }
     }
 }
 
 private actor BlockingLoginTransport: HTTPTransport {
-    private var loginContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var loginContinuations: [CheckedContinuation<HTTPResponse, Never>] =
+        []
+    private var admitted = 0
     nonisolated let loginStartedSignal = AuthTelemetryTestSignal()
     private var started = false
     private var completionReleased = false
 
     func hasPendingRequest() -> Bool {
-        loginContinuation != nil
+        !loginContinuations.isEmpty
     }
+
+    func pendingRequestCount() -> Int { loginContinuations.count }
+    func admissionCount() -> Int { admitted }
 
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
+        admitted += 1
         started = true
         await loginStartedSignal.signal()
         return await withCheckedContinuation { continuation in
@@ -971,7 +1110,7 @@ private actor BlockingLoginTransport: HTTPTransport {
                     returning: .init(data: Data(), statusCode: 401)
                 )
             } else {
-                loginContinuation = continuation
+                loginContinuations.append(continuation)
             }
         }
     }
@@ -989,11 +1128,13 @@ private actor BlockingLoginTransport: HTTPTransport {
 
     func rejectLogin() {
         completionReleased = true
-        let continuation = loginContinuation
-        loginContinuation = nil
-        continuation?.resume(
-            returning: .init(data: Data(), statusCode: 401)
-        )
+        let continuations = loginContinuations
+        loginContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume(
+                returning: .init(data: Data(), statusCode: 401)
+            )
+        }
     }
 }
 
@@ -1006,8 +1147,8 @@ private actor RefreshRaceTransport: HTTPTransport {
     private var logoutRequests = 0
     private var recordedLogoutRefreshToken: String?
 
-    func hasPendingRequest() -> Bool {
-        refreshContinuation != nil
+    func pendingRequestCount() -> Int {
+        refreshContinuation == nil ? 0 : 1
     }
 
     func send(
@@ -1137,8 +1278,8 @@ private actor InitialRequestRaceTransport: HTTPTransport {
         return response
     }
 
-    func hasPendingInitialRequest() -> Bool {
-        initialRequestContinuation != nil
+    func pendingInitialRequestCount() -> Int {
+        initialRequestContinuation == nil ? 0 : 1
     }
 
     func deliveredInitialStatusCode() -> Int? {
@@ -1217,10 +1358,11 @@ private func performLogoutTestCall<Value: Sendable>(
 
 private func requireLogoutCaller(
     _ completed: BoundedTestCounter,
+    count: Int = 1,
     stage: String,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async -> Bool {
-    let wait = await completed.wait(untilAtLeast: 1)
+    let wait = await completed.wait(untilAtLeast: count)
     #expect(
         wait.reached,
         "\(stage): elapsed \(wait.elapsed), limit \(wait.timeout)",
@@ -1236,41 +1378,46 @@ private enum LogoutFixtureKind: CaseIterable, Sendable {
 /// An explicit release must still settle a cancelled caller, including late entry.
 private func exerciseLogoutFixture(
     beforeEntry: Bool, cancelled: Bool, statusCode: Int,
+    callerCount: Int = 1,
     send: @escaping @Sendable () async -> HTTPResponse,
     release: @escaping @Sendable () async -> Void,
     repeatRelease: @escaping @Sendable () async -> Void,
-    hasPending: @escaping @Sendable () async -> Bool,
+    pendingCount: @escaping @Sendable () async -> Int,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     let start = AuthTelemetryTestSignal()
     let completed = BoundedTestCounter()
-    let task = Task {
-        guard
-            await requireAuthTelemetrySignal(
-                start, stage: "fixture caller start",
-                sourceLocation: sourceLocation)
-        else {
-            return (
-                HTTPResponse(data: Data(), statusCode: 599), Task.isCancelled
-            )
+    let tasks = (0..<callerCount).map { _ in
+        Task {
+            guard
+                await requireAuthTelemetrySignal(
+                    start, stage: "fixture caller start",
+                    sourceLocation: sourceLocation)
+            else {
+                return (
+                    HTTPResponse(data: Data(), statusCode: 599),
+                    Task.isCancelled
+                )
+            }
+            let response = await send()
+            await completed.increment()
+            return (response, Task.isCancelled)
         }
-        let response = await send()
-        await completed.increment()
-        return (response, Task.isCancelled)
     }
     try await withTestCleanup {
-        task.cancel()
+        for task in tasks { task.cancel() }
         await start.signal()
         await release()
         if await requireLogoutCaller(
-            completed, stage: "fixture caller cleanup",
+            completed, count: callerCount, stage: "fixture caller cleanup",
             sourceLocation: sourceLocation)
         {
-            _ = await task.value
+            for task in tasks { _ = await task.value }
         }
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
     } operation: {
         if beforeEntry {
-            if cancelled { task.cancel() }
+            if cancelled { for task in tasks { task.cancel() } }
             await release()
             await repeatRelease()
             await start.signal()
@@ -1279,24 +1426,29 @@ private func exerciseLogoutFixture(
             guard
                 await requireAuthTelemetryCondition(
                     stage: "fixture continuation registration",
-                    sourceLocation: sourceLocation, condition: hasPending)
+                    sourceLocation: sourceLocation,
+                    condition: { await pendingCount() == callerCount })
             else { return }
-            if cancelled { task.cancel() }
+            if cancelled { for task in tasks { task.cancel() } }
             await release()
             await repeatRelease()
         }
         guard
             await requireLogoutCaller(
-                completed, stage: "fixture caller returning",
+                completed, count: callerCount,
+                stage: "fixture caller returning",
                 sourceLocation: sourceLocation)
         else { return }
-        let (response, wasCancelled) = await task.value
-        #expect(
-            response.statusCode == statusCode, sourceLocation: sourceLocation)
-        #expect(wasCancelled == cancelled, sourceLocation: sourceLocation)
-        #expect(await hasPending() == false, sourceLocation: sourceLocation)
+        for task in tasks {
+            let (response, wasCancelled) = await task.value
+            #expect(
+                response.statusCode == statusCode,
+                sourceLocation: sourceLocation)
+            #expect(wasCancelled == cancelled, sourceLocation: sourceLocation)
+        }
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
         await repeatRelease()
-        #expect(await hasPending() == false, sourceLocation: sourceLocation)
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
     }
 }
 
@@ -1318,6 +1470,20 @@ struct LogoutFixtureScenario: Sendable {
     let beforeEntry: Bool
     let cancelled: Bool
     static let all: [Self] = LogoutFixtureKind.allCases.flatMap { kind in
+        [false, true].flatMap { before in
+            [false, true].map {
+                Self(kind: kind, beforeEntry: before, cancelled: $0)
+            }
+        }
+    }
+}
+
+struct LogoutOverlapFixtureScenario: Sendable {
+    fileprivate let kind: LogoutFixtureKind
+    let beforeEntry: Bool
+    let cancelled: Bool
+    static let all: [Self] = [LogoutFixtureKind.logout, .login].flatMap {
+        kind in
         [false, true].flatMap { before in
             [false, true].map {
                 Self(kind: kind, beforeEntry: before, cancelled: $0)

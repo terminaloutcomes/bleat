@@ -12090,18 +12090,18 @@
       "purpose": "Reject second logout and authenticated request while first remote logout is blocked.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
-        "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed."
+        "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed.",
-        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "1": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "3": "N/A: no player/seek timing.",
-        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "4": "Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
         "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
         "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
@@ -12110,13 +12110,13 @@
       },
       "decision": "keep",
       "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
-      "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed.",
-      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
       "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
       "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
-      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes. BlockingLogoutTransport/BlockingLoginTransport collect every pending continuation and detach/resume all on latched release. An eight-scenario two-caller contract independently verifies extra admission, early/registered release, cancellation and zero retained storage.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12131,31 +12131,36 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       },
-      "prior_logout_finding": "Awaited start signal has no timeout and can hang if logout never reaches transport; use bounded event helper."
+      "prior_logout_finding": "Awaited start signal has no timeout and can hang if logout never reaches transport; use bounded event helper.",
+      "overlap_review_correction": {
+        "rejected_head": "63dd249273b45772a8717f67a514e6b0ec21d381",
+        "finding": "Inline assertThrowsErrorAsync probes were still unbounded; single-slot fakes could overwrite the original waiter when rejection regressed.",
+        "current": "Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutRejectsAnOverlappingLocalLogin",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 299
+        "line": 342
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Reject logout while local login is in progress and reject duplicate login.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
-        "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials."
+        "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials.",
-        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "1": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "3": "N/A: no player/seek timing.",
-        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "4": "Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
         "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
         "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
         "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
@@ -12164,13 +12169,13 @@
       },
       "decision": "keep",
       "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
-      "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials.",
-      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup. Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request.",
       "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
       "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
       "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
-      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes. BlockingLogoutTransport/BlockingLoginTransport collect every pending continuation and detach/resume all on latched release. An eight-scenario two-caller contract independently verifies extra admission, early/registered release, cancellation and zero retained storage.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12185,13 +12190,18 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
       },
-      "prior_logout_finding": "Bound fake-start signals to diagnose missing login transition."
+      "prior_logout_finding": "Bound fake-start signals to diagnose missing login transition.",
+      "overlap_review_correction": {
+        "rejected_head": "63dd249273b45772a8717f67a514e6b0ec21d381",
+        "finding": "Inline assertThrowsErrorAsync probes were still unbounded; single-slot fakes could overwrite the original waiter when rejection regressed.",
+        "current": "Original caller and both overlap probes are owned tasks carrying actual Results. Each overlap terminal witness is required while the original gate stays held, before its unchanged typed-error assertion. Awaited outer cleanup cancels every started task, releases all fake arrivals, bounds each actual terminal before joining and asserts empty pending storage. Admission count is incremented before any signal await; normal rejection admits exactly one original request."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 365
+        "line": 450
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -12245,7 +12255,7 @@
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 495
+        "line": 580
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -12299,7 +12309,7 @@
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 590
+        "line": 675
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23405,7 +23415,7 @@
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testInitialRequestFixturePreservesReleasedResponse",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 686
+        "line": 771
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23437,7 +23447,7 @@
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutFixtureReleaseSurvivesCancellationAndLateEntry",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 716
+        "line": 801
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23464,6 +23474,38 @@
       },
       "decision": "keep",
       "reason": "Prove private logout/login/refresh gates release before entry or after positive registration, including cancelled callers and repeated release, without retained continuations."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testOverlapTransportsRetireEveryUnexpectedCaller",
+      "source": {
+        "path": "Tests/BleatCoreTests/LogoutTests.swift",
+        "line": 845
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Verify two unexpected simultaneous callers cannot overwrite a held logout/login continuation and all are retired safely.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh logout/login fake,explicit start signal,two owned tasks and bounded terminal counter per scenario.",
+        "action_postconditions": "Eight scenarios cross two fake kinds,release before entry/after both positive registrations,cancelled/normal callers. Assert both exact HTTP responses and cancellation flags,two admitted sends and zero pending continuations after repeated release and awaited cleanup."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "timeout_tolerance": "Existing ten-second entry/condition and five-second terminal diagnostic budgets; no latency requirement."
+      },
+      "compiler_skip_conditions": "No guard, skip or opt-in;eight exhaustive parameter scenarios.",
+      "rules": {
+        "1": "Eight scenarios cross two fake kinds,release before entry/after both positive registrations,cancelled/normal callers. Assert both exact HTTP responses and cancellation flags,two admitted sends and zero pending continuations after repeated release and awaited cleanup.",
+        "2": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "3": "N/A: no playback or latency measurement.",
+        "4": "Cleanup cancels both owned callers,opens entry/release gates,bounds both actual terminal returns before joining,and asserts zero pending storage. Fakes intentionally ignore cancellation;explicit release settles every admitted caller.",
+        "5": "Fresh private actor, start signal and completion counter per exhaustive scenario; synthetic request only.",
+        "6": "Private deterministic HTTP fixture lifecycle, not production/framework/server/device validation.",
+        "7": "No readiness sleep, tolerance increase or retry; pre-entry order is controlled and late registration positively observed.",
+        "8": "Caller source location, scenario, stage, elapsed/limit, exact response and pending storage diagnose failure.",
+        "9": "Focused repeats, owner/signed inventory and targeted mutations recorded separately."
+      },
+      "decision": "keep",
+      "reason": "Verify two unexpected simultaneous callers cannot overwrite a held logout/login continuation and all are retired safely."
     }
   ],
   "issue_382": {
@@ -23677,9 +23719,10 @@
       "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
       "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
       "Tests/BleatCoreTests/LogoutTests.swift::testInitialRequestFixturePreservesReleasedResponse",
-      "Tests/BleatCoreTests/LogoutTests.swift::testLogoutFixtureReleaseSurvivesCancellationAndLateEntry"
+      "Tests/BleatCoreTests/LogoutTests.swift::testLogoutFixtureReleaseSurvivesCancellationAndLateEntry",
+      "Tests/BleatCoreTests/LogoutTests.swift::testOverlapTransportsRetireEveryUnexpectedCaller"
     ],
-    "scope": "Five existing logout-concurrency cases and their private transports, two parameterized fixture contracts; changed-file navigation/inventory and scoped evidence only.",
+    "scope": "Five existing logout-concurrency cases including four overlap probes and their private transports;three parameterized fixture contracts,including two simultaneous unexpected callers;changed-file navigation/inventory and scoped evidence only.",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
     "excluded": "Production authentication, whole production-task drainage, seven app clock oracles, cover work #400, and broad tracker or issue-comment updates."
   }

@@ -353,7 +353,8 @@
     "testRequestCannotStartRefreshAfterLogoutBegins()",
     "testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated()",
     "testInitialRequestFixturePreservesReleasedResponse(scenario:)",
-    "testLogoutFixtureReleaseSurvivesCancellationAndLateEntry(scenario:)"
+    "testLogoutFixtureReleaseSurvivesCancellationAndLateEntry(scenario:)",
+    "testOverlapTransportsRetireEveryUnexpectedCaller(scenario:)"
   ],
   "BleatCoreTests.MetadataEditingTests": [
     "testSeriesPatchPreservesFreeFormSequence(sequence:)",

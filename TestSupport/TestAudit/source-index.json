@@ -5675,37 +5675,43 @@
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testLogoutRejectsAnOverlappingLocalLogin",
-      "line": 299,
+      "line": 342,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
-      "line": 365,
+      "line": 450,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testRequestCannotStartRefreshAfterLogoutBegins",
-      "line": 495,
+      "line": 580,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
-      "line": 590,
+      "line": 675,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testInitialRequestFixturePreservesReleasedResponse",
-      "line": 686,
+      "line": 771,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/LogoutTests.swift",
       "name": "testLogoutFixtureReleaseSurvivesCancellationAndLateEntry",
-      "line": 716,
+      "line": 801,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LogoutTests.swift",
+      "name": "testOverlapTransportsRetireEveryUnexpectedCaller",
+      "line": 845,
       "language": "swift"
     },
     {
