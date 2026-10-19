@@ -131,7 +131,7 @@ checks do not establish application behavior or refresh historical release evide
 | AUTH-012 | 6.4, 6.5, 16 | Login, refresh, authenticated requests, and logout cannot race credentials back into a signed-out account; logout settles rotation and invalidates all requests from the previous account-operation generation | `Sources/BleatCore/Authentication.swift`, `Sources/BleatCore/AuthenticatedRequests.swift`, `Sources/BleatCore/Logout.swift` | `LogoutTests.testConcurrentLogoutAndAuthenticatedRequestAreRejected`, `testLogoutRejectsAnOverlappingLocalLogin`, `testLogoutSettlesRefreshAndInvalidatesTheRotatedToken`, `testRequestCannotStartRefreshAfterLogoutBegins`, `testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated` | verified |
 | AUTH-013 | 6.2, 6.4, 6.5, 15 | Root and `/audiobookshelf` username/password sessions log out and reject the invalidated refresh token | `Tests/BleatCoreLiveTests/LocalAuthenticationLiveTests.swift` | `LocalAuthenticationLiveTests.testPinnedRootAndPrefixLocalAuthenticationContracts` through `scripts/test-live.sh` | verified |
 | ACCOUNT-001 | 2, 4.1, 7 | SwiftData stores multiple users on one normalized server and users on different servers while retaining one active browsing context | `Sources/BleatCore/AccountStore.swift`, `Sources/BleatCore/BleatPersistenceModelCatalog.swift` | `AccountStoreTests.testStoresMultipleUsersAndServersWithOneActiveContext`, `testRejectsDuplicateRemoteUserOnSameNormalizedServer`, `testConnectionStateAndActiveSelectionPersistAcrossStoreActors`, `PersistenceModelCatalogTests.testCatalogListsEveryPersistentModelInCore`, `testCatalogBuildsUsableSchema` | verified |
-| ACCOUNT-002 | 4.1, 6.2, 7 | Native login persists credentials and the account profile transactionally, rolling credentials back when profile creation fails | `Sources/BleatCore/AccountStore.swift` | `AccountStoreTests.testLoginPersistsAccountAndCredentialsTransactionally`, `testDuplicateOnboardingRollsBackOnlyNewCredentials`, `testOnboardingReportsCredentialRollbackFailure`, `testOnboardingRejectsNonLocalServerBeforeTransport` | verified |
+| ACCOUNT-002 | 4.1, 6.2, 7 | Native login persists credentials and the account profile transactionally, rolling credentials back when profile creation fails | `Sources/BleatCore/AccountStore.swift` | `AccountStoreTests.testLoginPersistsAccountAndCredentialsTransactionally`, `testDuplicateOnboardingRollsBackOnlyNewCredentials` (seeded existing tokens survive; new tokens are observed before rollback and absent afterward), `testOnboardingReportsCredentialRollbackFailure`, `testOnboardingRejectsNonLocalServerBeforeTransport` | verified |
 | ACCOUNT-003 | 4.1, 6.5, 7 | Sign-out and removal resolve the stored server, clear credentials, and persist reauthentication or profile removal without accepting an arbitrary server URL | `Sources/BleatCore/AccountStore.swift` | `AccountStoreTests.testPersistedSignOutAndRemovalUseStoredServerAndClearCredentials`, `testPersistedLifecycleRejectsUnknownAccountBeforeLogout` | verified |
 | ACCOUNT-004 | 6.1, 6.2, 15 | Fresh pinned root and path-prefixed servers support native onboarding and profile restoration | `Tests/BleatCoreLiveTests/AccountStoreLiveTests.swift` | `AccountStoreLiveTests.testPinnedRootAndPrefixNativeAccountsPersist` through `scripts/test-live.sh` | verified |
 | API-001 | 3.1, 7, 8.1, 16 | The typed API actor lists libraries through the stored native account, maps private forward-compatible DTOs to domain values, preserves path prefixes, and attaches a non-secret correlation ID | `Sources/BleatCore/AudiobookshelfAPI.swift` | `AudiobookshelfAPITests.testLibrariesUsesNativeAccountAndMapsForwardCompatibleDTOs`, `testLibraryFailuresRemainTyped`, `testMissingCredentialsRemainTyped` | verified |
@@ -662,3 +662,20 @@ zero failures/skips/runtime warnings. After the component update, local Xcode
 app outcomes, with zero skips/failures/runtime warnings. A prior SpringBoard
 Busy launch failure executed no actual test cases and is retained separately;
 explicit boot readiness and installation preceded the successful owning run.
+
+### AccountStore coverage evidence (2026-10-19)
+
+`AccountStoreTests.testCorruptStoredProfileIsRejectedWithoutLeakingPayload`
+retains typed corruption rejection and checks three synthetic credential markers
+are absent from error descriptions, reflection, localized descriptions and
+NSError representations. `testDuplicateOnboardingRollsBackOnlyNewCredentials`
+seeds existing tokens, observes new tokens before rollback, then verifies retained
+existing credentials and exact new-credential cleanup. See the
+[bounded coverage evidence](release-evidence/test-reliability-core-followups.md#accountstore-coverage-2026-10-19).
+These are deterministic test coverage improvements, not evidence of an observed
+production leak or new signed-device behavior.
+
+The separately authorized telemetry cancellation regression now gates its fake
+response until typed cancellation and survivor admission are observed, with
+bounded completion assertions and awaited cleanup on every exit. See the
+[telemetry response-gate evidence](release-evidence/test-reliability-core-followups.md#telemetry-response-gate-2026-10-19); production token-provider behavior is unchanged.

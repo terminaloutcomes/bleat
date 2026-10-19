@@ -501,7 +501,7 @@
       "purpose": "Reject malformed persisted profile containing credential-like marker strings.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-        "action_postconditions": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID)."
+        "action_postconditions": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
@@ -509,24 +509,24 @@
       },
       "compiler_skip_conditions": "No test-level compiler condition, opt-in variable, or skip applies.",
       "rules": {
-        "1": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID).",
+        "1": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations.",
         "2": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
         "3": "N/A: no active playback/seek or position measurement.",
         "4": "Async store/transport operations are awaited; scoped fixture or URLProtocol cleanup is completed by the test. No detached tasks remain.",
         "5": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
         "6": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
         "7": "No blind retry or wait relaxation.",
-        "8": "Typed errors/states and semantic output are asserted. Add explicit privacy-safe error/diagnostic assertion proving the profile payload marker is absent.",
-        "9": "Source review only; no individual repetition run is recorded."
+        "8": "Synthetic markers are checked in each error representation without process-global output capture.",
+        "9": "See AccountStore coverage evidence dated 2026-10-19 in docs/release-evidence/test-reliability-core-followups.md."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-      "action_postconditions": "Insert record with access/refresh marker in profile bytes; assert invalidStoredAccount(corrupt ID).",
+      "action_postconditions": "Insert malformed profile bytes containing three synthetic credential markers; retain invalidStoredAccount(corrupt ID) equality and assert markers are absent from describing, reflecting, localized and NSError representations.",
       "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
       "timeout_tolerance": "N/A: no numeric time tolerance.",
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
-      "reason": "Typed corruption rejection is asserted, but the test title promises non-disclosure and no error/diagnostic text is checked for the inserted marker.",
+      "reason": "Typed corruption rejection and explicit error-representation non-disclosure are asserted; AccountStore decode emits no diagnostic event.",
       "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
     },
     {
@@ -618,7 +618,7 @@
       "purpose": "Rollback credentials generated for duplicate remote identity.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-        "action_postconditions": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged."
+        "action_postconditions": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
@@ -626,24 +626,24 @@
       },
       "compiler_skip_conditions": "No test-level compiler condition, opt-in variable, or skip applies.",
       "rules": {
-        "1": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged.",
+        "1": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred.",
         "2": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
         "3": "N/A: no active playback/seek or position measurement.",
         "4": "Async store/transport operations are awaited; scoped fixture or URLProtocol cleanup is completed by the test. No detached tasks remain.",
         "5": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
         "6": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
         "7": "No blind retry or wait relaxation.",
-        "8": "Typed errors/states and semantic output are asserted. Seed existing credential sentinel and assert rollback retains it, or narrow the claim.",
-        "9": "Source review only; no individual repetition run is recorded."
+        "8": "Typed duplicate failure, retained token equality and exact new-credential cleanup are asserted.",
+        "9": "See AccountStore coverage evidence dated 2026-10-19 in docs/release-evidence/test-reliability-core-followups.md."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh StoreFixture: complete current schema in a new in-memory ModelContainer; fixed local IDs/URLs and actor-backed onboarding fakes.",
-      "action_postconditions": "Persist existing account; onboarding under temporary ID fails duplicate; assert canonical new credential absent, one deletion and existing account unchanged.",
+      "action_postconditions": "Seed existing-account token sentinels; assert canonical destination starts empty and contains the new login tokens at the awaited authentication callback; after typed duplicate failure assert existing tokens and account row survive, new tokens are absent and exactly one deletion occurred.",
       "synchronization": "Await each store/statistics/auth operation; no sleep, guessed-yield, or unbounded event wait.",
       "timeout_tolerance": "N/A: no numeric time tolerance.",
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
-      "reason": "Current assertions show the generated credential is removed and existing account row remains, but do not seed/assert that a pre-existing unrelated credential survives; title overstates coverage.",
+      "reason": "Rollback directly proves preservation of seeded existing credentials and removal of credentials observed before failure.",
       "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
     },
     {
@@ -20284,33 +20284,33 @@
       "purpose": "Cancel one caller without cancelling shared refresh for surviving concurrent waiter.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh provider/fake state per case; TestClock and fake transport/attester/store inject deterministic values and actor-isolated counters.",
-        "action_postconditions": "Start first waiter, wait token entry by unbounded yield, start survivor then yield exactly 100 scheduler turns, cancel first, assert cancelled first, token-1 survivor, one challenge and no transport cancellation."
+        "action_postconditions": "Hold token response behind an explicit bounded gate; observe both provider waiters, cancel one, require its typed cancelled completion and one retained waiter before response release; assert survivor token-1, zero remaining waiters, one challenge, one token request and zero transport cancellations."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
-        "timeout_tolerance": "The three cancellation/acquisition tests and concurrent joiner currently use unbounded yields or guessed 100-yield scheduling; actionable bounded-signal follow-ups are recorded."
+        "synchronization": "Bounded token-entry signal, asserted provider waiter-count conditions and bounded typed task completions; response release is explicit, never driven by a 100 ms delay.",
+        "timeout_tolerance": "Ten-second bounded signals/completions are failure budgets, not response-release timers; a gate timeout records a test failure and throws instead of returning a token."
       },
       "compiler_skip_conditions": "No per-test compiler condition, opt-in flag, or skip applies.",
       "rules": {
-        "1": "Start first waiter, wait token entry by unbounded yield, start survivor then yield exactly 100 scheduler turns, cancel first, assert cancelled first, token-1 survivor, one challenge and no transport cancellation.",
-        "2": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
+        "1": "Hold token response behind an explicit bounded gate; observe both provider waiters, cancel one, require its typed cancelled completion and one retained waiter before response release; assert survivor token-1, zero remaining waiters, one challenge, one token request and zero transport cancellations.",
+        "2": "Bounded token-entry signal, asserted provider waiter-count conditions and bounded typed task completions; response release is explicit, never driven by a 100 ms delay.",
         "3": "N/A: no playback clock/seek measurement; auth token expiry/backoff uses explicitly injected TestClock and exact values.",
-        "4": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling. All returned tasks are awaited; fake transport delay is cancellable.",
+        "4": "withTestCleanup cancels both owned waiter tasks, disables the provider, retires and releases the fake response gate, observes synchronous token exit when admitted, and awaits both tasks on every exit. Late response calls are rejected; a never-entered response is not awaited.",
         "5": "Every case creates fresh provider/store/transport/attester state with explicit enrollment and deterministic clock as needed.",
         "6": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
-        "7": "No retry is used to conceal flakiness; protocol retry/backoff behavior is the subject and is checked against fake time. Scheduler polling issues remain follow-ups.",
-        "8": "Assert typed provider errors/availability and exact counts; polling failure lacks timeout diagnostics and is tracked.",
-        "9": "Inspected all bodies and TestClock, attester, memory store, fake transport, tracer and typed-error assertion helper. No individual repetition recorded."
+        "7": "No retry conceals the original CI failure; response ordering is explicit.",
+        "8": "Stage-specific bounded wait diagnostics, typed cancellation and exact waiter/transport counts.",
+        "9": "See telemetry response-gate evidence dated 2026-10-19 in docs/release-evidence/test-reliability-core-followups.md."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh provider and actor fakes; deterministic injected clock for timing contracts; no real attestation/network service.",
-      "action_postconditions": "Start first waiter, wait token entry by unbounded yield, start survivor then yield exactly 100 scheduler turns, cancel first, assert cancelled first, token-1 survivor, one challenge and no transport cancellation.",
-      "synchronization": "Uses Task.yield loops to wait for fake transport state (some loops unbounded; concurrent joiner uses fixed 100 yields) before asserting/cancelling.",
-      "timeout_tolerance": "Wait for fake state currently lacks a bounded time budget; see follow-up.",
+      "action_postconditions": "Hold token response behind an explicit bounded gate; observe both provider waiters, cancel one, require its typed cancelled completion and one retained waiter before response release; assert survivor token-1, zero remaining waiters, one challenge, one token request and zero transport cancellations.",
+      "synchronization": "Bounded token-entry signal, asserted provider waiter-count conditions and bounded typed task completions; response release is explicit, never driven by a 100 ms delay.",
+      "timeout_tolerance": "Ten-second bounded signals/completions are failure budgets, not response-release timers; a gate timeout records a test failure and throws instead of returning a token.",
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
-      "reason": "Replace the actor token-count/cancellation polling with bounded registered fake-transport notifications; for concurrent waiters signal that the second caller joined shared refresh before cancellation.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "reason": "Explicit response ordering removes the timed-response race; typed outcomes, shared-refresh counters and failure-safe task cleanup remain directly asserted.",
+      "shared_helper_review": "Existing bounded AuthTelemetryTestSignal and completion helpers retain early signals/results. The optional fake response gate fails on timeout and observes cancellation after release. Retirement rejects late calls and bounds observation of synchronous token exit; withTestCleanup is awaited on both exits.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",

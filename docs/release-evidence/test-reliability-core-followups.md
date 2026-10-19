@@ -6,7 +6,6 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | --- | --- | --- |
 | `Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityReportsActiveAcquisition` | Replace the unbounded `Task.yield()` loop waiting for `tokenCount > 0` with a bounded, asserted notification from the fake transport. | If acquisition never reaches the transport, the test hangs instead of reporting the failed stage and elapsed timeout. |
 | `Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOnlyWaiterCancelsUnderlyingRefresh` | Replace both unbounded `Task.yield()` loops (token request and cancellation observation) with registered, bounded completion signals and useful timeout failures. | A regression before token request or cancellation can hang the host suite indefinitely. |
-| `Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOneWaiterPreservesRefreshForConcurrentWaiter` | Replace the unbounded request wait and 100 guessed yields with explicit test synchronization proving both callers have joined the same refresh before cancelling one waiter. | The test currently uses scheduler turns as a proxy for waiter registration. It can race or pass without proving the surviving caller joined the in-flight operation. |
 | `Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken` | Replace the unbounded `Task.yield()` wait for a token challenge with a bounded transport-start signal. | If refresh never starts, the test hangs before it can assert disable behavior. |
 | `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::OpenIDWebSessionFactory.waitUntilSessionStarts` (callers include browser lifecycle tests) | Use a registered start notification and bounded wait, then assert session start with the caller's source location. | The helper loops forever if the session never starts and relies on scheduler yields instead of an event contract. Audit every caller when changing the helper. |
 | `Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken` | Replace the 1,000-yield loop polling `isSigningOut` with a state-change signal or bounded predicate wait. | The bound is a scheduler-iteration count, not a time budget; failure diagnostics do not report elapsed time or a meaningful timeout. |
@@ -18,8 +17,6 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testBearerNeverAppearsInCapturedProcessLogs` | Capture output in a subprocess or enforce process-wide exclusive serialization, and restore both file descriptors through guaranteed cleanup. | `captureStandardOutput` redirects process-global stdout/stderr while other Swift Testing suites can execute concurrently; a restoration failure can also leave a descriptor redirected. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh`, `testTwentyUnauthorizedRequestsShareOneRejectedRefresh`, `testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead`, `testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`, `testConcurrentRejectionJoinsFailingInFlightRefresh`, `testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery` | Add bounded, diagnostic arrival notifications to the concurrent HTTP fake barriers and staged refresh gates. | Count barriers currently suspend with checked continuations until all request calls arrive, and gated tests wait for refresh/save/initial-send states indefinitely. If a regression prevents a stage from occurring, the test process hangs rather than reporting which transition timed out. Preserve each cancellation/coalescing race scenario. |
 | `Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSavedCredentialsMemoizesConclusiveFailure` | Rename to describe memoization of conclusive refresh status failure, or construct an actual missing-credentials fixture and assert that typed result. | The current fixture has old access/refresh tokens and the scripted refresh returns 503; it does not exercise missing credentials despite the test title. |
-| `Tests/BleatCoreTests/AccountStoreTests.swift::testCorruptStoredProfileIsRejectedWithoutLeakingPayload` | Assert that the typed error/diagnostic representation omits the marker stored in malformed profile bytes. | The test injects credential-like sentinel text and checks only `invalidStoredAccount`; the title’s non-disclosure claim is not directly verified. |
-| `Tests/BleatCoreTests/AccountStoreTests.swift::testDuplicateOnboardingRollsBackOnlyNewCredentials` | Seed a pre-existing credential for another account and assert it survives failed duplicate onboarding rollback, or narrow the test’s claim. | Existing assertions prove one credential deletion and preservation of the existing account row, but do not prove rollback preserves existing credentials. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterStreamsEveryServerConnectionPurpose` | Bound each `AsyncStream` event read and report the missing snapshot stage on timeout. | Three awaited `iterator.next()` calls have no deadline, so a missing initial/update yield can hang the suite. |
 | `Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportKeepsThenClearsSessionCookies` | Replace the test URLProtocol helper’s `preconditionFailure` for unexpected route with a captured typed test failure. | An unexpected adapter request currently traps the process instead of reporting the failing route as a test issue. |
 | `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testNativeBrowserCallbackAdapterRunsOffMainActor` | Bound the continuation awaiting the detached framework callback and report missing callback completion. | The test invokes the actual callback adapter off MainActor, but a regression that drops the callback leaves the test suspended indefinitely. Preserve all success/cancel/failure adapter cases. |
@@ -191,3 +188,114 @@ installation warning remains unresolved and no Simulator validation is claimed.
 SwiftData permission error 513 messages occurred inside existing deliberately
 read-only store tests, whose expected rollback/failure assertions passed.
 No live-server, app/device or release-validation claim follows from this change.
+
+## AccountStore coverage 2026-10-19
+
+Bounded follow-up under [#372](https://github.com/terminaloutcomes/bleat/issues/372),
+reviewed against `90d5471ce7ed3577a2d8e9ee90f0ad8ddae66e9a`:
+
+- `AccountStoreTests.testCorruptStoredProfileIsRejectedWithoutLeakingPayload`
+  retains the typed `invalidStoredAccount` assertion and checks three synthetic
+  credential markers against error description, reflection, localized description
+  and NSError reflection. The current decode boundary emits no diagnostic event;
+  this tests exposed error representations without process-global log capture.
+- `AccountStoreTests.testDuplicateOnboardingRollsBackOnlyNewCredentials` seeds
+  existing-account token sentinels, verifies the canonical destination is empty,
+  observes the new login tokens through the existing awaited authentication
+  callback, then proves duplicate failure preserves existing credentials and the
+  account row while removing new credentials with exactly one deletion.
+
+Only these two dispositions in `TestSupport/TestAudit/core.json` change to
+`keep`. There is no production credential change or observed production leak.
+The existing in-memory SwiftData fixture and actor credential fake isolate state;
+no sleeps, tasks, callbacks requiring teardown, or global output redirection were
+added. Adjacent decode and rollback paths retain typed errors with awaited
+credential deletion and no process-terminating constructs.
+
+Focused unsigned validation used SwiftPM Swift Testing with `--disable-xctest
+--no-parallel`, first selecting both identities (2 passed), then selecting each
+identity separately in three independent invocations (6 passes total). All exact
+identities were checked in `.build/account-store-focused-1.xml` and
+`.build/account-store-<identity>-<1...3>.xml`; zero failures, errors or skips.
+An earlier `--repetitions 3` attempt was rejected as an unknown option before
+execution and supplies no test evidence. No identities were added or renamed.
+
+`mise exec -- ./scripts/test-host.sh` passed the complete signed owning-host
+suite: 573 exact identities, zero failures/errors/skips, including all 18
+AccountStore identities and both changed tests. The gate verified signing,
+profile and Keychain entitlements, inventory completeness, and executed coverage
+in both libraries. Reports: `.build/host-results/tests.xml`, per-product XML,
+and `.build/coverage/swift-host/lcov.info`.
+
+Retained diagnostics: the upstream OpenTelemetry package manifest warns about a
+deprecated watchOS deployment version. SwiftData permission errors belong to
+intentional read-only save-failure fixtures (transcript checkpoint, migration,
+pending progress, and history); each owning test passed. The cleanup regression
+`retainsOperationFailureWhenCleanupAlsoFails` intentionally records one known
+issue through `withKnownIssue`; it passed. No unexpected warning or crash was
+observed in the changed cases.
+
+`mise run docs:check`, strict Swift formatting lint for the changed file, and
+`git diff --check` passed. Validation platform: macOS 26.6.2 arm64, Apple Swift
+6.4. The final revision is recorded in the pull request. Simulator, live server
+and physical-device validation are outside this test-only change.
+
+## Telemetry response gate 2026-10-19
+
+PR [#387](https://github.com/terminaloutcomes/bleat/pull/387), under
+[#372](https://github.com/terminaloutcomes/bleat/issues/372), also addresses the
+separately authorized test response race in
+`TelemetryAuthenticationTests.testCancellingOneWaiterPreservesRefreshForConcurrentWaiter`.
+The fake previously returned automatically after 100 ms even while the test was
+asserting waiter admission and cancellation. The response now remains gated until
+two waiters are observed, one returns typed `.cancelled`, and exactly one remains.
+The survivor then receives `token-1`; one challenge, one token request, zero
+transport cancellations and zero final waiters remain asserted.
+
+Both waiter outcomes use existing bounded completion observations. Awaited
+`withTestCleanup` cancels both waiter tasks, disables the provider, releases the
+gate and drains both tasks on success, failed setup, throw or cancellation.
+Cleanup also retires fake response admission and observes the synchronous token
+exit state with a bounded condition when a response had entered. Calls queued
+after retirement fail immediately; cleanup does not wait for a never-entered
+response. Cleanup runs in an owned, directly awaited task so cancellation of
+the test task cannot short-circuit its bounded exit observation. The exit state
+is assigned in synchronous `defer`, after the last
+suspension, so observing it proves the admitted fake token method has exited. A
+gate timeout records its elapsed duration and throws a transport failure; it
+cannot silently return a successful response. No production code or shared
+synchronization helper changed, and no test identity was added or renamed.
+
+The original PR head `94242f5` failed the unsigned host job
+[117845478447](https://github.com/terminaloutcomes/bleat/actions/runs/39185008750/job/117845478447)
+with “operation unexpectedly succeeded” in this test. The same unchanged test
+and helper failed at earlier main revision `f6a6360` in job
+[117817541807](https://github.com/terminaloutcomes/bleat/actions/runs/39175616101/job/117817541807),
+while exact base `90d5471` passed in job
+[117838643938](https://github.com/terminaloutcomes/bleat/actions/runs/39182696069/job/117838643938).
+These logs establish intermittence, not the precise event ordering of either
+failure. No blind rerun replaced that evidence.
+
+Final-source validation: the exact cancellation identity passed one focused
+Swift Testing run plus ten independent invocations, each with one exact identity
+and zero failures/errors/skips. Reports: `.build/telemetry-gate-final.xml` and
+`.build/telemetry-gate-final-repetition-<1...10>.xml`. Earlier development versions
+also passed focused runs; only these final-source reports count for this revision.
+
+`mise exec -- ./scripts/test-host.sh` then verified 573 signed host identities,
+zero failures/errors/skips, including all 18 telemetry and 18 AccountStore tests.
+Signing, profile, Keychain entitlements, inventory and coverage checks passed.
+Reports remain `.build/host-results/tests.xml` and
+`.build/coverage/swift-host/lcov.info`. No identities changed, so the host
+inventory is unchanged. Strict formatting lint, documentation checks and
+`git diff --check` passed on macOS 26.6.2 arm64 / Apple Swift 6.4.
+
+An earlier signed build emitted Xcode stale-file warnings for generated host-runner
+artifacts under the linked build directory. The two logical worktree path aliases
+resolve to the same cache; signing/profile verification and all tests completed.
+Those generated-path warnings are retained, not claimed fixed; the final-source
+signed run emitted none. Nine SwiftData
+permission diagnostics came from intentional read-only fixtures; the cleanup
+regression recorded its declared known issue. No warning or crash was observed
+in the changed telemetry case. Final revision and CI outcomes are recorded in
+PR #387; no physical-device or live-server evidence is claimed.
