@@ -80,6 +80,7 @@
     "testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce()",
     "testPersistentAuthenticationRejectionNeverLoops()",
     "testLogExporterRefreshesOnceAndDisableGatesQueuedRecords()",
+    "testSuspendedTokenProviderDistinguishesCancellationFromRetirement(mode:)",
     "testCancellingAsyncExportCancelsTokenWaitBeforeRPC()",
     "testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC()",
     "testAsyncTokenTimeoutDoesNotWaitForCancellationIgnoringProvider()",

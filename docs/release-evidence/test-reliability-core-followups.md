@@ -1244,3 +1244,79 @@ XML has a matching log. Complete signed validation uses
 `.build/i372-otlp-docs.log` and `.build/i372-otlp-verification.json`.
 Broader lifecycle, drainage, configuration/device/live-server and file-backed
 cleanup acceptance remains open. Fresh exact-head source review and CI required.
+
+
+## Controlled OTLP token-wait lifecycle (issue #372)
+
+At merged base `48392b30738a1dc7142477286376b71dcf5379a8` (#402), the
+`SuspendedTokenProvider` fake could finish naturally after thirty seconds. A
+bounded caller-return wait alone could therefore pass after scheduler delay
+without proving provider cancellation. This test-only slice replaces that fake
+with a one-shot actor whose installed cancellation handler opens a controlled
+release signal. Natural signal timeout records an issue; genuine cancellation
+is independently observed through `Task.isCancelled`, a signal and an exact
+count before cleanup can cancel anything. No production leak or production
+cancellation bug was observed or changed.
+
+Four existing cases retain their typed export outcomes and client counters:
+
+- `testCancellingAsyncExportCancelsTokenWaitBeforeRPC`
+- `testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC`
+- `testCancellationUnblocksTokenWaitAndShutsTransportOnce`
+- `testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport`
+
+The three suspended-provider users now await scoped retirement on every
+operation exit. Retirement rejects late entry, releases existing waiters and
+observes logical fake-body exit; it never cancels a task or manufactures the
+cancellation count. The first two retain failure/zero RPC and the second retains
+one client cancellation. The shutdown case retains failure plus two client
+cancellations, one shutdown, zero synchronous shutdowns and one async shutdown.
+Its export and two shutdown calls now have bounded actual caller-return signals.
+The post-token case retains registration release ordering, first failure/zero
+RPC, then later success/one RPC/two token requests; its later export also has a
+bounded actual caller-return signal. Missing completion records a stage issue
+and returns without awaiting an unconfirmed task value.
+
+New parameterized
+`testSuspendedTokenProviderDistinguishesCancellationFromRetirement(mode:)`
+executes cancellation before entry, cancellation after handler installation,
+retirement before entry and retirement after handler installation. It requires
+the typed cancelled result and exact request/cancellation counts: retirement
+alone must leave cancellation zero. The controlled start and installed-handler
+signals make both registration orderings explicit. Every parameter owns its own
+fake and awaits cleanup. Existing ten-second bounds fail missing transitions;
+there is no readiness sleep or elapsed-time success threshold.
+
+Only the four existing test bodies, this shared fake and its local contract
+test change. Five records receive individual nine-rule reviews, while historical
+assessments stay revision-bound. The two timed-fake follow-ups are superseded
+by observed genuine cancellation; whole production task-graph drainage is not
+claimed. Inventory is now 593 identities, source index 1,577 declarations, core
+audit 587 records, owning suite 20 identities. No production/shared synchronization
+helper change, global output redirection or broad tracker reconciliation.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused runs: **5/5 identities each**, including all four
+  parameter cases each run; zero failures/errors/skips.
+- Owning `AuthenticatedOtlpSpanExporterTests`: **20/20**, exact identities, zero
+  failures/errors/skips; original bearer privacy tests remain executed.
+- Supported full signed host gate: **593/593**, exact inventory identities,
+  zero failures/errors/skips; built discovery **593/593**.
+- Strict Swift lint, documentation references, scoped source-index/JSON and diff
+  checks passed. Initial compilation found a typed-catch inference error in the
+  new test; it was corrected with typed `do throws(...)` before any test ran.
+  That unsuccessful build remains retained and is not credited as execution.
+
+Focused serial command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift
+test --disable-xctest --no-parallel --filter` selecting the five names above,
+writing `.build/i372-otlp-control-focused-1.xml`; repeats add `--skip-build`
+and distinct `-2`/`-3` reports. Owning filter is
+`AuthenticatedOtlpSpanExporterTests`, report
+`.build/i372-otlp-control-owning.xml`. Complete signed command is
+`mise exec -- ./scripts/test-host.sh`, log
+`.build/i372-otlp-control-signed-host.log`; discovery, lint, docs and outcome
+manifest use the same `i372-otlp-control-` prefix. Raw logs/build artifacts stay
+private. Fresh exact-head source review and CI remain required. Broader
+#372/#362 lifecycle, native configuration/device/live-server and unproven
+drainage criteria remain open; cache implementation is separate.
