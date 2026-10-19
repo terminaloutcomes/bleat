@@ -251,6 +251,7 @@
     "testURLSessionTransportRejectsNonHTTPResponse()",
     "testURLSessionTransportRecordsTypedRequestOutcome()",
     "testOpenIDTransportKeepsThenClearsSessionCookies()",
+    "testOpenIDTransportUnexpectedRouteThrowsAndCleansUp()",
     "testOpenIDTransportDefaultConfigurationIsInitiallyEmpty()"
   ],
   "BleatCoreTests.IdentifiersTests": [
