@@ -673,6 +673,7 @@
     "launchFailureClosesOwnedHandles()",
     "operationAndCleanupFailuresRemainSeparate()",
     "partialSetupClosesBothPipeEnds()",
+    "stalledDiagnosticIsStoppedAndClosureIsProven(loseCloseAcknowledgment:)",
     "typedReportGrammarRejectsAmbiguousAndUnboundedInput()",
     "uncertainExitPreservesAllResources()",
     "uncertainIOPreservesOwnedResources(injectedError:)",

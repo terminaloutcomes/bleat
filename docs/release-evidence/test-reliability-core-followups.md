@@ -858,7 +858,9 @@ timeout, pre-cancellation, injected launch cancellation, uncertain exit, uncerta
 IO and independent operation/cleanup failures have separate regressions. A lost
 supervisor event is labeled injection; it does not claim native SIGKILL failure.
 
-Validation on m2 (macOS 26.6.2, Xcode 27.1 build 27A9275):
+Validation at `410e92682bf5e48926fee7505c16da4ccb361e6a` on m2
+(macOS 26.6.2, Xcode 27.1 build 27A9275), before the parent diagnostic
+[review correction](#bounded-parent-diagnostic-write-review-correction):
 
 - Three independent unsigned serial focused invocations: **14/14 each**,
   zero failures/errors/skips, exact identity multisets independently compared
@@ -906,10 +908,80 @@ for actual zero selection. A failed temporary editing assertion also reran the
 old guard once. Final repeats supersede these attempts without erasing them.
 Raw child/framework diagnostics, temporary paths and setup traces remain private.
 
-The source index adds thirteen declarations (1,575 current entries), the host
+At `410e926`, the source index added thirteen declarations (1,575 entries), the host
 inventory adds thirteen identities (591 total), and the core audit adds thirteen
 individual nine-rule reviews plus the specific owning-test/helper review.
 Historical audit counts remain revision-bound. Broader checkpoint/cancellation,
 configuration, Simulator, live-server and physical-device acceptance is unchanged.
 Fresh review of the final implementation SHA and green CI are required; the
 previous documentation-only review does not clear this implementation.
+
+
+## Bounded parent diagnostic write review correction
+
+Fresh independent review of `410e926` found one P2: after leaving the process/
+reader event loop, the parent awaited a diagnostic writer whose continuation
+waited indefinitely for DispatchIO completion. The child report writer remains
+process-contained; the parent invocation was outside that boundary. Existing
+selection, typed migration and cleanup assertions otherwise passed review.
+
+The parent now persists diagnostics in a separately bounded phase using the
+same native event stream. Its deadline is the earlier of the remaining operation
+budget and one second. Deadline/cancellation explicitly stops the owned channel
+and allows at most one additional second for native close acknowledgment. The
+parent awaits only finite timers, never an IO continuation after that bound.
+Native channel/descriptor ownership survives an unconfirmed close; the descriptor
+is closed only in its native cleanup callback. Original operation failures remain
+intact, with distinct diagnostic write, close, deadline, cancellation and
+unconfirmed-close failures. Missing close acknowledgment sets writersClosed
+false and preserves the root/domains. Test-only recovery also requires the
+separate native diagnostic-close proof. Already-latched cancellation skips the
+optional diagnostic write and retains the existing cancellation/cleanup contract.
+
+A new two-case regression injects loss of the write-completion close action on a
+real owned diagnostic channel, then separately injects loss of its close
+acknowledgment. This simulates missing notifications, not a physical disk stall
+or native close failure. The test uses a 100 ms diagnostic deadline, a 500 ms
+close-acknowledgment bound and a separate 30-second completion notification;
+there is no elapsed-time performance assertion or sleep used as readiness. It
+requires bounded return with the original malformed-XML failure, real normal
+child exit and retained archive/incomplete-migration evidence. Confirmed closure
+permits checked cleanup; uncertain acknowledgment preserves the root/domains
+until independently proven native closure authorizes explicit recovery. Parent
+descriptor identity sentinels remain unchanged. All prior thirteen supervisor
+regression identities are preserved.
+
+Correction validation on the same m2 toolchain:
+
+- Three independent focused passes: **15/15 each**, exact identity multisets,
+  zero failures/errors/skips. The new identity executed both argument cases.
+- Owning persistence, all new regressions and unchanged bearer suite: **36/36**,
+  exact identity multiset, zero failures/errors/skips.
+- Supported complete signed host gate: **592/592**, exact inventory identities,
+  zero failures/errors/skips. Signing, entitlements and provisioning verified
+  by the gate; production LCOV exported. Existing three intentional known
+  cleanup issues and upstream/read-only warnings remain unchanged.
+- Built discovery matches all **592** host declarations. Strict repository
+  Swift lint, documentation references and final diff checks passed.
+
+Reports use `.build/i372-diagnostic-repeat-1` through `-3` and
+`.build/i372-diagnostic-owning`, each with `.xml` and `.log` extensions; signed
+log `.build/i372-diagnostic-signed-host.log`, discovery
+`.build/i372-diagnostic-discovery.txt`, lint
+`.build/i372-diagnostic-lint-final.log`, documentation
+`.build/i372-diagnostic-docs.log` and independent summary
+`.build/i372-diagnostic-verification.json`. Commands are the same supported
+serial focused/owning and signed commands above, with these distinct report names.
+The diagnostic-only first run passed one identity/two argument cases. The first
+full corrected candidate then failed two existing cancellation cases because
+optional diagnostics started after cancellation was already latched; the writer
+path was corrected without weakening those assertions. An initial strict lint
+trailing-comment violation was corrected before final gates. Those unsuccessful
+attempts remain local and receive no passing coverage credit.
+
+The current host inventory is 592, source index 1,576 and core audit 586 individual
+records; historical counts and the `410e926` evidence remain revision-bound.
+The added declaration is reviewed under all nine rules. The complete `410e926`
+CI run passed, including the unsigned host's sole named Keychain exclusion; its
+review/CI evidence does not clear this changed implementation. Fresh exact-head
+review and CI remain required. No merge or auto-merge is enabled.

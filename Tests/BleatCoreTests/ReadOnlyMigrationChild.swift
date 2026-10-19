@@ -33,10 +33,16 @@ enum ReadOnlyMigrationChild {
     enum ReportFault: Equatable, Sendable {
         case none, missingXML, malformedXML, duplicateXML, oversizedXML
     }
+    enum DiagnosticFault: Sendable {
+        case none, stallCompletion, stallCompletionAndLoseCloseAcknowledgment
+    }
     struct Options: Sendable {
         var mode: Mode = .migration
         var timeout: Duration = .seconds(20)
         var teardownTimeout: Duration = .seconds(5)
+        var diagnosticTimeout: Duration = .seconds(1)
+        var diagnosticDrainTimeout: Duration = .seconds(1)
+        var diagnosticFault: DiagnosticFault = .none
         var executable: URL?
         var reportFault: ReportFault = .none
         var suppressExitEvent = false
@@ -101,6 +107,8 @@ enum ReadOnlyMigrationChild {
         case kill(Int32)
         case exitUnconfirmed, ioUnconfirmed
         case diagnosticWrite(Native)
+        case diagnosticClose(Native)
+        case diagnosticDeadline, diagnosticCancelled, diagnosticUnconfirmed
         case rootRemoval(Native)
         case defaultsRemoval, rootStillPresent
     }
@@ -281,6 +289,8 @@ enum ReadOnlyMigrationChild {
         case failed(Failure)
         case cleanup(CleanupFailure)
         case deadline, teardownDeadline, cancelled
+        case diagnosticClosed(Int32, Int32)
+        case diagnosticDeadline, diagnosticDrainDeadline
     }
     private final class CloseProof: @unchecked Sendable {
         private let lock = NSLock()
@@ -411,6 +421,7 @@ enum ReadOnlyMigrationChild {
         var teardown: Task<Void, Never>?
         var report: Report?
         var unconfirmedClose: Set<IO> = []
+        var diagnosticState: DiagnosticState?
         func fail(_ value: Failure) {
             if !failures.contains(value) && failures.count < 16 {
                 failures.append(value)
@@ -512,6 +523,10 @@ enum ReadOnlyMigrationChild {
 
         for await event in events.stream {
             switch event {
+            case .diagnosticClosed, .diagnosticDeadline,
+                .diagnosticDrainDeadline:
+                // Only the post-exit diagnostic phase consumes these events.
+                break
             case .exit(let exit):
                 state = .exited(exit)
                 if exit.reason == .signal {
@@ -673,16 +688,21 @@ enum ReadOnlyMigrationChild {
                 }
             }
         }
-        if options.mode == .migration, !failures.isEmpty, let owned = resources
+        let pipeWriterClosed = writersClosed
+        if options.mode == .migration, !failures.isEmpty, !cancellation.value,
+            let owned = resources
         {
             let diagnostic = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
                     "bleat-migration-diagnostic-\(owned.configuration.nonce.uuidString).log"
                 )
-            do {
-                try await write(
-                    readers[.output]?.snapshot.data ?? Data(), to: diagnostic)
-            } catch { cleanup.append(.diagnosticWrite(Native(error))) }
+            let outcome = await writeDiagnostic(
+                readers[.output]?.snapshot.data ?? Data(), to: diagnostic,
+                options: options, operationDeadline: deadline,
+                cancellation: cancellation, events: events)
+            diagnosticState = outcome.state
+            writersClosed = writersClosed && outcome.closed
+            cleanup += outcome.failures
         }
         let preferences = resources?.childPreferencesVisible ?? false
         if failures.isEmpty && !preferences { fail(.typed(.preferences)) }
@@ -714,11 +734,12 @@ enum ReadOnlyMigrationChild {
         // If exit is unconfirmed, proof retains the native observer until its real callback.
         let recoveryReaders = Array(readers.values)
         let recoveryResources = resources
-        let writerProof = writersClosed
+        let writerProof = pipeWriterClosed
+        let diagnosticProof = diagnosticState
         let recover: @Sendable () -> [CleanupFailure] = {
             guard proof.value != nil else { return [.exitUnconfirmed] }
             guard
-                writerProof
+                writerProof && (diagnosticProof?.nativeClosed ?? true)
                     && recoveryReaders.allSatisfy({ $0.snapshot.nativeClosed })
             else { return [.ioUnconfirmed] }
             return recoveryResources?.cleanup() ?? []
@@ -734,6 +755,139 @@ enum ReadOnlyMigrationChild {
             resources: resources, exitProof: proof, recovery: recover)
     }
 
+    /// Owns the descriptor and channel until the native cleanup callback, even
+    /// if bounded supervision returns without a close acknowledgment.
+    private final class DiagnosticState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var owner: DispatchIO?
+        private var writeError: Int32 = 0
+        private var closed = false
+        let descriptor: Int32
+        init(descriptor: Int32) { self.descriptor = descriptor }
+        func retain(_ channel: DispatchIO) { lock.withLock { owner = channel } }
+        func stop() { lock.withLock { owner }?.close(flags: .stop) }
+        func recordWrite(_ error: Int32) {
+            lock.withLock { if writeError == 0 { writeError = error } }
+        }
+        func recordClose(_ error: Int32) -> Int32 {
+            lock.withLock {
+                closed = error == 0
+                owner = nil
+                return writeError
+            }
+        }
+        var nativeClosed: Bool { lock.withLock { closed } }
+    }
+    private struct DiagnosticOutcome {
+        var state: DiagnosticState?
+        var closed: Bool
+        var failures: [CleanupFailure]
+    }
+    private static func writeDiagnostic(
+        _ data: Data, to url: URL, options: Options,
+        operationDeadline: ContinuousClock.Instant, cancellation: Cancellation,
+        events: (
+            stream: AsyncStream<Event>,
+            continuation: AsyncStream<Event>.Continuation
+        )
+    ) async -> DiagnosticOutcome {
+        let deadline = min(
+            operationDeadline,
+            ContinuousClock.now.advanced(by: options.diagnosticTimeout))
+        let timer = Task.detached {
+            do {
+                try await Task.sleep(until: deadline, clock: .continuous)
+            } catch { return }
+            events.continuation.yield(.diagnosticDeadline)
+        }
+        let fd = Darwin.open(
+            url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+            S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            let native = Native(
+                NSError(domain: NSPOSIXErrorDomain, code: Int(errno)))
+            timer.cancel()
+            await timer.value
+            return DiagnosticOutcome(
+                closed: true, failures: [.diagnosticWrite(native)])
+        }
+        let state = DiagnosticState(descriptor: fd)
+        let queue = DispatchQueue(
+            label: "bleat.migration-child.diagnostic-writer")
+        let channel = DispatchIO(
+            type: .random, fileDescriptor: fd, queue: queue
+        ) { error in
+            state.recordWrite(error)
+            let closeError: Int32 = Darwin.close(fd) == 0 ? 0 : errno
+            let writeError = state.recordClose(closeError)
+            if options.diagnosticFault
+                != .stallCompletionAndLoseCloseAcknowledgment
+            {
+                events.continuation.yield(
+                    .diagnosticClosed(writeError, closeError))
+            }
+        }
+        state.retain(channel)
+        let bytes = data.withUnsafeBytes { DispatchData(bytes: $0) }
+        channel.write(offset: 0, data: bytes, queue: queue) { done, _, error in
+            state.recordWrite(error)
+            // Inject loss of the write-completion action. Native stop/close is
+            // still real; this does not claim a physical filesystem stall.
+            if done, options.diagnosticFault == .none { channel.close() }
+        }
+        var failures: [CleanupFailure] = []
+        var drain: Task<Void, Never>?
+        var acknowledged = false
+        func stop(_ reason: CleanupFailure) {
+            if !failures.contains(reason) { failures.append(reason) }
+            guard drain == nil else { return }
+            state.stop()
+            drain = Task.detached {
+                do {
+                    try await Task.sleep(for: options.diagnosticDrainTimeout)
+                } catch { return }
+                events.continuation.yield(.diagnosticDrainDeadline)
+            }
+        }
+        if cancellation.value { stop(.diagnosticCancelled) }
+        if ContinuousClock.now >= deadline { stop(.diagnosticDeadline) }
+        diagnosticEvents: for await event in events.stream {
+            switch event {
+            case .diagnosticClosed(let writeError, let closeError):
+                acknowledged = closeError == 0
+                if writeError != 0 {
+                    failures.append(
+                        .diagnosticWrite(
+                            Native(
+                                NSError(
+                                    domain: NSPOSIXErrorDomain,
+                                    code: Int(writeError)))))
+                }
+                if closeError != 0 {
+                    failures.append(
+                        .diagnosticClose(
+                            Native(
+                                NSError(
+                                    domain: NSPOSIXErrorDomain,
+                                    code: Int(closeError)))))
+                }
+                break diagnosticEvents
+            case .cancelled: stop(.diagnosticCancelled)
+            case .deadline, .diagnosticDeadline: stop(.diagnosticDeadline)
+            case .diagnosticDrainDeadline: break diagnosticEvents
+            default: break
+            }
+            if cancellation.value { stop(.diagnosticCancelled) }
+        }
+        if !acknowledged { failures.append(.diagnosticUnconfirmed) }
+        timer.cancel()
+        drain?.cancel()
+        await timer.value
+        await drain?.value
+        return DiagnosticOutcome(
+            state: state, closed: acknowledged, failures: failures)
+    }
+
     private final class WriteStatus: @unchecked Sendable {
         let lock = NSLock()
         var error: Int32 = 0
@@ -742,7 +896,8 @@ enum ReadOnlyMigrationChild {
         }
         var value: Int32 { lock.withLock { error } }
     }
-    private static func write(_ data: Data, to url: URL) async throws {
+    private static func writeChildReport(_ data: Data, to url: URL) async throws
+    {
         let fd = Darwin.open(
             url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
             S_IRUSR | S_IWUSR)
@@ -834,7 +989,8 @@ enum ReadOnlyMigrationChild {
         }
         if c.mode == .thrown {
             report.cause = .injectedThrow
-            try await write(try JSONEncoder().encode(report), to: destination)
+            try await writeChildReport(
+                try JSONEncoder().encode(report), to: destination)
             throw InjectedError.thrown
         }
         if c.mode == .flood {
@@ -939,7 +1095,7 @@ enum ReadOnlyMigrationChild {
         } else {
             encoded = try JSONEncoder().encode(report)
         }
-        try await write(encoded, to: destination)
+        try await writeChildReport(encoded, to: destination)
     }
 
     static func validReportShape(_ data: Data) -> Bool {

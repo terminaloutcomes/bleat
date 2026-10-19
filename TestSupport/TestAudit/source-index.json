@@ -9440,7 +9440,7 @@
     {
       "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
       "name": "typedReportGrammarRejectsAmbiguousAndUnboundedInput",
-      "line": 291,
+      "line": 348,
       "language": "swift"
     },
     {
@@ -9452,13 +9452,19 @@
     {
       "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
       "name": "xmlGrammarRejectsUntrustedAndAmbiguousReports",
-      "line": 322,
+      "line": 379,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
       "name": "uncertainIOPreservesOwnedResources",
       "line": 243,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift",
+      "name": "stalledDiagnosticIsStoppedAndClosureIsProven",
+      "line": 292,
       "language": "swift"
     }
   ]

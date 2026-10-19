@@ -288,6 +288,63 @@ struct ReadOnlyMigrationChildTests {
         #expect(result.resourcesRemoved)
     }
 
+    @Test(arguments: [false, true])
+    func stalledDiagnosticIsStoppedAndClosureIsProven(
+        loseCloseAcknowledgment: Bool
+    ) async throws {
+        let streams = streamIdentities()
+        var options = ReadOnlyMigrationChild.Options()
+        options.reportFault = .malformedXML
+        options.diagnosticTimeout = .milliseconds(100)
+        options.diagnosticDrainTimeout = .milliseconds(500)
+        options.diagnosticFault =
+            loseCloseAcknowledgment
+            ? .stallCompletionAndLoseCloseAcknowledgment : .stallCompletion
+        let completed = BoundedTestCounter()
+        let task = Task {
+            let result = await ReadOnlyMigrationChild.run(options: options)
+            await completed.increment()
+            return result
+        }
+        let completion = await completed.wait(
+            untilAtLeast: 1, timeout: .seconds(30))
+        #expect(
+            completion.reached, "Stalled diagnostic supervisor did not return")
+        guard completion.reached else {
+            task.cancel()
+            return
+        }
+        let result = await task.value
+        #expect(result.failures.contains(.xml(.malformed)))
+        #expect(result.cleanupFailures.contains(.diagnosticDeadline))
+        #expect(result.state == .exited(.init(reason: .normal, status: 0)))
+        #expect(result.report?.archiveEqual == true)
+        #expect(result.report?.migrationComplete == false)
+        #expect(result.readersClosed)
+        #expect(streamIdentities() == streams)
+        let owned = try #require(result.resources)
+        if loseCloseAcknowledgment {
+            #expect(result.cleanupFailures.contains(.diagnosticUnconfirmed))
+            #expect(!result.writersClosed)
+            #expect(!result.resourcesRemoved)
+            let rootPreserved = FileManager.default.fileExists(
+                atPath: owned.configuration.root.path)
+            #expect(rootPreserved)
+            #expect(!owned.domainsAbsent)
+            // Independent native close/exit proof authorizes test-only recovery.
+            #expect(result.recoverPreservedResources().isEmpty)
+            let rootRemoved = !FileManager.default.fileExists(
+                atPath: owned.configuration.root.path)
+            #expect(rootRemoved)
+            #expect(owned.domainsAbsent)
+        } else {
+            #expect(!result.cleanupFailures.contains(.diagnosticUnconfirmed))
+            #expect(result.writersClosed)
+            #expect(result.resourcesRemoved)
+            #expect(owned.domainsAbsent)
+        }
+    }
+
     @Test func typedReportGrammarRejectsAmbiguousAndUnboundedInput() throws {
         let report = ReadOnlyMigrationChild.Report(
             nonce: UUID(), mode: .migration,
