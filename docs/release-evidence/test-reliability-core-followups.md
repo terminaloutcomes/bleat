@@ -1843,3 +1843,87 @@ core audit **596**. Only the eight selected dispositions and changed-file source
 locations are refreshed, plus two helper records. Fresh exact-head CI and
 independent review are required before merge; broader #372/#362 acceptance,
 production drainage and seven startup clock oracles remain open.
+
+## Logout caller completion and private response latching (issue #372)
+
+Four `LogoutTests` concurrency cases already bounded transport entry but consumed
+caller task values without a terminal bound. The refresh/logout case already
+bounded actual typed outcomes with thirty-second completions; its entry and
+signing-out observations needed guarded exits and cleanup on every path. The
+older audit descriptions of unbounded signals and guessed yields were stale.
+These are test-lifecycle findings, not observed production authentication defects.
+
+The four callers now retain their actual return/error in `Result`, emit a
+five-second terminal witness only after the coordinator API returns or throws,
+and consume task values only after that witness. Existing typed-error assertions
+remain. All five cases guard readiness and use awaited `withTestCleanup` for
+normal, guard and throwing exits: cancel owned callers, release their private
+transport gates, and bound actual terminal cleanup before joining. The refresh
+case retains its existing thirty-second signing-out and outcome budgets. No
+cleanup path manufactures a completion signal. This does not prove whole
+production-task graph drainage.
+
+The private `InitialRequestRaceTransport` previously remembered only a release
+Boolean. `completeInitial(statusCode: 200)` before continuation registration
+therefore delivered HTTP 401, while the same release after registration delivered
+HTTP 200. It now latches the first actual response, preserves that response across
+conflicting repeated release, and detaches continuation storage before resume.
+The stale-success case independently checks that the fake actually delivered
+HTTP 200 after completed logout. The other private release gates retain their
+existing early-release latches and explicitly detach resumed continuation state.
+They intentionally ignore cancellation to preserve stale-response coverage;
+explicit release must still settle a cancelled caller.
+
+Two new parameterized contracts exercise eight initial-response scenarios
+(HTTP 200/401, release before entry/after positive registration, cancelled/normal
+caller) and twelve logout/login/refresh scenarios (three fixtures, both release
+orders, both cancellation states). Entry is explicitly gated; late release waits
+for positive continuation registration. Every scenario checks actual response,
+cancellation state, empty pending storage and repeated release. There are no
+readiness sleeps or guessed yield counts.
+
+The original overlap errors, invalid-credential failure, credential deletion,
+rotated refresh token, one refresh/logout, zero forbidden refreshes and old-request
+ordering remain. The six neighboring logout tests are byte-for-byte unchanged.
+Only five existing dispositions, two new helper records, changed-file navigation,
+host inventory and scoped traceability/evidence change. Production authentication,
+the separate cover work, broader tracker reconciliation, seven unresolved app
+startup clock oracles and issue comments are outside this slice.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent serial focused runs passed **7/7 exact function identities
+  each**, including eight and twelve parameter scenarios in the new contracts.
+  The owning `LogoutTests` suite passed **13/13**; the restored-source focus
+  passed **7/7**. Each has zero failures, errors and skips.
+- The supported signed host gate passed **602/602** exact inventory identities
+  with zero failures/errors/skips, including the synchronizable-Keychain case.
+  Per-target XML and the combined XML alias reconcile without double counting.
+- Four expected-failing mutations were killed at executed assertions: missing
+  actual caller terminal witness, early HTTP 200 replaced with HTTP 401,
+  conflicting repeated release overwriting the response, and retained released
+  continuation storage. No continuation trap occurred; the exact source hash
+  was restored after every attempt.
+- Strict Swift lint, docs, original semantic-postcondition preservation, six
+  unchanged neighboring tests and scoped audit/index checks passed. Existing
+  dependency deployment-target warnings, three declared fixture-cleanup known
+  issues and intentional read-only SwiftData diagnostics remain separately
+  visible; no warning suppression or production change was added.
+
+Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter` selecting the five cases and two new
+contracts; XML/logs are `.build/i372-logout-focused-{1,2,3}`. Owning selection is
+`LogoutTests` with `i372-logout-owning` reports; restored selection uses
+`i372-logout-restored`. The signed command is
+`mise exec -- ./scripts/test-host.sh`; retained XML is in
+`.build/i372-logout-signed-results`. Exact verification and mutation manifests
+are `.build/i372-logout-verification.json` and
+`.build/i372-logout-mutations.json`; raw logs remain private.
+
+Two preliminary builds failed at typed-throws closure annotations without
+executing tests; both are retained and excluded from coverage. The corrected
+preliminary owner passed thirteen identities separately from final repetitions.
+Two function identities are added: host inventory **602**, source index **1,588**
+and core audit **598**. Fresh exact-head CI and independent review are required
+before merge. Broader #372/#362 acceptance and device/live/framework evidence
+remain separate.

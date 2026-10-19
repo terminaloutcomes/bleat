@@ -12089,34 +12089,34 @@
       "review_status": "source_reviewed",
       "purpose": "Reject second logout and authenticated request while first remote logout is blocked.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "Blocking actor transport uses unbounded waitUntilLogoutStarts; explicit completion continuation released after state assertions.",
-        "action_postconditions": "Start first logout, await fake transport entry, assert second logout/account operation in progress and library request rejected; release logout and assert completion."
+        "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Blocking actor transport uses unbounded waitUntilLogoutStarts; explicit completion continuation released after state assertions.",
-        "timeout_tolerance": "N/A: no playback or numeric timing tolerance."
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Start first logout, await fake transport entry, assert second logout/account operation in progress and library request rejected; release logout and assert completion.",
-        "2": "Blocking actor transport uses unbounded waitUntilLogoutStarts; explicit completion continuation released after state assertions.",
+        "1": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
         "3": "N/A: no player/seek timing.",
-        "4": "All tasks/results are awaited. Gate entry is unbounded or uses guessed yields; see follow-up.",
-        "5": "Fresh LogoutFixture/store/transport per case with fixed synthetic identities and URLs.",
-        "6": "Deterministic host logout lifecycle test with actor fakes.",
-        "7": "No retries or dropped assertions.",
-        "8": "Typed error/status and local state counts are asserted. Missing state transition diagnostics are pending linked bounded-wait follow-up.",
-        "9": "Source review only; no individual repetition recorded."
+        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
+        "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+        "8": "Failures identify original caller, stage, elapsed time and limit; original typed errors, credential state, token and exact counts remain asserted. Successful stale-response case additionally checks actual delivered HTTP status.",
+        "9": "Final focused repetitions, owner suite, complete signed inventory and expected-failing mutations are retained in scoped evidence."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "Blocking actor transport uses unbounded waitUntilLogoutStarts; explicit completion continuation released after state assertions.",
-      "action_postconditions": "Start first logout, await fake transport entry, assert second logout/account operation in progress and library request rejected; release logout and assert completion.",
-      "synchronization": "Blocking actor transport uses unbounded waitUntilLogoutStarts; explicit completion continuation released after state assertions.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host logout lifecycle test with actor fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+      "action_postconditions": "Start logout and guard bounded transport entry; assert overlapping logout and authenticated request each fail with typed accountOperationInProgress; release logout, bound actual caller return, assert remote completed.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+      "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
-      "reason": "Awaited start signal has no timeout and can hang if logout never reaches transport; use bounded event helper.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12130,46 +12130,47 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
-      }
+      },
+      "prior_logout_finding": "Awaited start signal has no timeout and can hang if logout never reaches transport; use bounded event helper."
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutRejectsAnOverlappingLocalLogin",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 282
+        "line": 299
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Reject logout while local login is in progress and reject duplicate login.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "Blocking actor transport and waitUntilLoginStarts use unbounded checked continuation.",
-        "action_postconditions": "Start blocked login, await transport entry, assert logout and second login typed operation-in-progress errors; reject first login and assert invalidCredentials."
+        "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Blocking actor transport and waitUntilLoginStarts use unbounded checked continuation.",
-        "timeout_tolerance": "N/A: no playback or numeric timing tolerance."
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Start blocked login, await transport entry, assert logout and second login typed operation-in-progress errors; reject first login and assert invalidCredentials.",
-        "2": "Blocking actor transport and waitUntilLoginStarts use unbounded checked continuation.",
+        "1": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
         "3": "N/A: no player/seek timing.",
-        "4": "All tasks/results are awaited. Gate entry is unbounded or uses guessed yields; see follow-up.",
-        "5": "Fresh LogoutFixture/store/transport per case with fixed synthetic identities and URLs.",
-        "6": "Deterministic host logout lifecycle test with actor fakes.",
-        "7": "No retries or dropped assertions.",
-        "8": "Typed error/status and local state counts are asserted. Missing state transition diagnostics are pending linked bounded-wait follow-up.",
-        "9": "Source review only; no individual repetition recorded."
+        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
+        "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+        "8": "Failures identify original caller, stage, elapsed time and limit; original typed errors, credential state, token and exact counts remain asserted. Successful stale-response case additionally checks actual delivered HTTP status.",
+        "9": "Final focused repetitions, owner suite, complete signed inventory and expected-failing mutations are retained in scoped evidence."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "Blocking actor transport and waitUntilLoginStarts use unbounded checked continuation.",
-      "action_postconditions": "Start blocked login, await transport entry, assert logout and second login typed operation-in-progress errors; reject first login and assert invalidCredentials.",
-      "synchronization": "Blocking actor transport and waitUntilLoginStarts use unbounded checked continuation.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host logout lifecycle test with actor fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+      "action_postconditions": "Start native login and guard bounded transport entry; assert overlapping logout and login fail with their typed accountOperationInProgress errors; reject login, bound actual caller throw, assert typed invalidCredentials.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+      "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
-      "reason": "Bound fake-start signals to diagnose missing login transition.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12183,46 +12184,47 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
-      }
+      },
+      "prior_logout_finding": "Bound fake-start signals to diagnose missing login transition."
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 331
+        "line": 365
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Drain in-flight token refresh before logout; send rotated refresh token and prevent old request from proceeding.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "Refresh gate has unbounded waitUntilRefreshStarts; `isSigningOut` uses 1,000 guessed scheduler yields, an iteration bound rather than condition notification/time deadline.",
-        "action_postconditions": "Start authenticated request; wait refresh entry; start logout; poll isSigningOut up to 1000 Task.yield turns and assert true; complete refresh; assert logout complete, request rejected, tokens removed, one refresh/logout and exact rotated token."
+        "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "action_postconditions": "Start authenticated request and guard bounded refresh entry; start logout and guard existing thirty-second signing-out condition; release rotation; bound both actual outcomes with existing thirty-second completions; assert typed accountOperationInProgress, remote completed, no credentials, one refresh/logout and exact rotated refresh token."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Refresh gate has unbounded waitUntilRefreshStarts; `isSigningOut` uses 1,000 guessed scheduler yields, an iteration bound rather than condition notification/time deadline.",
-        "timeout_tolerance": "N/A: no playback or numeric timing tolerance."
+        "synchronization": "Existing bounded refresh-entry signal and thirty-second signing-out polling/actual typed outcome completions are retained; guards now exit to awaited cleanup. Five-second cleanup completion bounds precede task joins.",
+        "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Start authenticated request; wait refresh entry; start logout; poll isSigningOut up to 1000 Task.yield turns and assert true; complete refresh; assert logout complete, request rejected, tokens removed, one refresh/logout and exact rotated token.",
-        "2": "Refresh gate has unbounded waitUntilRefreshStarts; `isSigningOut` uses 1,000 guessed scheduler yields, an iteration bound rather than condition notification/time deadline.",
+        "1": "Start authenticated request and guard bounded refresh entry; start logout and guard existing thirty-second signing-out condition; release rotation; bound both actual outcomes with existing thirty-second completions; assert typed accountOperationInProgress, remote completed, no credentials, one refresh/logout and exact rotated refresh token.",
+        "2": "Existing bounded refresh-entry signal and thirty-second signing-out polling/actual typed outcome completions are retained; guards now exit to awaited cleanup. Five-second cleanup completion bounds precede task joins.",
         "3": "N/A: no player/seek timing.",
-        "4": "All tasks/results are awaited. Gate entry is unbounded or uses guessed yields; see follow-up.",
-        "5": "Fresh LogoutFixture/store/transport per case with fixed synthetic identities and URLs.",
-        "6": "Deterministic host logout lifecycle test with actor fakes.",
-        "7": "No retries or dropped assertions.",
-        "8": "Typed error/status and local state counts are asserted. Missing state transition diagnostics are pending linked bounded-wait follow-up.",
-        "9": "Source review only; no individual repetition recorded."
+        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
+        "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+        "8": "Failures identify original caller, stage, elapsed time and limit; original typed errors, credential state, token and exact counts remain asserted. Successful stale-response case additionally checks actual delivered HTTP status.",
+        "9": "Final focused repetitions, owner suite, complete signed inventory and expected-failing mutations are retained in scoped evidence."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "Refresh gate has unbounded waitUntilRefreshStarts; `isSigningOut` uses 1,000 guessed scheduler yields, an iteration bound rather than condition notification/time deadline.",
-      "action_postconditions": "Start authenticated request; wait refresh entry; start logout; poll isSigningOut up to 1000 Task.yield turns and assert true; complete refresh; assert logout complete, request rejected, tokens removed, one refresh/logout and exact rotated token.",
-      "synchronization": "Refresh gate has unbounded waitUntilRefreshStarts; `isSigningOut` uses 1,000 guessed scheduler yields, an iteration bound rather than condition notification/time deadline.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host logout lifecycle test with actor fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+      "action_postconditions": "Start authenticated request and guard bounded refresh entry; start logout and guard existing thirty-second signing-out condition; release rotation; bound both actual outcomes with existing thirty-second completions; assert typed accountOperationInProgress, remote completed, no credentials, one refresh/logout and exact rotated refresh token.",
+      "synchronization": "Existing bounded refresh-entry signal and thirty-second signing-out polling/actual typed outcome completions are retained; guards now exit to awaited cleanup. Five-second cleanup completion bounds precede task joins.",
+      "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+      "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
-      "reason": "Replace state polling with a coordinator sign-out transition signal and make refresh-start readiness bounded; otherwise scheduling changes can spuriously fail or hang.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12236,46 +12238,47 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
-      }
+      },
+      "prior_logout_finding": "Replace state polling with a coordinator sign-out transition signal and make refresh-start readiness bounded; otherwise scheduling changes can spuriously fail or hang."
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 399
+        "line": 495
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Do not begin token refresh after logout has started while initial authenticated request is blocked.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "InitialRequestRaceTransport has unbounded waits for both initial and logout entry; operations released explicitly.",
-        "action_postconditions": "Await initial request and logout start, reject initial request; assert request gets accountOperationInProgress; release logout; assert completed and zero refreshes."
+        "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "action_postconditions": "Start initial request and logout in guarded entry order; release initial HTTP 401 after logout starts; bound actual request throw and assert typed accountOperationInProgress before releasing logout; bound logout return, assert remote completed and zero refresh calls."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "InitialRequestRaceTransport has unbounded waits for both initial and logout entry; operations released explicitly.",
-        "timeout_tolerance": "N/A: no playback or numeric timing tolerance."
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Await initial request and logout start, reject initial request; assert request gets accountOperationInProgress; release logout; assert completed and zero refreshes.",
-        "2": "InitialRequestRaceTransport has unbounded waits for both initial and logout entry; operations released explicitly.",
+        "1": "Start initial request and logout in guarded entry order; release initial HTTP 401 after logout starts; bound actual request throw and assert typed accountOperationInProgress before releasing logout; bound logout return, assert remote completed and zero refresh calls.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
         "3": "N/A: no player/seek timing.",
-        "4": "All tasks/results are awaited. Gate entry is unbounded or uses guessed yields; see follow-up.",
-        "5": "Fresh LogoutFixture/store/transport per case with fixed synthetic identities and URLs.",
-        "6": "Deterministic host logout lifecycle test with actor fakes.",
-        "7": "No retries or dropped assertions.",
-        "8": "Typed error/status and local state counts are asserted. Missing state transition diagnostics are pending linked bounded-wait follow-up.",
-        "9": "Source review only; no individual repetition recorded."
+        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
+        "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+        "8": "Failures identify original caller, stage, elapsed time and limit; original typed errors, credential state, token and exact counts remain asserted. Successful stale-response case additionally checks actual delivered HTTP status.",
+        "9": "Final focused repetitions, owner suite, complete signed inventory and expected-failing mutations are retained in scoped evidence."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "InitialRequestRaceTransport has unbounded waits for both initial and logout entry; operations released explicitly.",
-      "action_postconditions": "Await initial request and logout start, reject initial request; assert request gets accountOperationInProgress; release logout; assert completed and zero refreshes.",
-      "synchronization": "InitialRequestRaceTransport has unbounded waits for both initial and logout entry; operations released explicitly.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host logout lifecycle test with actor fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+      "action_postconditions": "Start initial request and logout in guarded entry order; release initial HTTP 401 after logout starts; bound actual request throw and assert typed accountOperationInProgress before releasing logout; bound logout return, assert remote completed and zero refresh calls.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+      "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
-      "reason": "Bound both entry notifications; retain old-request-vs-logout ordering assertions.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12289,46 +12292,47 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
-      }
+      },
+      "prior_logout_finding": "Bound both entry notifications; retain old-request-vs-logout ordering assertions."
     },
     {
       "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
       "source": {
         "path": "Tests/BleatCoreTests/LogoutTests.swift",
-        "line": 453
+        "line": 590
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Invalidate authenticated success arriving after logout completed.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "Actor fake has unbounded start waiters and explicit response release.",
-        "action_postconditions": "Wait initial request, start logout, wait logout entry and complete logout; then release initial 200; assert authenticated request fails accountOperationInProgress and logout completed."
+        "setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "action_postconditions": "Start initial request then logout in guarded entry order; release and bound completed logout before releasing initial HTTP 200; bound actual request throw, assert typed accountOperationInProgress, independently assert the fake delivered HTTP 200 and assert remote completed."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Actor fake has unbounded start waiters and explicit response release.",
-        "timeout_tolerance": "N/A: no playback or numeric timing tolerance."
+        "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+        "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout."
       },
       "compiler_skip_conditions": "No test-level guard, skip, or opt-in.",
       "rules": {
-        "1": "Wait initial request, start logout, wait logout entry and complete logout; then release initial 200; assert authenticated request fails accountOperationInProgress and logout completed.",
-        "2": "Actor fake has unbounded start waiters and explicit response release.",
+        "1": "Start initial request then logout in guarded entry order; release and bound completed logout before releasing initial HTTP 200; bound actual request throw, assert typed accountOperationInProgress, independently assert the fake delivered HTTP 200 and assert remote completed.",
+        "2": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
         "3": "N/A: no player/seek timing.",
-        "4": "All tasks/results are awaited. Gate entry is unbounded or uses guessed yields; see follow-up.",
-        "5": "Fresh LogoutFixture/store/transport per case with fixed synthetic identities and URLs.",
-        "6": "Deterministic host logout lifecycle test with actor fakes.",
-        "7": "No retries or dropped assertions.",
-        "8": "Typed error/status and local state counts are asserted. Missing state transition diagnostics are pending linked bounded-wait follow-up.",
-        "9": "Source review only; no individual repetition recorded."
+        "4": "Awaited cleanup runs on normal, guard and throwing exits; cancel each owned caller, release all owned fake gates, require actual terminal witness before task join. No synthetic completion from cleanup or whole production-task graph drainage claim.",
+        "5": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+        "6": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
+        "7": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+        "8": "Failures identify original caller, stage, elapsed time and limit; original typed errors, credential state, token and exact counts remain asserted. Successful stale-response case additionally checks actual delivered HTTP status.",
+        "9": "Final focused repetitions, owner suite, complete signed inventory and expected-failing mutations are retained in scoped evidence."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "Actor fake has unbounded start waiters and explicit response release.",
-      "action_postconditions": "Wait initial request, start logout, wait logout entry and complete logout; then release initial 200; assert authenticated request fails accountOperationInProgress and logout completed.",
-      "synchronization": "Actor fake has unbounded start waiters and explicit response release.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host logout lifecycle test with actor fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh account-scoped in-memory credential store and private controlled HTTP actor per case; synthetic HTTPS server and tokens; no real server or personal state.",
+      "action_postconditions": "Start initial request then logout in guarded entry order; release and bound completed logout before releasing initial HTTP 200; bound actual request throw, assert typed accountOperationInProgress, independently assert the fake delivered HTTP 200 and assert remote completed.",
+      "synchronization": "Existing ten-second transport-entry signals are guarded. Five-second counters are emitted only after the actual coordinator API returns or throws, before task Result consumption; guards exit to awaited cleanup.",
+      "timeout_tolerance": "Diagnostic failure budgets, not latency or scheduling-performance assertions; no readiness sleep, guessed yields or widened existing timeout.",
+      "classification": "Deterministic host logout lifecycle with deliberately cancellation-ignoring HTTP fakes.",
       "compiler_skip": "No test-level guard, skip, or opt-in.",
-      "reason": "Bound stage-entry waits; no timing assumptions otherwise.",
-      "shared_helper_review": "LogoutFixture constructs fixed server and scripted actor store/transport. BlockingLogoutTransport, BlockingLoginTransport, RefreshRaceTransport and InitialRequestRaceTransport expose checked-continuation gates; their waitUntil* helpers are unbounded. TestCleanup not used here.",
+      "reason": "Current source has bounded and guarded readiness/actual caller outcomes plus awaited cancellation and latched-release cleanup on normal, guard and throwing exits; all logout security and typed-error postconditions remain. Private-fixture response latching is checked independently; no production authentication defect or whole-task drainage claim.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/Completion and BoundedTestCounter supply diagnostic bounds. withTestCleanup cancels callers and opens latched gates on every exit; it only joins witnessed terminal tasks. Private InitialRequestRaceTransport retains the first released HTTP response, including early HTTP 200; completion detaches retained continuation storage. Fixture contracts exercise early/registered release, repeated release and cancelled callers; cancellation alone intentionally does not settle these stale-response fakes.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -12342,7 +12346,8 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The shared logout fake now buffers release-before-continuation races. Focused execution is recorded in the core follow-up; only testLogoutSettlesRefreshAndInvalidatesTheRotatedToken has bounded task completion and cancellation cleanup in this batch."
-      }
+      },
+      "prior_logout_finding": "Bound stage-entry waits; no timing assumptions otherwise."
     },
     {
       "identifier": "Tests/BleatCoreTests/MetadataEditingTests.swift::testBookDetailSummaryMapsAvailableDomainFields",
@@ -23395,6 +23400,70 @@
       },
       "decision": "keep",
       "reason": "Validate private cancellable repository hold cancellation and explicit release before entry and after registration, preserving actual typed failure/success and terminal empty storage."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testInitialRequestFixturePreservesReleasedResponse",
+      "source": {
+        "path": "Tests/BleatCoreTests/LogoutTests.swift",
+        "line": 686
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove private initial-request fake preserves first released HTTP 200 or 401, including early release, repeated conflicting release and cancellation.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor, gated task and synthetic request per scenario.",
+        "action_postconditions": "Eight explicit scenarios cross HTTP 200/401, release before entry/after positive continuation registration and caller cancellation/normal completion. First response wins despite opposite repeated release; assert actual delivered status, cancellation flag and empty pending storage."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "timeout_tolerance": "Existing ten-second entry/condition and five-second terminal diagnostic budgets; no latency requirement."
+      },
+      "compiler_skip_conditions": "No guard, skip or opt-in; 8 exhaustive parameter scenarios.",
+      "rules": {
+        "1": "Eight explicit scenarios cross HTTP 200/401, release before entry/after positive continuation registration and caller cancellation/normal completion. First response wins despite opposite repeated release; assert actual delivered status, cancellation flag and empty pending storage.",
+        "2": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "3": "N/A: no playback or latency measurement.",
+        "4": "Fakes deliberately ignore cancellation to preserve stale-response coverage; explicit release must settle actual callers even when cancelled. Cleanup is awaited on every exit and unknown task values are never joined.",
+        "5": "Fresh private actor, start signal and completion counter per exhaustive scenario; synthetic request only.",
+        "6": "Private deterministic HTTP fixture lifecycle, not production/framework/server/device validation.",
+        "7": "No readiness sleep, tolerance increase or retry; pre-entry order is controlled and late registration positively observed.",
+        "8": "Caller source location, scenario, stage, elapsed/limit, exact response and pending storage diagnose failure.",
+        "9": "Focused repeats, owner/signed inventory and targeted mutations recorded separately."
+      },
+      "decision": "keep",
+      "reason": "Prove private initial-request fake preserves first released HTTP 200 or 401, including early release, repeated conflicting release and cancellation."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutFixtureReleaseSurvivesCancellationAndLateEntry",
+      "source": {
+        "path": "Tests/BleatCoreTests/LogoutTests.swift",
+        "line": 716
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove private logout/login/refresh gates release before entry or after positive registration, including cancelled callers and repeated release, without retained continuations.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor, gated task and synthetic request per scenario.",
+        "action_postconditions": "Twelve explicit scenarios cross three fakes, release before entry/after positive continuation registration and caller cancellation/normal completion. Assert exact HTTP status, cancellation flag and empty pending storage after repeated release."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "timeout_tolerance": "Existing ten-second entry/condition and five-second terminal diagnostic budgets; no latency requirement."
+      },
+      "compiler_skip_conditions": "No guard, skip or opt-in; 12 exhaustive parameter scenarios.",
+      "rules": {
+        "1": "Twelve explicit scenarios cross three fakes, release before entry/after positive continuation registration and caller cancellation/normal completion. Assert exact HTTP status, cancellation flag and empty pending storage after repeated release.",
+        "2": "Explicit start signal controls pre-entry cancellation/release; bounded condition confirms continuation registration for late release. Five-second counter records actual send return before task consumption. Every exit cancels, opens start and release gates, and bounds terminal cleanup.",
+        "3": "N/A: no playback or latency measurement.",
+        "4": "Fakes deliberately ignore cancellation to preserve stale-response coverage; explicit release must settle actual callers even when cancelled. Cleanup is awaited on every exit and unknown task values are never joined.",
+        "5": "Fresh private actor, start signal and completion counter per exhaustive scenario; synthetic request only.",
+        "6": "Private deterministic HTTP fixture lifecycle, not production/framework/server/device validation.",
+        "7": "No readiness sleep, tolerance increase or retry; pre-entry order is controlled and late registration positively observed.",
+        "8": "Caller source location, scenario, stage, elapsed/limit, exact response and pending storage diagnose failure.",
+        "9": "Focused repeats, owner/signed inventory and targeted mutations recorded separately."
+      },
+      "decision": "keep",
+      "reason": "Prove private logout/login/refresh gates release before entry or after positive registration, including cancelled callers and repeated release, without retained continuations."
     }
   ],
   "issue_382": {
@@ -23599,5 +23668,19 @@
     "scope": "Eight existing coordinator cases; two new private-fixture contracts with four cases each; controlled fixture ownership and current-file navigation/evidence only.",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-caller-completion-and-private-fixture-retirement-issue-372",
     "excluded": "Production coordinator/authentication, whole production-task graph drainage, seven app startup clock oracles and broad tracker reconciliation."
+  },
+  "issue_372_logout_caller_lifecycle": {
+    "tests": [
+      "Tests/BleatCoreTests/LogoutTests.swift::testConcurrentLogoutAndAuthenticatedRequestAreRejected",
+      "Tests/BleatCoreTests/LogoutTests.swift::testLogoutRejectsAnOverlappingLocalLogin",
+      "Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
+      "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
+      "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
+      "Tests/BleatCoreTests/LogoutTests.swift::testInitialRequestFixturePreservesReleasedResponse",
+      "Tests/BleatCoreTests/LogoutTests.swift::testLogoutFixtureReleaseSurvivesCancellationAndLateEntry"
+    ],
+    "scope": "Five existing logout-concurrency cases and their private transports, two parameterized fixture contracts; changed-file navigation/inventory and scoped evidence only.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
+    "excluded": "Production authentication, whole production-task drainage, seven app clock oracles, cover work #400, and broad tracker or issue-comment updates."
   }
 }
