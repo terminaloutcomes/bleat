@@ -1,0 +1,4 @@
+prefix_rule(pattern=["mise", "exec", "--", "env", "BLEAT_HOST_SIGNING=unsigned", "swift", "test"], decision="allow")
+prefix_rule(pattern=["mise", "exec", "--", "./scripts/test-host.sh"], decision="allow")
+prefix_rule(pattern=["xcrun", "swift-format", "lint", "--strict"], decision="allow")
+prefix_rule(pattern=["mise", "run", "docs:check"], decision="allow")
