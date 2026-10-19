@@ -39003,8 +39003,8 @@
       "identifier": "AppModelTests/testCarPlaySearchAuthorZeroCapacityHasNoStatusSections",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 23412,
-        "endLineBeforeNextTest": 23449
+        "line": 24445,
+        "endLineBeforeNextTest": 24484
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -39013,27 +39013,35 @@
       ],
       "actions": [
         {
-          "line": 23426,
+          "line": 24458,
           "expression": "await service.setCarPlaySearchResults("
         }
       ],
       "assertions": [
         {
-          "line": 23444,
+          "line": 24452,
+          "expression": "id: try XCTUnwrap(AuthorID(rawValue: \"author\")),"
+        },
+        {
+          "line": 24475,
+          "expression": "selectedResult: try XCTUnwrap(rows.first)"
+        },
+        {
+          "line": 24478,
           "expression": "let list = try XCTUnwrap(pushed.last as? CPListTemplate)"
         },
         {
-          "line": 23447,
+          "line": 24481,
           "expression": "XCTAssertTrue(list.sections.isEmpty)"
         }
       ],
       "synchronizationEvidence": [
         {
-          "line": 23439,
+          "line": 24472,
           "expression": "let selected = expectation(description: \"Author loaded\")"
         },
         {
-          "line": 23443,
+          "line": 24477,
           "expression": "await fulfillment(of: [selected], timeout: 2)"
         }
       ],
@@ -39047,21 +39055,21 @@
             "postcondition": "No status rows/sections at zero capacity."
           }
         ],
-        "timeoutAndToleranceRationale": "Presenter callbacks and controller conditions are waited with bounded XCTest expectations or bounded condition helpers. Scheduler yield/sleep sites are follow-up findings, not latency tolerance.",
+        "timeoutAndToleranceRationale": "Search publication helper awaits an exact-once callback with a three-second XCTest budget; selection callbacks retain two seconds. These are bounded failure deadlines, not product latency or added settling delays.",
         "ruleAssessments": {
           "1": "The CarPlay cellular queue or search state follows the action and is checked through exact presenter, model, callback, or service request postconditions.",
-          "2": "Most callback paths use bounded waitUntil/XCTest expectations. A few methods still use Task.yield or fixed-sleep polling as queue/drain evidence; see specific follow-up.",
+          "2": "Author selection callbacks use asserted XCTest fulfillment with the existing two-second failure budget; no sleep or guessed yield barrier in this test.",
           "3": "N/A: only download/search UI queue, not playback timing.",
-          "4": "CarPlay framework action handlers may arrive asynchronously; detached callback invocation is used where tested. Explicit gates are released and tasks awaited; yield/sleep drain is not a completion contract in listed follow-ups.",
-          "5": "Cellular tests use temporary download roots and cleanup; search tests are in-memory.",
+          "4": "Direct synchronous defer invalidates the controller on every scope exit, including throwing fixture/row/list/handler checks. Existing callback fulfillment and stale retry assertions are retained; this does not establish async callback-drain completion.",
+          "5": "Fresh account/library, injected in-memory service and local controller state per test; zero-capacity test recreates them for each remote/cache source.",
           "6": "Loop over remote/cache source with author fixture. Platform presenter/service fakes; no physical CarPlay head unit validation.",
-          "7": "No hidden retry-to-green; stale callback behavior is asserted.",
-          "8": "Bounded 2\u20133s callbacks and conditions; not product latency.",
-          "9": "Conditional compile guard `#if canImport(CarPlay) && !os(macOS)`; simulator results pending."
+          "7": "Checked author-ID construction preserves exact original IDs/names; first-row selection is checked through XCTUnwrap without changing fixtures, capacity cases, typed filters or request-count assertions.",
+          "8": "XCTUnwrap records invalid fixture IDs and missing first rows at the caller location; existing list/handler checks and exact assertions remain.",
+          "9": "CarPlay is conditionally compiled with canImport(CarPlay) && !os(macOS); focused repetitions and build-discovered owning-suite Simulator evidence are recorded in docs/release-evidence/test-reliability-app-followups.md."
         },
         "decision": {
           "outcome": "keep",
-          "reason": "The scenario uses injected presenter/service and gates and asserts the exact visible state, request count, or callback result."
+          "reason": "Forced AuthorID fixture construction and unchecked first-row selection are replaced by caller-located XCTest checks; immediate synchronous defer guarantees controller invalidation on throwing exits. Original semantic assertions and timing budgets remain. Other gated fixture and callback-drain findings remain open."
         }
       }
     },
@@ -39069,8 +39077,8 @@
       "identifier": "AppModelTests/testCarPlaySearchStaleAuthorRetryAndFailureCapacity",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 23450,
-        "endLineBeforeNextTest": 23506
+        "line": 24485,
+        "endLineBeforeNextTest": 24541
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -39079,63 +39087,75 @@
       ],
       "actions": [
         {
-          "line": 23463,
+          "line": 24496,
           "expression": "await service.setCarPlaySearchResults("
         }
       ],
       "assertions": [
         {
-          "line": 23481,
+          "line": 24490,
+          "expression": "id: try XCTUnwrap(AuthorID(rawValue: \"author\")), name: \"Author\")"
+        },
+        {
+          "line": 24512,
+          "expression": "controller.template, selectedResult: try XCTUnwrap(rows.first)"
+        },
+        {
+          "line": 24515,
           "expression": "let list = try XCTUnwrap(pushed.last as? CPListTemplate)"
         },
         {
-          "line": 23482,
+          "line": 24516,
           "expression": "let retry = try XCTUnwrap("
         },
         {
-          "line": 23484,
+          "line": 24518,
           "expression": "XCTAssertTrue(retry.isEnabled)"
         },
         {
-          "line": 23487,
+          "line": 24521,
           "expression": "XCTAssertTrue(list.sections.isEmpty)"
         },
         {
-          "line": 23490,
+          "line": 24524,
           "expression": "XCTAssertEqual(list.sections.first?.items.count, 1)"
         },
         {
-          "line": 23501,
+          "line": 24528,
+          "expression": "controller.template, selectedResult: try XCTUnwrap(rows.first)"
+        },
+        {
+          "line": 24535,
           "expression": "let handler = try XCTUnwrap(retry.handler)"
         },
         {
-          "line": 23505,
+          "line": 24539,
           "expression": "XCTAssertEqual(after, before)"
         }
       ],
       "synchronizationEvidence": [
         {
-          "line": 23475,
+          "line": 24509,
           "expression": "let selected = expectation("
         },
         {
-          "line": 23480,
+          "line": 24514,
           "expression": "await fulfillment(of: [selected], timeout: 2)"
         },
         {
-          "line": 23492,
+          "line": 24526,
           "expression": "let reopened = expectation(description: \"Reopened author completes\")"
         },
         {
-          "line": 23496,
+          "line": 24530,
           "expression": "await fulfillment(of: [reopened], timeout: 2)"
         },
         {
-          "line": 23498,
+          "line": 24532,
           "expression": "let stale = expectation("
         },
         {
-          "line": 23503,
+          "line": 24537,
           "expression": "await fulfillment(of: [stale], timeout: 2)"
         }
       ],
@@ -39149,21 +39169,21 @@
             "postcondition": "Failure retry row enabled only current, capacity respected; stale handler causes no page request."
           }
         ],
-        "timeoutAndToleranceRationale": "Presenter callbacks and controller conditions are waited with bounded XCTest expectations or bounded condition helpers. Scheduler yield/sleep sites are follow-up findings, not latency tolerance.",
+        "timeoutAndToleranceRationale": "Search publication helper awaits an exact-once callback with a three-second XCTest budget; selection callbacks retain two seconds. These are bounded failure deadlines, not product latency or added settling delays.",
         "ruleAssessments": {
           "1": "The CarPlay cellular queue or search state follows the action and is checked through exact presenter, model, callback, or service request postconditions.",
-          "2": "Most callback paths use bounded waitUntil/XCTest expectations. A few methods still use Task.yield or fixed-sleep polling as queue/drain evidence; see specific follow-up.",
+          "2": "Author selection callbacks use asserted XCTest fulfillment with the existing two-second failure budget; no sleep or guessed yield barrier in this test.",
           "3": "N/A: only download/search UI queue, not playback timing.",
-          "4": "CarPlay framework action handlers may arrive asynchronously; detached callback invocation is used where tested. Explicit gates are released and tasks awaited; yield/sleep drain is not a completion contract in listed follow-ups.",
-          "5": "Cellular tests use temporary download roots and cleanup; search tests are in-memory.",
+          "4": "Direct synchronous defer invalidates the controller on every scope exit, including throwing fixture/row/list/handler checks. Existing callback fulfillment and stale retry assertions are retained; this does not establish async callback-drain completion.",
+          "5": "Fresh account/library, injected in-memory service and local controller state per test; zero-capacity test recreates them for each remote/cache source.",
           "6": "Author search row and typed 503 page failure. Platform presenter/service fakes; no physical CarPlay head unit validation.",
-          "7": "No hidden retry-to-green; stale callback behavior is asserted.",
-          "8": "Bounded 2\u20133s callbacks and conditions; not product latency.",
-          "9": "Conditional compile guard `#if canImport(CarPlay) && !os(macOS)`; simulator results pending."
+          "7": "Checked author-ID construction preserves exact original IDs/names; first-row selection is checked through XCTUnwrap without changing fixtures, capacity cases, typed filters or request-count assertions.",
+          "8": "XCTUnwrap records invalid fixture IDs and missing first rows at the caller location; existing list/handler checks and exact assertions remain.",
+          "9": "CarPlay is conditionally compiled with canImport(CarPlay) && !os(macOS); focused repetitions and build-discovered owning-suite Simulator evidence are recorded in docs/release-evidence/test-reliability-app-followups.md."
         },
         "decision": {
           "outcome": "keep",
-          "reason": "The scenario uses injected presenter/service and gates and asserts the exact visible state, request count, or callback result."
+          "reason": "Forced AuthorID fixture construction and unchecked first-row selection are replaced by caller-located XCTest checks; immediate synchronous defer guarantees controller invalidation on throwing exits. Original semantic assertions and timing budgets remain. Other gated fixture and callback-drain findings remain open."
         }
       }
     },
@@ -39244,8 +39264,8 @@
       "identifier": "AppModelTests/testCarPlaySearchAuthorUsesIndependentFilteredPage",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 23542,
-        "endLineBeforeNextTest": 23578
+        "line": 24577,
+        "endLineBeforeNextTest": 24614
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -39254,47 +39274,51 @@
       ],
       "actions": [
         {
-          "line": 23553,
+          "line": 24587,
           "expression": "await service.setCarPlaySearchResults("
         }
       ],
       "assertions": [
         {
-          "line": 23567,
+          "line": 24581,
+          "expression": "id: try XCTUnwrap(AuthorID(rawValue: \"search-author\")),"
+        },
+        {
+          "line": 24602,
           "expression": "controller.template, selectedResult: try XCTUnwrap(rows.first)"
         },
         {
-          "line": 23570,
+          "line": 24605,
           "expression": "let list = try XCTUnwrap(pushed.last as? CPListTemplate)"
         },
         {
-          "line": 23571,
+          "line": 24606,
           "expression": "XCTAssertEqual(list.title, author.name)"
         },
         {
-          "line": 23572,
+          "line": 24607,
           "expression": "XCTAssertFalse(list.sections.isEmpty)"
         },
         {
-          "line": 23574,
+          "line": 24609,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 23576,
+          "line": 24611,
           "expression": "XCTAssertEqual(selections.last?.collapseSeries, false)"
         },
         {
-          "line": 23577,
+          "line": 24612,
           "expression": "XCTAssertEqual(model.books, .idle)"
         }
       ],
       "synchronizationEvidence": [
         {
-          "line": 23563,
+          "line": 24598,
           "expression": "let selected = expectation("
         },
         {
-          "line": 23569,
+          "line": 24604,
           "expression": "await fulfillment(of: [selected], timeout: 2)"
         }
       ],
@@ -39308,21 +39332,21 @@
             "postcondition": "Author page title/rows visible; request has author filter and no collapsing; phone books idle."
           }
         ],
-        "timeoutAndToleranceRationale": "Presenter callbacks and controller conditions are waited with bounded XCTest expectations or bounded condition helpers. Scheduler yield/sleep sites are follow-up findings, not latency tolerance.",
+        "timeoutAndToleranceRationale": "Search publication helper awaits an exact-once callback with a three-second XCTest budget; selection callbacks retain two seconds. These are bounded failure deadlines, not product latency or added settling delays.",
         "ruleAssessments": {
           "1": "The CarPlay cellular queue or search state follows the action and is checked through exact presenter, model, callback, or service request postconditions.",
-          "2": "Most callback paths use bounded waitUntil/XCTest expectations. A few methods still use Task.yield or fixed-sleep polling as queue/drain evidence; see specific follow-up.",
+          "2": "Author selection callbacks use asserted XCTest fulfillment with the existing two-second failure budget; no sleep or guessed yield barrier in this test.",
           "3": "N/A: only download/search UI queue, not playback timing.",
-          "4": "CarPlay framework action handlers may arrive asynchronously; detached callback invocation is used where tested. Explicit gates are released and tasks awaited; yield/sleep drain is not a completion contract in listed follow-ups.",
-          "5": "Cellular tests use temporary download roots and cleanup; search tests are in-memory.",
+          "4": "Direct synchronous defer invalidates the controller on every scope exit, including throwing fixture/row/list/handler checks. Existing callback fulfillment and stale retry assertions are retained; this does not establish async callback-drain completion.",
+          "5": "Fresh account/library, injected in-memory service and local controller state per test; zero-capacity test recreates them for each remote/cache source.",
           "6": "Injected author result, AppModel, CarPlay controller. Platform presenter/service fakes; no physical CarPlay head unit validation.",
-          "7": "No hidden retry-to-green; stale callback behavior is asserted.",
-          "8": "Bounded 2\u20133s callbacks and conditions; not product latency.",
-          "9": "Conditional compile guard `#if canImport(CarPlay) && !os(macOS)`; simulator results pending."
+          "7": "Checked author-ID construction preserves exact original IDs/names; first-row selection is checked through XCTUnwrap without changing fixtures, capacity cases, typed filters or request-count assertions.",
+          "8": "XCTUnwrap records invalid fixture IDs and missing first rows at the caller location; existing list/handler checks and exact assertions remain.",
+          "9": "CarPlay is conditionally compiled with canImport(CarPlay) && !os(macOS); focused repetitions and build-discovered owning-suite Simulator evidence are recorded in docs/release-evidence/test-reliability-app-followups.md."
         },
         "decision": {
           "outcome": "keep",
-          "reason": "The scenario uses injected presenter/service and gates and asserts the exact visible state, request count, or callback result."
+          "reason": "Forced AuthorID fixture construction is replaced by a caller-located XCTest check; existing checked first-row selection remains. Immediate synchronous defer guarantees controller invalidation on throwing exits. Original semantic assertions and timing budgets remain. Other gated fixture and callback-drain findings remain open."
         }
       }
     },

@@ -32,7 +32,7 @@ items below are specific reliability defects that remain after source review.
 | `AppModelTests/testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch`; `testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery`; `testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome`; `testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST`; `testPendingLocalSessionUploadDoesNotBlockLaunch` | Isolate defaults from `UserDefaults.standard`; replace break-only polling with asserted transition waits; on failure, release upload gates and cancel/join observer tasks. | Shared preferences can leak between parallel tests or survive abnormal teardown. Break-only loops can continue into assertions without proving the intended transition, and a blocked observer can outlive the test. | Bleat maintainers |
 | `AppModelTests/testBookDeletionSupersedesInFlightFailedPlaybackRetry`; `testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert`; `testSetFinishedUsesRemoteOnlyDetailReconciliation`; `testSetFinishedReconciliationFailuresRecordTypedDiagnostics` | Await the owned retry/reconciliation completion through a signal, then assert one exact request/session outcome and final committed state. | Deadline-bounded polling is better than an unbounded wait but does not establish that independent work finished; accepting a request-count range can hide a duplicate or missing path. | Bleat maintainers |
 | `AppModelTests/testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest`; `testCarPlayCellularReconnectAndDelayedPresentationKeepDecision`; `testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions`; `testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing`; `testCarPlaySearchNativeRowsSurviveCapacityChanges`; `testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchRetryAndNoMatchesRemainExplicit`; `testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback`; `testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork` | Use completion/admission signals for stale callbacks and queue transitions; replace artwork-render polling with an observable publication signal or an asserted bounded condition. | The current yield/sleep barriers do not prove the retired callback or artwork update has been processed. A late callback could mutate the next request after the test returns, while a short render poll gives weak failure evidence. | Bleat maintainers |
-| `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`; `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`; `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`; `testCarPlaySearchAuthorUsesIndependentFilteredPage` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
+| `AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad`; `testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad` | Replace force-unwrapped fixture IDs and URLs with `try XCTUnwrap` or another XCTest failure path before exercising the behavior. | Malformed fixtures or constructor changes currently can terminate the test process instead of recording the failing fixture and allowing XCTest diagnostics. | Bleat maintainers |
 | `NetworkPathTests/testStaleProbeCannotPromoteEndpointOrReviveStoppedSubscription` | Ensure all probe gates and subscription tasks are released/cancelled and joined in `defer`, then assert the retired generation cannot be promoted. | A failed intermediate assertion can strand the probe task and contaminate later network tests; stale-generation rejection must remain the semantic postcondition. | Bleat maintainers |
 | `ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh`; `testCaptureRotatedTokens`; `testRemovePrivateCapture`; `testLogoutRemovedSessionCredentials`; `testPrivateCaptureRemainsRemovedAfterLogout` | Add failure-safe cleanup for the private capture directory and real Keychain test credentials, while preserving the cross-launch capture/rotation/logout sequence. | These tests deliberately use persistent host state across launches. An early assertion failure can leave sensitive test artifacts or credentials behind and affect a later run. Signed host evidence remains required. | Bleat maintainers |
 | `FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor`; `KeychainEntitlementTests/testApplicationHostCanPersistCredentialsInKeychain` | Replace queue-marker assumptions with a signal tied to the actual KVO callback or Keychain operation completion before reading final state. | Main-actor task ordering is not proof that the callback/operation finished; the assertion can race delivery and report a false pass. Preserve the off-main callback and application-host Keychain coverage. | Bleat maintainers |
@@ -346,3 +346,77 @@ marker were preserved.
 This is app-hosted Simulator evidence. Signed-host, physical-device energy,
 external-server, full live journeys, configuration and release evidence remain
 separate; issues #374 and #362 remain open.
+
+## Three ungated CarPlay author fixtures (#374)
+
+Only these `AppModelTests` cases are reconciled in this slice:
+
+- `testCarPlaySearchAuthorZeroCapacityHasNoStatusSections`
+- `testCarPlaySearchStaleAuthorRetryAndFailureCapacity`
+- `testCarPlaySearchAuthorUsesIndependentFilteredPage`
+
+Each author ID now uses caller-located `try XCTUnwrap`, preserving the exact
+`author`/`search-author` IDs, author names and injected service fixtures. The
+first two cases check the first result with `XCTUnwrap(rows.first)` before
+selection (including reopening the author page); the third retains its existing
+checked selection. Each controller immediately registers a direct synchronous
+`defer { controller.invalidate() }`, inside each source iteration where relevant,
+so throwing setup, row, list or retry-handler checks still invalidate it.
+
+Remote/cache zero-capacity cases, failure-row 5→0→5 capacity changes, pop/reopen,
+stale retry exact request-count equality, exact-once callback expectations,
+independent typed author filter, uncollapsed page and unchanged phone browsing
+assertions remain. No timing budget, production code or test identity changes.
+The three audit records now reflect current source; historical aggregate counts
+remain historical. The host inventory is unaffected.
+
+Adjacent source review covered the selected fixtures, search-row helper and
+controller selection, author loading, stale-generation checks and invalidation.
+No new production defect was found in this slice. The helper's main-actor row
+publication assumption and asynchronous callback/drain contracts are not newly
+validated by synchronous invalidation. The two gated fixture findings
+(`testCarPlaySearchAuthorPopCompletesUncooperativeLoad` and
+`testCarPlaySearchNewAuthorDoesNotRenderPreviousAuthorDuringLoad`) and all
+remaining callback-synchronization findings stay open in the table above.
+
+Validation uses base `781acf161ef3e955d8fcd8a8aa255f53260d72fd`, Xcode 27.1
+(`27A9275`), Debug, iPhone 17 Pro and iOS Simulator 26.5. Result bundles and
+logs use `.build/carplay-author-` prefixes. The Xcode command is `mise exec --
+xcodebuild -quiet -project Bleat.xcodeproj -scheme Bleat -configuration Debug
+-derivedDataPath .build/carplay-author-derived`, with the installed Simulator
+destination, `-parallel-testing-enabled NO`, explicit result bundle and selection.
+
+| Selection | Verified passed outcomes | Result bundle |
+| --- | --- | --- |
+| Exact three author cases, fresh build | Three identities | `.build/carplay-author-focused.xcresult` |
+| Same exact cases, native repetitions after final line wrap | Ten each, 30 outcomes | `.build/carplay-author-repeated.xcresult` |
+| `BleatAppTests/AppModelTests` | All 505 built identities | `.build/carplay-author-appmodel.xcresult` |
+| `BleatAppTests` | All 608 built identities | `.build/carplay-author-app-unit.xcresult` |
+
+The focused/repetition commands used `test` (the repetition command added
+`-test-iterations 10`); owning selections use `test-without-building`. The first
+run preceded a line-wrap-only lint correction; the repetition build and owning
+runs use the final Swift source. `verify-test-results` checked exact focused
+identities with `--expected` and `--repetitions 10` for repetitions. Owning runs
+use `--discovery .build/carplay-author-owning.discovery.json` and the exact
+`--only` selection. Discovery is flat JSON from `test-without-building
+-enumerate-tests` on the same built products, with 505 AppModel and 608 app
+identities. Source/product SHA-256 evidence is retained in
+`.build/carplay-author-source-products.json`.
+
+Strict changed-file lint initially found one overlong selection line, corrected
+by wrapping it. Changed-file lint and repository-wide `mise run swift-lint`
+subsequently passed. Logs retain Xcode's `IDESchemeActionSDKRecord` diagnostic
+for host build `24A94232` (`invalidDigitCount(94232)`). The repetition rebuild
+also emitted 1,608 stale-file warnings for paths through the configured `.build`
+symlink outside allowed build roots, matching the documented tooling warning
+from the preceding slice. There were no other compiler warnings in that rebuild;
+no shared build/cache files were removed or configuration changed. The fresh
+focused build, AppModel execution and full app execution have no compiler/stale-file warnings.
+All verified bundles have zero failures, expected failures, skips and runtime
+warnings; no test attempt failed or was retried to green.
+
+This is app-hosted Simulator evidence only. Signed-host, physical CarPlay,
+iOS 27 input/head-unit, live-server and release evidence remain separate.
+`mise run docs:check` and `git diff --check` passed after the final evidence update.
+Issues #374 and #362 remain open.
