@@ -21607,19 +21607,19 @@
       "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
     },
     {
-      "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCanonicalTranscriptExportHasSourceIndependentSemantics",
+      "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCanonicalTranscriptExportIsRepeatable",
       "source": {
         "path": "Tests/BleatCoreTests/TranscriptExportTests.swift",
         "line": 90
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Compare two exports of a canonical transcript.",
+      "purpose": "Verify repeated canonical transcript exports produce identical WebVTT bytes.",
       "dependencies_setup_actions_postconditions": null,
       "synchronization_timeout_tolerance": null,
       "compiler_skip_conditions": null,
       "rules": {
-        "1": "Equality compares repeated identical input; it does not cover the named source-independence contract.",
+        "1": "Exact byte equality intentionally checks repeatable WebVTT encoding for identical canonical input; distinct local/imported source paths are not exercised.",
         "2": "No arbitrary delay or condition wait occurs.",
         "3": "N/A: no advancing playback or exact playback-position assertion.",
         "4": "Synchronous; no wait is required.",
@@ -21627,17 +21627,17 @@
         "6": "Deterministic host test",
         "7": "No retry or timeout/tolerance adjustment is present.",
         "8": "Assertions report the expression and source location.",
-        "9": "Individual and owning-suite repetition evidence remains pending execution."
+        "9": "2026-10-19: three independent focused passes, owning suite 7/7 and signed host 577/577; zero failures/errors/skips. See docs/release-evidence/test-reliability-core-followups.md#transcript-export-repeatability-issue-372. Historical evidence remains revision-bound."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Literal canonical transcript and segment values local to the test.",
-      "action_postconditions": "Both values export the same array through the same function; assert byte equality.",
+      "action_postconditions": "Export the same canonical array twice as WebVTT; assert identical encoded bytes.",
       "synchronization": "Synchronous; no wait is required.",
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Both purported sources are the identical input and exporter call, proving only deterministic repeatability; either rename the test or construct distinct local/imported source paths.",
-      "follow_up_document": "docs/release-evidence/test-reliability-core-followups.md"
+      "reason": "Renamed on 2026-10-19 under issue #372 to describe existing repeatability coverage. Canonical fixture, segments, format, export calls and byte equality are unchanged; no source-independence coverage is claimed.",
+      "follow_up_document": "docs/release-evidence/test-reliability-core-followups.md#transcript-export-repeatability-issue-372"
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testPartialCanonicalTranscriptCanBeExported",

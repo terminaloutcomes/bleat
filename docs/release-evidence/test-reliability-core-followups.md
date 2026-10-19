@@ -9,7 +9,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken` | Replace the unbounded `Task.yield()` wait for a token challenge with a bounded transport-start signal. | If refresh never starts, the test hangs before it can assert disable behavior. |
 | `Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::OpenIDWebSessionFactory.waitUntilSessionStarts` (callers include browser lifecycle tests) | Use a registered start notification and bounded wait, then assert session start with the caller's source location. | The helper loops forever if the session never starts and relies on scheduler yields instead of an event contract. Audit every caller when changing the helper. |
 | `Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken` | Replace the 1,000-yield loop polling `isSigningOut` with a state-change signal or bounded predicate wait. | The bound is a scheduler-iteration count, not a time budget; failure diagnostics do not report elapsed time or a meaningful timeout. |
-| `Tests/BleatCoreTests/TranscriptExportTests.swift::testCanonicalTranscriptExportHasSourceIndependentSemantics` | Rename this test to state that it checks repeatability, or make its two inputs originate from distinct local/imported paths and compare their semantic output. | Both current variables call the same exporter with the same canonical array, so the equality assertion does not establish source-independent behavior named by the test. |
+| `Tests/BleatCoreTests/TranscriptExportTests.swift::testCanonicalTranscriptExportIsRepeatable` | Implemented: name and local variables describe repeatable WebVTT bytes. | See [scoped identity evidence](#transcript-export-repeatability-issue-372); this does not establish distinct local/imported source-path coverage. |
 | `Tests/BleatCoreTests/LogoutTests.swift::testConcurrentLogoutAndAuthenticatedRequestAreRejected`, `testLogoutRejectsAnOverlappingLocalLogin`, `testLogoutSettlesRefreshAndInvalidatesTheRotatedToken`, `testRequestCannotStartRefreshAfterLogoutBegins`, `testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated` | Replace unbounded fake-entry continuation waits with bounded condition signals; replace the 1,000-yield `isSigningOut` loop with a typed state-change notification. | Missing login/logout/refresh transition can currently suspend a test forever. The yield loop uses scheduler iteration count rather than a deadline or observed state event and may be flaky under load. Preserve the ordering and late-result race assertions. |
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellingAsyncExportCancelsTokenWaitBeforeRPC`, `testCancelActiveExportsCancelsAsyncTokenWaitBeforeRPC`, `testCancellationUnblocksTokenWaitAndShutsTransportOnce`, `testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport` | Replace `DispatchSemaphore.wait` readiness helpers with bounded async signals and source-located timeout failures. | These async tests synchronously block their executor while waiting up to two seconds for token/RPC entry; a semaphore is not an async completion contract and can starve work under constrained test scheduling. |
 | `Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient` | Replace the token fake’s 50ms sleep window with a barrier proving concurrent callers have joined before token release. | A sleep approximates overlap but does not guarantee all eight export tasks join the same refresh under slow scheduling. |
@@ -507,3 +507,71 @@ not failures of the renamed test. Documentation checking passed after adding
 this section; `git diff --check` and scoped source/index/inventory checks passed.
 The adjacent refresh error mapping and fixture were inspected for typed error
 handling and process-terminating constructs; no production change was needed.
+
+## Transcript export repeatability (issue #372)
+
+On 2026-10-19, `TranscriptExportTests.testCanonicalTranscriptExportHasSourceIndependentSemantics`
+was renamed to `testCanonicalTranscriptExportIsRepeatable`; its local values are
+now `firstExport` and `repeatedExport`. The canonical array, segment values,
+WebVTT format, two exporter calls and equality assertion are unchanged.
+Byte equality is intentional here: the contract under test is repeatable encoded
+WebVTT bytes for identical canonical input. The adjacent fixed-output WebVTT
+encoding tests remain separate. This test does not exercise distinct local and
+imported source paths, and no new coverage is claimed.
+
+The matching audit disposition is now keep, and the active follow-up row,
+host inventory and source-index identity agree. Historical audit revisions and
+counts remain unchanged. Issues #372 and #362 remain open, including unrelated
+lifecycle, staged-gate and cleanup findings.
+
+Validation is against base `6e62417281980f0185c1eb812def220e5c82bd66` plus this
+scoped change, using Xcode 27.1 (27A9275), macOS 26.6.2 and serial Swift Testing.
+Artifacts are retained under `.build/i372-transcript-repeatability/`;
+three independent focused invocations passed 3/3 and the owning suite passed
+7/7. XML identity multisets and each outcome were independently checked, with
+zero failures/errors/skips. No Simulator,
+live-server, physical-device or release evidence is claimed.
+
+The synchronous exporter and adjacent test fixtures were inspected: invalid
+input uses typed `TranscriptExportError.noSegments` / `.invalidSegment` cases;
+no process-terminating constructs or framework callback boundary was found.
+Production and helper code are unchanged. Supported app setup supplied the
+linked `.envrc` and marked temporary build directory; environment loading was
+verified before editing. No setup script exit status was exposed.
+
+Commands: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+TranscriptExportTests.testCanonicalTranscriptExportIsRepeatable
+--xunit-output .build/i372-transcript-repeatability/focused-1.xml`;
+subsequent independent invocations use `--skip-build` and `focused-2.xml` /
+`focused-3.xml`. The owning invocation uses `--skip-build --filter
+TranscriptExportTests` and `owning.xml`. Each log has the corresponding basename.
+The literal local fixture has no order, timing, load or external-state dependency;
+serial fresh invocations are the applicable variation for this name-only change.
+The host inventory remains 577 identities; the portable source index remains
+1,561 declarations. Normalizing only the new name reproduces each base inventory
+structurally. Normalizing the function and two local variable names reproduces
+the entire base Swift file exactly.
+
+Strict changed-file Swift lint and repository `mise run swift-lint` passed.
+The initial build emitted the upstream OpenTelemetry deprecated watchOS minimum
+warning; no focused or owning test failure, skip or runtime warning occurred.
+
+The complete signed owning-host command, `mise exec -- ./scripts/test-host.sh`,
+passed **577/577 exact inventory identities** (572 core and five transcription),
+zero failures/errors/skips, including the renamed test. The repository verifier
+and an independent XML identity-multiset/outcome check both accepted
+`.build/host-results/tests.xml`; per-product reports remain alongside it.
+The log is `.build/i372-transcript-repeatability/signed-host.log`; production
+coverage is retained under `.build/coverage/swift-host/`. The gate verified
+signed identity, Keychain entitlement and provisioning-profile presence.
+
+The signed log retains the upstream watchOS deprecation, nine intentional
+read-only SwiftData save diagnostics, and three known issues from the
+DownloadStorage/TestCleanup deletion-failure regressions. Their owning tests
+passed. There were no unsuccessful test invocations or zero-test selections.
+The initial branch-creation attempt was blocked by shared Git filesystem access;
+the same operation succeeded with host access before editing. Documentation
+checking passed, as did `git diff --check` and scoped source/index/inventory
+consistency checks. No setup, environment, security or production changes were
+needed.

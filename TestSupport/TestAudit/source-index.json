@@ -7186,7 +7186,7 @@
     },
     {
       "path": "Tests/BleatCoreTests/TranscriptExportTests.swift",
-      "name": "testCanonicalTranscriptExportHasSourceIndependentSemantics",
+      "name": "testCanonicalTranscriptExportIsRepeatable",
       "line": 90,
       "language": "swift"
     },
