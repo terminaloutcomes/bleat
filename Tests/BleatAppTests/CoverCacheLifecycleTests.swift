@@ -389,6 +389,10 @@ import XCTest
             BookCoverRefresh.shared.refresh(accountID: otherAccount)
             await fulfillment(of: [unrelated], timeout: 3)
             await fetcher.set(fresh)
+            let revalidationEntered = expectation(
+                description: "same-URL refresh held before new bytes")
+            let gate = CoverDeliveryGate(entered: revalidationEntered)
+            await fetcher.hold(gate)
             await loader.revalidate(for: account)
             let replacement = expectation(
                 description: "same-URL system artwork replaced")
@@ -400,6 +404,15 @@ import XCTest
                 }
             }
             BookCoverRefresh.shared.refresh(accountID: account)
+            await fulfillment(of: [revalidationEntered], timeout: 3)
+            let retained =
+                publisher.nowPlayingInfo?[MPMediaItemPropertyArtwork]
+                as? MPMediaItemArtwork
+            XCTAssertEqual(
+                retained?.image(at: CGSize(width: 1, height: 1))?.size.width, 2,
+                "Routine revalidation must retain usable artwork until replacement bytes arrive"
+            )
+            try await gate.release(data: fresh)
             await fulfillment(of: [replacement], timeout: 3)
             let artwork =
                 publisher.nowPlayingInfo?[MPMediaItemPropertyArtwork]
@@ -493,11 +506,14 @@ import XCTest
     }
 
     private actor CoverMutableResponse {
+        var gate: CoverDeliveryGate?
         var data: Data
         init(data: Data) { self.data = data }
         func set(_ data: Data) { self.data = data }
-        func fetch(_ request: URLRequest) throws -> (Data, URLResponse) {
-            try response(data, request)
+        func hold(_ gate: CoverDeliveryGate) { self.gate = gate }
+        func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+            if let gate { return try await gate.fetch(request) }
+            return try response(data, request)
         }
     }
 

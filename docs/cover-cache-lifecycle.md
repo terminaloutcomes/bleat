@@ -44,7 +44,10 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   Exact encoded bytes intentionally identify the rendered variant; a changed
   encoding may cause extra revalidation. This comparison never proves why the
   original device showed stale art.
-- Routine refresh retains the displayed image while requesting its replacement.
+- Routine refresh retains the displayed image while requesting its replacement,
+  including system artwork and CarPlay presentation cache seeds. Transient
+  request revisions are excluded from presentation identity; replacement
+  generations, canonical timestamps, dimensions and account identity are retained.
   A confirmed replacement, changed timestamp/URL, or account switch hides the
   obsolete presentation. Request identity includes policy and refresh generation;
   a retired view task cannot publish its completion.

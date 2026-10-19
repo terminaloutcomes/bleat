@@ -77,6 +77,28 @@ final class BookCoverRefresh {
     }
 }
 
+// Refresh-only revisions must not blank usable artwork. A confirmed
+// replacement generation or canonical metadata/size/account change does.
+struct BookCoverPresentationIdentity: Equatable {
+    let accountID: AccountID?
+    let url: URL?
+    let replacementGeneration: UUID?
+
+    init(accountID: AccountID?, url: URL?, generation: [UUID?]) {
+        self.accountID = accountID
+        if let url {
+            var components = URLComponents(
+                url: url, resolvingAgainstBaseURL: false)
+            let items = components?.queryItems?.filter { $0.name != "revision" }
+            components?.queryItems = items
+            self.url = components?.url ?? url
+        } else {
+            self.url = nil
+        }
+        replacementGeneration = generation.count > 1 ? generation[1] : nil
+    }
+}
+
 private struct PersistedBookCover: Codable {
     let timestamp: Int64
     let data: Data
@@ -734,10 +756,7 @@ struct BookCoverView: View {
         Color.clear.overlay {
             switch state {
             case .loaded(let image):
-                if loadedRequest?.accountID == request.accountID,
-                    loadedRequest?.url == request.url,
-                    loadedRequest?.generation.last == request.generation.last
-                {
+                if loadedRequest?.presentation == request.presentation {
                     PlatformImageSupport.resizableView(for: image)
                         .scaledToFill()
                 } else {
@@ -770,9 +789,7 @@ struct BookCoverView: View {
                 return
             }
             if image == nil, case .loaded = state,
-                loadedRequest?.accountID == loadingRequest.accountID,
-                loadedRequest?.url == loadingRequest.url,
-                loadedRequest?.generation.last == loadingRequest.generation.last
+                loadedRequest?.presentation == loadingRequest.presentation
             {
                 return
             }
@@ -803,6 +820,11 @@ private struct BookCoverRequest: Hashable {
     let policy: BookCoverLoadPolicy
     let accountID: AccountID?
     let url: URL?
+
+    var presentation: BookCoverPresentationIdentity {
+        BookCoverPresentationIdentity(
+            accountID: accountID, url: url, generation: generation)
+    }
 }
 
 enum PlayableBookCoverState: Equatable, Sendable {

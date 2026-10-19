@@ -145,6 +145,11 @@ private struct NowPlayingArtworkIdentity: Equatable {
     let accountID: AccountID?
     let url: URL
     let policy: BookCoverLoadPolicy
+
+    var presentation: BookCoverPresentationIdentity {
+        BookCoverPresentationIdentity(
+            accountID: accountID, url: url, generation: generation)
+    }
 }
 
 @MainActor
@@ -273,6 +278,11 @@ final class NowPlayingCoordinator {
                 policy: snapshot.coverLoadPolicy
             )
         }
+        if nextArtworkIdentity != artworkIdentity,
+            nextArtworkIdentity?.presentation != artworkIdentity?.presentation
+        {
+            artwork = nil
+        }
         latestSnapshot = snapshot
         remoteCommandAdmission.withLock { $0.snapshot = snapshot }
         updateCommandAvailability(snapshot)
@@ -285,8 +295,7 @@ final class NowPlayingCoordinator {
         artworkTask?.cancel()
         artworkTask = nil
         artworkIdentity = nextArtworkIdentity
-        artwork = nil
-        infoCenter.nowPlayingInfo = snapshot.information(artwork: nil)
+        infoCenter.nowPlayingInfo = snapshot.information(artwork: artwork)
         guard let nextArtworkIdentity else {
             return
         }

@@ -1571,6 +1571,10 @@
                     return
                 }
                 artworkCache.setObject(image, forKey: cacheKey)
+                artworkCache.setObject(
+                    image,
+                    forKey: retainedArtworkCacheKey(
+                        accountID: accountID, url: url))
                 item.setImage(image)
             }
             artworkTasks.append(task)
@@ -1588,7 +1592,22 @@
                 url: url
             )
             return artworkCache.object(forKey: cacheKey)
+                ?? artworkCache.object(
+                    forKey: retainedArtworkCacheKey(
+                        accountID: accountID, url: url))
                 ?? UIImage(systemName: "book.closed.fill")
+        }
+
+        private func retainedArtworkCacheKey(accountID: AccountID?, url: URL)
+            -> NSString
+        {
+            let identity = BookCoverPresentationIdentity(
+                accountID: accountID, url: url,
+                generation: BookCoverRefresh.shared.generation(
+                    accountID: accountID, url: url))
+            return
+                "retained:\(identity.accountID?.rawValue ?? "anonymous")\u{0}\(identity.url?.absoluteString ?? "")\u{0}\(identity.replacementGeneration?.uuidString ?? "")"
+                as NSString
         }
 
         private func artworkCacheKey(
