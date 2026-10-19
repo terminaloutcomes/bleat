@@ -3972,7 +3972,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 9
+        "line": 80
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -3982,43 +3982,44 @@
         "action_postconditions": "Run 20 requests; assert each succeeds, exactly 20 old and new access requests, one refresh, 20 paired correlations, one token save, no reauth, exact prefixed refresh request/method/header."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Concurrency transport releases unauthorized requests only after count reaches 20; this continuation has no timeout.",
-        "timeout_tolerance": "N/A: no playback/time-position assertion."
+        "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
+        "timeout_tolerance": "Arrival retains the existing ten-second budget; batch completion is ten seconds for all twenty results, not twenty serial per-caller budgets. No numeric playback tolerance."
       },
       "compiler_skip_conditions": "No test-level compile guard, skip, or opt-in condition.",
       "rules": {
         "1": "Run 20 requests; assert each succeeds, exactly 20 old and new access requests, one refresh, 20 paired correlations, one token save, no reauth, exact prefixed refresh request/method/header.",
-        "2": "Concurrency transport releases unauthorized requests only after count reaches 20; this continuation has no timeout.",
+        "2": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
         "3": "N/A: no active player, seek, or playback measurement.",
-        "4": "Task groups and task values are awaited; gated fake operations are deliberately released. Gate/barrier wait has no timeout; see linked follow-up.",
+        "4": "Owned unstructured callers permit a failed observation to return without an implicit task-group join. Cleanup requests cancellation and releases the fake latch on normal return, guard return and throw; late callers see an open latch and never enter the waiter list. Cancellation/release do not prove whole production-task graph drainage.",
         "5": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values. Each scenario constructs fresh fake state; concurrency actors are test-local.",
         "6": "Deterministic host concurrency/authentication test with scripted actor transports; no live server.",
         "7": "No blind retries in the harness; repeated calls are explicit product behavior under test.",
-        "8": "Typed errors and exact response/count/store state are asserted. Missing barrier diagnostic is pending bounded-gate follow-up.",
-        "9": "Source review only; no per-test repetition run recorded."
+        "8": "Arrival helper reports stage/elapsed time; caller completion assertion reports all-twenty action, elapsed and limit before failed guard. Original response/error, refresh/recovery, correlation and token/store assertions remain.",
+        "9": "Fresh focused repetitions, owning suite and signed host results are recorded in the scoped evidence; no skipped/zero-test pass accepted."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Run 20 requests; assert each succeeds, exactly 20 old and new access requests, one refresh, 20 paired correlations, one token save, no reauth, exact prefixed refresh request/method/header.",
-      "synchronization": "Concurrency transport releases unauthorized requests only after count reaches 20; this continuation has no timeout.",
+      "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Task group and count assertions exercise coalescing, but transport continuations wait forever if any request fails to arrive; wrap fake barrier with bounded notification.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "reason": "Bounded arrival and actual caller completion observations guard task-value consumption. Awaited cleanup requests cancellation and releases held/late fake calls; no whole production-task drainage claim. Three fake lifecycle variants have dedicated early/late/repeated-release regression coverage.",
+      "shared_helper_review": "Only the three private coalescing transports are changed. Released requests are resumed without retaining their continuations; release detaches waiter storage before resuming. Shared synchronization primitives and production authentication are unchanged.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "previous_coalescing_finding": "Task group and count assertions exercise coalescing, but transport continuations wait forever if any request fails to arrive; wrap fake barrier with bounded notification."
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRejectedRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 89
+        "line": 179
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4028,43 +4029,44 @@
         "action_postconditions": "Assert 20 typed refreshRejected outcomes, 20 ordinary requests, one refresh, and reauthentication required."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake unauthorized response barrier waits for all 20 arrivals with no timeout.",
-        "timeout_tolerance": "N/A: no playback/time-position assertion."
+        "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
+        "timeout_tolerance": "Arrival retains the existing ten-second budget; batch completion is ten seconds for all twenty results, not twenty serial per-caller budgets. No numeric playback tolerance."
       },
       "compiler_skip_conditions": "No test-level compile guard, skip, or opt-in condition.",
       "rules": {
         "1": "Assert 20 typed refreshRejected outcomes, 20 ordinary requests, one refresh, and reauthentication required.",
-        "2": "Fake unauthorized response barrier waits for all 20 arrivals with no timeout.",
+        "2": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
         "3": "N/A: no active player, seek, or playback measurement.",
-        "4": "Task groups and task values are awaited; gated fake operations are deliberately released. No unowned tasks remain.",
+        "4": "Owned unstructured callers permit a failed observation to return without an implicit task-group join. Cleanup requests cancellation and releases the fake latch on normal return, guard return and throw; late callers see an open latch and never enter the waiter list. Cancellation/release do not prove whole production-task graph drainage.",
         "5": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values. Each scenario constructs fresh fake state; concurrency actors are test-local.",
         "6": "Deterministic host concurrency/authentication test with scripted actor transports; no live server.",
         "7": "No blind retries in the harness; repeated calls are explicit product behavior under test.",
-        "8": "Typed errors and exact response/count/store state are asserted. No elapsed-time wait requires timeout reporting.",
-        "9": "Source review only; no per-test repetition run recorded."
+        "8": "Arrival helper reports stage/elapsed time; caller completion assertion reports all-twenty action, elapsed and limit before failed guard. Original response/error, refresh/recovery, correlation and token/store assertions remain.",
+        "9": "Fresh focused repetitions, owning suite and signed host results are recorded in the scoped evidence; no skipped/zero-test pass accepted."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Assert 20 typed refreshRejected outcomes, 20 ordinary requests, one refresh, and reauthentication required.",
-      "synchronization": "Fake unauthorized response barrier waits for all 20 arrivals with no timeout.",
+      "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Missing request can leave task group blocked; bounded gate required.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "reason": "Bounded arrival and actual caller completion observations guard task-value consumption. Awaited cleanup requests cancellation and releases held/late fake calls; no whole production-task drainage claim. Three fake lifecycle variants have dedicated early/late/repeated-release regression coverage.",
+      "shared_helper_review": "Only the three private coalescing transports are changed. Released requests are resumed without retaining their continuations; release detaches waiter storage before resuming. Shared synchronization primitives and production authentication are unchanged.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "previous_coalescing_finding": "Missing request can leave task group blocked; bounded gate required."
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 161
+        "line": 253
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4130,7 +4132,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 282
+        "line": 374
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4196,7 +4198,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 404
+        "line": 496
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4262,7 +4264,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 371
+        "line": 617
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4272,43 +4274,44 @@
         "action_postconditions": "Assert 20 successful results, 20 old/new requests, one refresh/login/authorize, and saved final tokens."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "Fake waits until all 20 unauthorized callers arrive with an unbounded checked continuation.",
-        "timeout_tolerance": "N/A: no playback/time-position assertion."
+        "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
+        "timeout_tolerance": "Arrival retains the existing ten-second budget; batch completion is ten seconds for all twenty results, not twenty serial per-caller budgets. No numeric playback tolerance."
       },
       "compiler_skip_conditions": "No test-level compile guard, skip, or opt-in condition.",
       "rules": {
         "1": "Assert 20 successful results, 20 old/new requests, one refresh/login/authorize, and saved final tokens.",
-        "2": "Fake waits until all 20 unauthorized callers arrive with an unbounded checked continuation.",
+        "2": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
         "3": "N/A: no active player, seek, or playback measurement.",
-        "4": "Task groups and task values are awaited; gated fake operations are deliberately released. Gate/barrier wait has no timeout; see linked follow-up.",
+        "4": "Owned unstructured callers permit a failed observation to return without an implicit task-group join. Cleanup requests cancellation and releases the fake latch on normal return, guard return and throw; late callers see an open latch and never enter the waiter list. Cancellation/release do not prove whole production-task graph drainage.",
         "5": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values. Each scenario constructs fresh fake state; concurrency actors are test-local.",
         "6": "Deterministic host concurrency/authentication test with scripted actor transports; no live server.",
         "7": "No blind retries in the harness; repeated calls are explicit product behavior under test.",
-        "8": "Typed errors and exact response/count/store state are asserted. Missing barrier diagnostic is pending bounded-gate follow-up.",
-        "9": "Source review only; no per-test repetition run recorded."
+        "8": "Arrival helper reports stage/elapsed time; caller completion assertion reports all-twenty action, elapsed and limit before failed guard. Original response/error, refresh/recovery, correlation and token/store assertions remain.",
+        "9": "Fresh focused repetitions, owning suite and signed host results are recorded in the scoped evidence; no skipped/zero-test pass accepted."
       },
-      "decision": "follow_up",
+      "decision": "keep",
       "dependencies_and_setup": "Fresh AuthCoordinator, RequestCredentialStore, and scripted or purpose-built actor HTTP fake; fixed HTTPS server and synthetic account/token values.",
       "action_postconditions": "Assert 20 successful results, 20 old/new requests, one refresh/login/authorize, and saved final tokens.",
-      "synchronization": "Fake waits until all 20 unauthorized callers arrive with an unbounded checked continuation.",
+      "synchronization": "Existing bounded arrival signal; ten-second batch completion counter increments only after each actual authenticated send returns or throws. Failed observations return before joining unknown task values. Existing awaited cleanup cancels each owned caller and awaits idempotent fake release.",
       "timeout_tolerance": "N/A: no numeric tolerance.",
       "classification": "Deterministic host authentication test with scripted actor fakes.",
       "compiler_skip": "No test-level compile guard, skip, or opt-in condition.",
-      "reason": "Count barrier can hang instead of reporting missed caller; bound it.",
-      "shared_helper_review": "Fixture helpers create isolated scripted transports and actor credential stores. Concurrent transports use checked-continuation count barriers and GatedMidFlightRefreshTransport uses explicit wait/release continuations; these are the unbounded waits captured in linked follow-ups.",
+      "reason": "Bounded arrival and actual caller completion observations guard task-value consumption. Awaited cleanup requests cancellation and releases held/late fake calls; no whole production-task drainage claim. Three fake lifecycle variants have dedicated early/late/repeated-release regression coverage.",
+      "shared_helper_review": "Only the three private coalescing transports are changed. Released requests are resumed without retaining their continuations; release detaches waiter storage before resuming. Shared synchronization primitives and production authentication are unchanged.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "previous_coalescing_finding": "Count barrier can hang instead of reporting missed caller; bound it."
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRejectedRefreshUsesSavedPasswordAndRetriesRequest",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 436
+        "line": 703
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4347,7 +4350,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshContractFailuresUseSavedPasswordAndRetryRequest",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 517
+        "line": 784
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4386,7 +4389,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedPasswordRejectionRemainsTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 616
+        "line": 883
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4425,7 +4428,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginCannotChangeRemoteUserIdentity",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 686
+        "line": 953
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4464,7 +4467,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginAuthorizationRejectionRequiresReauthentication",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 744
+        "line": 1011
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4503,7 +4506,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testForbiddenResponseDoesNotRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 801
+        "line": 1068
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4542,7 +4545,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAuthenticationEndpointsNeverEnterRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 821
+        "line": 1088
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4581,7 +4584,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testOrdinaryRequestRetriesOnlyOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 856
+        "line": 1123
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4620,7 +4623,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailuresAreTypedAndAccountScoped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 890
+        "line": 1157
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4659,7 +4662,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshTransportFailureIsNotCachedAndRetries",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 982
+        "line": 1249
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4698,7 +4701,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1104
+        "line": 1298
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4737,7 +4740,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTransientSavedLoginFailuresAreNotCachedAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1065
+        "line": 1332
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4776,7 +4779,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSessionTokensUseSynchronizedNativeLogin",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1162
+        "line": 1429
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4815,7 +4818,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCredentialFailuresAreTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1218
+        "line": 1485
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4854,7 +4857,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRequestValidationAndTransportFailuresAreTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1277
+        "line": 1544
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4893,7 +4896,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAlreadyRotatedCredentialsAvoidAnotherRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1375
+        "line": 1642
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4932,7 +4935,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCompletedRotationCoversAStaleCredentialRead",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1415
+        "line": 1682
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4971,7 +4974,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailureDoesNotAffectAnotherAccount",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1468
+        "line": 1735
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23288,6 +23291,38 @@
       "decision": "keep",
       "reason": "Regression for the independently reviewed P2 parent diagnostic supervision gap.",
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction"
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCoalescingTransportReleasesRegisteredAndLateCallersOnce",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
+        "line": 9
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove the three private coalescing HTTP fakes own checked continuations exactly once across registered/cancelled and early-release/late-entry/repeated-release scenarios.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Three parameterized private transports, fresh instance per early/registered phase, synthetic tokens, direct traced local request; no coordinator or network.",
+        "action_postconditions": "Registered phase observes one retained waiter, requests task cancellation, then releases twice. Early phase releases twice before entry. Both require actual caller completion and typed 401, zero retained waiters, and safe subsequent repeated release."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Bounded existing arrival signal and five-second BoundedTestCounter completion. Guards precede task-value joins and repeated release of a potentially invalid retained continuation.",
+        "timeout_tolerance": "Ten-second existing arrival budget; five-second helper completion budget. No readiness sleep or numeric tolerance."
+      },
+      "compiler_skip_conditions": "No compile guard, skip or opt-in. Three enum cases, each with two control-order phases.",
+      "rules": {
+        "1": "Assert registered waiter ownership, actual typed 401 response, empty terminal waiter storage and safe repeated release in both phases.",
+        "2": "Bounded arrival and completion checks guard every required observation before unknown task joins.",
+        "3": "N/A: no playback position or clock measurement.",
+        "4": "Cleanup cancels caller; registered-phase cleanup releases held waiters. Early phase already has a permanently open latch. Cancelled held send remains owned until explicit release. No production graph-drainage claim.",
+        "5": "Fresh private actor instance per kind/phase; synthetic request and tokens, no personal state.",
+        "6": "Direct deterministic test-fake HTTP boundary; no real server, Keychain or framework callbacks.",
+        "7": "No retry-to-green; source ownership fix is validated against old-retention mutations separately.",
+        "8": "Completion failures include stage, elapsed and limit; parameterized kind and pending count identify ownership mismatch.",
+        "9": "Focused repeated, owning and signed outcomes plus expected-failing mutations are retained separately in scoped evidence."
+      },
+      "decision": "keep",
+      "reason": "Exactly-once waiter ownership is a prerequisite for failure-safe cancellation/release cleanup in the twenty-caller tests."
     }
   ],
   "issue_382": {
@@ -23464,5 +23499,16 @@
     "core_audit_records": 593,
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#search-release-timeout-exits-and-missing-audit-records-issue-372",
     "remaining_limits": "Cancellation/release cleanup is observed; whole underlying task-graph drainage and unrelated search follow-ups remain unproven/open."
+  },
+  "issue_372_coalesced_request_ownership": {
+    "tests": [
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRejectedRefresh",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCoalescingTransportReleasesRegisteredAndLateCallersOnce"
+    ],
+    "scope": "Three existing twenty-request cases and three private fake continuation ownership paths; one new parameterized helper contract with three kinds and two phases. No production authentication change.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372",
+    "remaining": "Whole production-task graph drainage, other #372 follow-ups and seven neighboring startup clock oracles remain unresolved."
   }
 }

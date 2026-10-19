@@ -777,3 +777,11 @@ playback-start intent while checking awaited seek precision with paused state
 and zero native player rate. It addresses the advancing-clock assertion in the
 retained failed #408 CI run without changing production behavior or tolerance;
 independent initial-position forwarding is not claimed.
+
+The [coalesced request ownership slice](release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372)
+bounds actual outcomes for the three twenty-request authentication cases and
+repairs exactly-once continuation ownership in their private HTTP fakes, retaining
+refresh/recovery/token/correlation behavior. Production authentication is
+unchanged; cancellation and fake release do not prove whole-task drainage.
+Seven neighboring advancing-clock startup assertions remain explicitly unresolved
+in the app audit and require independent initial-position forwarding oracles.

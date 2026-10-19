@@ -101,6 +101,7 @@
     "testBearerNeverAppearsInCapturedProcessLogs()"
   ],
   "BleatCoreTests.AuthenticatedRequestTests": [
+    "testCoalescingTransportReleasesRegisteredAndLateCallersOnce(kind:)",
     "testTwentyUnauthorizedRequestsShareOneRotatingRefresh()",
     "testTwentyUnauthorizedRequestsShareOneRejectedRefresh()",
     "testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead()",

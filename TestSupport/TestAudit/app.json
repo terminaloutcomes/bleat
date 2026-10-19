@@ -32588,15 +32588,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -32649,15 +32653,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -32746,15 +32754,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -32812,15 +32824,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -33128,15 +33144,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -33340,15 +33360,19 @@
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
           "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "Playback tests assert whole-book position, chapter selection, intent and session state; accuracies up to 0.01s are documented as floating-point seek comparison.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
-          "7": "No retry-to-green or assertion suppression; transient retry is the named behavior under test.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
           "9": "No test skip; simulator execution pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         }
@@ -34204,15 +34228,19 @@
         "ruleAssessments": {
           "1": "The asserted final model identity/session/result directly follows the requested action.",
           "2": "No scheduler sleeps; all preparation/close gates are awaited and released; task results are awaited.",
-          "3": "Playback state/session identity is asserted, not elapsed-time behavior.",
+          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
           "4": "Playback fakes model async operations; gates establish callback/service entry and tasks are joined.",
           "5": "Download removal fixtures use unique temporary roots with deferred cleanup.",
           "6": "Injected playback/download service boundary; no live server or physical audio route.",
-          "7": "No retry-to-green or hidden assertion; distinct typed access failures remain separate.",
+          "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
           "8": "Direct value assertions; no timing tolerance.",
           "9": "No test skip; simulator result pending."
         },
         "decision": {
+          "outcome": "follow_up",
+          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+        },
+        "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Request ownership, async barriers, typed result and resulting session/download state are explicitly asserted."
         }
@@ -49373,8 +49401,22 @@
     }
   ],
   "decisionCounts": {
-    "keep": 509,
-    "fix": 4,
-    "follow_up": 80
+    "keep": 505,
+    "follow_up": 84,
+    "fix": 4
+  },
+  "startupClockNeighborReview": {
+    "basis": "PR #408 review at 7275258afe2421a9e467fd59c911c8998a39243a; source inspection only for these neighbors.",
+    "identifiers": [
+      "AppModelTests/testPlaybackStartUsesExplicitWholeBookPosition",
+      "AppModelTests/testStreamedResumeUsesFreshSessionInsteadOfStaleDetail",
+      "AppModelTests/testStreamedCheckpointResumesDownloadedPlaybackAfterRelaunch",
+      "AppModelTests/testDownloadedPlaybackUsesExplicitWholeBookPosition",
+      "AppModelTests/testPlaybackStartDiscoversCompleteDownloadFromSummary",
+      "AppModelTests/testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork",
+      "AppModelTests/testPlaybackStartLoadsDetailWithoutChangingNavigationState"
+    ],
+    "status": "unresolved; no startup oracle has been replaced by a later seek",
+    "remaining_scope": "These seven source-reviewed neighboring startup assertions are explicitly open; this is not a repository-wide playback-clock reconciliation."
   }
 }
