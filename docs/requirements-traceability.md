@@ -720,3 +720,12 @@ The [bounded OTLP cancellation-outcome slice](release-evidence/test-reliability-
 adds actual caller-return proof to three existing cancellation tests, retaining
 result/RPC/cancellation/request assertions. Underlying drainage and broader
 #372/#362 criteria remain open; cache implementation is separate.
+
+
+The [controlled OTLP token-wait slice](release-evidence/test-reliability-core-followups.md#controlled-otlp-token-wait-lifecycle-issue-372)
+replaces the timed suspended-token fake with observed actual cancellation and
+awaited noncancelling retirement, adds a four-case helper contract, and bounds
+remaining shutdown/later-export caller waits. Passing lifecycle cases exclude
+ordinary deadline cancellation through monotonic event proof; separate cancellation
+mutations retain deadline behavior and must fail. Broader #372/#362 drainage and
+configuration criteria remain open.
