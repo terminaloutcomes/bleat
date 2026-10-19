@@ -8,6 +8,7 @@ import Testing
 @Suite(.serialized)
 struct PrivateCloudPersistenceTests {
     private func fixture(
+        domains: inout OwnedDefaultsDomains,
         checkpoint: (@Sendable (Int) async throws -> Void)? = nil
     ) throws -> (
         ModelContainer, UserDefaults, PrivateCloudSyncStore
@@ -20,17 +21,68 @@ struct PrivateCloudPersistenceTests {
                     schema: schema, isStoredInMemoryOnly: true,
                     cloudKitDatabase: .none)
             ])
-        let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+        let defaults = try domains.make()
         let store = PrivateCloudSyncStore(
             statistics: StatisticsRepository(modelContainer: container),
             accounts: AccountStore(modelContainer: container),
             credentialStore: nil,
             configuration: CloudConfigurationStore(
-                defaults: try #require(
-                    UserDefaults(suiteName: UUID().uuidString))),
+                defaults: try domains.make()),
             defaults: PrivateCloudDefaultsReference(defaults),
             migrationBatchDidCommit: checkpoint)
         return (container, defaults, store)
+    }
+
+    private enum DefaultsOperationError: Error, Equatable {
+        case afterData
+        case afterConfiguration
+    }
+
+    @Test(
+        arguments: [nil, .afterData, .afterConfiguration]
+            as [DefaultsOperationError?])
+    private func ownedDefaultsAreRemovedOnSuccessAndThrowingExit(
+        failure: DefaultsOperationError?
+    ) throws {
+        let unrelatedName = UUID().uuidString
+        let unrelated = try #require(UserDefaults(suiteName: unrelatedName))
+        defer { unrelated.removePersistentDomain(forName: unrelatedName) }
+        unrelated.set("preserved", forKey: "sentinel")
+        var owned: [(String, UserDefaults)] = []
+        func operation() throws {
+            var domains = OwnedDefaultsDomains()
+            defer { domains.removeAll() }
+            let data = try domains.make()
+            owned.append((try #require(domains.names.last), data))
+            data.set("data", forKey: "sentinel")
+            #expect(
+                data.persistentDomain(forName: owned[0].0)?["sentinel"]
+                    as? String == "data")
+            if failure == .afterData { throw DefaultsOperationError.afterData }
+            let configuration = try domains.make()
+            owned.append((try #require(domains.names.last), configuration))
+            configuration.set("configuration", forKey: "sentinel")
+            #expect(
+                configuration.persistentDomain(forName: owned[1].0)?["sentinel"]
+                    as? String == "configuration")
+            if failure == .afterConfiguration {
+                throw DefaultsOperationError.afterConfiguration
+            }
+        }
+        do {
+            try operation()
+            #expect(failure == nil)
+        } catch let error as DefaultsOperationError {
+            #expect(error == failure)
+        }
+        #expect(owned.count == (failure == .afterData ? 1 : 2))
+        #expect(Set(owned.map { $0.0 }).count == owned.count)
+        for (name, defaults) in owned {
+            #expect(defaults.persistentDomain(forName: name) == nil)
+        }
+        #expect(
+            unrelated.persistentDomain(forName: unrelatedName)?["sentinel"]
+                as? String == "preserved")
     }
 
     private func record(_ name: String) -> CKRecord {
@@ -45,7 +97,9 @@ struct PrivateCloudPersistenceTests {
     @Test func migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources()
         async throws
     {
-        let (container, defaults, store) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, defaults, store) = try fixture(domains: &domains)
         let record = record("slice.\(UUID().uuidString.lowercased())")
         let data = PrivateCloudPersistence.encodeSystemFields(record)
         defaults.set(
@@ -68,8 +122,7 @@ struct PrivateCloudPersistenceTests {
             accounts: AccountStore(modelContainer: container),
             credentialStore: nil,
             configuration: CloudConfigurationStore(
-                defaults: try #require(
-                    UserDefaults(suiteName: UUID().uuidString))),
+                defaults: try domains.make()),
             defaults: PrivateCloudDefaultsReference(defaults))
         try await restored.prepareStorage()
         #expect(
@@ -81,9 +134,13 @@ struct PrivateCloudPersistenceTests {
         async throws
     {
         let probe = MigrationCancellationProbe()
-        let (container, defaults, store) = try fixture(checkpoint: { count in
-            try await probe.checkpoint(count)
-        })
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, defaults, store) = try fixture(
+            domains: &domains,
+            checkpoint: { count in
+                try await probe.checkpoint(count)
+            })
         var archives: [String: Data] = [:]
         for index in 0..<201 {
             let value = record(String(format: "a%04d", index))
@@ -152,8 +209,7 @@ struct PrivateCloudPersistenceTests {
             accounts: AccountStore(modelContainer: container),
             credentialStore: nil,
             configuration: CloudConfigurationStore(
-                defaults: try #require(
-                    UserDefaults(suiteName: UUID().uuidString))),
+                defaults: try domains.make()),
             defaults: PrivateCloudDefaultsReference(defaults))
         try await restarted.prepareStorage()
         #expect(
@@ -162,7 +218,9 @@ struct PrivateCloudPersistenceTests {
     }
 
     @Test func malformedStoredStateDoesNotBecomeAnEmptyDefault() throws {
-        let (container, _, _) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, _, _) = try fixture(domains: &domains)
         let storage = PrivateCloudPersistence(container: container)
         try storage.set(
             "wrong shape", forKey: PrivateCloudPersistence.engineKey)
@@ -182,7 +240,9 @@ struct PrivateCloudPersistenceTests {
             "bleat.cloudKit.legacyAccountIdentityMappings.v1",
             "bleat.cloudKit.pendingLegacyRecordDeletions.v1",
         ] {
-            let (container, _, store) = try fixture()
+            var domains = OwnedDefaultsDomains()
+            defer { domains.removeAll() }
+            let (container, _, store) = try fixture(domains: &domains)
             let storage = PrivateCloudPersistence(container: container)
             try storage.set(true, forKey: PrivateCloudPersistence.migrationKey)
             let malformed = ["retained": 42]
@@ -203,7 +263,9 @@ struct PrivateCloudPersistenceTests {
     func secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap()
         async throws
     {
-        let (_, defaults, store) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (_, defaults, store) = try fixture(domains: &domains)
         let archiver = NSKeyedArchiver(requiringSecureCoding: true)
         archiver.encode(
             "valid archive, absent record metadata", forKey: "unrelated")
@@ -263,7 +325,9 @@ struct PrivateCloudPersistenceTests {
                     schema: schema,
                     url: url, allowsSave: false, cloudKitDatabase: .none)
             ])
-        let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let defaults = try domains.make()
         let value = record("retained")
         defaults.set(
             ["retained": PrivateCloudPersistence.encodeSystemFields(value)],
@@ -273,8 +337,7 @@ struct PrivateCloudPersistenceTests {
             accounts: AccountStore(modelContainer: container),
             credentialStore: nil,
             configuration: CloudConfigurationStore(
-                defaults: try #require(
-                    UserDefaults(suiteName: UUID().uuidString))),
+                defaults: try domains.make()),
             defaults: PrivateCloudDefaultsReference(defaults))
         do {
             try await store.prepareStorage()
@@ -298,7 +361,9 @@ struct PrivateCloudPersistenceTests {
     func partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows()
         async throws
     {
-        let (container, defaults, store) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, defaults, store) = try fixture(domains: &domains)
         var archives: [String: Data] = [:]
         for index in 0..<200 {
             let value = record(String(format: "a%04d", index))
@@ -335,7 +400,9 @@ struct PrivateCloudPersistenceTests {
     }
 
     @Test func malformedCoordinatorStateRetainsAllLegacyData() async throws {
-        let (container, defaults, store) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, defaults, store) = try fixture(domains: &domains)
         let value = record("retained")
         defaults.set(
             ["retained": PrivateCloudPersistence.encodeSystemFields(value)],
@@ -360,7 +427,9 @@ struct PrivateCloudPersistenceTests {
     @Test func migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource()
         async throws
     {
-        let (_, defaults, store) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (_, defaults, store) = try fixture(domains: &domains)
         defaults.set(
             [
                 "wrong": PrivateCloudPersistence.encodeSystemFields(
@@ -380,7 +449,9 @@ struct PrivateCloudPersistenceTests {
     @Test func upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection()
         throws
     {
-        let (_, defaults, _) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (_, defaults, _) = try fixture(domains: &domains)
         #expect(!CloudStorageUpgradeNotice.isPending(in: defaults))
         CloudStorageUpgradeNotice.detectLegacy(in: defaults)
         #expect(CloudStorageUpgradeNotice.isPending(in: defaults))
@@ -393,7 +464,9 @@ struct PrivateCloudPersistenceTests {
     @Test func twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows()
         throws
     {
-        let (container, defaults, _) = try fixture()
+        var domains = OwnedDefaultsDomains()
+        defer { domains.removeAll() }
+        let (container, defaults, _) = try fixture(domains: &domains)
         let storage = PrivateCloudPersistence(container: container)
         let context = ModelContext(container)
         context.autosaveEnabled = false
@@ -442,5 +515,22 @@ private actor MigrationCancellationProbe {
 
     func waitForEntry() async -> BoundedTestWaitResult {
         await checkpointEntries.wait(untilAtLeast: 1)
+    }
+}
+
+private struct OwnedDefaultsDomains {
+    private(set) var names: [String] = []
+
+    mutating func make() throws -> UserDefaults {
+        let name = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        names.append(name)
+        return defaults
+    }
+
+    func removeAll() {
+        for name in names {
+            UserDefaults().removePersistentDomain(forName: name)
+        }
     }
 }

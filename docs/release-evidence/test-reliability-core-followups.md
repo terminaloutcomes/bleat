@@ -31,7 +31,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSynchronousSpanWitnessReturnsBeforePersistenceAndAsyncFlushWaits` | Add an explicit signal that the flush task reached its queued persistence wait before asserting it remains incomplete; preserve the semaphore-controlled queue and post-release persisted-file assertion. | The 50 ms sleep does not prove the flush task was scheduled before the incomplete assertion, so a scheduling delay can make that negative check pass without exercising the wait. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift` (temporary directory cleanup in test defers and `makeRecordedSpan`) | Route temporary telemetry directory deletion through checked cleanup support instead of suppressing errors with `try?`. | UUID paths isolate tests, but cleanup failures silently accumulate telemetry files and consume host disk. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` (caller `cancelledMigrationRetainsCommittedProgressAndCoalescesCallers`) | Add a bounded checkpoint-entry notification preserving the exact 200-row commit boundary and coalesced-cancellation checks. | If migration never reaches the checkpoint, the checked continuation suspends indefinitely and the cancellation/recovery assertions never run. |
-| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::fixture` | Retain and remove the unique UserDefaults suite names created by each fixture during test cleanup. | The suites isolate test state, but are never explicitly removed; repeated runs can leave inaccessible test domains behind. |
+| `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::fixture` | Implemented: caller-scoped ownership retains and removes exact data/configuration domains, including restored/restarted/read-only stores and throwing exits. | See [scoped defaults evidence](#private-cloud-defaults-lifecycle-issue-372). File-backed root deletion and historical synchronization findings remain separate. |
 | `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences`, `Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::MigrationCancellationProbe.waitForEntry` | The file-backed fixture cleanup also uses best-effort `try?`; use checked cleanup reporting after closing the read-only ModelContainer. | A failed temporary store removal can silently leave a large persistent test database and invalidate the cleanup claim. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`, `boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`, `observationHistoryAndPresentationAreAccountScoped` | Replace awaited AsyncStream iterator reads with bounded, source-located update/termination waits that assert the expected revision or close event. | If repository publication or termination regresses, `iterator.next()` suspends indefinitely instead of reporting which update was missing. |
 | `Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar` | Avoid changing process-global `NSTimeZone.default` while unrelated test suites may run concurrently; inject a calendar/time-zone or otherwise serialize the global mutation across all tests. | `.serialized` only orders this suite; other suites can observe the temporary Brisbane/Los Angeles process setting and become order-sensitive. |
@@ -575,3 +575,110 @@ the same operation succeeded with host access before editing. Documentation
 checking passed, as did `git diff --check` and scoped source/index/inventory
 consistency checks. No setup, environment, security or production changes were
 needed.
+
+
+## Private Cloud defaults lifecycle (issue 372)
+
+This slice under #372/#362 changes only defaults ownership in
+`Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift`. Every allocating
+caller registers a `defer` before fixture construction; the local owner retains
+exact UUID suite names and calls nonthrowing
+`removePersistentDomain(forName:)` for each. Data and configuration remain
+separate, including restored/restarted stores and the read-only fixture.
+A throwing fixture construction leaves any already-created domains under its
+caller's cleanup. No process-global defaults, deinitialization-based lifetime,
+production seam, clock or synchronization behavior is introduced.
+
+The parameterized `ownedDefaultsAreRemovedOnSuccessAndThrowingExit(failure:)`
+regression seeds persistent data/configuration domains and an unrelated-domain
+sentinel. Success, a typed throw after only data allocation, and a typed throw
+after configuration allocation all verify owned-domain absence and unrelated
+preservation; thrown error identity is checked structurally. The unrelated
+suite has independent deferred cleanup. This finite synchronous operation has
+no wait or timing budget. Domain removal is an API-level postcondition, not a
+claim that UserDefaults reports filesystem deletion failures.
+
+Every fixture caller and direct restored/restarted/read-only construction was
+reviewed. All migration/retry/error assertions, the 200/201-row checkpoint,
+coalesced cancellation and 58,404-row sentinel workload remain intact. The
+best-effort file-backed root deletion finding remains **open**: closing store
+lifetimes before checked directory removal requires separate evidence. The
+historical checkpoint/synchronization findings and counts are preserved.
+Production paths and callback adapters are unchanged; adjacent storage failures
+retain their existing typed errors. No broader persistence, signed-device,
+live-server, release or epic-completion claim is made.
+
+Supported app setup supplied the linked `.envrc` and marked temporary `.build`;
+the worktree began at current remote main `c7bb381` before scoped branch
+creation. The app exposes no numeric setup exit. Initial branch creation was
+blocked by shared Git metadata access and succeeded unchanged with host access
+before edits. No environment, trust or security settings were modified.
+
+The first focused build failed strict concurrency checking before test execution:
+retaining configuration `UserDefaults` instances in the owner prevented their
+transfer to `CloudConfigurationStore`. The corrected owner retains only names;
+cleanup uses a fresh defaults instance to remove each explicitly named domain,
+without reading or writing standard-domain keys. The unsuccessful build log is
+`.build/i372-defaults-focused-1.log`; subsequent attempts use distinct files.
+
+Local configuration: Xcode 27.1 (27A9275), macOS 26.6.2; mise environment
+readiness was checked without printing configuration values. Final-source
+unsigned Swift Testing evidence:
+
+- Focused cleanup: **1/1 identity**, all three parameter cases passed, in
+  `.build/i372-defaults-focused-2.xml` (matching `.log`).
+- Five separate serial invocations of the cleanup identity plus migration
+  copy/restore, cancellation/restart, read-only failure and partial-resume
+  identities: **25/25 executions**, five exact identities per invocation,
+  zero failures/errors/skips. Reports/logs are
+  `.build/i372-defaults-repeat-1.xml` through
+  `.build/i372-defaults-repeat-5.xml` and their matching `.log` files. The
+  cleanup identity exercises all three argument cases per invocation.
+- Complete owning suite: **13/13 identities**, zero failures/errors/skips, in
+  `.build/i372-defaults-owning.xml` and matching `.log`; includes the full
+  58,404-row test. XML outcomes and exact identity sets were inspected.
+- Built discovery in `.build/i372-defaults-discovery.txt` exactly equals all
+  **578** host inventory identities. The source index contains **1,562**
+  declarations; only this file's entries and the new test were updated.
+  Historical audit counts remain tied to their original revision.
+
+Focused command: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter
+PrivateCloudPersistenceTests.ownedDefaultsAreRemovedOnSuccessAndThrowingExit
+--xunit-output .build/i372-defaults-focused-2.xml`. Repetitions use
+`--skip-build`, a regex selecting the five identities listed above, and distinct
+report paths. The owning command uses `--skip-build --filter
+PrivateCloudPersistenceTests`. Each invocation starts fresh UUID domains;
+serial independent runs are the relevant state-isolation variation. There is
+no shared state, ordering or timing assumption in the new regression.
+
+An attempted `--repetitions 5` invocation was rejected as an unknown option
+before execution; `.build/i372-defaults-repeated.log` is retained, and it is
+not counted as coverage. The five supported independent invocations above
+replaced it. The original compile failure is also retained above. Each
+read-only test run emitted its expected SwiftData Cocoa 513 save diagnostic;
+its exact typed-error and retained-source assertions passed. The upstream
+OpenTelemetry watchOS minimum deprecation appeared during dependency planning
+(including repeat 2); no test failure or unexpected skip occurred. Strict
+repository Swift lint and documentation checking passed (logs
+`.build/i372-defaults-swift-lint-final.log` and `.build/i372-defaults-docs.log`).
+
+The complete signed owning-host gate, `mise exec -- ./scripts/test-host.sh`,
+passed **578/578 exact inventory identities** (573 core, five transcription),
+zero failures/errors/skips. Both the supported verifier and an independent XML
+identity multiset/outcome comparison accepted `.build/host-results/tests.xml`;
+per-product reports are retained alongside it. The full log is
+`.build/i372-defaults-signed-host.log`; merged production LCOV is under
+`.build/coverage/swift-host/`. The gate verified the signed host identity,
+Keychain entitlement and provisioning-profile presence. Parameterized XML is
+counted once per function identity, not once per argument or duplicate report.
+The signed log retains nine intentional read-only SwiftData Cocoa 513 save
+diagnostics, the upstream watchOS deprecation, and three intentional known
+issues from DownloadStorage/TestCleanup failure-injection regressions; all
+owning tests passed. No new runtime warning or unhandled failure was observed.
+
+Final diff and scoped structural checks confirmed exactly one added host
+identity/audit declaration, unchanged unrelated inventory/index entries, and
+preserved checkpoint/sentinel constants. The `.envrc` link and marked temporary
+build link remain intact. Strict repository lint, docs and `git diff --check`
+passed; no production, generated project or environment files changed.

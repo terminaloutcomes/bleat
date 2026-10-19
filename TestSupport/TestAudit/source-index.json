@@ -5938,74 +5938,80 @@
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
+      "name": "ownedDefaultsAreRemovedOnSuccessAndThrowingExit",
+      "line": 44,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources",
-      "line": 45,
+      "line": 96,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "cancelledMigrationRetainsCommittedProgressAndCoalescesCallers",
-      "line": 80,
+      "line": 132,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedStoredStateDoesNotBecomeAnEmptyDefault",
-      "line": 126,
+      "line": 219,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedBookkeepingContentsRemainRetained",
-      "line": 142,
+      "line": 237,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap",
-      "line": 165,
+      "line": 263,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
-      "line": 186,
+      "line": 285,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "failedMigrationSaveRetainsLegacyPreferences",
-      "line": 205,
+      "line": 304,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",
-      "line": 260,
+      "line": 361,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "malformedCoordinatorStateRetainsAllLegacyData",
-      "line": 299,
+      "line": 401,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
-      "line": 322,
+      "line": 426,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
-      "line": 342,
+      "line": 448,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
       "name": "twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
-      "line": 355,
+      "line": 463,
       "language": "swift"
     },
     {

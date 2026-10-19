@@ -89,7 +89,8 @@
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
-      "assessment": "Reviewed in-memory/unique-suite fixture and synthetic record builder, cancellation checkpoint actor, and every test caller; the migration test\u2019s unbounded entry notification is linked."
+      "assessment": "Reviewed in-memory/unique-suite fixture and synthetic record builder, cancellation checkpoint actor, and every test caller; the migration test\u2019s unbounded entry notification is linked.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
@@ -13678,7 +13679,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::cancelledMigrationRetainsCommittedProgressAndCoalescesCallers",
@@ -13724,7 +13726,8 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedStoredStateDoesNotBecomeAnEmptyDefault",
@@ -13763,7 +13766,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedBookkeepingContentsRemainRetained",
@@ -13802,7 +13806,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap",
@@ -13841,7 +13846,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
@@ -13919,7 +13925,8 @@
       "classification": "Deterministic file-backed SwiftData failure-injection test using read-only ModelContainer and isolated defaults; checks native write error.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",
@@ -13958,7 +13965,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedCoordinatorStateRetainsAllLegacyData",
@@ -13997,7 +14005,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
@@ -14036,7 +14045,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
@@ -14075,7 +14085,8 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
@@ -14114,7 +14125,8 @@
       "classification": "Deterministic large in-memory persistence behavior test: creates 58,404 rows and updates 200 selected records; intentionally not an elapsed-time benchmark.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce",
@@ -22185,6 +22197,36 @@
       "issue_382": {
         "execution": "Three individual and three owning-suite repetitions passed; signed host passed. See top-level issue_382 and linked evidence."
       }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::ownedDefaultsAreRemovedOnSuccessAndThrowingExit",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift",
+        "line": 44
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove exact owned defaults-domain removal on success and typed throwing exits, including partial construction, without removing unrelated state.",
+      "dependencies_and_setup": "Unique unrelated sentinel suite and fresh OwnedDefaultsDomains per parameter case; caller defer registered before first allocation. Unrelated suite has its own defer.",
+      "action_postconditions": "Seed and read persistent data/configuration sentinels; finish or throw after data/configuration allocation; verify exact typed error, one/two unique owned domains absent and unrelated sentinel retained.",
+      "synchronization": "Synchronous defaults API and lexical defer; no tasks, callbacks, sleeps or polling.",
+      "timeout_tolerance": "Finite one/two-domain operation, no elapsed-time tolerance or external completion wait.",
+      "classification": "Local UserDefaults integration with synthetic independent domains; no personal defaults.",
+      "compiler_skip": "No guards or skips; arguments are success, afterData and afterConfiguration.",
+      "rules": {
+        "1": "Read seeded persistent domains before operation exit and assert removal and unrelated preservation afterward.",
+        "2": "Synchronous completion; no wait required.",
+        "3": "N/A: no playback or time measurement.",
+        "4": "Caller defer before first allocation covers success and typed failures; unrelated sentinel has independent defer.",
+        "5": "Fresh UUID suites with retained exact names; no standard defaults or shared state.",
+        "6": "Local UserDefaults API, not filesystem deletion or device evidence.",
+        "7": "No retries or timing relaxation.",
+        "8": "Swift Testing source-located assertions plus exact typed failure equality.",
+        "9": "Focused repetitions and owning-suite/signed-host evidence recorded in linked follow-up."
+      },
+      "decision": "keep",
+      "reason": "Exercises actual owner and same lexical cleanup contract as migration callers, including partial allocation.",
+      "shared_helper_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     }
   ],
   "issue_382": {
@@ -22201,5 +22243,12 @@
     },
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382",
     "reviews": "Two fresh independent read-only review-agent cycles reported No findings; no P0/P1 or lower-priority findings."
+  },
+  "issue_372_defaults_lifecycle": {
+    "new_declarations": 1,
+    "tests": [
+      "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::ownedDefaultsAreRemovedOnSuccessAndThrowingExit"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372"
   }
 }
