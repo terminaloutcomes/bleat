@@ -68,7 +68,8 @@
     },
     {
       "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
-      "assessment": "Inspected Fixture, its best-effort unique-root cleanup, and placeCompleteTestFile helper as well as each caller body; see per-test records for use-specific postconditions and decisions."
+      "assessment": "Inspected Fixture, its best-effort unique-root cleanup, and placeCompleteTestFile helper as well as each caller body; see per-test records for use-specific postconditions and decisions.",
+      "download_fixture_cleanup_followup": "2026-10-19, issue #372: all 31 root-owning callers await withFixture/withTestCleanup. Cleanup reports deletion errors at the calling test location on both exits and preserves the operation error. Throwing removeRoot and deterministic success/operation-failure/deletion-failure regressions are scoped to this file; historical review below is retained. See docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372."
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
@@ -6841,7 +6842,14 @@
       "classification": "Deterministic filesystem/persistence state-transition test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts both durable manifest state and concrete file presence/absence across store reconstruction.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testLateCancellationCleanupCannotDiscardRetriedBytes",
@@ -6880,7 +6888,14 @@
       "classification": "Deterministic stale-operation fencing test over isolated filesystem.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "The observable state and retained partial length distinguish stale cleanup rejection.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled",
@@ -6919,7 +6934,14 @@
       "classification": "Deterministic persistence/reconstruction test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Uses an exact known Date and asserts each persisted transition.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testCompletedTrackRejectsAndRepairsRetryState",
@@ -6958,7 +6980,14 @@
       "classification": "Deterministic filesystem plus record-reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts rejected conditional transitions and repaired persisted invariants.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testConditionalFailureDoesNotOverwritePauseOrContinueState",
@@ -6997,7 +7026,14 @@
       "classification": "Deterministic state-transition test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks both no-op and matching-state transition outcomes.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testAccountIdentityMigrationMovesManifestAndMedia",
@@ -7036,7 +7072,14 @@
       "classification": "Deterministic filesystem/persistence migration test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Covers state and media placement plus old-path removal.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testAccountIdentityMigrationResumesAfterDirectoryMove",
@@ -7075,7 +7118,14 @@
       "classification": "Deterministic interrupted-migration recovery test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Starts from precisely staged post-move/pre-manifest state and asserts recovered identity.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFinalizedLateTrackKeepsRemainingTracksPaused",
@@ -7114,7 +7164,14 @@
       "classification": "Deterministic late-completion state test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts the remaining track and aggregate do not incorrectly become queued.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testDurableChunksSurviveRecreationAndFinalizeAtExactLength",
@@ -7153,7 +7210,14 @@
       "classification": "Deterministic durable filesystem test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks offset, lengths, persisted state and byte-for-byte final output.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testChunkAppendRejectsWrongOffsetAndOversizedResult",
@@ -7192,7 +7256,14 @@
       "classification": "Deterministic storage boundary test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts the mismatched offset error details and verifies valid boundary before overflow.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testStorageRequirementUsesSafetyMarginAndTypedCapacityFailure",
@@ -7231,7 +7302,14 @@
       "classification": "Deterministic capacity arithmetic test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Exercises exact threshold and typed under-capacity result.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testStorageRequirementRejectsOverflow",
@@ -7309,7 +7387,14 @@
       "classification": "Deterministic storage API test that consults the actual host volume capacity.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Only asserts capacity-derived requirement structure, not a machine-specific free-space value or success threshold.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFinalizedFilesAndManifestSurviveStoreRecreation",
@@ -7348,7 +7433,14 @@
       "classification": "Deterministic filesystem/persistence test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Semantic state, media bytes, and path privacy are asserted.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRejectsWrongLengthBeforeFinalPlacement",
@@ -7387,7 +7479,14 @@
       "classification": "Deterministic file-validation boundary test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks both exact mismatch cause and no finalized output.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testMissingCompletedFileBecomesRepairablePartial",
@@ -7426,7 +7525,14 @@
       "classification": "Deterministic corruption/reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks repaired persisted shape and rejects stale snapshot use.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testCorruptCompletedFileBecomesRepairablePartial",
@@ -7465,7 +7571,14 @@
       "classification": "Deterministic filesystem corruption test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts state repair and corrupt file removal.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFinalizedFileCompletesManifestAfterInterruptedPersistence",
@@ -7504,7 +7617,14 @@
       "classification": "Deterministic interrupted persistence recovery test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Sets post-crash filesystem state explicitly and validates reconciliation.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRemainingPreflightCountsOnlyMissingPartialBytes",
@@ -7543,7 +7663,14 @@
       "classification": "Deterministic storage calculation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts remaining byte total rather than original plan total.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testOversizedPartialFailsOnlyItsOwnRecord",
@@ -7582,7 +7709,14 @@
       "classification": "Deterministic multi-record reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts record isolation and cleanup of only invalid partial.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testMalformedRecordIsQuarantinedWithoutHidingHealthyRecords",
@@ -7621,7 +7755,14 @@
       "classification": "Deterministic malformed-persistence recovery test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks quarantine evidence and healthy-record continuity.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testInvalidEntryPreservesHealthyTrackAndBytes",
@@ -7660,7 +7801,14 @@
       "classification": "Deterministic parameterized backward-data reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Covers order and both corrupt forms with typed reconciliation cause and retained bytes.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testCompletedLegacyRecordWithoutInodeIsPreserved",
@@ -7699,7 +7847,14 @@
       "classification": "Deterministic legacy persisted-shape reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Uses valid media bytes with absent optional metadata and asserts usability.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testAutomaticCacheMetadataAndFullBookPromotionPersist",
@@ -7738,7 +7893,14 @@
       "classification": "Deterministic filesystem/persistence lifecycle test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks intermediate cache semantics and final promotion plus stale snapshot safety.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testReconciledFullCacheSurvivesStaleChapterCleanup",
@@ -7777,7 +7939,14 @@
       "classification": "Deterministic persistence reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Sets crash-like file/manifest mismatch and asserts cleanup does not delete valid final bytes.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testLegacyManifestDefaultsToManualPurpose",
@@ -7816,7 +7985,14 @@
       "classification": "Deterministic backward-compatibility decode test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Explicitly synthesizes missing optional fields and asserts defaults.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testAutomaticWindowValidationPromotionAndLegacyDetection",
@@ -7855,7 +8031,14 @@
       "classification": "Deterministic validation and persisted-shape test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks constructor/preflight validation, state transition, and legacy marker independently.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testAutomaticWindowIgnoresNonTargetCorruption",
@@ -7894,7 +8077,14 @@
       "classification": "Deterministic target-scoped reconciliation test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Contrasts non-target and target corruption postconditions.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRemovingRecordDeletesOnlyItsOpaqueBookDirectory",
@@ -7933,7 +8123,14 @@
       "classification": "Deterministic scoped deletion test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Explicitly verifies preservation of a neighboring resource.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRemoveTrackFilesDeletesPartialAndFinalFiles",
@@ -7972,7 +8169,14 @@
       "classification": "Deterministic per-track deletion test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts target removal and sibling preservation in filesystem and manifest.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRemoveTrackFilesDeletesPartialFileWhenDownloadInProgress",
@@ -8011,7 +8215,14 @@
       "classification": "Deterministic in-progress cleanup test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Asserts target filesystem postconditions.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testRemoveTrackFilesIgnoresMissingFiles",
@@ -8050,7 +8261,14 @@
       "classification": "Deterministic idempotent cleanup test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Checks missing-file behavior without requiring error or changing state.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "download_fixture_cleanup_followup": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/372",
+        "date": "2026-10-19",
+        "disposition": "verified",
+        "source_review": "Original action and assertion coverage retained. Scoped withFixture awaits cleanup before returning or rethrowing. Throwing root deletion is recorded at the caller on either exit without replacing an original operation failure. No task, observer, sleep or timing window added; independent UUID roots remain.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterUsesLocalServerAndPreservesPathPrefix",

@@ -679,3 +679,11 @@ The separately authorized telemetry cancellation regression now gates its fake
 response until typed cancellation and survivor admission are observed, with
 bounded completion assertions and awaited cleanup on every exit. See the
 [telemetry response-gate evidence](release-evidence/test-reliability-core-followups.md#telemetry-response-gate-2026-10-19); production token-provider behavior is unchanged.
+
+
+DownloadStorage fixture cleanup (#372) now uses an awaited test scope for all
+31 root-owning tests, records path-free structured deletion failures at the
+calling test, and preserves any original operation error. Success and forced
+missing-root failures are covered separately. See the
+[scoped cleanup evidence](release-evidence/test-reliability-core-followups.md#downloadstorage-fixture-cleanup-issue-372).
+This test-only disposition does not close broader reliability acceptance.

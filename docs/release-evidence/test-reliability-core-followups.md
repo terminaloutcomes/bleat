@@ -24,7 +24,7 @@ These are source-review findings for [issue #362](https://github.com/terminalout
 | `Tests/BleatCoreTests/LibrarySearchCoordinatorTests.swift` (all callers of `SearchTestSleeper.waitForSleepCount` and `SearchTestService.waitForFirstCall`) | Add bounded, source-location-preserving start signals to fake sleeper/service gates and assert each signal before release/cancellation. | The actor continuation helpers correctly coordinate the intended concurrency order, but wait forever if the coordinator stops scheduling debounce or never invokes the repository. This can hang all eight tests rather than fail at the missing transition. Keep the deterministic sleeper and cancellation race scenarios. |
 | `Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain` and `testFetchedCallbackProgressResetsNoProgressDeadline` | Replace wall-clock sleeps/manual deadline probes with a controlled clock where feasible, or add a typed notification to observe deadline reset/expiry. Preserve the actual background pause and elapsed no-progress contract. | Both tests use intended elapsed-time coverage, but the progress case sleeps 600 ms, checks for non-expiry, sleeps another 600 ms, then expects expiry for a one-second deadline; scheduler delay before the progress check can turn the first expectation flaky. The background case also relies on 50 ms sleeps for deadline propagation. Keep the cancellation/drain postconditions; make the timing boundary controllable and diagnostic. |
 | `Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheReadsDoNotBlockTheMainActor` | Bound and diagnose the final `readsTask.value` wait, and retain the current observable start/finish probe. | The two 30-second loops are bounded, but after either expires the test still awaits the detached task without a bound. A stuck cache read can hang the process. Recheck the heartbeat observation window after adding a completion contract. |
-| `Tests/BleatCoreTests/DownloadStorageTests.swift::Fixture.removeRoot` (all `DownloadStorageTests` callers) | Route temporary-root cleanup through the checked cleanup helper or surface cleanup failure as a test issue instead of suppressing `removeItem` errors with `try?`. | A failed cleanup silently leaks the test's unique temporary directory. Per-test UUID roots prevent state collision, but resource cleanup failure is currently invisible and can consume host disk over repeated runs. |
+| `Tests/BleatCoreTests/DownloadStorageTests.swift::Fixture.removeRoot` (all 31 root-owning callers) | Implemented: awaited fixture scope reports deletion failures at the calling test and preserves the original operation failure. | See [scoped cleanup evidence](#downloadstorage-fixture-cleanup-issue-372); historical audit findings remain retained. |
 | `Tests/BleatCoreTests/PrivateCloudSyncTests.swift::CloudKitCancellationProbe.waitForEntry` (callers `testCallbackCancellationCompletesBeforeLifecycleAllowsRetry`, `testCallbackWatchdogCancellationEscapesDelegateTaskLocals`) | Add a bounded actor-entry notification with test-site timeout diagnostics; keep the cancellation release/drain ordering. | If cancellation never enters the probe, its checked continuation suspends indefinitely before either test can assert its lifecycle/watchdog outcome. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift::GatedShutdownLogExporter.waitUntilShutdownStarts` / `TestAsyncSignal.wait` (caller `testConcurrentLogShutdownCallersAwaitSharedCompletion`) | Add a bounded start signal that reports a test issue if downstream shutdown is never entered, and an arrival signal proving the second caller joined before releasing the shared shutdown. | The first wait currently suspends on an unbounded continuation; the second caller is only given 50 ms of sleep, so under load it may not have joined before the assertion/release. |
 | `Tests/BleatCoreTests/RemoteTelemetryTests.swift::CancellableBlockingSpanExporter.waitUntilStarted` and `waitUntilFinished` (caller `testWithdrawalCancelsAnActiveDownstreamExport`) | Replace synchronous semaphore waits inside the async test with bounded async notifications and source-located timeout failures. | The two calls can block the test executor for up to two seconds each; a missing stage is reported only as a semaphore result and can starve constrained test scheduling. |
@@ -381,3 +381,73 @@ warning or unexpected skip was found in the affected tests.
 Final revision and final-head CI results are recorded in draft
 [PR #388](https://github.com/terminaloutcomes/bleat/pull/388). This disposition
 resolves only the cookie-fixture source finding and retains unrelated #372 work.
+
+
+## DownloadStorage fixture cleanup (issue 372)
+
+This slice addresses only the `Fixture.removeRoot` finding under
+[issue #372](https://github.com/terminaloutcomes/bleat/issues/372).
+All 31 root-owning tests now await `withFixture`, which uses `withTestCleanup`
+to complete deletion on successful and throwing exits. `removeRoot` throws;
+the cleanup boundary records failures at the caller's `SourceLocation` and
+retains the original operation error. Its dedicated error value exposes only
+the Foundation domain and numeric code, omitting filesystem paths. Each test
+still owns an independent UUID root. All original download actions and assertions
+remain; three catches explicitly match `DownloadStorageError` because the
+closure scope otherwise erases Swift's inferred thrown type.
+
+Three new inventory identities cover deletion after success, deletion after an
+operation error, and deterministic deletion failure on both operation outcomes.
+The last identity first removes its owned root, then requires a cleanup issue
+matching both its exact calling location and structured missing-file code.
+Unexpected issues do not match the known-issue handler. It separately verifies
+the original typed operation error and absence of the root. No permissions,
+sleeps, background work, arbitrary scheduler windows or production changes are
+involved. The historical audit's 31 caller records gain separate follow-up
+annotations; their original review decisions and counts are preserved.
+
+Final-source validation on 19 October 2026 used macOS 26.6.2, Xcode 27.1
+(27A9275), Swift 6.4 and Swift Testing 2084:
+
+- Focused cleanup regressions: 3/3 exact identities passed, including both
+  deletion-failure arguments (`.build/download-cleanup-redacted.xml`).
+- Three independent invocations each of the three cleanup identities,
+  `testCancellationPersistsIntentAndDiscardsPartialBytes` and
+  `testLegacyManifestDefaultsToManualPurpose`: 15/15 exact single-identity
+  reports passed (18 argument executions), zero failures/errors/skips.
+  Commands used `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+  --skip-build --disable-xctest --no-parallel --filter DownloadStorageTests.<name>
+  --xunit-output .build/download-<name>-<1...3>.xml`; sibling logs are retained.
+- Owning DownloadStorage suite: all 35 inventory identities passed, zero
+  failures/errors/skips (`.build/download-storage-suite-final.xml`).
+- `mise exec -- ./scripts/test-host.sh`: all 577 exact inventory identities
+  passed, zero failures/errors/skips, including all 35 DownloadStorage identities.
+  Signature, provisioned profile, Keychain entitlements and coverage checks
+  passed. Artifacts: `.build/download-storage-signed-host.log`,
+  `.build/host-results/tests.xml`, per-product XML in `.build/host-results/`,
+  and `.build/coverage/swift-host/lcov.info`.
+- Strict formatting lint on the changed Swift file, `mise run docs:check`
+  (`.build/download-storage-docs-check.log`) and `git diff --check` passed.
+
+Every focused, repeated, owning-suite and signed-host report was parsed for exact
+identities, uniqueness and individual outcomes. The two new known issues are
+required missing-file injections, matched by exact source location/domain/code;
+the existing `TestCleanupTests` dual-failure regression contributes the third
+known issue. The signed gate also emitted the pinned OpenTelemetry watchOS
+minimum-version deprecation and intentional SwiftData code 513 diagnostics from
+read-only-store failure tests; their individual outcomes passed. No unexpected
+warning or skip was observed in DownloadStorage tests. This is host filesystem
+and signed-host evidence; no local Simulator, live Audiobookshelf server or
+physical-device journey is claimed.
+
+The initial focused build failed before executing tests because three catches
+lost their inferred `DownloadStorageError` type inside the closure
+(`.build/download-cleanup-focused.log`). Explicit typed catches resolve that
+compile failure. The subsequent focused run passed 3/3 identities and the
+owning suite passed 35/35, but the intentionally failed deletion diagnostic
+included the synthetic root path. The final-source error presentation retains
+only domain/code; the earlier successful runs are superseded evidence
+(`.build/download-cleanup-focused-final.xml`,
+`.build/download-storage-suite.xml`). No setup script exit status was exposed;
+configured environment loading and the marked temporary build link were
+verified before editing.
