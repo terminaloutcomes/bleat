@@ -9562,6 +9562,12 @@
       "name": "stalledDiagnosticIsStoppedAndClosureIsProven",
       "line": 292,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
+      "line": 19173,
+      "language": "swift"
     }
   ]
 }

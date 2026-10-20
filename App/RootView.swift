@@ -3007,7 +3007,9 @@ private struct HomeContent: View {
                                     "home.downloaded.\(record.detail.id.rawValue)",
                                 playbackIdentifier:
                                     "home.downloaded.\(record.detail.id.rawValue).play",
-                                coverLoadPolicy: .cacheOnly,
+                                coverLoadPolicy: model.networkPathState
+                                    .availability == .unavailable
+                                    ? .cacheOnly : .allowNetwork,
                                 handlePlaybackOutcome: handlePlaybackOutcome
                             )
                         }

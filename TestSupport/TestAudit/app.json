@@ -49667,6 +49667,34 @@
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
       }
+    },
+    {
+      "identifier": "AppModelTests/testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19173
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Retired initial save cannot publish editor completion or clear a newer operation after awaited cover invalidation.",
+        "purpose": "Deterministic reset, account-switch, account round-trip and selection regressions at the actual invalidation suspension.",
+        "ruleAssessments": {
+          "1": "Held old invalidation, retired editor ownership, held newer upload, then old completion: newer saving state/account/selection/detail must survive; newer completion alone publishes saved; two exact account-scoped upload payloads required.",
+          "2": "Register entry and return expectations before tasks; actual invalidation/upload admission and caller return establish ordering. No sleep or guessed yield.",
+          "3": "N/A: editor state, no playback position/clock assertion.",
+          "4": "No throwing operation or early return after callers start. Both gates are released on every assertion-failure path. Caller return is bounded by three-second XCTest expectations and an observed completion Bool before task.value; unconfirmed tasks are cancelled rather than awaited indefinitely.",
+          "5": "Fresh model, fake service, accounts and gates per reset/account-switch/account-round-trip/selection scenario; only synthetic identifiers and bytes.",
+          "6": "Real app-model ownership with controlled in-memory service and injected invalidation; no server, system-artwork or physical-device claim.",
+          "7": "One expected-failing run against 90e1207 retained; assertion saved != saving confirms finding. No budget increase, suppression or retry-to-green.",
+          "8": "Every semantic assertion includes the ownership scenario; named admission/return expectations identify blocked stage. Exact enum/detail/request assertions preserve cause.",
+          "9": "Focused baseline failure, corrected focused repetitions and owning app suite required; retry neighbors and independent source review retained separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises the confirmed stale-completion boundary with a newer upload held; preserves successful current-operation completion."
+        }
+      },
+      "execution": "Source84840c1: three independent runs of this four-scenario identity passed; three adjacent playback/retry runs passed; owning624/624; live online/offline1+1; ReleaseSimulator/lint/docs passed. Zero Simulator failures/skips/runtime warnings. Independent final-source re-review found no actionable issues. Baseline red and first owning failure retained separately; no CI/device acceptance claim."
     }
   ],
   "decisionCounts": {
@@ -49688,6 +49716,39 @@
     "status": "resolved for these seven oracles;focused21/21,owner505/505,eight mutation kills before exact syntax-only correction;final exact-textapp608/608;signedhost606/606",
     "remaining_scope": "These seven original-seek oracles use an awaited pre-play diagnostic snapshot; execution is recorded separately. Other playback and lifecycle findings still need current reconciliation.",
     "historicalStatus": "unresolved; no startup oracle has been replaced by a later seek"
+  },
+  "coverInitialSaveOwnership": {
+    "baseline": "90e12073c39480e06d578c8996a28dabd2cf860a",
+    "scope": "One new four-scenario app test plus shared initial/retry editor ownership; historical audit counts above are retained baseline counts, not a new repository-wide acceptance claim.",
+    "rules": {
+      "1": "Held old invalidation, retired editor ownership, held newer upload, then old completion: newer saving state/account/selection/detail must survive; newer completion alone publishes saved; two exact account-scoped upload payloads required.",
+      "2": "Register entry and return expectations before tasks; actual invalidation/upload admission and caller return establish ordering. No sleep or guessed yield.",
+      "3": "N/A: editor state, no playback position/clock assertion.",
+      "4": "No throwing operation or early return after callers start. Both gates are released on every assertion-failure path. Caller return is bounded by three-second XCTest expectations and an observed completion Bool before task.value; unconfirmed tasks are cancelled rather than awaited indefinitely.",
+      "5": "Fresh model, fake service, accounts and gates per reset/account-switch/account-round-trip/selection scenario; only synthetic identifiers and bytes.",
+      "6": "Real app-model ownership with controlled in-memory service and injected invalidation; no server, system-artwork or physical-device claim.",
+      "7": "One expected-failing run against 90e1207 retained; assertion saved != saving confirms finding. No budget increase, suppression or retry-to-green.",
+      "8": "Every semantic assertion includes the ownership scenario; named admission/return expectations identify blocked stage. Exact enum/detail/request assertions preserve cause.",
+      "9": "Focused baseline failure, corrected focused repetitions and owning app suite required; retry neighbors and independent source review retained separately."
+    },
+    "evidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership",
+    "adjacentReadiness": {
+      "identifier": "AppModelTests/testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
+      "finding": "Owning run at446299d recorded item-status equality failure; enum raw values and loop case were not captured. Initial readiness checked only model playing and there was no AVPlayer readiness witness after the paused baseline seek. Exact runtime root cause remains unproven.",
+      "change": "Require readyToPlay item, positive rate and playing time-control before initial playing baseline; after paused seek, observe readyToPlay, paused, zero rate and paused time-control before preserving runtime snapshot. Existing five-second budgets and exact continuation/identity/position/rate assertions retained.",
+      "evidence": "Retained failed owning446299d. Source84840c1: three focused executions (normal and retry scenarios each), then full624/624owning, zero failures/skips/runtime warnings; independent re-review no findings. Exact original item-status transition remains unproven.",
+      "rules": {
+        "1": "Strengthen semantic readiness before unchanged audio continuation assertions.",
+        "2": "Observe actual AVPlayer runtime properties, no readiness sleep.",
+        "3": "Existing paused seek and playing elapsed-time tolerance retained unchanged.",
+        "4": "Existing model playback.stop and fixture cleanup preserved.",
+        "5": "Unique playbackRecoveryFixture per normal/retry case.",
+        "6": "Local AVPlayer Simulator integration, no device claim.",
+        "7": "Failure diagnosed and preserved before changing predicate; budget and assertions unchanged.",
+        "8": "Existing playbackDiagnostic exposes runtime states on bounded readiness failure.",
+        "9": "Repeat affected methods and full app suite at final head."
+      }
+    }
   },
   "startupClockObserverReview": {
     "source": "Tests/BleatAppTests/AppModelTests.swift::StartupPlaybackDiagnosticRecorder",

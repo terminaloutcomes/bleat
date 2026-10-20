@@ -1,6 +1,7 @@
 import BleatCore
 import Foundation
 import MediaPlayer
+import Observation
 import Synchronization
 
 enum PlaybackRemoteCommand: Equatable, Sendable {
@@ -140,9 +141,15 @@ enum NowPlayingArtwork {
 }
 
 private struct NowPlayingArtworkIdentity: Equatable {
+    let generation: [UUID?]
     let accountID: AccountID?
     let url: URL
     let policy: BookCoverLoadPolicy
+
+    var presentation: BookCoverPresentationIdentity {
+        BookCoverPresentationIdentity(
+            accountID: accountID, url: url, generation: generation)
+    }
 }
 
 @MainActor
@@ -204,7 +211,7 @@ final class NowPlayingCoordinator {
         (@MainActor (PlaybackRemoteCommand) -> PlaybackRemoteCommandOutcome)?
     private nonisolated let remoteCommandAdmission = Mutex(
         RemoteCommandAdmission())
-    private var latestSnapshot: NowPlayingSnapshot?
+    private(set) var latestSnapshot: NowPlayingSnapshot?
     private(set) var remoteCommandCallbackProcessingSequenceForTesting = 0
     private var artworkIdentity: NowPlayingArtworkIdentity?
     private var artwork: MPMediaItemArtwork?
@@ -264,10 +271,17 @@ final class NowPlayingCoordinator {
         }
         let nextArtworkIdentity = snapshot.coverURL.map {
             NowPlayingArtworkIdentity(
+                generation: BookCoverRefresh.shared.generation(
+                    accountID: snapshot.accountID, url: $0),
                 accountID: snapshot.accountID,
                 url: $0,
                 policy: snapshot.coverLoadPolicy
             )
+        }
+        if nextArtworkIdentity != artworkIdentity,
+            nextArtworkIdentity?.presentation != artworkIdentity?.presentation
+        {
+            artwork = nil
         }
         latestSnapshot = snapshot
         remoteCommandAdmission.withLock { $0.snapshot = snapshot }
@@ -281,14 +295,14 @@ final class NowPlayingCoordinator {
         artworkTask?.cancel()
         artworkTask = nil
         artworkIdentity = nextArtworkIdentity
-        artwork = nil
-        infoCenter.nowPlayingInfo = snapshot.information(artwork: nil)
+        infoCenter.nowPlayingInfo = snapshot.information(artwork: artwork)
         guard let nextArtworkIdentity else {
             return
         }
 
         artworkGeneration &+= 1
         let generation = artworkGeneration
+        observeArtworkChanges(generation: generation, snapshot: snapshot)
         artworkTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { artworkCompletionSequenceForTesting += 1 }
@@ -311,6 +325,26 @@ final class NowPlayingCoordinator {
             infoCenter.nowPlayingInfo = latestSnapshot.information(
                 artwork: artwork
             )
+        }
+    }
+
+    private func observeArtworkChanges(
+        generation: UInt64, snapshot: NowPlayingSnapshot
+    ) {
+        withObservationTracking {
+            _ = BookCoverRefresh.shared.generation(
+                accountID: snapshot.accountID, url: snapshot.coverURL)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, artworkGeneration == generation,
+                    let snapshot = latestSnapshot
+                else { return }
+                publish(snapshot)
+                if artworkGeneration == generation {
+                    observeArtworkChanges(
+                        generation: generation, snapshot: snapshot)
+                }
+            }
         }
     }
 

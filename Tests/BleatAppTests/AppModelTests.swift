@@ -14127,6 +14127,65 @@ final class AppModelTests: XCTestCase {
         model.setLiveUpdatesActive(false)
     }
 
+    func testLiveCoverChangeOutsideSelectedLibraryRefreshesOnlyActiveArtwork()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount(accountID: fixture.accountID.rawValue)
+        let browsingLibrary = LibrarySummary(
+            id: LibraryID(rawValue: "other-library"), name: "Fixture",
+            mediaType: .book)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([browsingLibrary]),
+            firstPage: .success(fixturePage(libraryID: browsingLibrary.id)))
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service,
+            operationObserver: { operations.record($0) },
+            localSessionStore: LocalPlaybackSessionStore(
+                defaults: fixture.defaults),
+            playbackPositionStore: PlaybackPositionStore(
+                defaults: fixture.defaults))
+        try await startLiveRefreshTest(
+            model, service: service, operations: operations)
+        await model.playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: account.id, account: account)
+        model.playback.pause()
+        await model.playback.seek(to: 0.25)
+        let before = model.playback.coverURL
+        XCTAssertNotNil(before)
+        let baseline = await service.liveRefreshRequestCounts()
+        let consumed = operations.expectation(for: .liveUpdateConsumed)
+        await service.emitLiveUpdate(
+            .event(
+                .itemsChanged(
+                    AudiobookshelfLiveItemChange(
+                        libraryIDs: [fixture.detail.libraryID],
+                        itemIDs: [fixture.detail.id]))))
+        await fulfillment(of: [consumed], timeout: 30)
+        XCTAssertNotEqual(model.playback.coverURL, before)
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.001)
+        let requests = await service.liveRefreshRequestCounts()
+        XCTAssertEqual(requests, baseline)
+        let refreshed = model.playback.coverURL
+        let unrelatedConsumed = operations.expectation(for: .liveUpdateConsumed)
+        await service.emitLiveUpdate(
+            .event(
+                .itemsChanged(
+                    AudiobookshelfLiveItemChange(
+                        libraryIDs: [fixture.detail.libraryID],
+                        itemIDs: [LibraryItemID(rawValue: "unrelated")]))))
+        await fulfillment(of: [unrelatedConsumed], timeout: 30)
+        XCTAssertEqual(model.playback.coverURL, refreshed)
+        model.setLiveUpdatesActive(false)
+        await model.playback.stop()
+    }
+
     func testLiveRefreshCancelsQueuedCatalogChangeOnBackground() async throws {
         let account = try fixtureAccount()
         let library = fixtureLibrary()
@@ -18723,6 +18782,115 @@ final class AppModelTests: XCTestCase {
     }
 
     #if os(iOS)
+        func
+            testNetworkRecoveryRefreshesPausedDownloadedSystemArtworkInBackground()
+            async throws
+        {
+            let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+            defer { fixture.cleanUp() }
+            let account = try fixtureAccount(
+                accountID: fixture.accountID.rawValue)
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([fixtureLibrary()]))
+            let operations = AppModelOperationEventProbe()
+            let publisher = TestNowPlayingInfoPublisher()
+            let data = try XCTUnwrap(
+                artworkTestImage(edge: 3, colour: .red).pngData())
+            let fetched = expectation(
+                description: "recovered path requests artwork")
+            let published = expectation(
+                description: "paused system artwork replaces offline miss")
+            let loader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { request in
+                    fetched.fulfill()
+                    return (
+                        data,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200,
+                                httpVersion: nil, headerFields: nil))
+                    )
+                })
+            let coordinator = NowPlayingCoordinator(
+                infoCenter: publisher, coverLoader: loader,
+                registersRemoteCommands: false)
+            let model = AppModel(
+                service: service,
+                operationObserver: { event in
+                    operations.record(event)
+                    if case .networkPathApplied = event {
+                        publisher.networkAppliedPolicies.append(
+                            coordinator.latestSnapshot?.coverLoadPolicy)
+                    }
+                },
+                localSessionStore: LocalPlaybackSessionStore(
+                    defaults: fixture.defaults),
+                playbackPositionStore: PlaybackPositionStore(
+                    defaults: fixture.defaults),
+                nowPlayingCoordinator: coordinator)
+            let started = operations.expectation(
+                for: .networkPathObserverStarted)
+            await model.start()
+            defer {
+                publisher.didPublish = nil
+                model.setLiveUpdatesActive(false)
+            }
+            await fulfillment(of: [started], timeout: 3)
+            model.setLiveUpdatesActive(false)
+            let unavailable = AppNetworkPathState(
+                availability: .unavailable, isConstrained: false,
+                isExpensive: false)
+            let offlineApplied = operations.expectation(
+                for: .networkPathStateApplied(unavailable))
+            await service.emitNetworkPathUpdate(unavailable)
+            await fulfillment(of: [offlineApplied], timeout: 3)
+            await model.playback.startDownloaded(
+                detail: fixture.detail, trackURLs: [fixture.audioURL],
+                accountID: account.id, account: account)
+            model.playback.pause()
+            await model.playback.seek(to: 5)
+            XCTAssertEqual(model.playback.state, .paused)
+            XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)
+            XCTAssertNil(publisher.nowPlayingInfo?[MPMediaItemPropertyArtwork])
+            let before = model.playback.runtimeSnapshotForTesting
+            publisher.didPublish = {
+                if let artwork = publisher.nowPlayingInfo?[
+                    MPMediaItemPropertyArtwork] as? MPMediaItemArtwork,
+                    artwork.image(at: CGSize(width: 1, height: 1))?.size.width
+                        == 3
+                {
+                    publisher.didPublish = nil
+                    published.fulfill()
+                }
+            }
+            // Both background and Low Data Mode prevent live catalog refresh.
+            let recovered = AppNetworkPathState(
+                availability: .satisfied, isConstrained: true,
+                isExpensive: false)
+            let recoveredApplied = operations.expectation(
+                for: .networkPathStateApplied(recovered))
+            await service.emitNetworkPathUpdate(recovered)
+            await fulfillment(
+                of: [recoveredApplied, fetched, published], timeout: 3)
+            publisher.didPublish = nil
+            XCTAssertEqual(model.playback.coverLoadPolicy, .allowNetwork)
+            XCTAssertEqual(
+                publisher.networkAppliedPolicies.last ?? nil, .allowNetwork,
+                "The consumer snapshot must update in the path-change turn, before AVPlayer or catalog callbacks"
+            )
+            XCTAssertEqual(model.playback.state, .paused)
+            XCTAssertEqual(model.playback.currentTime, 5)
+            let after = model.playback.runtimeSnapshotForTesting
+            XCTAssertEqual(after.playerIdentity, before.playerIdentity)
+            XCTAssertEqual(
+                after.queuedItemIdentities, before.queuedItemIdentities)
+            XCTAssertEqual(after.playerRate, before.playerRate)
+            await model.playback.stop()
+        }
+
         func testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry()
             async throws
         {
@@ -18786,7 +18954,14 @@ final class AppModelTests: XCTestCase {
                 await assertEventually(
                     "downloaded playback is ready", timeout: .seconds(5),
                     observed: { self.playbackDiagnostic(playback) },
-                    condition: { playback.state == .playing })
+                    condition: {
+                        playback.state == .playing
+                            && playback.runtimeSnapshotForTesting.itemStatus
+                                == .readyToPlay
+                            && playback.runtimeSnapshotForTesting.playerRate > 0
+                            && playback.runtimeSnapshotForTesting
+                                .timeControlStatus == .playing
+                    })
                 let initialArtwork = await waitForNowPlayingArtwork(
                     in: publisher)
                 XCTAssertEqual(
@@ -18797,6 +18972,19 @@ final class AppModelTests: XCTestCase {
                 if retriesUpload {
                     playback.pause()
                     await playback.seek(to: 5)
+                    await assertEventually(
+                        "paused player is ready after cover-save baseline seek",
+                        timeout: .seconds(5),
+                        observed: { self.playbackDiagnostic(playback) },
+                        condition: {
+                            playback.state == .paused
+                                && playback.runtimeSnapshotForTesting.itemStatus
+                                    == .readyToPlay
+                                && playback.runtimeSnapshotForTesting.playerRate
+                                    == 0
+                                && playback.runtimeSnapshotForTesting
+                                    .timeControlStatus == .paused
+                        })
                     XCTAssertEqual(playback.state, .paused)
                     XCTAssertEqual(playback.currentTime, 5)
                 }
@@ -18982,6 +19170,107 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(metadataRequests.count, 1)
     }
 
+    func testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation()
+        async throws
+    {
+        enum OwnershipChange: CaseIterable {
+            case reset, accountSwitch, accountRoundTrip, selection
+        }
+        for change in OwnershipChange.allCases {
+            let first = try fixtureAccount()
+            let second = try fixtureAccount(
+                accountID: "account-2", userID: "user-2", username: "second",
+                server: "https://second.example")
+            let library = fixtureLibrary()
+            let page = fixturePage(libraryID: library.id)
+            let original = fixtureBookDetail(item: page.items[0])
+            let nextBook = fixtureBook(
+                id: "item-2", title: "Next fixture", libraryID: library.id)
+            let next =
+                change == .selection
+                ? fixtureBookDetail(item: nextBook) : original
+            let invalidation = AsyncGate()
+            let newerUpload = AsyncGate()
+            let service = TestAppService(
+                accounts: .success([first, second]),
+                activeAccount: .success(first),
+                libraries: .success([library]), firstPage: .success(page),
+                bookDetail: .success(original),
+                coverReplacement: .success(original))
+            let model = AppModel(
+                service: service,
+                invalidateBookCover: { _, _ in
+                    await invalidation.enterAndWait()
+                })
+            await model.start()
+            await model.loadBookDetail(page.items[0])
+            let entered = await invalidation.entryExpectation
+            let oldReturned = expectation(
+                description: "old save returned: \(change)")
+            var oldCompleted = false
+            let oldSave = Task {
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: original),
+                    baseline: original, coverJPEGData: Data([1]))
+                oldCompleted = true
+                oldReturned.fulfill()
+            }
+            await fulfillment(of: [entered], timeout: 3)
+            let invalidationEntered = await invalidation.hasEntered
+            XCTAssertTrue(invalidationEntered)
+            switch change {
+            case .reset:
+                model.resetBookEditSaveState()
+            case .accountSwitch, .accountRoundTrip:
+                await model.switchAccount(to: second)
+                if change == .accountRoundTrip {
+                    await model.switchAccount(to: first)
+                }
+                await model.loadBookDetail(page.items[0])
+            case .selection:
+                await service.setBookDetail(.success(next))
+                await model.loadBookDetail(nextBook)
+            }
+            XCTAssertEqual(model.bookEditSaveState, .idle, "\(change)")
+            await service.setCoverReplacement(.success(next))
+            await service.setCoverReplacementGate(newerUpload)
+            let newerEntered = await newerUpload.entryExpectation
+            let newReturned = expectation(
+                description: "new save returned: \(change)")
+            var newCompleted = false
+            let newSave = Task {
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: next),
+                    baseline: next, coverJPEGData: Data([2]))
+                newCompleted = true
+                newReturned.fulfill()
+            }
+            await fulfillment(of: [newerEntered], timeout: 3)
+            let uploadEntered = await newerUpload.hasEntered
+            XCTAssertTrue(uploadEntered)
+            XCTAssertEqual(model.bookEditSaveState, .saving, "\(change)")
+            let selectedAccount = model.account
+            let selectedDetail = model.bookDetail
+            await invalidation.release()
+            await fulfillment(of: [oldReturned], timeout: 3)
+            if oldCompleted { await oldSave.value } else { oldSave.cancel() }
+            XCTAssertEqual(model.account, selectedAccount, "\(change)")
+            XCTAssertEqual(model.selectedBookID, next.id, "\(change)")
+            XCTAssertEqual(model.bookDetail, selectedDetail, "\(change)")
+            XCTAssertEqual(model.bookEditSaveState, .saving, "\(change)")
+            XCTAssertFalse(newCompleted, "new upload remains held: \(change)")
+            await newerUpload.release()
+            await fulfillment(of: [newReturned], timeout: 3)
+            if newCompleted { await newSave.value } else { newSave.cancel() }
+            XCTAssertEqual(model.bookEditSaveState, .saved, "\(change)")
+            let requests = await service.coverReplacementRequests()
+            let expectedAccount = change == .accountSwitch ? second : first
+            XCTAssertEqual(
+                requests.map(\.accountID), [first.id, expectedAccount.id])
+            XCTAssertEqual(requests.map(\.jpegData), [Data([1]), Data([2])])
+        }
+    }
+
     func testCoverRetryCannotPublishAfterAccountSwitch() async throws {
         let first = try fixtureAccount()
         let second = try fixtureAccount(
@@ -19022,6 +19311,136 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.account, second)
         XCTAssertEqual(model.bookDetail, .idle)
         XCTAssertEqual(model.bookEditSaveState, .idle)
+    }
+
+    func testCoverRetryCannotPublishAfterOwnershipChangesDuringInvalidation()
+        async throws
+    {
+        for switchAccount in [false, true] {
+            let first = try fixtureAccount()
+            let second = try fixtureAccount(
+                accountID: "account-2", userID: "user-2", username: "second",
+                server: "https://second.example")
+            let library = fixtureLibrary()
+            let page = fixturePage(libraryID: library.id)
+            let detail = fixtureBookDetail(item: page.items[0])
+            let gate = AsyncGate()
+            let service = TestAppService(
+                accounts: .success([first, second]),
+                activeAccount: .success(first),
+                libraries: .success([library]), firstPage: .success(page),
+                bookDetail: .success(detail),
+                metadataSave: .success(.saved(detail)),
+                coverReplacement: .failure(.coverUpdate(.uploadRejected)))
+            let model = AppModel(
+                service: service,
+                invalidateBookCover: { _, _ in await gate.enterAndWait() })
+            await model.start()
+            await model.saveBookEdits(
+                draft: BookMetadataDraft(detail: detail), baseline: detail,
+                coverJPEGData: Data([1]))
+            await service.setCoverReplacement(.success(detail))
+            let entered = await gate.entryExpectation
+            let retry = Task { await model.retryBookCoverUpload() }
+            await fulfillment(of: [entered], timeout: 3)
+            if switchAccount {
+                await model.switchAccount(to: second)
+            } else {
+                model.resetBookEditSaveState()
+            }
+            let selection = model.selectedBookID
+            let bookDetail = model.bookDetail
+            await gate.release()
+            await retry.value
+            XCTAssertEqual(model.account, switchAccount ? second : first)
+            XCTAssertEqual(model.bookEditSaveState, .idle)
+            XCTAssertEqual(model.selectedBookID, selection)
+            XCTAssertEqual(model.bookDetail, bookDetail)
+        }
+    }
+
+    func
+        testCoverRetrySelectionChangeRetiresBusyStateWithoutClearingNewerRetry()
+        async throws
+    {
+        for holdDuringInvalidation in [false, true] {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let page = fixturePage(libraryID: library.id)
+            let first = fixtureBookDetail(item: page.items[0])
+            let nextBook = fixtureBook(
+                id: "item-2", title: "Next fixture", libraryID: library.id)
+            let next = fixtureBookDetail(item: nextBook)
+            let oldGate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]), firstPage: .success(page),
+                bookDetail: .success(first),
+                coverReplacement: .failure(.coverUpdate(.uploadRejected)))
+            let model = AppModel(
+                service: service,
+                invalidateBookCover: { url, _ in
+                    if holdDuringInvalidation,
+                        url.pathComponents.contains(first.id.rawValue)
+                    {
+                        await oldGate.enterAndWait()
+                    }
+                })
+            await model.start()
+            await model.saveBookEdits(
+                draft: BookMetadataDraft(detail: first), baseline: first,
+                coverJPEGData: Data([1]))
+            await service.setCoverReplacement(.success(first))
+            if !holdDuringInvalidation {
+                await service.setCoverReplacementGate(oldGate)
+            }
+            let entered = await oldGate.entryExpectation
+            let oldRetry = Task { await model.retryBookCoverUpload() }
+            await fulfillment(of: [entered], timeout: 3)
+
+            // No reset/dismiss callback or account switch: navigation alone
+            // must release the old editor's busy state while its caller waits.
+            await service.setBookDetail(.success(next))
+            await model.loadBookDetail(nextBook)
+            XCTAssertEqual(model.selectedBookID, next.id)
+            XCTAssertEqual(model.bookDetail, .loaded(next))
+            XCTAssertEqual(model.bookEditSaveState, .idle)
+            if !holdDuringInvalidation {
+                await oldGate.release()
+                await oldRetry.value
+                XCTAssertEqual(model.bookEditSaveState, .idle)
+            }
+
+            // Hold a newer owned retry before retiring the old caller. Its
+            // saving state must survive the old operation's final cleanup.
+            await service.setCoverReplacementGate(nil)
+            await service.setCoverReplacement(
+                .failure(.coverUpdate(.uploadRejected)))
+            await model.saveBookEdits(
+                draft: BookMetadataDraft(detail: next), baseline: next,
+                coverJPEGData: Data([2]))
+            XCTAssertEqual(
+                model.bookEditSaveState,
+                .metadataSavedCoverFailed(
+                    account.id, next, coverJPEGData: Data([2]),
+                    AppFailure(.replaceCover, .invalidInput)))
+            let newGate = AsyncGate()
+            await service.setCoverReplacement(.success(next))
+            await service.setCoverReplacementGate(newGate)
+            let newerEntered = await newGate.entryExpectation
+            let newRetry = Task { await model.retryBookCoverUpload() }
+            await fulfillment(of: [newerEntered], timeout: 3)
+            if holdDuringInvalidation {
+                await oldGate.release()
+                await oldRetry.value
+            }
+            XCTAssertEqual(model.bookEditSaveState, .saving)
+            XCTAssertEqual(model.selectedBookID, next.id)
+            XCTAssertEqual(model.bookDetail, .loaded(next))
+            await newGate.release()
+            await newRetry.value
+            XCTAssertEqual(model.bookEditSaveState, .coverSaved(next))
+        }
     }
 
     func testBookDeletionForwardsModeAndRefreshesLibrary()
@@ -20970,7 +21389,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(outcome, .started(source: .downloaded))
         startup.assertInitialPosition(0.25, accuracy: 0.05)
         await startup.assertNativePlayRequested()
-        XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)
+        XCTAssertEqual(model.playback.coverLoadPolicy, .allowNetwork)
         XCTAssertTrue(
             model.playback.state == .buffering
                 || model.playback.state == .playing
@@ -21307,10 +21726,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[1]))
         XCTAssertTrue(model.playback.isPlaybackRequested)
 
-        let didContinue = await waitUntil(timeout: .seconds(2)) {
-            model.playback.coverLoadPolicy == .allowNetwork
-        }
-        XCTAssertTrue(didContinue)
+        let continued = expectation(
+            description: "Prepared remote track owns playback after cached seek"
+        )
+        Self.fulfillStreamingContinuation(
+            continued, when: model.playback,
+            using: root.appendingPathComponent("source.wav"))
+        await fulfillment(of: [continued], timeout: 2)
+        XCTAssertEqual(
+            model.playback.audioFiles.map(\.url),
+            [root.appendingPathComponent("source.wav")])
+        XCTAssertEqual(model.playback.cachedContinuationPhase, .inactive)
         let openRequests = await service.playbackOpenRequests()
         XCTAssertEqual(openRequests.count, 1)
         XCTAssertFalse(isFailed(model.playback.state))
@@ -21382,10 +21808,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.playback.state, .paused)
         model.playback.play()
 
-        let didRetry = await waitUntil(timeout: .seconds(4)) {
-            model.playback.coverLoadPolicy == .allowNetwork
-        }
-        XCTAssertTrue(didRetry)
+        let retried = expectation(
+            description:
+                "Retried remote track owns playback after cached boundary")
+        Self.fulfillStreamingContinuation(
+            retried, when: model.playback,
+            using: root.appendingPathComponent("source.wav"))
+        await fulfillment(of: [retried], timeout: 4)
+        XCTAssertEqual(
+            model.playback.audioFiles.map(\.url),
+            [root.appendingPathComponent("source.wav")])
+        XCTAssertEqual(model.playback.cachedContinuationPhase, .inactive)
         let openRequests = await service.playbackOpenRequests()
         XCTAssertEqual(openRequests.count, 2)
         XCTAssertFalse(isFailed(model.playback.state))
@@ -25163,6 +25596,52 @@ final class AppModelTests: XCTestCase {
             coordinator.disconnect()
         }
 
+        func testCarPlayRejectsCompletionFromPreviousCoverGeneration()
+            async throws
+        {
+            let account = try fixtureAccount()
+            let url = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://books.example/api/items/stale-carplay/cover?width=200&ts=1"
+                ))
+            let old = artworkTestImage(edge: 2, colour: .blue)
+            let loader = TestCarPlayArtworkCompletion(image: old) {
+                // The loader has accepted the old bytes, but their MainActor
+                // presentation must still validate the shared replacement ID.
+                BookCoverRefresh.shared.refresh(
+                    accountID: account.id,
+                    itemID: LibraryItemID(rawValue: "stale-carplay"))
+            }
+            let model = AppModel(
+                service: TestAppService(activeAccount: .success(nil)))
+            let coordinator = CarPlayCoordinator(
+                model: model, coverLoader: loader)
+            let presenter = TestCarPlayPresenter()
+            coordinator.connect(presenter)
+            defer { coordinator.disconnect() }
+            let item = CPListItem(text: "Fixture", detailText: nil)
+            let task = try XCTUnwrap(
+                coordinator.loadArtwork(
+                    for: item, accountID: account.id, url: url))
+            await task.value
+            XCTAssertEqual(loader.completedLoads, 1)
+            XCTAssertNil(item.image)
+            XCTAssertFalse(
+                coordinator.initialArtwork(accountID: account.id, url: url)
+                    === old)
+            // An unavailable replacement cannot seed templates with old pixels.
+            let replacement = CPListItem(text: "Replacement", detailText: nil)
+            let failed = try XCTUnwrap(
+                coordinator.loadArtwork(
+                    for: replacement, accountID: account.id, url: url))
+            await failed.value
+            XCTAssertNil(replacement.image)
+            XCTAssertFalse(
+                coordinator.initialArtwork(accountID: account.id, url: url)
+                    === old)
+        }
+
         func testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork()
             async throws
         {
@@ -27085,6 +27564,28 @@ final class AppModelTests: XCTestCase {
             + "snapshot=\(playback.runtimeSnapshotForTesting)"
     }
 
+    private static func fulfillStreamingContinuation(
+        _ expectation: XCTestExpectation, when playback: PlaybackModel,
+        using trackURL: URL
+    ) {
+        if playback.audioFiles.map(\.url) == [trackURL],
+            playback.cachedContinuationPhase == .inactive
+        {
+            expectation.fulfill()
+            return
+        }
+        withObservationTracking {
+            _ = playback.audioFiles
+            _ = playback.cachedContinuationPhase
+        } onChange: { [weak playback] in
+            Task { @MainActor in
+                guard let playback else { return }
+                Self.fulfillStreamingContinuation(
+                    expectation, when: playback, using: trackURL)
+            }
+        }
+    }
+
     private static func fulfill(
         _ expectation: XCTestExpectation,
         when playback: PlaybackModel,
@@ -27299,7 +27800,11 @@ private func waitForNowPlayingArtwork(
 private final class TestNowPlayingInfoPublisher:
     NowPlayingInfoPublishing
 {
-    var nowPlayingInfo: [String: Any]?
+    var nowPlayingInfo: [String: Any]? {
+        didSet { didPublish?() }
+    }
+    var didPublish: (@MainActor () -> Void)?
+    var networkAppliedPolicies: [BookCoverLoadPolicy?] = []
     var playbackState: MPNowPlayingPlaybackState = .unknown
 }
 
@@ -27496,6 +28001,30 @@ private struct PlaybackRecoveryFixture {
     private final class TestCarPlaySearchState {
         var current = true
         var capacity = 5
+    }
+
+    @MainActor
+    private final class TestCarPlayArtworkCompletion: BookCoverImageLoading {
+        private var image: UIImage?
+        private let beforeReturn: @MainActor () -> Void
+        private(set) var completedLoads = 0
+
+        init(image: UIImage, beforeReturn: @escaping @MainActor () -> Void) {
+            self.image = image
+            self.beforeReturn = beforeReturn
+        }
+
+        func image(
+            for url: URL, accountID: AccountID?, policy: BookCoverLoadPolicy
+        )
+            async -> PlatformImage?
+        {
+            guard let image else { return nil }
+            self.image = nil
+            beforeReturn()
+            completedLoads += 1
+            return image
+        }
     }
 
     @MainActor

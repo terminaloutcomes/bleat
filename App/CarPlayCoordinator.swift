@@ -170,6 +170,7 @@
         }
 
         private struct TemplatePresentation: Equatable, Sendable {
+            let artworkGeneration: UUID?
             let phase: AppPhase
             let account: AccountPresentation?
             let selectedLibraryID: LibraryID?
@@ -196,7 +197,7 @@
         private var keyboardAvailable = true
         private let searchEnabled: @MainActor () -> Bool
         private let model: AppModel
-        private let coverLoader: BookCoverImageLoader
+        private let coverLoader: any BookCoverImageLoading
         private var presenter: (any CarPlayPresenting)?
         private enum CellularModalPhase {
             case presenting, presented, dismissing
@@ -249,7 +250,8 @@
 
         init(
             model: AppModel,
-            coverLoader: BookCoverImageLoader = .shared,
+            coverLoader: any BookCoverImageLoading = BookCoverImageLoader
+                .shared,
             searchEnabled: @escaping @MainActor () -> Bool = {
                 guard #available(iOS 27.0, *) else { return false }
                 return Bundle.main.object(
@@ -1003,6 +1005,8 @@
                 AccountPresentation(id: $0.id, server: $0.server)
             }
             return TemplatePresentation(
+                artworkGeneration: BookCoverRefresh.shared
+                    .presentationGeneration(accountID: accountID),
                 phase: model.phase,
                 account: account,
                 selectedLibraryID: model.selectedLibrary?.id,
@@ -1469,6 +1473,8 @@
             }
             let generation = presentationGeneration
             withObservationTracking {
+                _ = BookCoverRefresh.shared.presentationGeneration(
+                    accountID: model.account?.id)
                 _ = model.phase
                 _ = model.account?.id
                 _ = model.selectedLibrary?.id
@@ -1535,13 +1541,14 @@
             return result
         }
 
-        private func loadArtwork(
+        @discardableResult
+        func loadArtwork(
             for item: CPListItem,
             accountID: AccountID?,
             url: URL?
-        ) {
+        ) -> Task<Void, Never>? {
             guard let url else {
-                return
+                return nil
             }
             let cacheKey = artworkCacheKey(
                 accountID: accountID,
@@ -1549,29 +1556,39 @@
             )
             if let image = artworkCache.object(forKey: cacheKey) {
                 item.setImage(image)
-                return
+                return nil
             }
+            let retainedKey = retainedArtworkCacheKey(
+                accountID: accountID, url: url)
             let generation = presentationGeneration
             let task = Task { @MainActor [weak self, weak item] in
                 guard let self,
                     let item,
                     let image = await coverLoader.image(
                         for: url,
-                        accountID: accountID
+                        accountID: accountID, policy: .allowNetwork
                     ),
                     !Task.isCancelled,
                     generation == presentationGeneration,
+                    cacheKey == artworkCacheKey(accountID: accountID, url: url),
+                    retainedKey
+                        == retainedArtworkCacheKey(
+                            accountID: accountID, url: url),
                     presenter != nil
                 else {
                     return
                 }
                 artworkCache.setObject(image, forKey: cacheKey)
+                artworkCache.setObject(
+                    image,
+                    forKey: retainedKey)
                 item.setImage(image)
             }
             artworkTasks.append(task)
+            return task
         }
 
-        private func initialArtwork(
+        func initialArtwork(
             accountID: AccountID?,
             url: URL?
         ) -> UIImage? {
@@ -1583,7 +1600,22 @@
                 url: url
             )
             return artworkCache.object(forKey: cacheKey)
+                ?? artworkCache.object(
+                    forKey: retainedArtworkCacheKey(
+                        accountID: accountID, url: url))
                 ?? UIImage(systemName: "book.closed.fill")
+        }
+
+        private func retainedArtworkCacheKey(accountID: AccountID?, url: URL)
+            -> NSString
+        {
+            let identity = BookCoverPresentationIdentity(
+                accountID: accountID, url: url,
+                generation: BookCoverRefresh.shared.generation(
+                    accountID: accountID, url: url))
+            return
+                "retained:\(identity.accountID?.rawValue ?? "anonymous")\u{0}\(identity.url?.absoluteString ?? "")\u{0}\(identity.replacementGeneration?.uuidString ?? "")"
+                as NSString
         }
 
         private func artworkCacheKey(
@@ -1591,7 +1623,9 @@
             url: URL
         ) -> NSString {
             let account = accountID?.rawValue ?? "anonymous"
-            return "\(account)\u{0}\(url.absoluteString)" as NSString
+            return
+                "\(account)\u{0}\(url.absoluteString)\u{0}\(BookCoverRefresh.shared.generation(accountID: accountID, url: url))"
+                as NSString
         }
     }
 

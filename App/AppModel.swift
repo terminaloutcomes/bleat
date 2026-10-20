@@ -1524,6 +1524,7 @@ extension PrivateCloudSyncFailure {
 @Observable
 final class AppModel {
     private let service: any AppServicing
+    private let invalidateBookCover: @Sendable (URL, AccountID) async -> Void
     private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
     private let diagnostics: any DiagnosticRecording
     private let remoteTelemetryConsentStore: RemoteTelemetryConsentStore
@@ -1619,7 +1620,7 @@ final class AppModel {
     @ObservationIgnored
     private var seriesDownloadSubmissionAccounts: [UUID: AccountID] = [:]
     @ObservationIgnored
-    private var bookCoverRetryOperationID: UUID?
+    private var bookEditSaveOperation: (id: UUID, itemID: LibraryItemID)?
     @ObservationIgnored
     private var seriesDownloadSubmissionTails:
         [AccountID: SeriesDownloadSubmissionTail] = [:]
@@ -1696,7 +1697,15 @@ final class AppModel {
     private(set) var homeShelvesRefreshState: ResourceRefreshState = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
-    private(set) var selectedBookID: LibraryItemID?
+    private(set) var selectedBookID: LibraryItemID? {
+        didSet {
+            guard selectedBookID != oldValue,
+                let operation = bookEditSaveOperation,
+                selectedBookID != operation.itemID
+            else { return }
+            retireBookEditSave(operation.id)
+        }
+    }
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var bookDetailRefreshState: ResourceRefreshState = .idle
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
@@ -1931,9 +1940,13 @@ final class AppModel {
                     until: $0, tolerance: .milliseconds(100))
             },
         downloadRemovalStorageCheckpoint:
-            @escaping @MainActor @Sendable () async throws -> Void = {}
+            @escaping @MainActor @Sendable () async throws -> Void = {},
+        invalidateBookCover:
+            @escaping @Sendable (URL, AccountID) async -> Void =
+            BookCoverImageLoader.invalidateShared(for:accountID:)
     ) {
         self.service = service
+        self.invalidateBookCover = invalidateBookCover
         self.cloudStorageNoticeDefaults = cloudStorageNoticeDefaults
         cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
             in: cloudStorageNoticeDefaults)
@@ -3017,6 +3030,8 @@ final class AppModel {
     }
 
     private func refreshSelectedLibraryContent() async {
+        guard !Task.isCancelled else { return }
+        if let account { await revalidateCoverArtwork(for: account) }
         guard !Task.isCancelled else { return }
         homeShelvesGeneration &+= 1
         let operationGeneration = homeShelvesGeneration
@@ -4524,6 +4539,8 @@ final class AppModel {
             // older bookmark results only once that replacement is certain.
             bookDetailGeneration &+= 1
             bookDetail = .loaded(detail)
+            await refreshCoverArtwork(
+                for: account, detail: detail, replacement: false)
             await diagnostics.record(.completed(.loadBook, category: .api))
             await loadBookBookmarks()
         } catch let error {
@@ -4617,6 +4634,32 @@ final class AppModel {
         }
     }
 
+    private func refreshCoverArtwork(
+        for account: ServerAccount, detail: LibraryBookDetail, replacement: Bool
+    ) async {
+        if replacement,
+            let url = BookCoverURL.make(
+                server: account.server, itemID: detail.id,
+                updatedAtMilliseconds: detail.updatedAtMilliseconds, width: 600,
+                height: 600)
+        {
+            await invalidateBookCover(url, account.id)
+        } else {
+            await BookCoverImageLoader.shared.revalidate(for: account.id)
+        }
+        BookCoverRefresh.shared.refresh(
+            accountID: account.id, itemID: replacement ? detail.id : nil)
+        playback.refreshCover(for: account, detail: detail)
+    }
+
+    private func revalidateCoverArtwork(for account: ServerAccount) async {
+        await BookCoverImageLoader.shared.revalidate(for: account.id)
+        BookCoverRefresh.shared.refresh(accountID: account.id)
+        if let detail = playback.preparedBookDetail {
+            playback.refreshCover(for: account, detail: detail)
+        }
+    }
+
     func saveBookEdits(
         draft: BookMetadataDraft,
         baseline: LibraryBookDetail,
@@ -4632,15 +4675,24 @@ final class AppModel {
         guard bookEditSaveState != .saving else {
             return
         }
-        bookCoverRetryOperationID = nil
+        let operationID = UUID()
+        let originalSelection = selectedBookID
+        bookEditSaveOperation = (operationID, baseline.id)
         bookEditSaveState = .saving
+        defer { retireBookEditSave(operationID) }
         do {
-            switch try await service.saveMetadata(
+            let outcome = try await service.saveMetadata(
                 for: account,
                 baseline: baseline,
                 draft: draft,
                 overwrite: overwrite
-            ) {
+            )
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: account.id,
+                    selectedItemID: originalSelection)
+            else { return }
+            switch outcome {
             case .saved(let detail):
                 bookDetailRefreshGeneration &+= 1
                 bookDetailRefreshState = .idle
@@ -4656,13 +4708,29 @@ final class AppModel {
                         detail: detail,
                         jpegData: coverJPEGData
                     )
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: detail.id)
+                    else { return }
                     bookDetailRefreshGeneration &+= 1
                     bookDetailRefreshState = .idle
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
-                    playback.refreshCover(for: account, detail: updated)
+                    await refreshCoverArtwork(
+                        for: account, detail: updated, replacement: true)
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: updated.id)
+                    else { return }
                     bookEditSaveState = .saved
                 } catch let error {
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: detail.id)
+                    else { return }
                     bookEditSaveState = .metadataSavedCoverFailed(
                         account.id,
                         detail,
@@ -4675,6 +4743,11 @@ final class AppModel {
                 bookEditSaveState = .stale(latest)
             }
         } catch let error {
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: account.id,
+                    selectedItemID: originalSelection)
+            else { return }
             bookEditSaveState = .failed(
                 AppFailure(operation: .saveMetadata, serviceError: error)
             )
@@ -4695,40 +4768,50 @@ final class AppModel {
                 let coverJPEGData,
                 _
             ) = bookEditSaveState,
-            account.id == originatingAccountID
+            account.id == originatingAccountID,
+            selectedBookID == detail.id
         else {
             return
         }
         let operationID = UUID()
-        bookCoverRetryOperationID = operationID
+        bookEditSaveOperation = (operationID, detail.id)
         bookEditSaveState = .saving
+        defer { retireBookEditSave(operationID) }
         do {
             let updated = try await service.replaceCover(
                 for: account,
                 detail: detail,
                 jpegData: coverJPEGData
             )
-            guard bookCoverRetryOperationID == operationID,
-                self.account?.id == originatingAccountID,
-                bookEditSaveState == .saving
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: detail.id)
             else {
                 return
             }
-            bookCoverRetryOperationID = nil
             bookDetailRefreshGeneration &+= 1
             bookDetailRefreshState = .idle
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
-            playback.refreshCover(for: account, detail: updated)
+            await refreshCoverArtwork(
+                for: account, detail: updated, replacement: true)
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: updated.id)
+            else { return }
+            bookEditSaveOperation = nil
             bookEditSaveState = .coverSaved(updated)
         } catch let error {
-            guard bookCoverRetryOperationID == operationID,
-                self.account?.id == originatingAccountID,
-                bookEditSaveState == .saving
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: detail.id)
             else {
                 return
             }
-            bookCoverRetryOperationID = nil
+            bookEditSaveOperation = nil
             bookEditSaveState = .metadataSavedCoverFailed(
                 originatingAccountID,
                 detail,
@@ -4738,8 +4821,26 @@ final class AppModel {
         }
     }
 
+    private func ownsBookEditSave(
+        _ operationID: UUID, accountID: AccountID,
+        selectedItemID: LibraryItemID?
+    ) -> Bool {
+        bookEditSaveOperation?.id == operationID
+            && account?.id == accountID
+            && selectedBookID == selectedItemID
+            && bookEditSaveState == .saving
+    }
+
+    private func retireBookEditSave(_ operationID: UUID) {
+        guard bookEditSaveOperation?.id == operationID else { return }
+        bookEditSaveOperation = nil
+        if bookEditSaveState == .saving {
+            bookEditSaveState = .idle
+        }
+    }
+
     func resetBookEditSaveState() {
-        bookCoverRetryOperationID = nil
+        bookEditSaveOperation = nil
         bookEditSaveState = .idle
     }
 
@@ -4800,6 +4901,8 @@ final class AppModel {
                 detail: detail,
                 mode: mode
             )
+            await refreshCoverArtwork(
+                for: account, detail: detail, replacement: true)
             playbackPositionStore.clearLastPlaying(
                 accountID: account.id, itemID: detail.id)
             let localDownloadCleanupFailed: Bool
@@ -7266,6 +7369,8 @@ final class AppModel {
                 defer { operationObserver?(.networkPathStateApplied(state)) }
                 let previousState = networkPathState
                 networkPathState = state
+                playback.artworkNetworkAvailable =
+                    state.availability != .unavailable
                 operationObserver?(.networkPathApplied)
                 switch state.change(from: previousState) {
                 case .duplicatePath, .qualityOnly: continue
@@ -7451,6 +7556,14 @@ final class AppModel {
                         guard let selectedLibrary,
                             change.libraryIDs.contains(selectedLibrary.id)
                         else {
+                            // Playback can belong to a different library from
+                            // the current browser. Its cover still needs the
+                            // server event, without reloading the other catalog.
+                            if let itemID = playback.itemID,
+                                change.itemIDs.contains(itemID)
+                            {
+                                await revalidateCoverArtwork(for: account)
+                            }
                             continue
                         }
                         scheduleLiveRefresh(
