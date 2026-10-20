@@ -18972,6 +18972,19 @@ final class AppModelTests: XCTestCase {
                 if retriesUpload {
                     playback.pause()
                     await playback.seek(to: 5)
+                    await assertEventually(
+                        "paused player is ready after cover-save baseline seek",
+                        timeout: .seconds(5),
+                        observed: { self.playbackDiagnostic(playback) },
+                        condition: {
+                            playback.state == .paused
+                                && playback.runtimeSnapshotForTesting.itemStatus
+                                    == .readyToPlay
+                                && playback.runtimeSnapshotForTesting.playerRate
+                                    == 0
+                                && playback.runtimeSnapshotForTesting
+                                    .timeControlStatus == .paused
+                        })
                     XCTAssertEqual(playback.state, .paused)
                     XCTAssertEqual(playback.currentTime, 5)
                 }

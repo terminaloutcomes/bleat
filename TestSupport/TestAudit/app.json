@@ -49562,8 +49562,8 @@
     "evidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership",
     "adjacentReadiness": {
       "identifier": "AppModelTests/testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
-      "finding": "Owning run at446299d recorded item-status equality failure after baseline waited only for model playing; AVPlayer runtime readiness can advance independently.",
-      "change": "Require readyToPlay item, positive player rate and playing time-control status before baseline, within unchanged five-second condition budget. Exact continuation/identity/position/rate assertions retained.",
+      "finding": "Owning run at446299d recorded item-status equality failure; enum raw values and loop case were not captured. Initial readiness checked only model playing and there was no AVPlayer readiness witness after the paused baseline seek. Exact runtime root cause remains unproven.",
+      "change": "Require readyToPlay item, positive rate and playing time-control before initial playing baseline; after paused seek, observe readyToPlay, paused, zero rate and paused time-control before preserving runtime snapshot. Existing five-second budgets and exact continuation/identity/position/rate assertions retained.",
       "evidence": "cover-initial-save-owning-446299d.xcresult retained as failed attempt; corrected owning validation pending.",
       "rules": {
         "1": "Strengthen semantic readiness before unchanged audio continuation assertions.",

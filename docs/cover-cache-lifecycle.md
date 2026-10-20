@@ -160,8 +160,10 @@ from this app-model test.
 
 The first owning run with the ownership fix also exposed an adjacent baseline
 readiness gap in `testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry`:
-the model reported playing before the AVPlayer item reached its final status.
-The test now requires a ready-to-play item, positive rate and playing time-control
-status before sampling the preserved runtime identity/status. Its five-second
+the item-status preservation assertion failed; the report did not retain enum
+raw values or identify the loop case, so the exact runtime cause is unproven.
+The test now observes a ready-to-play item and playing rate/time-control before
+the playing baseline, and independently observes ready-to-play plus paused/zero
+rate/time-control after its paused seek, before sampling preserved runtime state. Its five-second
 budget, paused-seek checks, playing-position tolerance and continuation assertions
 are unchanged. The original failed owning bundle is retained separately.
