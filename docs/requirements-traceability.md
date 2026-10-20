@@ -852,3 +852,13 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Cleanup helper caller diagnostics (#372)
+
+The test cleanup helper records secondary cleanup failures at the calling
+test's default or explicitly supplied source location while preserving the
+originating typed operation error. Narrow native issue matchers verify both
+cleanup cause and caller context; all success and single-failure assertions
+remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
+Signed-host, independent-review and exact-head CI evidence are recorded
+separately; broader epic acceptance is not established by this helper change.

@@ -9568,6 +9568,12 @@
       "name": "testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
       "line": 19173,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/TestCleanupTests.swift",
+      "name": "reportsDefaultCleanupFailureAtTheTestCaller",
+      "line": 58,
+      "language": "swift"
     }
   ]
 }

@@ -21910,7 +21910,12 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Fresh fixed inputs with a direct result assertion."
+      "reason": "Fresh fixed inputs with a direct result assertion.",
+      "issue_372_cleanup_caller_diagnostics": {
+        "decision": "fixed",
+        "reason": "Retains primary operation error and now permits only the typed cleanup failure at an explicit exact caller location;the broad known-issue matcher is replaced. Historical assessment remains unchanged.",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TokenVaultTests.swift::testRoundTripReplacementIsolationAccessibilityAndDeletion",
@@ -23647,6 +23652,38 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
         "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/TestCleanupTests.swift::reportsDefaultCleanupFailureAtTheTestCaller",
+      "source": {
+        "path": "Tests/BleatCoreTests/TestCleanupTests.swift",
+        "line": 58
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Record the typed secondary cleanup error at the calling test while preserving the original operation error.",
+      "dependencies_and_setup": "Fresh local observed error and two distinct synthetic throwing closures;serialized helper suite;caller SourceLocation captured in this test.",
+      "action_postconditions": "Run both failing phases without supplying a location. withKnownIssue matches only Failure.cleanup in the caller file;assert propagated Failure.operation. Missing or unexpected issues fail natively.",
+      "synchronization": "Await withKnownIssue and withTestCleanup;no worker,observer,external operation or manual wait.",
+      "timeout_tolerance": "N/A:finite throwing closures,no elapsed-time or playback assertion.",
+      "classification": "Deterministic host Swift Testing diagnostic contract.",
+      "compiler_skip": "Default native host test;no opt-in/skip/parameter conditions.",
+      "decision": "keep",
+      "reason": "The old helper fails this regression with helper-file attribution and a missing matched issue. Caller-default forwarding now preserves useful source context without replacing primary cause.",
+      "rules": {
+        "1": "Require both the typed cleanup diagnostic at the caller file and the original typed operation failure.",
+        "2": "N/A:both closures throw synchronously inside an awaited async cleanup contract;no guessed timing.",
+        "3": "N/A:no playback or media clock.",
+        "4": "All async scopes awaited;no tasks or observers escape. Existing helper isolation parameter remains intact.",
+        "5": "Only fresh local error state and synthetic closures;no filesystem,preferences,environment or global output mutation.",
+        "6": "Native Swift Testing issue delivery and matcher;no app,network,signing or device integration claim.",
+        "7": "Retain the exact intended baseline failure;no broad known-issue allowance,retry or tolerance adjustment.",
+        "8": "The default invocation must report in this caller file;the neighboring existing test checks an explicit exact SourceLocation and typed cleanup cause.",
+        "9": "Require focused repetitions,both affected identities and full signed owning-host evidence;commands,identities and original failures retained separately."
+      },
+      "issue_372_cleanup_caller_diagnostics": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372"
+      }
     }
   ],
   "issue_382": {
@@ -23894,5 +23931,17 @@
       "core_audit_after": 600
     },
     "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
+  },
+  "issue_372_cleanup_caller_diagnostics": {
+    "owner": "Bleat maintainers / @yaleman",
+    "helper": "Tests/BleatCoreTests/TestCleanup.swift::withTestCleanup",
+    "current_disposition": "Default SourceLocation is captured at helper invocation and forwarded when secondary cleanup failure is recorded. Original operation error is rethrown;success/operation-only/cleanup-only completion contracts unchanged.",
+    "original_failure": "Default-location native regression rejected helper-file attribution and missing expected known issue.",
+    "configuration_limits": "Swift Testing host test-helper diagnostics;no production/logging or device behavior claim.",
+    "baseline_counts_are_historical": {
+      "review_revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+      "declaration_count": 562,
+      "current_core_records": 603
+    }
   }
 }

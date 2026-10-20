@@ -826,3 +826,38 @@ iOS smoke passes and zero skips in [Validate Bleat run 39021211739](https://gith
 Subsequent branch updates require their own normal CI; the PR records its final
 head and checks. This batch does not close issue #362 or claim new physical-device,
 full app-live, signed macOS authentication or release archive evidence.
+
+## Cleanup helper caller diagnostics (#372)
+
+`withTestCleanup` preserves the originating operation failure when cleanup also
+fails. Its secondary `Issue.record` previously used the helper's own default
+source location, and the existing known-issue test accepted any recorded issue.
+A new native default-location regression failed against the unchanged helper:
+the cleanup issue pointed to `TestCleanup.swift` and the caller-specific known
+issue was not matched. This is a test-helper diagnostic defect, not an observed
+application or credential failure.
+
+The helper now accepts a caller-default `SourceLocation` and forwards it only
+when recording the secondary cleanup error. The existing dual-failure test
+requires both the exact explicitly supplied location and `Failure.cleanup`,
+while retaining its `Failure.operation` assertion. The new test exercises the
+default call-site path and requires the typed cleanup issue in the calling
+test file. Success, operation-only failure, cleanup-only failure, actor
+isolation and awaited cleanup behavior remain unchanged. No global output or
+process state is redirected.
+
+Five owning helper identities passed, including both narrowed diagnostic
+contracts. Both affected identities passed three focused executions each
+(6/6), with final-source hashes and individual XML outcomes retained. The
+complete signed host gate verified607/607 native identities with zero failures
+or skips,including synchronizable-Keychain coverage. Four intentional typed
+cleanup issues are matched as known issues;they are not unexpected failures.
+Changed and repository Swift lint,documentation and diff checks passed.
+Independent review and exact-head CI remain separate required gates. Evidence is retained in
+`.build/i372-cleanup-verification.json`; the intentionally failing baseline
+XML/log remain available.
+
+The baseline build also retained an upstream OpenTelemetry watchOS-minimum
+deprecation and an existing optional-`#require` ambiguity in
+`AuthenticatedOtlpSpanExporterTests.swift`. Neither is hidden or claimed fixed
+by this caller-location change. Broader #372/#362 acceptance remains open.
