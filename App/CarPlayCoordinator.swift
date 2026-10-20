@@ -197,7 +197,7 @@
         private var keyboardAvailable = true
         private let searchEnabled: @MainActor () -> Bool
         private let model: AppModel
-        private let coverLoader: BookCoverImageLoader
+        private let coverLoader: any BookCoverImageLoading
         private var presenter: (any CarPlayPresenting)?
         private enum CellularModalPhase {
             case presenting, presented, dismissing
@@ -250,7 +250,8 @@
 
         init(
             model: AppModel,
-            coverLoader: BookCoverImageLoader = .shared,
+            coverLoader: any BookCoverImageLoading = BookCoverImageLoader
+                .shared,
             searchEnabled: @escaping @MainActor () -> Bool = {
                 guard #available(iOS 27.0, *) else { return false }
                 return Bundle.main.object(
@@ -1540,13 +1541,14 @@
             return result
         }
 
-        private func loadArtwork(
+        @discardableResult
+        func loadArtwork(
             for item: CPListItem,
             accountID: AccountID?,
             url: URL?
-        ) {
+        ) -> Task<Void, Never>? {
             guard let url else {
-                return
+                return nil
             }
             let cacheKey = artworkCacheKey(
                 accountID: accountID,
@@ -1554,18 +1556,24 @@
             )
             if let image = artworkCache.object(forKey: cacheKey) {
                 item.setImage(image)
-                return
+                return nil
             }
+            let retainedKey = retainedArtworkCacheKey(
+                accountID: accountID, url: url)
             let generation = presentationGeneration
             let task = Task { @MainActor [weak self, weak item] in
                 guard let self,
                     let item,
                     let image = await coverLoader.image(
                         for: url,
-                        accountID: accountID
+                        accountID: accountID, policy: .allowNetwork
                     ),
                     !Task.isCancelled,
                     generation == presentationGeneration,
+                    cacheKey == artworkCacheKey(accountID: accountID, url: url),
+                    retainedKey
+                        == retainedArtworkCacheKey(
+                            accountID: accountID, url: url),
                     presenter != nil
                 else {
                     return
@@ -1573,14 +1581,14 @@
                 artworkCache.setObject(image, forKey: cacheKey)
                 artworkCache.setObject(
                     image,
-                    forKey: retainedArtworkCacheKey(
-                        accountID: accountID, url: url))
+                    forKey: retainedKey)
                 item.setImage(image)
             }
             artworkTasks.append(task)
+            return task
         }
 
-        private func initialArtwork(
+        func initialArtwork(
             accountID: AccountID?,
             url: URL?
         ) -> UIImage? {

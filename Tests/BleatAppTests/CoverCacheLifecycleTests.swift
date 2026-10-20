@@ -498,6 +498,42 @@ import XCTest
             XCTAssertEqual(publisher.playbackState, .paused)
         }
 
+        func testObservedNewerMetadataSurvivesFailedRefreshAndOfflineRestart()
+            async throws
+        {
+            for policy in [BookCoverLoadPolicy.allowNetwork, .cacheOnly] {
+                let root = root()
+                defer { try? FileManager.default.removeItem(at: root) }
+                let oldURL = try url(timestamp: 1)
+                let sibling = try url(size: 600, timestamp: 1)
+                let newer = try url(timestamp: 2)
+                let old = try image(2)
+                let seed = BookCoverImageLoader(
+                    cacheRoot: root,
+                    fetch: { request in try response(old, request) })
+                _ = await seed.image(for: oldURL, accountID: account)
+                _ = await seed.image(for: sibling, accountID: account)
+                let refresh = BookCoverImageLoader(
+                    cacheRoot: root,
+                    fetch: { _ in throw URLError(.notConnectedToInternet) })
+                let failed = await refresh.image(
+                    for: newer, accountID: account, policy: policy)
+                XCTAssertNil(failed)
+                let restarted = BookCoverImageLoader(
+                    cacheRoot: root,
+                    fetch: { _ in throw URLError(.notConnectedToInternet) })
+                let restored = await restarted.image(
+                    for: oldURL, accountID: account, policy: .cacheOnly)
+                let otherSize = await restarted.image(
+                    for: sibling, accountID: account, policy: .cacheOnly)
+                XCTAssertNil(
+                    restored,
+                    "Older downloaded metadata cannot undo a known revision")
+                XCTAssertNil(
+                    otherSize, "The durable watermark covers every size")
+            }
+        }
+
         func testCorruptVariantRecoversAndTemporaryWriteIsNeverRead()
             async throws
         {

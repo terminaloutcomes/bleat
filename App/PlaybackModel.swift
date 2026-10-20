@@ -618,7 +618,12 @@ final class PlaybackModel {
         state == .playing
     }
 
-    var artworkNetworkAvailable = true
+    var artworkNetworkAvailable = true {
+        didSet {
+            guard artworkNetworkAvailable != oldValue else { return }
+            updateNowPlaying()
+        }
+    }
 
     var coverLoadPolicy: BookCoverLoadPolicy {
         hasActiveBook && artworkNetworkAvailable ? .allowNetwork : .cacheOnly

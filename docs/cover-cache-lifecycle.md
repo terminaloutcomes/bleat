@@ -41,7 +41,9 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   the selected library also refreshes artwork without reloading the browser.
   Progress-only events keep their narrow path.
   Successful in-app cover saves and retries invalidate every variant of the
-  affected account/item before notifying views and active playback. Audio player,
+  affected account/item before notifying views and active playback. Upload retry
+  keeps its operation/account/book ownership through awaited invalidation and
+  rechecks it before publishing editor completion. Audio player,
   position, intent and queue are unchanged.
 - A successfully fetched variant with changed bytes retires sibling variants.
   Exact encoded bytes intentionally identify the rendered variant; a changed
@@ -58,9 +60,13 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   cached variant, but a known newer timestamp cannot use older bytes. Downloaded
   cards and artwork may revalidate independently of audio playback; a known
   unavailable network uses cache-only artwork. Downloaded audio preparation
-  remains independent of cover completion.
+  remains independent of cover completion. Network availability changes publish
+  a fresh Now Playing snapshot even for paused downloaded playback in background
+  or Low Data Mode, without waiting for a catalog event or chapter transition.
 - New disk entries use account/resource directories, atomic encoded variant
-  files with timestamps, and a timestamp watermark published before the payload
+  files with timestamps, and a timestamp watermark advanced as soon as newer
+  authoritative metadata is observed, even on cache-only or failed loads. The
+  watermark is published before the payload
   so interruption cannot make an older variant eligible again. A replacement tombstone prevents
   fallback to pre-policy hashed files after replacement. Legacy raw files remain
   readable offline until their resource is validated; no bulk upgrade purge is
@@ -82,7 +88,9 @@ Mini/full player use `PlaybackModel.coverURL`; system artwork uses
 random request revision for #377. The coordinator observes cover generations and
 keeps its own task-generation check. CarPlay also has a presentation NSCache;
 its key and observed presentation include the shared cover generation so that
-it cannot bypass invalidation with an old local image.
+it cannot bypass invalidation with an old local image. Each CarPlay image request
+captures both cache keys before suspension and checks the shared identity again
+before installing pixels or seeding a retained presentation.
 
 ## Other assets: inventory and distinct policies
 

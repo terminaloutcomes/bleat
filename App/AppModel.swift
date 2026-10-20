@@ -1524,6 +1524,7 @@ extension PrivateCloudSyncFailure {
 @Observable
 final class AppModel {
     private let service: any AppServicing
+    private let invalidateBookCover: @Sendable (URL, AccountID) async -> Void
     private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
     private let diagnostics: any DiagnosticRecording
     private let remoteTelemetryConsentStore: RemoteTelemetryConsentStore
@@ -1931,9 +1932,13 @@ final class AppModel {
                     until: $0, tolerance: .milliseconds(100))
             },
         downloadRemovalStorageCheckpoint:
-            @escaping @MainActor @Sendable () async throws -> Void = {}
+            @escaping @MainActor @Sendable () async throws -> Void = {},
+        invalidateBookCover:
+            @escaping @Sendable (URL, AccountID) async -> Void =
+            BookCoverImageLoader.invalidateShared(for:accountID:)
     ) {
         self.service = service
+        self.invalidateBookCover = invalidateBookCover
         self.cloudStorageNoticeDefaults = cloudStorageNoticeDefaults
         cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
             in: cloudStorageNoticeDefaults)
@@ -4630,8 +4635,7 @@ final class AppModel {
                 updatedAtMilliseconds: detail.updatedAtMilliseconds, width: 600,
                 height: 600)
         {
-            await BookCoverImageLoader.shared.invalidate(
-                for: url, accountID: account.id)
+            await invalidateBookCover(url, account.id)
         } else {
             await BookCoverImageLoader.shared.revalidate(for: account.id)
         }
@@ -4727,7 +4731,8 @@ final class AppModel {
                 let coverJPEGData,
                 _
             ) = bookEditSaveState,
-            account.id == originatingAccountID
+            account.id == originatingAccountID,
+            selectedBookID == detail.id
         else {
             return
         }
@@ -4742,21 +4747,28 @@ final class AppModel {
             )
             guard bookCoverRetryOperationID == operationID,
                 self.account?.id == originatingAccountID,
+                selectedBookID == detail.id,
                 bookEditSaveState == .saving
             else {
                 return
             }
-            bookCoverRetryOperationID = nil
             bookDetailRefreshGeneration &+= 1
             bookDetailRefreshState = .idle
             selectedBookID = updated.id
             bookDetail = .loaded(updated)
             await refreshCoverArtwork(
                 for: account, detail: updated, replacement: true)
+            guard bookCoverRetryOperationID == operationID,
+                self.account?.id == originatingAccountID,
+                selectedBookID == updated.id,
+                bookEditSaveState == .saving
+            else { return }
+            bookCoverRetryOperationID = nil
             bookEditSaveState = .coverSaved(updated)
         } catch let error {
             guard bookCoverRetryOperationID == operationID,
                 self.account?.id == originatingAccountID,
+                selectedBookID == detail.id,
                 bookEditSaveState == .saving
             else {
                 return

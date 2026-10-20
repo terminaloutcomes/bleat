@@ -113,11 +113,22 @@ enum BookCoverCacheEvent: Sendable {
     case joined, committed, obsoleteCompletion
 }
 
-actor BookCoverImageLoader {
+protocol BookCoverImageLoading: Sendable {
+    func image(for url: URL, accountID: AccountID?, policy: BookCoverLoadPolicy)
+        async -> PlatformImage?
+}
+
+actor BookCoverImageLoader: BookCoverImageLoading {
     typealias Fetch =
         @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
     static let shared = BookCoverImageLoader()
+
+    nonisolated static func invalidateShared(for url: URL, accountID: AccountID)
+        async
+    {
+        await shared.invalidate(for: url, accountID: accountID)
+    }
 
     private static let maximumResponseBytes = 5 * 1_024 * 1_024
     private static let memoryCapacity = 32 * 1_024 * 1_024
@@ -220,6 +231,10 @@ actor BookCoverImageLoader {
             retireRequests { $0 == key.resource }
             validated = validated.filter { $0.resource != key.resource }
             latestRequested[key.resource] = timestamp
+            // Metadata is authoritative even when no replacement bytes can be
+            // fetched. Persist before cache-only/failure fallback so a restart
+            // with an older download snapshot cannot resurrect obsolete art.
+            persistTimestamp(timestamp, for: key.resource)
         }
         if policy == .cacheOnly, retryVisibleRequests || knownObsolete {
             await publishRetirement(
@@ -598,6 +613,21 @@ actor BookCoverImageLoader {
         else { return nil }
         return PersistedBookCover(
             timestamp: Self.timestamp(legacyURL), data: data)
+    }
+
+    private func persistTimestamp(
+        _ timestamp: Int64, for resource: BookCoverResource
+    ) {
+        guard let directory = resourceDirectory(for: resource) else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true)
+            try Data(String(timestamp).utf8).write(
+                to: directory.appendingPathComponent(".revision"),
+                options: .atomic)
+        } catch {
+            return
+        }
     }
 
     private func storeOnDisk(

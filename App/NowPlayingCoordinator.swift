@@ -211,7 +211,7 @@ final class NowPlayingCoordinator {
         (@MainActor (PlaybackRemoteCommand) -> PlaybackRemoteCommandOutcome)?
     private nonisolated let remoteCommandAdmission = Mutex(
         RemoteCommandAdmission())
-    private var latestSnapshot: NowPlayingSnapshot?
+    private(set) var latestSnapshot: NowPlayingSnapshot?
     private(set) var remoteCommandCallbackProcessingSequenceForTesting = 0
     private var artworkIdentity: NowPlayingArtworkIdentity?
     private var artwork: MPMediaItemArtwork?
