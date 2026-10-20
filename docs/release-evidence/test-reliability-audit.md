@@ -826,3 +826,64 @@ iOS smoke passes and zero skips in [Validate Bleat run 39021211739](https://gith
 Subsequent branch updates require their own normal CI; the PR records its final
 head and checks. This batch does not close issue #362 or claim new physical-device,
 full app-live, signed macOS authentication or release archive evidence.
+
+## Missing audit entry repair (#369)
+
+The bounded repair adds substantive records for five existing host functions:
+three DownloadStorage fixture-cleanup contracts (including both deletion-failure
+arguments), unexpected OpenID route cleanup, and cache-child cancellation/reap
+supervision. Nine build-helper functions gain individual records: six typed
+paid-build validation cases and three caller-environment/dependency/sandbox-input
+checks. Each has concrete setup, actions/postconditions, applicable rule
+assessments, compiler/argument conditions, rationale and version-specific
+execution evidence. No underlying test or application implementation changes.
+
+Current declaration matching also reconciles 18 moved build-helper records and
+index locations. Some old `scripts` files still exist with different consumer
+tests, so checking only path existence was insufficient. The obsolete SDK
+compiler-override test is preserved in explicit historical arrays, with its
+removal commit and three replacement contracts; it is not a current missing
+function. Existing unrelated assessments remain unchanged. The current core
+record set has 606 default runtime identities plus the retained opt-in
+250,000-slice case; the historical 562-record source-review count remains a
+baseline, not a new current-discovery claim.
+
+The Rust `validate-test-audit` check requires current audit/index presence for
+host inventory and ordinary Rust tests in build-helper source/tests and its own
+regression file. Eight new audited/indexed regressions cover the actual
+checkout, missing host/Rust audits, missing indexes, stale identities/source,
+duplicates, placeholder reviews and empty required scopes. The checker performs
+no builds, network calls or writes; compiler discovery, argument cases, semantic
+truth and the remaining repository inventory require separate evidence.
+
+Source review found no per-child deadline in the three newly recorded command
+boundary tests. They retain actionable follow-ups under #370 with owner,
+remaining risk and next verification action; a passing Cargo command is not
+claimed as kill/reap proof. This is not an exhaustive subprocess-lifecycle audit.
+Broader #362/#369 reconciliation and other lifecycle/configuration gates remain
+open.
+
+Validation on m2 after integration of the reviewed #416 main merge:
+
+- Final checker regression target: **8/8** exact native function identities,
+  zero failures, ignored or filtered tests. Unknown decisions/unreviewed states
+  and empty build-helper sources are rejected as well as the original missing,
+  stale, duplicate and placeholder cases.
+- Existing build-helper all-target suite: **27/27** exact module-qualified
+  identities, zero failures or skips, with unchanged package source.
+- Final parity command: **606 host functions and 35 scoped Rust functions**
+  (27 build-helper declarations plus eight checker regressions). These are
+  source/record counts, not an additional runtime execution count.
+- Strict all-target scripts Clippy, workspace formatting, documentation,
+  scope/preservation and diff checks pass. Detailed source hashes, commands,
+  identities and retained attempts are in `.build/i369-audit-verification.json`.
+
+The initial checker runs passed seven negative fixture identities but correctly
+rejected the current repository for stale release-version audit/index paths.
+Both failed attempts remain retained; mappings were corrected using actual
+function declarations, and no assertion or case was removed. Retained signed
+host evidence has 606 exact passing identities, including both known-issue
+cleanup arguments; it is tied to unchanged Swift source and is not a fresh run
+caused by these metadata edits. The retired SDK record and all 602 existing core
+assessments are preserved; unrelated source/index/other records are unchanged.
+Fresh exact-head CI and independent review remain separate requirements.

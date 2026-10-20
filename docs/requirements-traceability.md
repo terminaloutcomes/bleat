@@ -851,3 +851,21 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Missing audit records and scoped recurrence validation (#369)
+
+Five existing host functions and nine build-helper functions have individual
+source-reviewed decisions, setup/action/postcondition details, synchronization
+and cleanup boundaries, enabling conditions and applicable rule assessments.
+Current source-index locations and moved-path provenance are reconciled; retired
+SDK-override history remains explicit. Three command-driven records preserve
+unproven child-budget follow-ups under #370. No application or existing test
+behavior changes, and no production leak/hang is inferred.
+
+The Rust parity checker and eight audited regressions reject missing/stale/
+duplicate/placeholder records and empty required scopes. Its scope is host
+inventory, build-helper source/test declarations and its own regressions;
+semantic review, compiler discovery and broader inventory are not certified by
+name parity. See [repair scope and exact evidence](release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369).
+Broader #362/#369 acceptance remains open; source/record coverage alone is not
+completion of the testing epic.
