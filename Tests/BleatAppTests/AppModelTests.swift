@@ -18954,7 +18954,14 @@ final class AppModelTests: XCTestCase {
                 await assertEventually(
                     "downloaded playback is ready", timeout: .seconds(5),
                     observed: { self.playbackDiagnostic(playback) },
-                    condition: { playback.state == .playing })
+                    condition: {
+                        playback.state == .playing
+                            && playback.runtimeSnapshotForTesting.itemStatus
+                                == .readyToPlay
+                            && playback.runtimeSnapshotForTesting.playerRate > 0
+                            && playback.runtimeSnapshotForTesting
+                                .timeControlStatus == .playing
+                    })
                 let initialArtwork = await waitForNowPlayingArtwork(
                     in: publisher)
                 XCTAssertEqual(

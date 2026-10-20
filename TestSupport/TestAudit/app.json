@@ -49559,6 +49559,23 @@
       "8": "Every semantic assertion includes the ownership scenario; named admission/return expectations identify blocked stage. Exact enum/detail/request assertions preserve cause.",
       "9": "Focused baseline failure, corrected focused repetitions and owning app suite required; retry neighbors and independent source review retained separately."
     },
-    "evidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership"
+    "evidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership",
+    "adjacentReadiness": {
+      "identifier": "AppModelTests/testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
+      "finding": "Owning run at446299d recorded item-status equality failure after baseline waited only for model playing; AVPlayer runtime readiness can advance independently.",
+      "change": "Require readyToPlay item, positive player rate and playing time-control status before baseline, within unchanged five-second condition budget. Exact continuation/identity/position/rate assertions retained.",
+      "evidence": "cover-initial-save-owning-446299d.xcresult retained as failed attempt; corrected owning validation pending.",
+      "rules": {
+        "1": "Strengthen semantic readiness before unchanged audio continuation assertions.",
+        "2": "Observe actual AVPlayer runtime properties, no readiness sleep.",
+        "3": "Existing paused seek and playing elapsed-time tolerance retained unchanged.",
+        "4": "Existing model playback.stop and fixture cleanup preserved.",
+        "5": "Unique playbackRecoveryFixture per normal/retry case.",
+        "6": "Local AVPlayer Simulator integration, no device claim.",
+        "7": "Failure diagnosed and preserved before changing predicate; budget and assertions unchanged.",
+        "8": "Existing playbackDiagnostic exposes runtime states on bounded readiness failure.",
+        "9": "Repeat affected methods and full app suite at final head."
+      }
+    }
   }
 }

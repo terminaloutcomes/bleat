@@ -156,3 +156,12 @@ The regression failed against `90e1207` with the old caller publishing `saved`
 while the newer upload was held. That failed artifact is retained separately
 from corrected-source validation. No physical artwork/device acceptance follows
 from this app-model test.
+
+
+The first owning run with the ownership fix also exposed an adjacent baseline
+readiness gap in `testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry`:
+the model reported playing before the AVPlayer item reached its final status.
+The test now requires a ready-to-play item, positive rate and playing time-control
+status before sampling the preserved runtime identity/status. Its five-second
+budget, paused-seek checks, playing-position tolerance and continuation assertions
+are unchanged. The original failed owning bundle is retained separately.
