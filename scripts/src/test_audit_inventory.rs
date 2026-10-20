@@ -35,6 +35,11 @@ pub enum AuditInventoryError {
     },
     #[error("incomplete review for {identity}: {field}")]
     Review { identity: String, field: String },
+    #[error("orphaned {kind}: {identity}")]
+    Orphan {
+        kind: &'static str,
+        identity: String,
+    },
     #[error("source no longer declares {identity}")]
     StaleSource { identity: String },
     #[error("unsupported Rust test declaration in {0}; reconcile source discovery explicitly")]
@@ -339,6 +344,30 @@ pub fn validate(root: &Path) -> Result<AuditCoverage, AuditInventoryError> {
         return Err(AuditInventoryError::Shape(
             "empty Rust test source scope".to_owned(),
         ));
+    }
+    // Check the reverse direction too: deleting a declaration must not leave an
+    // apparently current review or source-index entry behind. Historical arrays
+    // are deliberately outside this active-record comparison.
+    let in_rust_scope = |path: &str| {
+        path.starts_with("build-scripts/tests/")
+            || path.starts_with("build-scripts/src/")
+            || path == "scripts/tests/test_audit_inventory.rs"
+    };
+    for (rows, kind, name_field) in [
+        (other_rows, "Rust audit entry", "id"),
+        (index_rows, "source-index entry", "name"),
+    ] {
+        for row in rows {
+            let Some(path) = row["path"].as_str().filter(|path| in_rust_scope(path)) else {
+                continue;
+            };
+            let name = text(&row[name_field], path, name_field)?;
+            let name = name.rsplit("::").next().unwrap_or_default();
+            let identity = format!("{path}::{name}");
+            if !rust_seen.contains(&identity) {
+                return Err(AuditInventoryError::Orphan { kind, identity });
+            }
+        }
     }
     Ok(AuditCoverage {
         host_functions: host_seen.len(),

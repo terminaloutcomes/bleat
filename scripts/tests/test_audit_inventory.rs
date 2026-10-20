@@ -116,6 +116,47 @@ fn stale_audit_identity_is_rejected() {
     assert!(
         matches!(fixture.check(),Err(AuditInventoryError::Missing {kind:"Rust audit entry", identity}) if identity.ends_with("example.rs::package_case"))
     );
+    for removed_source in [Some("fn package_case() {}\n"), Some(""), None] {
+        for orphan_index_only in [false, true] {
+            let mut fixture = Fixture::new();
+            if let Some(source) = removed_source {
+                fixture.write("build-scripts/tests/example.rs", source);
+            } else {
+                fs::remove_file(fixture.root.path().join("build-scripts/tests/example.rs"))
+                    .expect("remove owned source fixture");
+            }
+            fixture.write(
+                "build-scripts/src/lib.rs",
+                "#[test]\nfn surviving_case() {}\n",
+            );
+            let mut surviving_audit = fixture.other["tests"][0].clone();
+            surviving_audit["id"] = json!("build-scripts::surviving_case");
+            surviving_audit["path"] = json!("build-scripts/src/lib.rs");
+            fixture.other["tests"]
+                .as_array_mut()
+                .expect("rows")
+                .push(surviving_audit);
+            fixture.index["declarations"]
+                .as_array_mut()
+                .expect("index rows")
+                .push(json!({"path":"build-scripts/src/lib.rs","name":"surviving_case","line":2}));
+            if orphan_index_only {
+                fixture.other["tests"]
+                    .as_array_mut()
+                    .expect("rows")
+                    .remove(0);
+            }
+            let expected_kind = if orphan_index_only {
+                "source-index entry"
+            } else {
+                "Rust audit entry"
+            };
+            assert!(
+                matches!(fixture.check(), Err(AuditInventoryError::Orphan { kind, identity })
+                    if kind == expected_kind && identity == "build-scripts/tests/example.rs::package_case")
+            );
+        }
+    }
     let fixture = Fixture::new();
     fixture.write(
         "Tests/BleatCoreTests/ExampleTests.swift",

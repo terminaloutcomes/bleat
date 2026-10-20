@@ -852,7 +852,8 @@ The Rust `validate-test-audit` check requires current audit/index presence for
 host inventory and ordinary Rust tests in build-helper source/tests and its own
 regression file. Eight new audited/indexed regressions cover the actual
 checkout, missing host/Rust audits, missing indexes, stale identities/source,
-duplicates, placeholder reviews and empty required scopes. The checker performs
+duplicates, placeholder reviews and empty required scopes. Active scoped Rust
+audit/index records are also checked in reverse against declarations. The checker performs
 no builds, network calls or writes; compiler discovery, argument cases, semantic
 truth and the remaining repository inventory require separate evidence.
 
@@ -887,3 +888,14 @@ cleanup arguments; it is tied to unchanged Swift source and is not a fresh run
 caused by these metadata edits. The retired SDK record and all 602 existing core
 assessments are preserved; unrelated source/index/other records are unchanged.
 Fresh exact-head CI and independent review remain separate requirements.
+
+Independent local review of `aef2911` found a P2 in the checker: removing a
+Rust test attribute while retaining its audit/index rows still passed with 34
+Rust declarations. The local correction checks active scoped Rust records in
+both directions. The existing stale-record regression now removes the attribute,
+the declaration and the source file in isolated fixtures; each case requires
+the exact typed orphaned-audit error, then the orphaned-index error after the
+audit is removed. A surviving build test prevents empty-scope rejection from
+masking these assertions. Historical arrays remain outside active comparison.
+The original eight-pass evidence is retained separately from review-corrected
+validation; exact-head re-review and CI are still required before clearance.

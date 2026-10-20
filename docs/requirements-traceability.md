@@ -862,7 +862,8 @@ SDK-override history remains explicit. Three command-driven records preserve
 unproven child-budget follow-ups under #370. No application or existing test
 behavior changes, and no production leak/hang is inferred.
 
-The Rust parity checker and eight audited regressions reject missing/stale/
+The Rust parity checker and eight audited regressions reject orphaned active
+Rust records after attribute/declaration/file removal as well as missing/stale/
 duplicate/placeholder records and empty required scopes. Its scope is host
 inventory, build-helper source/test declarations and its own regressions;
 semantic review, compiler discovery and broader inventory are not certified by

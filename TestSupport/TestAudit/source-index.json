@@ -9764,19 +9764,19 @@
     {
       "path": "scripts/tests/test_audit_inventory.rs",
       "name": "duplicate_audit_entries_are_rejected",
-      "line": 130,
+      "line": 171,
       "language": "rust"
     },
     {
       "path": "scripts/tests/test_audit_inventory.rs",
       "name": "placeholder_reviews_are_rejected",
-      "line": 148,
+      "line": 189,
       "language": "rust"
     },
     {
       "path": "scripts/tests/test_audit_inventory.rs",
       "name": "empty_required_scopes_are_rejected",
-      "line": 183,
+      "line": 224,
       "language": "rust"
     }
   ],

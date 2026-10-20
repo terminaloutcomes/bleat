@@ -6756,8 +6756,8 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
@@ -6789,8 +6789,8 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
@@ -6822,8 +6822,8 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
@@ -6855,27 +6855,27 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
       "id": "scripts::test_audit_inventory::stale_audit_identity_is_rejected",
       "path": "scripts/tests/test_audit_inventory.rs",
       "line": 113,
-      "purpose": "Reject stale audit identities and stale source function names.",
+      "purpose": "Reject stale identities, stale Swift source, and orphaned active Rust audit/index records after test removal.",
       "review": {
         "status": "reviewed",
         "decision": "keep",
-        "reason": "Rename a Rust audit ID while source remains; require Missing(Rust audit entry). Separately rename the declared Swift function while inventory stays unchanged; require StaleSource with exact identity."
+        "reason": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource."
       },
       "profile": "rust_deterministic",
       "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
       "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
-      "action_postconditions": "Rename a Rust audit ID while source remains; require Missing(Rust audit entry). Separately rename the declared Swift function while inventory stays unchanged; require StaleSource with exact identity.",
+      "action_postconditions": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource.",
       "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
       "rules": {
-        "1": "Rename a Rust audit ID while source remains; require Missing(Rust audit entry). Separately rename the declared Swift function while inventory stays unchanged; require StaleSource with exact identity.",
+        "1": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource.",
         "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
         "3": "N/A: no playback or clock assertion.",
         "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
@@ -6888,14 +6888,14 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
       "id": "scripts::test_audit_inventory::duplicate_audit_entries_are_rejected",
       "path": "scripts/tests/test_audit_inventory.rs",
-      "line": 130,
+      "line": 171,
       "purpose": "Reject ambiguous host and Rust current audit coverage.",
       "review": {
         "status": "reviewed",
@@ -6921,14 +6921,14 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
       "id": "scripts::test_audit_inventory::placeholder_reviews_are_rejected",
       "path": "scripts/tests/test_audit_inventory.rs",
-      "line": 148,
+      "line": 189,
       "purpose": "Reject empty-placeholder coverage being substituted for an actual review record.",
       "review": {
         "status": "reviewed",
@@ -6954,14 +6954,14 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     },
     {
       "id": "scripts::test_audit_inventory::empty_required_scopes_are_rejected",
       "path": "scripts/tests/test_audit_inventory.rs",
-      "line": 183,
+      "line": 224,
       "purpose": "Reject vacuous success when either required host or build-helper source scope is empty.",
       "review": {
         "status": "reviewed",
@@ -6987,8 +6987,8 @@
       "audit_entry_repair": {
         "issue": 369,
         "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
-        "execution": "Final8/8 in .build/i369-audit-ready-regressions.log;source hash and parity606/35 recorded in .build/i369-audit-verification.json.",
-        "source_sha256": "76b12d534e0a72c031c504ad6b43c453dbcced2703c2eb5cf61fe89c080ee62d"
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
     }
   ],
@@ -7051,10 +7051,10 @@
   "auditInventoryValidatorReview": {
     "source": "scripts/src/test_audit_inventory.rs",
     "scope": "Host runtime inventory functions;ordinary Rust #[test] declarations in build-scripts source/tests and the checker regression file.",
-    "postconditions": "One current source-linked audit and index row per required identity;review status,valid keep/fix/follow-up decision and non-placeholder applicable rule fields;nonempty required host/build-helper scopes.",
+    "postconditions": "One current source-linked audit and index row per required identity;review status,valid keep/fix/follow-up decision and non-placeholder applicable rule fields;nonempty required host/build-helper scopes. Active scoped Rust audit/index rows must also match a discovered declaration; orphaned records after attribute/function/file removal are rejected.",
     "ownership": "Read-only synchronous local JSON/source reads. No subprocess,network,task or callback. Regression fixtures own unique TempDir roots;normal and failing tests use scoped RAII cleanup.",
     "limits": "Does not certify semantic truth,runtime discovery,argument multiplicity,line freshness,macro-generated tests or whole repository coverage. Rust/Swift function matching is deliberately source-shaped; compiler discovery and exact native outcomes remain separate.",
-    "errors": "Typed read/JSON/shape/missing/duplicate/review/stale/unsupported-declaration causes retain source identity or field and original IO/parse errors.",
-    "verification": "Final eight-function regression target8/8,zero failures/ignored/filtered tests after source/unit coverage,review-state and empty-scope checks. Current parity606host/35Rust;strict all-target Clippy and formatting exit0. This does not certify semantic truth or runtime discovery."
+    "errors": "Typed read/JSON/shape/missing/duplicate/review/stale/orphan/unsupported-declaration causes retain source identity or field and original IO/parse errors.",
+    "verification": "Review-corrected eight-function regression target includes six orphan variants (attribute/declaration/file removal, each with audit or index orphan). Final checks and exact outcomes are retained in .build/i369-audit-verification.json; compiler discovery and semantic truth remain separate."
   }
 }
