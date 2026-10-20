@@ -852,3 +852,18 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Local smoke runner lifecycle correction (#371)
+
+Controlled baseline regressions demonstrated a live child after stdin-write
+failure, a held boot preventing return, and lost combined native failure data.
+Private file input removes the post-spawn write hazard;owned command groups,
+non-reaping exit observation and a single build/readiness coordinator bound
+retirement and preserve both typed outcomes. Shared Simulators/services are not
+retired. Original selector assertions remain byte-identical;their audit now
+acknowledges external jq ownership. Final local evidence is 147/147 owning and
+42/42 exact individual repeated outcomes,including eleven new lifecycle cases.
+See [demonstration, policies and remaining boundaries](release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371).
+This is local fixture evidence only. Independent review, publication, Linux and
+real Xcode/Simulator gates remain pending;other runner command owners,platform
+requirements and broader #362/#369 reconciliation remain open.

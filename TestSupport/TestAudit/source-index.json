@@ -8897,20 +8897,35 @@
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "selects_installed_runtime_even_when_newer_sdk_has_no_device",
-      "line": 289,
-      "language": "rust"
+      "line": 438,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 289,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "prefers_newest_available_runtime_by_numeric_version",
-      "line": 302,
-      "language": "rust"
+      "line": 451,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 302,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "rejects_missing_devices_old_runtimes_and_other_platforms",
-      "line": 318,
-      "language": "rust"
+      "line": 467,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 318,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/listening_repair.rs",
@@ -9568,6 +9583,72 @@
       "name": "testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
       "line": 19173,
       "language": "swift"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "stdin_write_failure_retires_started_child",
+      "line": 144,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "held_boot_returns_within_preparation_budget",
+      "line": 179,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "preparation_retains_both_native_failures",
+      "line": 234,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "completed_peer_retains_native_failure_instead_of_cancellation",
+      "line": 282,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "dropping_owner_retires_the_started_wrapper",
+      "line": 324,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "captured_payload_is_retained_without_error_format_disclosure",
+      "line": 343,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "build_failure_retires_held_readiness_and_keeps_both_causes",
+      "line": 384,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "readiness_failure_retires_held_build_and_keeps_both_causes",
+      "line": 403,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "boot_then_readiness_preserves_success_and_reaps_wrappers",
+      "line": 422,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "exhausted_boot_budget_does_not_start_readiness",
+      "line": 437,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "fixture_supervisor_releases_and_joins_on_assertion_unwind",
+      "line": 467,
+      "language": "rust"
     }
   ]
 }

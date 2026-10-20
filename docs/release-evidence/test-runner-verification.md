@@ -108,3 +108,65 @@ The historical Swift Testing prototype's LLDB trace lane remains a diagnostic
 lane based on log patterns. Its ordinary XML lanes already verify their exact
 seven-case inventory; the trace lane is not promoted to equivalent test evidence
 by this batch.
+
+## Smoke runner command ownership (#371)
+
+The local runner slice demonstrates three failure boundaries before fixing
+them. A minimal extraction preserved the legacy command behavior while allowing
+per-invocation fixture commands. All three regressions failed: stdin writing
+returned `BrokenPipe` while the started child remained alive; a ready-but-held
+boot fixture prevented return through the observation window and returned
+success only after release; and the production result combiner failed to retain
+two completed native causes together. Fixtures were released and reaped before
+failed assertions were reported. This is controlled native runner evidence, not
+an observed production Simulator incident. Baseline source and logs remain in
+`.build/i371-baseline-source.json` and `.build/i371-baseline-regressions.log`.
+
+`jq` input now uses a private anonymous regular file prepared before spawning.
+There is no post-spawn pipe write to fail before child retirement. Capture also
+uses private regular files, so a descendant cannot hold a pipe EOF indefinitely.
+The invocation owns its process group through non-reaping exit observation,
+cleanup and direct-child reaping. Captured output is limited to1 MiB per stream.
+New command-error formatting exposes byte counts instead of payload; output
+UTF8 errors retain the byte-free validation cause. Synthetic marker regressions
+check both Display and Debug while preserving typed failure data.
+
+Build and optional boot/readiness commands are observed by one owner; there is
+no production boot thread to join. Failure retires a still-running peer, while
+an already-completed peer retains its native exit cause. Both failed outcomes
+are retained in `PreparationFailure`. Readiness commands share a five minute
+budget, compilation has 40 minutes,and JSON commands have two minutes. Cleanup has
+three seconds, with one additional bounded Drop attempt after an unsuccessful
+retirement. Positive historical combined build/test steps took about 20 minutes;
+these policies introduce failure bounds, not performance expectations or strict
+kernel interruption guarantees. Already-expired phases cannot start readiness.
+
+Only wrapper command groups are invocation-owned. The selected Simulator and
+CoreSimulator services remain shared; the change does not reset, shutdown, delete
+or signal them. Other report/list/build-settings/discovery/install/test-command
+boundaries are unchanged and remain separate lifecycle work. Native spawn and
+local filesystem stalls, deliberate process-group escape, process destruction,
+unreapable kernel states and daemon retirement are not certified. Failed cleanup
+remains an explicit error rather than a successful retry.
+
+Final m2 validation accounts for **147/147** exact native test outcomes across
+11 nonempty targets;16 zero-test CLI targets are build checks only. All 11 new
+lifecycle identities and three original selector identities passed three
+individual focused repetitions each: **42/42** exact one-test executions. The
+original selector test bodies are byte-identical to base. Strict all-target
+Clippy, formatting, documentation and scope checks are recorded separately in
+`.build/i371-runner-verification.json`. Compile alias/lifetime and six Clippy
+conditional-style corrections are retained. Earlier 146/146 and 39/39 results
+precede the test-only release/join unwind guard and its extra native regression;
+they are not relabelled as final-source executions.
+
+The three original audits previously called selection pure, although it invokes
+external `jq`. Their current dependency/lifecycle descriptions are corrected
+with full historical records retained. Eleven new source-reviewed audit/index
+rows cover the lifecycle cases;384 unrelated audit rows remain unchanged. The
+prior 725 moved navigation references are a historical navigation snapshot, not a
+semantic defect count. This slice remains local: no independent reviewer was
+contacted, no publication or tracker write occurred,and `fe76c69` plus draft
+PR #417 remain unchanged. Linux and real Xcode/Simulator execution,independent
+review and eventual integration remain separate requirements. Owner: Bleat
+maintainers / @yaleman under #371/#369; broader epic acceptance stays open.

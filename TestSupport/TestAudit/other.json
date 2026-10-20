@@ -6048,50 +6048,152 @@
     {
       "id": "scripts::selects_installed_runtime_even_when_newer_sdk_has_no_device",
       "path": "scripts/src/ci_smoke.rs",
-      "line": 288,
-      "purpose": "Selects installed runtime even when newer sdk has no device.",
+      "line": 438,
+      "purpose": "Select the installed usable runtime when a newer SDK has no available device.",
       "review": {
-        "status": "reviewed",
+        "status": "source_reviewed",
         "decision": "keep",
-        "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+        "reason": "Original selection assertions are byte-identical. The selector invokes real external jq with now-owned native input/output/lifetime;the previous pure/no-wait description is corrected without changing its functional oracle."
       },
       "profile": "rust_deterministic",
-      "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
-      "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
-      "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
-      "action_postconditions": "Body assertion contract: Selects installed runtime even when newer sdk has no device; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+      "enablement": "Default scripts library tests on supported Unix hosts;requires the jq executable. No xcrun,device,server,network,signing or opt-in.",
+      "setup_dependencies": "Synthetic CoreSimulator inventory JSON and real jq subprocess through JsonInspection ownership. No global environment mutation;no Simulator is booted by these tests.",
+      "synchronization_timeout": "Synchronous native jq execution,not pure in-memory selection. Each production jq command has a120second observation budget and3second cleanup policy;new lifecycle fixtures exercise failures with shorter injected policies.",
+      "action_postconditions": "Select the installed usable runtime when a newer SDK has no available device. Preserve exact destination or typed NoAvailableDevice assertions.",
+      "rules": {
+        "1": "Select the installed usable runtime when a newer SDK has no available device.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "historical_audit": {
+        "revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+        "record": {
+          "id": "scripts::selects_installed_runtime_even_when_newer_sdk_has_no_device",
+          "path": "scripts/src/ci_smoke.rs",
+          "line": 288,
+          "purpose": "Selects installed runtime even when newer sdk has no device.",
+          "review": {
+            "status": "reviewed",
+            "decision": "keep",
+            "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+          },
+          "profile": "rust_deterministic",
+          "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
+          "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
+          "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
+          "action_postconditions": "Body assertion contract: Selects installed runtime even when newer sdk has no device; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+        }
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "cfee1fcaddcf5019f884138701681c356a4de8674e02724e74a8a31f8809424d"
+      }
     },
     {
       "id": "scripts::prefers_newest_available_runtime_by_numeric_version",
       "path": "scripts/src/ci_smoke.rs",
-      "line": 301,
-      "purpose": "Prefers newest available runtime by numeric version.",
+      "line": 451,
+      "purpose": "Order runtime components numerically and ignore unavailable newer devices.",
       "review": {
-        "status": "reviewed",
+        "status": "source_reviewed",
         "decision": "keep",
-        "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+        "reason": "Original selection assertions are byte-identical. The selector invokes real external jq with now-owned native input/output/lifetime;the previous pure/no-wait description is corrected without changing its functional oracle."
       },
       "profile": "rust_deterministic",
-      "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
-      "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
-      "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
-      "action_postconditions": "Body assertion contract: Prefers newest available runtime by numeric version; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+      "enablement": "Default scripts library tests on supported Unix hosts;requires the jq executable. No xcrun,device,server,network,signing or opt-in.",
+      "setup_dependencies": "Synthetic CoreSimulator inventory JSON and real jq subprocess through JsonInspection ownership. No global environment mutation;no Simulator is booted by these tests.",
+      "synchronization_timeout": "Synchronous native jq execution,not pure in-memory selection. Each production jq command has a120second observation budget and3second cleanup policy;new lifecycle fixtures exercise failures with shorter injected policies.",
+      "action_postconditions": "Order runtime components numerically and ignore unavailable newer devices. Preserve exact destination or typed NoAvailableDevice assertions.",
+      "rules": {
+        "1": "Order runtime components numerically and ignore unavailable newer devices.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "historical_audit": {
+        "revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+        "record": {
+          "id": "scripts::prefers_newest_available_runtime_by_numeric_version",
+          "path": "scripts/src/ci_smoke.rs",
+          "line": 301,
+          "purpose": "Prefers newest available runtime by numeric version.",
+          "review": {
+            "status": "reviewed",
+            "decision": "keep",
+            "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+          },
+          "profile": "rust_deterministic",
+          "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
+          "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
+          "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
+          "action_postconditions": "Body assertion contract: Prefers newest available runtime by numeric version; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+        }
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "cfee1fcaddcf5019f884138701681c356a4de8674e02724e74a8a31f8809424d"
+      }
     },
     {
       "id": "scripts::rejects_missing_devices_old_runtimes_and_other_platforms",
       "path": "scripts/src/ci_smoke.rs",
-      "line": 317,
-      "purpose": "Rejects missing devices old runtimes and other platforms.",
+      "line": 467,
+      "purpose": "Require typed NoAvailableDevice for each empty,old,other-platform and unavailable inventory.",
       "review": {
-        "status": "reviewed",
+        "status": "source_reviewed",
         "decision": "keep",
-        "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+        "reason": "Original selection assertions are byte-identical. The selector invokes real external jq with now-owned native input/output/lifetime;the previous pure/no-wait description is corrected without changing its functional oracle."
       },
       "profile": "rust_deterministic",
-      "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
-      "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
-      "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
-      "action_postconditions": "Body assertion contract: Rejects missing devices old runtimes and other platforms; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+      "enablement": "Default scripts library tests on supported Unix hosts;requires the jq executable. No xcrun,device,server,network,signing or opt-in.",
+      "setup_dependencies": "Synthetic CoreSimulator inventory JSON and real jq subprocess through JsonInspection ownership. No global environment mutation;no Simulator is booted by these tests.",
+      "synchronization_timeout": "Synchronous native jq execution,not pure in-memory selection. Each production jq command has a120second observation budget and3second cleanup policy;new lifecycle fixtures exercise failures with shorter injected policies.",
+      "action_postconditions": "Require typed NoAvailableDevice for each empty,old,other-platform and unavailable inventory. Preserve exact destination or typed NoAvailableDevice assertions.",
+      "rules": {
+        "1": "Require typed NoAvailableDevice for each empty,old,other-platform and unavailable inventory.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "historical_audit": {
+        "revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+        "record": {
+          "id": "scripts::rejects_missing_devices_old_runtimes_and_other_platforms",
+          "path": "scripts/src/ci_smoke.rs",
+          "line": 317,
+          "purpose": "Rejects missing devices old runtimes and other platforms.",
+          "review": {
+            "status": "reviewed",
+            "decision": "keep",
+            "reason": "Inspected body asserts this analytics normalization, simulator-selection, listening-history safety, fixture-redaction, or changelog-generation contract with synthetic data and deterministic local fixtures."
+          },
+          "profile": "rust_deterministic",
+          "enablement": "Default `scripts` test target; no opt-in or external service requirement.",
+          "setup_dependencies": "Synthetic JSON CoreSimulator inventory values; selector is pure and performs no xcrun/device operation.",
+          "synchronization_timeout": "Synchronous pure selection; no wait or timeout.",
+          "action_postconditions": "Body assertion contract: Rejects missing devices old runtimes and other platforms; all file-backed fixtures are temporary or bundled and async filesystem operations are awaited."
+        }
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "cfee1fcaddcf5019f884138701681c356a4de8674e02724e74a8a31f8809424d"
+      }
     },
     {
       "id": "scripts::repairs_only_exact_identity_with_larger_measured_total",
@@ -6332,6 +6434,366 @@
       "setup_dependencies": "Desired schema and matching source declarations include two records; synthetic production schema omits one.",
       "synchronization_timeout": "Synchronous validator; no timeout.",
       "action_postconditions": "Structural validator reports RemoteListeningSession missing from production schema."
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::stdin_write_failure_retires_started_child",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 144,
+      "purpose": "Retire a started jq fixture when closed input and non-completion intersect.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "A native fixture closes stdin and remains held after admission. The legacy path returned BrokenPipe with that child alive. The corrected file-input path must return typed JsonInspection/Deadline after retirement; assert error,not-alive pid and absent owned group. Release/reap the fixture before failure assertions."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "A native fixture closes stdin and remains held after admission. The legacy path returned BrokenPipe with that child alive. The corrected file-input path must return typed JsonInspection/Deadline after retirement; assert error,not-alive pid and absent owned group. Release/reap the fixture before failure assertions.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "A native fixture closes stdin and remains held after admission. The legacy path returned BrokenPipe with that child alive. The corrected file-input path must return typed JsonInspection/Deadline after retirement; assert error,not-alive pid and absent owned group. Release/reap the fixture before failure assertions.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::held_boot_returns_within_preparation_budget",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 179,
+      "purpose": "Bound a ready-but-held boot readiness phase without depending on later release.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Build waits for admitted boot then succeeds; readiness stays held. Require a return through the five second observation window and typed SimulatorReadiness/Deadline under the configured two second phase budget,with verified group cleanup. Fixture supervisor releases and joins on normal or assertion-unwind paths."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Build waits for admitted boot then succeeds; readiness stays held. Require a return through the five second observation window and typed SimulatorReadiness/Deadline under the configured two second phase budget,with verified group cleanup. Fixture supervisor releases and joins on normal or assertion-unwind paths.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Build waits for admitted boot then succeeds; readiness stays held. Require a return through the five second observation window and typed SimulatorReadiness/Deadline under the configured two second phase budget,with verified group cleanup. Fixture supervisor releases and joins on normal or assertion-unwind paths.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::preparation_retains_both_native_failures",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 234,
+      "purpose": "Retain both completed native causes through the production result combiner.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Collect native exits17 and23,then pass both typed FixtureExit errors through preparation_results. Require PreparationFailure with both original typed exits rather than the first error alone. This controls both inputs without relying on scheduler overlap."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Collect native exits17 and23,then pass both typed FixtureExit errors through preparation_results. Require PreparationFailure with both original typed exits rather than the first error alone. This controls both inputs without relying on scheduler overlap.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Collect native exits17 and23,then pass both typed FixtureExit errors through preparation_results. Require PreparationFailure with both original typed exits rather than the first error alone. This controls both inputs without relying on scheduler overlap.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::completed_peer_retains_native_failure_instead_of_cancellation",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 282,
+      "purpose": "Do not replace an already-completed peer failure with a cancellation label.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Spawn exit17;native WNOWAIT observes completion while preserving ownership. Retire via cancel and require Cause::Exit(17),direct-child status and absent group. This exercises the actual completed-peer branch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Spawn exit17;native WNOWAIT observes completion while preserving ownership. Retire via cancel and require Cause::Exit(17),direct-child status and absent group. This exercises the actual completed-peer branch.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Spawn exit17;native WNOWAIT observes completion while preserving ownership. Retire via cancel and require Cause::Exit(17),direct-child status and absent group. This exercises the actual completed-peer branch.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::dropping_owner_retires_the_started_wrapper",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 324,
+      "purpose": "Give started wrapper ownership a scope-exit cleanup path.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Admit a held command,assert its pid is alive,drop Running,then require the native pid absent. Drop owns only that invocation group and has its configured cleanup budget."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Admit a held command,assert its pid is alive,drop Running,then require the native pid absent. Drop owns only that invocation group and has its configured cleanup budget.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Admit a held command,assert its pid is alive,drop Running,then require the native pid absent. Drop owns only that invocation group and has its configured cleanup budget.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::captured_payload_is_retained_without_error_format_disclosure",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 343,
+      "purpose": "Keep synthetic failure data available while excluding captured payload from diagnostics.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Native exit17 writes a synthetic private marker to both streams. Require typed Exit(17) and exact retained bytes but neither Display nor Debug may disclose the marker/input. A second zero-exit fixture emits invalid UTF8 plus the marker;require byte-free OutputDecodeFailure with valid_up_to0/error_len1 and nondisclosing formats."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Native exit17 writes a synthetic private marker to both streams. Require typed Exit(17) and exact retained bytes but neither Display nor Debug may disclose the marker/input. A second zero-exit fixture emits invalid UTF8 plus the marker;require byte-free OutputDecodeFailure with valid_up_to0/error_len1 and nondisclosing formats.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Native exit17 writes a synthetic private marker to both streams. Require typed Exit(17) and exact retained bytes but neither Display nor Debug may disclose the marker/input. A second zero-exit fixture emits invalid UTF8 plus the marker;require byte-free OutputDecodeFailure with valid_up_to0/error_len1 and nondisclosing formats.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::build_failure_retires_held_readiness_and_keeps_both_causes",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 384,
+      "purpose": "Retire a held readiness wrapper when build fails and preserve the distinct outcomes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Build waits for the atomic readiness admission marker then exits17. Require build Exit(17),readiness PeerFailed,verified cancel cleanup,and absent pids for both wrappers. No Simulator is used."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Build waits for the atomic readiness admission marker then exits17. Require build Exit(17),readiness PeerFailed,verified cancel cleanup,and absent pids for both wrappers. No Simulator is used.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Build waits for the atomic readiness admission marker then exits17. Require build Exit(17),readiness PeerFailed,verified cancel cleanup,and absent pids for both wrappers. No Simulator is used.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::readiness_failure_retires_held_build_and_keeps_both_causes",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 403,
+      "purpose": "Retire a held build wrapper when readiness fails and preserve both causes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Readiness waits for build admission then exits23. Require readiness Exit(23),build PeerFailed,verified group cleanup and absent pids. The held build cannot complete naturally before fixture release."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Readiness waits for build admission then exits23. Require readiness Exit(23),build PeerFailed,verified group cleanup and absent pids. The held build cannot complete naturally before fixture release.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Readiness waits for build admission then exits23. Require readiness Exit(23),build PeerFailed,verified group cleanup and absent pids. The held build cannot complete naturally before fixture release.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::boot_then_readiness_preserves_success_and_reaps_wrappers",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 422,
+      "purpose": "Preserve the normal optional-boot then readiness sequence alongside compilation.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Build waits for readiness admission;boot exits0 and readiness asserts the boot marker before exiting0. Require preparation success and absent build/boot/readiness pids after their invocation groups are retired."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Build waits for readiness admission;boot exits0 and readiness asserts the boot marker before exiting0. Require preparation success and absent build/boot/readiness pids after their invocation groups are retired.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Build waits for readiness admission;boot exits0 and readiness asserts the boot marker before exiting0. Require preparation success and absent build/boot/readiness pids after their invocation groups are retired.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::exhausted_boot_budget_does_not_start_readiness",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 437,
+      "purpose": "Reject an exhausted phase before starting its readiness command.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Use a zero boot budget and require a typed readiness Deadline with zero budget,no cleanup report for an unstarted command,and no readiness pid marker. Any already-started build remains owned and retired."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Use a zero boot budget and require a typed readiness Deadline with zero budget,no cleanup report for an unstarted command,and no readiness pid marker. Any already-started build remains owned and retired.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Use a zero boot budget and require a typed readiness Deadline with zero budget,no cleanup report for an unstarted command,and no readiness pid marker. Any already-started build remains owned and retired.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
+    },
+    {
+      "id": "scripts::ci_smoke_lifecycle::fixture_supervisor_releases_and_joins_on_assertion_unwind",
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "line": 467,
+      "purpose": "Ensure test observation does not leave an unjoined worker after an assertion failure.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Admit controlled build/readiness fixtures and intentionally unwind while FixtureWorker is owned. catch_unwind must observe the panic;the worker outcome must be delivered before guard cleanup returns and both native pids must be absent. The guard releases the fixture before joining."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test on supported macOS/Linux Unix hosts. Native shell/process fixtures;no real Apple tools,network,server,signing or opt-in.",
+      "setup_dependencies": "Fresh owned TempDir and per-invocation Commands;atomic pid publication and file release gates. Native libc probes/reaping only for recorded test children;Fixture/FixtureWorker own teardown.",
+      "action_postconditions": "Admit controlled build/readiness fixtures and intentionally unwind while FixtureWorker is owned. catch_unwind must observe the panic;the worker outcome must be delivered before guard cleanup returns and both native pids must be absent. The guard releases the fixture before joining.",
+      "synchronization_timeout": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+      "rules": {
+        "1": "Admit controlled build/readiness fixtures and intentionally unwind while FixtureWorker is owned. catch_unwind must observe the panic;the worker outcome must be delivered before guard cleanup returns and both native pids must be absent. The guard releases the fixture before joining.",
+        "2": "Native state/readiness markers are observed;no fixed sleep is treated as completion. Fixture policies use two second readiness/jq,five second build and one second cleanup budgets;the outer five second observation detects legacy non-return. Native owner polls actual state every10ms.",
+        "3": "N/A:no playback or media clock assertion.",
+        "4": "Production preparation has one synchronous owner and no boot worker thread/join. Owned native groups are retired on error/scope exit. Test FixtureWorker releases and joins on normal/unwind paths. No async-to-sync fallback.",
+        "5": "Fresh TempDir,atomic pid markers and invocation-specific commands/groups. No process-global PATH/env mutation,shared Simulator reset or service kill.",
+        "6": "Native macOS/Linux process boundary,not a simulated OS. m2 evidence only;no real xcrun/xcodebuild/Simulator or Linux execution claimed. Actual jq is required only by the original selection tests.",
+        "7": "Three legacy regressions were observed failing after minimal command extraction;their logs/source hashes are retained. Compile alias/lifetime and Clippy conditional-style corrections are retained. No budget or functional assertion widened to obtain a pass.",
+        "8": "Match stage/cause/native exit and cleanup fields. Primary operation plus peer/cleanup/capture errors remain distinct. Captured output Debug/Display expose lengths;UTF8 cause retains validation offsets without raw bytes.",
+        "9": "Final m2 owning suite147/147 across11nonempty targets;16zero-test CLI targets are build checks only. Fourteen selected identities each pass three exact focused runs(42/42). Source-epoch artifacts and final hashes are in .build/i371-runner-verification.json."
+      },
+      "issue371_runner_lifecycle": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
+        "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
+      }
     }
-  ]
+  ],
+  "issue371_smoke_runner_lifecycle": {
+    "base": "3deee8a748e0f7acac54f563abd07d5b36933e41",
+    "scope": "jq input/command ownership;bounded build and optional boot/readiness preparation;combined typed failure diagnostics. No other runner command boundary is declared remediated.",
+    "helper": "scripts/src/ci_smoke/owned_command.rs",
+    "budgets": {
+      "json_seconds": 120,
+      "boot_and_readiness_total_seconds": 300,
+      "build_seconds": 2400,
+      "cleanup_seconds": 3,
+      "drop_fallback": "one additional cleanup attempt;the earlier failure remains failure"
+    },
+    "budget_rationale": "Explicit local failure bounds replace missing bounds. Retained successful iOS combined build/test steps took about20minutes;the build policy is40minutes,readiness5minutes and JSON2minutes. These are not performance or real-time guarantees.",
+    "baseline_evidence": "Three intended failures in .build/i371-baseline-regressions.log against minimal legacy extraction,source preserved in i371-baseline-source.json. BrokenPipe with live child;ready held boot did not return through observation;both native errors not composed.",
+    "current_evidence": "147/147 owning,42/42 exact repetitions on m2;final command identities/hashes in .build/i371-runner-verification.json. Earlier146/146 and39/39 belong to the source epoch before the fixture-unwind guard.",
+    "historical_preservation": "384 unrelated audit rows unchanged;three selector rows retain full original historical records;eleven new native lifecycle rows. Current active count398 is not whole-repository semantic certification.",
+    "dependency": "Only scripts adds the existing locked libc normal edge;build-scripts normal dependency boundary and application code unchanged.",
+    "remaining": "Other report/list/settings/discovery/install/test-command wrappers are unchanged and still require separate lifecycle disposition. No Linux,real Apple tools,cold boot,uninterruptible OS spawn/filesystem,daemon retirement,deliberate group escape or process-death cleanup claim.",
+    "status": "local implementation and fixture validation only;independent review/publication/CI paused;fe76 and draft417 untouched."
+  }
 }
