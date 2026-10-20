@@ -852,3 +852,13 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Structured result child-array validation (#371)
+
+Modern Xcode result verification rejects present malformed `children` fields at
+case, container, repetition and message boundaries with a typed schema failure.
+Absent/empty children and genuine repeated outcomes retain their existing
+contracts. Three focused regressions preserve all existing assertions and
+exercise synthetic invalid schemas independently of Xcode execution. See the
+[bounded schema fix and retained failures](release-evidence/test-runner-verification.md#structured-result-children-schema-371).
+Broader #371/#362 acceptance and platform evidence remain separate.

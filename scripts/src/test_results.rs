@@ -425,16 +425,20 @@ struct TestCaseResult {
     outcomes: Vec<Outcome>,
 }
 
+fn node_children(node: &Value) -> Result<&[Value]> {
+    match node.get("children") {
+        None => Ok(&[]),
+        Some(Value::Array(children)) => Ok(children),
+        Some(_) => Err(VerifyError::InvalidResult("children must be an array")),
+    }
+}
+
 fn collect_node(node: &Value, outcomes: &mut BTreeMap<TestId, TestCaseResult>) -> Result<()> {
     let node_type = node
         .get("nodeType")
         .and_then(Value::as_str)
         .ok_or(VerifyError::InvalidResult("nodeType must be a string"))?;
-    let children = node
-        .get("children")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let children = node_children(node)?;
     match node_type {
         "Test Case" => {
             let id = id_from_case(node)?;
@@ -465,7 +469,7 @@ fn collect_node(node: &Value, outcomes: &mut BTreeMap<TestId, TestCaseResult>) -
                         ));
                     }
                 }
-                for child in &children {
+                for child in children {
                     if !matches!(
                         child.get("nodeType").and_then(Value::as_str),
                         Some("Repetition" | "Failure Message" | "Skip Message")
@@ -479,7 +483,7 @@ fn collect_node(node: &Value, outcomes: &mut BTreeMap<TestId, TestCaseResult>) -
                         ));
                     }
                 }
-                for child in &children {
+                for child in children {
                     if let Some(url) = child.get("nodeIdentifierURL").and_then(Value::as_str)
                         && id_from_url(url)? != id
                     {
@@ -493,24 +497,22 @@ fn collect_node(node: &Value, outcomes: &mut BTreeMap<TestId, TestCaseResult>) -
                     .map(outcome)
                     .collect::<Result<Vec<_>>>()?
             };
-            for child in &children {
+            for child in children {
                 match child.get("nodeType").and_then(Value::as_str) {
                     Some("Failure Message" | "Skip Message") => validate_message_node(child)?,
                     Some("Repetition") => {
-                        if let Some(nested) = child.get("children").and_then(Value::as_array) {
-                            for nested_child in nested {
-                                match nested_child.get("nodeType").and_then(Value::as_str) {
-                                    Some("Failure Message" | "Skip Message") => {
-                                        validate_message_node(nested_child)?
-                                    }
-                                    Some(other) => {
-                                        return Err(VerifyError::UnknownNodeType(other.to_owned()));
-                                    }
-                                    None => {
-                                        return Err(VerifyError::InvalidResult(
-                                            "repetition child nodeType is missing",
-                                        ));
-                                    }
+                        for nested_child in node_children(child)? {
+                            match nested_child.get("nodeType").and_then(Value::as_str) {
+                                Some("Failure Message" | "Skip Message") => {
+                                    validate_message_node(nested_child)?
+                                }
+                                Some(other) => {
+                                    return Err(VerifyError::UnknownNodeType(other.to_owned()));
+                                }
+                                None => {
+                                    return Err(VerifyError::InvalidResult(
+                                        "repetition child nodeType is missing",
+                                    ));
                                 }
                             }
                         }
@@ -550,7 +552,7 @@ fn collect_node(node: &Value, outcomes: &mut BTreeMap<TestId, TestCaseResult>) -
                 }
             }
             for child in children {
-                collect_node(&child, outcomes)?;
+                collect_node(child, outcomes)?;
             }
         }
         other => return Err(VerifyError::UnknownNodeType(other.to_owned())),
@@ -599,6 +601,7 @@ fn outcome(node: &Value) -> Result<Outcome> {
 }
 
 fn validate_message_node(node: &Value) -> Result<()> {
+    node_children(node)?;
     let message = node
         .get("name")
         .and_then(Value::as_str)

@@ -6332,6 +6332,99 @@
       "setup_dependencies": "Desired schema and matching source declarations include two records; synthetic production schema omits one.",
       "synchronization_timeout": "Synchronous validator; no timeout.",
       "action_postconditions": "Structural validator reports RemoteListeningSession missing from production schema."
+    },
+    {
+      "id": "scripts::test_results::malformed_children_fields_reject_cases_and_containers",
+      "path": "scripts/tests/test_results.rs",
+      "line": 296,
+      "purpose": "Reject malformed children on cases and otherwise-ignored sibling containers.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Five invalid JSON types at a case and each of five container node types must return the typed InvalidResult children-array error:30 rejection shapes."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration test;pure JSON,all supported Rust hosts,no network/Xcode/signing/opt-in.",
+      "setup_dependencies": "Fresh owned serde_json Values plus retained real-repetitions.json;shared immutable fixture strings;no file/process/global-state mutation.",
+      "action_postconditions": "Five invalid JSON types at a case and each of five container node types must return the typed InvalidResult children-array error:30 rejection shapes.",
+      "synchronization_timeout": "Synchronous finite JSON parsing;no concurrency,external operation,wait or timing budget.",
+      "rules": {
+        "1": "Five invalid JSON types at a case and each of five container node types must return the typed InvalidResult children-array error:30 rejection shapes.",
+        "2": "N/A:pure synchronous bounded fixture computation;return and typed variant directly observed.",
+        "3": "N/A:no playback or media clock.",
+        "4": "N/A:no async operation,tasks,observers or subprocess.",
+        "5": "Each mutation owns a fresh Value;immutable native fixture is not modified. No filesystem/global environment or fixture ordering dependency.",
+        "6": "Synthetic invalid-schema cases plus retained genuine Xcode repetition JSON;offline parser evidence,not fresh Xcode/Simulator execution.",
+        "7": "Two regressions fail against unchanged parser;offline CLI also incorrectly accepts malformed children. Original failures retained,no assertion or tolerance removed.",
+        "8": "Assert exact typed InvalidResult children-array cause with node location/invalid type context;positive cases assert exact passed/skipped counts. No user payloads in fixtures.",
+        "9": "Run three new identities independently three times and all eight verifier integration identities in owning scripts suite;exact counts,commands and original failures retained in schema evidence."
+      },
+      "issue371_result_children_schema": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#structured-result-children-schema-371",
+        "source_sha256": "89655fb515ec0e43d360fc19bd0ac511c463e0f66ea8bf3b8edea50bf852dfa8"
+      }
+    },
+    {
+      "id": "scripts::test_results::malformed_children_fields_reject_repetitions_and_messages",
+      "path": "scripts/tests/test_results.rs",
+      "line": 329,
+      "purpose": "Reject malformed children on repeated runs and diagnostic messages at root,case and repetition levels.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Five invalid JSON types at repeated-run children and three message locations must return the typed InvalidResult children-array error:20 rejection shapes."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration test;pure JSON,all supported Rust hosts,no network/Xcode/signing/opt-in.",
+      "setup_dependencies": "Fresh owned serde_json Values plus retained real-repetitions.json;shared immutable fixture strings;no file/process/global-state mutation.",
+      "action_postconditions": "Five invalid JSON types at repeated-run children and three message locations must return the typed InvalidResult children-array error:20 rejection shapes.",
+      "synchronization_timeout": "Synchronous finite JSON parsing;no concurrency,external operation,wait or timing budget.",
+      "rules": {
+        "1": "Five invalid JSON types at repeated-run children and three message locations must return the typed InvalidResult children-array error:20 rejection shapes.",
+        "2": "N/A:pure synchronous bounded fixture computation;return and typed variant directly observed.",
+        "3": "N/A:no playback or media clock.",
+        "4": "N/A:no async operation,tasks,observers or subprocess.",
+        "5": "Each mutation owns a fresh Value;immutable native fixture is not modified. No filesystem/global environment or fixture ordering dependency.",
+        "6": "Synthetic invalid-schema cases plus retained genuine Xcode repetition JSON;offline parser evidence,not fresh Xcode/Simulator execution.",
+        "7": "Two regressions fail against unchanged parser;offline CLI also incorrectly accepts malformed children. Original failures retained,no assertion or tolerance removed.",
+        "8": "Assert exact typed InvalidResult children-array cause with node location/invalid type context;positive cases assert exact passed/skipped counts. No user payloads in fixtures.",
+        "9": "Run three new identities independently three times and all eight verifier integration identities in owning scripts suite;exact counts,commands and original failures retained in schema evidence."
+      },
+      "issue371_result_children_schema": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#structured-result-children-schema-371",
+        "source_sha256": "89655fb515ec0e43d360fc19bd0ac511c463e0f66ea8bf3b8edea50bf852dfa8"
+      }
+    },
+    {
+      "id": "scripts::test_results::omitted_and_empty_children_preserve_valid_native_shapes",
+      "path": "scripts/tests/test_results.rs",
+      "line": 370,
+      "purpose": "Preserve supported omitted/empty child arrays and exact native repetition outcomes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Absent and empty arrays preserve one passing synthetic case and both retained genuine repetition outcomes,with exact pass/skip counts."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration test;pure JSON,all supported Rust hosts,no network/Xcode/signing/opt-in.",
+      "setup_dependencies": "Fresh owned serde_json Values plus retained real-repetitions.json;shared immutable fixture strings;no file/process/global-state mutation.",
+      "action_postconditions": "Absent and empty arrays preserve one passing synthetic case and both retained genuine repetition outcomes,with exact pass/skip counts.",
+      "synchronization_timeout": "Synchronous finite JSON parsing;no concurrency,external operation,wait or timing budget.",
+      "rules": {
+        "1": "Absent and empty arrays preserve one passing synthetic case and both retained genuine repetition outcomes,with exact pass/skip counts.",
+        "2": "N/A:pure synchronous bounded fixture computation;return and typed variant directly observed.",
+        "3": "N/A:no playback or media clock.",
+        "4": "N/A:no async operation,tasks,observers or subprocess.",
+        "5": "Each mutation owns a fresh Value;immutable native fixture is not modified. No filesystem/global environment or fixture ordering dependency.",
+        "6": "Synthetic invalid-schema cases plus retained genuine Xcode repetition JSON;offline parser evidence,not fresh Xcode/Simulator execution.",
+        "7": "Two regressions fail against unchanged parser;offline CLI also incorrectly accepts malformed children. Original failures retained,no assertion or tolerance removed.",
+        "8": "Assert exact typed InvalidResult children-array cause with node location/invalid type context;positive cases assert exact passed/skipped counts. No user payloads in fixtures.",
+        "9": "Run three new identities independently three times and all eight verifier integration identities in owning scripts suite;exact counts,commands and original failures retained in schema evidence."
+      },
+      "issue371_result_children_schema": {
+        "evidence": "docs/release-evidence/test-runner-verification.md#structured-result-children-schema-371",
+        "source_sha256": "89655fb515ec0e43d360fc19bd0ac511c463e0f66ea8bf3b8edea50bf852dfa8"
+      }
     }
   ]
 }
