@@ -803,3 +803,11 @@ unexpected simultaneous callers and the private fake's first-response HTTP
 observation while the original gate stays held. Production authentication is
 unchanged; this does not resolve whole production-task drainage or the seven
 independent app startup-position oracles.
+
+
+The [refresh join admission slice](release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance)
+observes a captured in-flight attempt before originator release and separately
+controls late recovery after retirement. It preserves typed rejection and token
+provenance assertions, bounds caller outcomes, and retires its private observation
+and fake waiters. Authentication semantics and broader lifecycle acceptance are
+unchanged; validation evidence is recorded with the local candidate.

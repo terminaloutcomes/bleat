@@ -1937,3 +1937,42 @@ failures are excluded from coverage. Corrected preflight passed 14 identities.
 Three new function identities bring host inventory to **603**, source index to
 **1,589** and core audit to **599**. Fresh revised-head CI and independent
 re-review are required; broader #372/#362 acceptance remains open.
+
+
+## Refresh join admission and late-arrival provenance
+
+`AuthenticatedRequestTests.testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`
+previously created its joiner task and released the originator gates without
+observing join admission. Main CI and the cover PR CI both reported a successful
+joiner where the test expected `refreshRejected`. Caller-completion bounds did
+not establish the earlier admission condition.
+
+The coordinator now has an internal, optional, nonblocking native stream
+observation immediately after capturing an existing attempt. Its value carries
+only account and attempt identity, with no credential values. It adds no public
+API, authentication decision, request, error translation or suspension point.
+The observation is unset in ordinary operation. The test registers it before
+starting callers and requires the matching attempt before releasing either
+originator gate. Both original typed errors, originating rejected-token
+provenance, cached original-token rejection and one-refresh assertion remain.
+
+`testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance` independently
+drives the originator to completion and confirms attempt retirement before
+starting the late caller. Both argument cases are required: matching provenance
+uses the cached typed rejection; a different rejected token uses the newer store
+value. Both retain the originating completed record and issue no new refresh or
+HTTP retry. This keeps the late-arrival control separate from the admitted-join
+contract.
+
+File-private callers retain their exact API results, use the existing ten-second
+completion failure budget, then drain owned tasks. Cleanup cancels callers, opens
+all fake latches, removes the observation and finishes/drains its stream on
+normal, throwing and early-return exits. Cancellation alone is never proof of
+completion. Fresh in-memory state is constructed per test/argument; no sleeps or
+guessed yields establish ordering. The inventory adds one identity, and the
+scoped audit records all nine rules.
+
+This change is prepared locally and has no publication or CI acceptance claim.
+Focused repetitions, the owning suite, unsigned-host verification and applicable
+aggregate checks are recorded in the local handoff evidence. Broader #362/#372
+and framework/device acceptance remain separate.

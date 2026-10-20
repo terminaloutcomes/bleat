@@ -80,6 +80,10 @@ public actor AuthCoordinator<
     let requestAuthorizer: BearerRequestAuthorizer
     var openIDAttempt: OpenIDAttempt?
     var refreshAttempts: [AccountID: RefreshAttempt]
+    // Optional nonblocking lifecycle observation; authentication decisions and
+    // suspension points are independent of whether an observer is installed.
+    var refreshJoinObservation:
+        AsyncStream<RefreshJoinObservation>.Continuation?
     var completedRefreshes: [AccountID: CompletedRefresh]
     var nextRefreshAttemptID: UInt64
     var reauthenticationRequiredAccounts: Set<AccountID>
