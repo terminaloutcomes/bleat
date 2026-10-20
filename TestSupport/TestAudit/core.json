@@ -4198,7 +4198,7 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372"
       },
       "join_admission_review": {
-        "status": "source_reviewed_validation_pending",
+        "status": "source_reviewed_host_verified_aggregate_blocked",
         "rules": {
           "1": "Preserve both in-flight refreshRejected outcomes, originating rejected-token provenance, cached original-token rejection and single refresh. Late controls separately require cached rejection for matching provenance or current credentials for a different rejected token after retirement.",
           "2": "Register bounded native AsyncStream observation before callers; observe matching account/attempt after existing-attempt capture before either originator gate releases. Late controls await actual originator completion and assert attempt retirement before launching recovery.",
@@ -4210,7 +4210,8 @@
           "8": "Existing source-located completion helper reports exact missing stage and elapsed budget; observation carries account/attempt identity only, no credentials. Actual errors remain captured and asserted unchanged.",
           "9": "Repeat the two affected identities, verify both late arguments, then owning suite, unsigned host and applicable aggregate/lint gates. Validation results remain separate from source review."
         },
-        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance"
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
+        "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
     },
     {
@@ -4245,7 +4246,7 @@
       "decision": "keep",
       "reason": "Separates a legitimately late caller from an admitted joiner instead of weakening the original in-flight assertion.",
       "join_admission_review": {
-        "status": "source_reviewed_validation_pending",
+        "status": "source_reviewed_host_verified_aggregate_blocked",
         "rules": {
           "1": "Preserve both in-flight refreshRejected outcomes, originating rejected-token provenance, cached original-token rejection and single refresh. Late controls separately require cached rejection for matching provenance or current credentials for a different rejected token after retirement.",
           "2": "Register bounded native AsyncStream observation before callers; observe matching account/attempt after existing-attempt capture before either originator gate releases. Late controls await actual originator completion and assert attempt retirement before launching recovery.",
@@ -4257,7 +4258,8 @@
           "8": "Existing source-located completion helper reports exact missing stage and elapsed budget; observation carries account/attempt identity only, no credentials. Actual errors remain captured and asserted unchanged.",
           "9": "Repeat the two affected identities, verify both late arguments, then owning suite, unsigned host and applicable aggregate/lint gates. Validation results remain separate from source review."
         },
-        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance"
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
+        "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
     },
     {
@@ -23807,6 +23809,6 @@
       "core_audit_before": 599,
       "core_audit_after": 600
     },
-    "execution": "Pending final local validation; no publication or CI claim."
+    "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
   }
 }
