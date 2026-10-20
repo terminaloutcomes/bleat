@@ -35,6 +35,12 @@ struct RefreshAttempt: Sendable {
         >
 }
 
+/// Admission to an already selected shared attempt, without credential values.
+struct RefreshJoinObservation: Equatable, Sendable {
+    let accountID: AccountID
+    let attemptID: UInt64
+}
+
 enum AuthenticationRecoveryDisposition: Sendable {
     case retryable
     case reauthenticationRequired
@@ -320,6 +326,10 @@ extension AuthCoordinator {
             throw AuthenticatedRequestError.accountOperationInProgress
         }
         if let attempt = refreshAttempts[accountID] {
+            refreshJoinObservation?.yield(
+                RefreshJoinObservation(
+                    accountID: accountID, attemptID: attempt.id)
+            )
             let tokens = try await finishRefresh(
                 attempt,
                 accountID: accountID

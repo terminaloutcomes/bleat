@@ -114,6 +114,10 @@
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "symbol": "CancellationIgnoringTokenProvider / ManualOtlpClock / ManualOtlpSleep",
       "assessment": "One-shot actor provider ignores acknowledged cancellation until explicit continuation release; retirement latches late entry and awaits logical exit. Manual clock protects synchronous data with locks, caches one settlement across pre/post registration cancellation and resumes outside locks; retirement rejects late entry, releases all known entries and positively observes logical exits. Four provider and six clock contract arguments plus public token-success cancellation/RPC-expiry cases. No global timing, real readiness sleep or natural provider expiry."
+    },
+    {
+      "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
+      "assessment": "Scoped RefreshTestCaller captures exact API Result, bounds completion, then drains owned Task; RejectedRefreshFixture owns fresh actor state. Test-only actor extension installs/removes a native single-observer stream. All callers release fake latches and observation on normal/throwing/early exit; no credential values enter timeout diagnostics."
     }
   ],
   "tests": [
@@ -4192,13 +4196,29 @@
         },
         "execution": "Three independent focused passes 3/3 each, owning 24/24, signed host 592/592 and exact discovery 592; zero failures/errors/skips. Strict Swift lint, docs and diff checks passed.",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-in-flight-refresh-caller-outcomes-issue-372"
+      },
+      "join_admission_review": {
+        "status": "source_reviewed_host_verified_aggregate_blocked",
+        "rules": {
+          "1": "Preserve both in-flight refreshRejected outcomes, originating rejected-token provenance, cached original-token rejection and single refresh. Late controls separately require cached rejection for matching provenance or current credentials for a different rejected token after retirement.",
+          "2": "Register bounded native AsyncStream observation before callers; observe matching account/attempt after existing-attempt capture before either originator gate releases. Late controls await actual originator completion and assert attempt retirement before launching recovery.",
+          "3": "N/A: no playback, seek or elapsed-position assertion.",
+          "4": "Every owned caller captures its exact Result and has an existing ten-second completion budget before its task value is awaited. withTestCleanup cancels callers, releases latched fake gates, removes observation, finishes its stream and confirms completion on normal, throwing and early-return exits. Unconfirmed work is reported rather than awaited indefinitely.",
+          "5": "Fresh private in-memory store, transport and coordinator for every method/argument; fixed synthetic server/account/token values; no personal state, disk or Keychain.",
+          "6": "Deterministic host authentication integration using the real coordinator and staged actor fake; no real server or device acceptance. Optional native join observation adds no authentication decision or suspension point.",
+          "7": "Historical failing CI assertion retained in the prior investigation; no dropped typed assertion, widened failure budget, guessed yield or sleep as readiness.",
+          "8": "Existing source-located completion helper reports exact missing stage and elapsed budget; observation carries account/attempt identity only, no credentials. Actual errors remain captured and asserted unchanged.",
+          "9": "Repeat the two affected identities, verify both late arguments, then owning suite, unsigned host and applicable aggregate/lint gates. Validation results remain separate from source review."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
+        "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConcurrentRejectionJoinsFailingInFlightRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 496
+        "line": 553
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4264,7 +4284,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 617
+        "line": 674
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4311,7 +4331,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRejectedRefreshUsesSavedPasswordAndRetriesRequest",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 703
+        "line": 760
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4350,7 +4370,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshContractFailuresUseSavedPasswordAndRetryRequest",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 784
+        "line": 841
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4389,7 +4409,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedPasswordRejectionRemainsTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 883
+        "line": 940
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4428,7 +4448,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginCannotChangeRemoteUserIdentity",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 953
+        "line": 1010
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4467,7 +4487,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginAuthorizationRejectionRequiresReauthentication",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1011
+        "line": 1068
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4506,7 +4526,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testForbiddenResponseDoesNotRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1068
+        "line": 1125
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4545,7 +4565,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAuthenticationEndpointsNeverEnterRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1088
+        "line": 1145
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4584,7 +4604,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testOrdinaryRequestRetriesOnlyOnce",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1123
+        "line": 1180
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4623,7 +4643,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailuresAreTypedAndAccountScoped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1157
+        "line": 1214
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4662,7 +4682,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshTransportFailureIsNotCachedAndRetries",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1249
+        "line": 1306
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4701,7 +4721,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1298
+        "line": 1355
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4740,7 +4760,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTransientSavedLoginFailuresAreNotCachedAndRetry",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1332
+        "line": 1389
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4779,7 +4799,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSessionTokensUseSynchronizedNativeLogin",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1429
+        "line": 1486
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4818,7 +4838,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCredentialFailuresAreTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1485
+        "line": 1542
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4857,7 +4877,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRequestValidationAndTransportFailuresAreTyped",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1544
+        "line": 1601
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4896,7 +4916,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAlreadyRotatedCredentialsAvoidAnotherRefresh",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1642
+        "line": 1699
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4935,7 +4955,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCompletedRotationCoversAStaleCredentialRead",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1682
+        "line": 1739
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -4974,7 +4994,7 @@
       "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailureDoesNotAffectAnotherAccount",
       "source": {
         "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
-        "line": 1735
+        "line": 1792
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23579,6 +23599,54 @@
       },
       "decision": "keep",
       "reason": "Validate private OpenID browser gate first-failure retirement across simultaneous and late callers without overwritten continuations."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
+        "line": 475
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Distinguish post-retirement matching and different rejected-token recovery while preserving the originator provenance and one-refresh contract.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh RejectedRefreshFixture per Bool argument; fake writes staged credentials then returns refresh rejection; no saved native login.",
+        "action_postconditions": "Drive the originator to typed refreshRejected and retired attempt; launch a late recovery, require matching-token cached rejection or different-token current credential result, unchanged completed provenance, reauthentication state and no additional refresh/HTTP retry."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Owned RefreshTestCaller completion values observed with existing ten-second bounds; staged fake gates explicitly opened; all cleanup awaited.",
+        "timeout_tolerance": "Failure budgets only; no latency assertion or guessed scheduling delay."
+      },
+      "compiler_skip_conditions": "No compile guard, skip or opt-in; matchesOriginator false and true both required.",
+      "rules": {
+        "1": "Preserve both in-flight refreshRejected outcomes, originating rejected-token provenance, cached original-token rejection and single refresh. Late controls separately require cached rejection for matching provenance or current credentials for a different rejected token after retirement.",
+        "2": "Register bounded native AsyncStream observation before callers; observe matching account/attempt after existing-attempt capture before either originator gate releases. Late controls await actual originator completion and assert attempt retirement before launching recovery.",
+        "3": "N/A: no playback, seek or elapsed-position assertion.",
+        "4": "Every owned caller captures its exact Result and has an existing ten-second completion budget before its task value is awaited. withTestCleanup cancels callers, releases latched fake gates, removes observation, finishes its stream and confirms completion on normal, throwing and early-return exits. Unconfirmed work is reported rather than awaited indefinitely.",
+        "5": "Fresh private in-memory store, transport and coordinator for every method/argument; fixed synthetic server/account/token values; no personal state, disk or Keychain.",
+        "6": "Deterministic host authentication integration using the real coordinator and staged actor fake; no real server or device acceptance. Optional native join observation adds no authentication decision or suspension point.",
+        "7": "Historical failing CI assertion retained in the prior investigation; no dropped typed assertion, widened failure budget, guessed yield or sleep as readiness.",
+        "8": "Existing source-located completion helper reports exact missing stage and elapsed budget; observation carries account/attempt identity only, no credentials. Actual errors remain captured and asserted unchanged.",
+        "9": "Repeat the two affected identities, verify both late arguments, then owning suite, unsigned host and applicable aggregate/lint gates. Validation results remain separate from source review."
+      },
+      "decision": "keep",
+      "reason": "Separates a legitimately late caller from an admitted joiner instead of weakening the original in-flight assertion.",
+      "join_admission_review": {
+        "status": "source_reviewed_host_verified_aggregate_blocked",
+        "rules": {
+          "1": "Preserve both in-flight refreshRejected outcomes, originating rejected-token provenance, cached original-token rejection and single refresh. Late controls separately require cached rejection for matching provenance or current credentials for a different rejected token after retirement.",
+          "2": "Register bounded native AsyncStream observation before callers; observe matching account/attempt after existing-attempt capture before either originator gate releases. Late controls await actual originator completion and assert attempt retirement before launching recovery.",
+          "3": "N/A: no playback, seek or elapsed-position assertion.",
+          "4": "Every owned caller captures its exact Result and has an existing ten-second completion budget before its task value is awaited. withTestCleanup cancels callers, releases latched fake gates, removes observation, finishes its stream and confirms completion on normal, throwing and early-return exits. Unconfirmed work is reported rather than awaited indefinitely.",
+          "5": "Fresh private in-memory store, transport and coordinator for every method/argument; fixed synthetic server/account/token values; no personal state, disk or Keychain.",
+          "6": "Deterministic host authentication integration using the real coordinator and staged actor fake; no real server or device acceptance. Optional native join observation adds no authentication decision or suspension point.",
+          "7": "Historical failing CI assertion retained in the prior investigation; no dropped typed assertion, widened failure budget, guessed yield or sleep as readiness.",
+          "8": "Existing source-located completion helper reports exact missing stage and elapsed budget; observation carries account/attempt identity only, no credentials. Actual errors remain captured and asserted unchanged.",
+          "9": "Repeat the two affected identities, verify both late arguments, then owning suite, unsigned host and applicable aggregate/lint gates. Validation results remain separate from source review."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
+        "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
+      }
     }
   ],
   "issue_382": {
@@ -23809,5 +23877,22 @@
     "scope": "Two existing active-session/concurrent-attempt cases,private fixture retirement and two helper contracts;changed-file navigation/inventory and scoped evidence.",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372",
     "remaining": "Whole retired private-worker/timeout-observer drainage needs later per-owner design;production lifecycle contracts,off-main callback adapter and broad reconciliation remain unchanged."
+  },
+  "auth_refresh_join_admission": {
+    "tests": [
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh",
+      "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance"
+    ],
+    "scope": "Actual join admission and explicit late-arrival controls only; no changes to authentication decisions or suspension points.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
+    "inventory_delta": {
+      "host_before": 603,
+      "host_after": 604,
+      "source_index_before": 1589,
+      "source_index_after": 1590,
+      "core_audit_before": 599,
+      "core_audit_after": 600
+    },
+    "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
   }
 }

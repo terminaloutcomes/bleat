@@ -106,6 +106,7 @@
     "testTwentyUnauthorizedRequestsShareOneRejectedRefresh()",
     "testConcurrentRejectionJoinsInFlightRefreshInsteadOfStaleStoreRead()",
     "testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh()",
+    "testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance(matchesOriginator:)",
     "testConcurrentRejectionJoinsFailingInFlightRefresh()",
     "testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery()",
     "testRejectedRefreshUsesSavedPasswordAndRetriesRequest()",
