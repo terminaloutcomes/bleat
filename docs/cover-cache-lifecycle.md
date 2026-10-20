@@ -133,3 +133,26 @@ would permit replacing the approved boundary; the exception does not extend to
 other storage owners. Each follow-on needs
 controlled interruption, cleanup-failure and account-isolation evidence for its
 own owner; an image policy must not be applied to durable audio or user state.
+
+
+## Editor completion ownership
+
+Initial metadata/cover saves and cover retries share one operation identity and
+target item. Every service response and awaited artwork invalidation must still
+own that operation, account, selected item and saving state before publishing
+editor state. Account/reset/navigation retirement releases only the retired
+operation's busy state; its final cleanup cannot clear a newer save. This also
+rejects a stale completion after switching away and back to the same account and
+item. A save may establish its target selection after metadata success without
+retiring itself.
+
+`AppModelTests.testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation`
+holds an initial save in invalidation, retires it through reset, account switch,
+account round-trip or another selection, then holds a newer cover upload. The
+old caller's observed return must preserve the newer saving state and exact
+account/detail/selection; only the newer completion publishes success. Fresh
+gates and bounded admission/return observations control all four scenarios.
+The regression failed against `90e1207` with the old caller publishing `saved`
+while the newer upload was held. That failed artifact is retained separately
+from corrected-source validation. No physical artwork/device acceptance follows
+from this app-model test.

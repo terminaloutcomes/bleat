@@ -19150,6 +19150,107 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(metadataRequests.count, 1)
     }
 
+    func testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation()
+        async throws
+    {
+        enum OwnershipChange: CaseIterable {
+            case reset, accountSwitch, accountRoundTrip, selection
+        }
+        for change in OwnershipChange.allCases {
+            let first = try fixtureAccount()
+            let second = try fixtureAccount(
+                accountID: "account-2", userID: "user-2", username: "second",
+                server: "https://second.example")
+            let library = fixtureLibrary()
+            let page = fixturePage(libraryID: library.id)
+            let original = fixtureBookDetail(item: page.items[0])
+            let nextBook = fixtureBook(
+                id: "item-2", title: "Next fixture", libraryID: library.id)
+            let next =
+                change == .selection
+                ? fixtureBookDetail(item: nextBook) : original
+            let invalidation = AsyncGate()
+            let newerUpload = AsyncGate()
+            let service = TestAppService(
+                accounts: .success([first, second]),
+                activeAccount: .success(first),
+                libraries: .success([library]), firstPage: .success(page),
+                bookDetail: .success(original),
+                coverReplacement: .success(original))
+            let model = AppModel(
+                service: service,
+                invalidateBookCover: { _, _ in
+                    await invalidation.enterAndWait()
+                })
+            await model.start()
+            await model.loadBookDetail(page.items[0])
+            let entered = await invalidation.entryExpectation
+            let oldReturned = expectation(
+                description: "old save returned: \(change)")
+            var oldCompleted = false
+            let oldSave = Task {
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: original),
+                    baseline: original, coverJPEGData: Data([1]))
+                oldCompleted = true
+                oldReturned.fulfill()
+            }
+            await fulfillment(of: [entered], timeout: 3)
+            let invalidationEntered = await invalidation.hasEntered
+            XCTAssertTrue(invalidationEntered)
+            switch change {
+            case .reset:
+                model.resetBookEditSaveState()
+            case .accountSwitch, .accountRoundTrip:
+                await model.switchAccount(to: second)
+                if change == .accountRoundTrip {
+                    await model.switchAccount(to: first)
+                }
+                await model.loadBookDetail(page.items[0])
+            case .selection:
+                await service.setBookDetail(.success(next))
+                await model.loadBookDetail(nextBook)
+            }
+            XCTAssertEqual(model.bookEditSaveState, .idle, "\(change)")
+            await service.setCoverReplacement(.success(next))
+            await service.setCoverReplacementGate(newerUpload)
+            let newerEntered = await newerUpload.entryExpectation
+            let newReturned = expectation(
+                description: "new save returned: \(change)")
+            var newCompleted = false
+            let newSave = Task {
+                await model.saveBookEdits(
+                    draft: BookMetadataDraft(detail: next),
+                    baseline: next, coverJPEGData: Data([2]))
+                newCompleted = true
+                newReturned.fulfill()
+            }
+            await fulfillment(of: [newerEntered], timeout: 3)
+            let uploadEntered = await newerUpload.hasEntered
+            XCTAssertTrue(uploadEntered)
+            XCTAssertEqual(model.bookEditSaveState, .saving, "\(change)")
+            let selectedAccount = model.account
+            let selectedDetail = model.bookDetail
+            await invalidation.release()
+            await fulfillment(of: [oldReturned], timeout: 3)
+            if oldCompleted { await oldSave.value } else { oldSave.cancel() }
+            XCTAssertEqual(model.account, selectedAccount, "\(change)")
+            XCTAssertEqual(model.selectedBookID, next.id, "\(change)")
+            XCTAssertEqual(model.bookDetail, selectedDetail, "\(change)")
+            XCTAssertEqual(model.bookEditSaveState, .saving, "\(change)")
+            XCTAssertFalse(newCompleted, "new upload remains held: \(change)")
+            await newerUpload.release()
+            await fulfillment(of: [newReturned], timeout: 3)
+            if newCompleted { await newSave.value } else { newSave.cancel() }
+            XCTAssertEqual(model.bookEditSaveState, .saved, "\(change)")
+            let requests = await service.coverReplacementRequests()
+            let expectedAccount = change == .accountSwitch ? second : first
+            XCTAssertEqual(
+                requests.map(\.accountID), [first.id, expectedAccount.id])
+            XCTAssertEqual(requests.map(\.jpegData), [Data([1]), Data([2])])
+        }
+    }
+
     func testCoverRetryCannotPublishAfterAccountSwitch() async throws {
         let first = try fixtureAccount()
         let second = try fixtureAccount(

@@ -1620,7 +1620,7 @@ final class AppModel {
     @ObservationIgnored
     private var seriesDownloadSubmissionAccounts: [UUID: AccountID] = [:]
     @ObservationIgnored
-    private var bookCoverRetryOperationID: UUID?
+    private var bookEditSaveOperation: (id: UUID, itemID: LibraryItemID)?
     @ObservationIgnored
     private var seriesDownloadSubmissionTails:
         [AccountID: SeriesDownloadSubmissionTail] = [:]
@@ -1700,9 +1700,10 @@ final class AppModel {
     private(set) var selectedBookID: LibraryItemID? {
         didSet {
             guard selectedBookID != oldValue,
-                let operationID = bookCoverRetryOperationID
+                let operation = bookEditSaveOperation,
+                selectedBookID != operation.itemID
             else { return }
-            retireBookCoverRetry(operationID)
+            retireBookEditSave(operation.id)
         }
     }
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
@@ -4674,15 +4675,24 @@ final class AppModel {
         guard bookEditSaveState != .saving else {
             return
         }
-        bookCoverRetryOperationID = nil
+        let operationID = UUID()
+        let originalSelection = selectedBookID
+        bookEditSaveOperation = (operationID, baseline.id)
         bookEditSaveState = .saving
+        defer { retireBookEditSave(operationID) }
         do {
-            switch try await service.saveMetadata(
+            let outcome = try await service.saveMetadata(
                 for: account,
                 baseline: baseline,
                 draft: draft,
                 overwrite: overwrite
-            ) {
+            )
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: account.id,
+                    selectedItemID: originalSelection)
+            else { return }
+            switch outcome {
             case .saved(let detail):
                 bookDetailRefreshGeneration &+= 1
                 bookDetailRefreshState = .idle
@@ -4698,14 +4708,29 @@ final class AppModel {
                         detail: detail,
                         jpegData: coverJPEGData
                     )
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: detail.id)
+                    else { return }
                     bookDetailRefreshGeneration &+= 1
                     bookDetailRefreshState = .idle
                     selectedBookID = updated.id
                     bookDetail = .loaded(updated)
                     await refreshCoverArtwork(
                         for: account, detail: updated, replacement: true)
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: updated.id)
+                    else { return }
                     bookEditSaveState = .saved
                 } catch let error {
+                    guard
+                        ownsBookEditSave(
+                            operationID, accountID: account.id,
+                            selectedItemID: detail.id)
+                    else { return }
                     bookEditSaveState = .metadataSavedCoverFailed(
                         account.id,
                         detail,
@@ -4718,6 +4743,11 @@ final class AppModel {
                 bookEditSaveState = .stale(latest)
             }
         } catch let error {
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: account.id,
+                    selectedItemID: originalSelection)
+            else { return }
             bookEditSaveState = .failed(
                 AppFailure(operation: .saveMetadata, serviceError: error)
             )
@@ -4744,19 +4774,19 @@ final class AppModel {
             return
         }
         let operationID = UUID()
-        bookCoverRetryOperationID = operationID
+        bookEditSaveOperation = (operationID, detail.id)
         bookEditSaveState = .saving
-        defer { retireBookCoverRetry(operationID) }
+        defer { retireBookEditSave(operationID) }
         do {
             let updated = try await service.replaceCover(
                 for: account,
                 detail: detail,
                 jpegData: coverJPEGData
             )
-            guard bookCoverRetryOperationID == operationID,
-                self.account?.id == originatingAccountID,
-                selectedBookID == detail.id,
-                bookEditSaveState == .saving
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: detail.id)
             else {
                 return
             }
@@ -4766,22 +4796,22 @@ final class AppModel {
             bookDetail = .loaded(updated)
             await refreshCoverArtwork(
                 for: account, detail: updated, replacement: true)
-            guard bookCoverRetryOperationID == operationID,
-                self.account?.id == originatingAccountID,
-                selectedBookID == updated.id,
-                bookEditSaveState == .saving
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: updated.id)
             else { return }
-            bookCoverRetryOperationID = nil
+            bookEditSaveOperation = nil
             bookEditSaveState = .coverSaved(updated)
         } catch let error {
-            guard bookCoverRetryOperationID == operationID,
-                self.account?.id == originatingAccountID,
-                selectedBookID == detail.id,
-                bookEditSaveState == .saving
+            guard
+                ownsBookEditSave(
+                    operationID, accountID: originatingAccountID,
+                    selectedItemID: detail.id)
             else {
                 return
             }
-            bookCoverRetryOperationID = nil
+            bookEditSaveOperation = nil
             bookEditSaveState = .metadataSavedCoverFailed(
                 originatingAccountID,
                 detail,
@@ -4791,16 +4821,26 @@ final class AppModel {
         }
     }
 
-    private func retireBookCoverRetry(_ operationID: UUID) {
-        guard bookCoverRetryOperationID == operationID else { return }
-        bookCoverRetryOperationID = nil
+    private func ownsBookEditSave(
+        _ operationID: UUID, accountID: AccountID,
+        selectedItemID: LibraryItemID?
+    ) -> Bool {
+        bookEditSaveOperation?.id == operationID
+            && account?.id == accountID
+            && selectedBookID == selectedItemID
+            && bookEditSaveState == .saving
+    }
+
+    private func retireBookEditSave(_ operationID: UUID) {
+        guard bookEditSaveOperation?.id == operationID else { return }
+        bookEditSaveOperation = nil
         if bookEditSaveState == .saving {
             bookEditSaveState = .idle
         }
     }
 
     func resetBookEditSaveState() {
-        bookCoverRetryOperationID = nil
+        bookEditSaveOperation = nil
         bookEditSaveState = .idle
     }
 

@@ -49496,6 +49496,34 @@
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
       }
+    },
+    {
+      "identifier": "AppModelTests/testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19153
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Retired initial save cannot publish editor completion or clear a newer operation after awaited cover invalidation.",
+        "purpose": "Deterministic reset, account-switch, account round-trip and selection regressions at the actual invalidation suspension.",
+        "ruleAssessments": {
+          "1": "Held old invalidation, retired editor ownership, held newer upload, then old completion: newer saving state/account/selection/detail must survive; newer completion alone publishes saved; two exact account-scoped upload payloads required.",
+          "2": "Register entry and return expectations before tasks; actual invalidation/upload admission and caller return establish ordering. No sleep or guessed yield.",
+          "3": "N/A: editor state, no playback position/clock assertion.",
+          "4": "No throwing operation or early return after callers start. Both gates are released on every assertion-failure path. Caller return is bounded by three-second XCTest expectations and an observed completion Bool before task.value; unconfirmed tasks are cancelled rather than awaited indefinitely.",
+          "5": "Fresh model, fake service, accounts and gates per reset/account-switch/account-round-trip/selection scenario; only synthetic identifiers and bytes.",
+          "6": "Real app-model ownership with controlled in-memory service and injected invalidation; no server, system-artwork or physical-device claim.",
+          "7": "One expected-failing run against 90e1207 retained; assertion saved != saving confirms finding. No budget increase, suppression or retry-to-green.",
+          "8": "Every semantic assertion includes the ownership scenario; named admission/return expectations identify blocked stage. Exact enum/detail/request assertions preserve cause.",
+          "9": "Focused baseline failure, corrected focused repetitions and owning app suite required; retry neighbors and independent source review retained separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises the confirmed stale-completion boundary with a newer upload held; preserves successful current-operation completion."
+        }
+      },
+      "execution": "Initial baseline failed as expected; first corrected focused run passed. Final commit validation and independent review pending."
     }
   ],
   "decisionCounts": {
@@ -49516,5 +49544,21 @@
     ],
     "status": "unresolved; no startup oracle has been replaced by a later seek",
     "remaining_scope": "These seven source-reviewed neighboring startup assertions are explicitly open; this is not a repository-wide playback-clock reconciliation."
+  },
+  "coverInitialSaveOwnership": {
+    "baseline": "90e12073c39480e06d578c8996a28dabd2cf860a",
+    "scope": "One new four-scenario app test plus shared initial/retry editor ownership; historical audit counts above are retained baseline counts, not a new repository-wide acceptance claim.",
+    "rules": {
+      "1": "Held old invalidation, retired editor ownership, held newer upload, then old completion: newer saving state/account/selection/detail must survive; newer completion alone publishes saved; two exact account-scoped upload payloads required.",
+      "2": "Register entry and return expectations before tasks; actual invalidation/upload admission and caller return establish ordering. No sleep or guessed yield.",
+      "3": "N/A: editor state, no playback position/clock assertion.",
+      "4": "No throwing operation or early return after callers start. Both gates are released on every assertion-failure path. Caller return is bounded by three-second XCTest expectations and an observed completion Bool before task.value; unconfirmed tasks are cancelled rather than awaited indefinitely.",
+      "5": "Fresh model, fake service, accounts and gates per reset/account-switch/account-round-trip/selection scenario; only synthetic identifiers and bytes.",
+      "6": "Real app-model ownership with controlled in-memory service and injected invalidation; no server, system-artwork or physical-device claim.",
+      "7": "One expected-failing run against 90e1207 retained; assertion saved != saving confirms finding. No budget increase, suppression or retry-to-green.",
+      "8": "Every semantic assertion includes the ownership scenario; named admission/return expectations identify blocked stage. Exact enum/detail/request assertions preserve cause.",
+      "9": "Focused baseline failure, corrected focused repetitions and owning app suite required; retry neighbors and independent source review retained separately."
+    },
+    "evidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership"
   }
 }
