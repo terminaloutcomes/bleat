@@ -468,3 +468,77 @@ BleatAppTests/AppModelTests/testPlaybackStartExcludesIncompleteAndUsesAutomaticC
 exact identities, retained bundles and signed inventory. Private raw logs remain
 local. Original failed CI bundle stays under `.build/i408-failed-ci-smoke`.
 Fresh changed-head CI and independent review remain required before merge.
+
+## Independent native startup-position oracles (#374)
+
+The seven identifiers in `app.json`'s `startupClockNeighborReview` previously
+sampled `currentTime` after startup had called `play()`. Their original seek is
+now observed at the existing awaited `openPlayback` completion diagnostic,
+before playback is requested. The file-local recorder copies the snapshot while
+the model is ready, native rate is zero and time-control status is paused. It
+owns no tasks, continuations or player controls and issues no corrective seek.
+
+The read-only `PlaybackRuntimeSnapshotForTesting` adds actual AVPlayerItem time
+plus its registered track offset. Every original target and precision is
+retained, including the second-track whole-book position and the automatic-cache
+case's 0.05-second tolerance. Each test requires one completion snapshot and
+checks both model and independent native position. A caller-located three-second
+condition wait observes the existing completed-play diagnostic, which follows
+the native play request; unlike post-return intent sampling, this evidence
+survives a short fixture naturally ending. It does not establish audible progress.
+
+Native seek, queue planning, playback scheduling, production diagnostics and
+cancellation contracts are unchanged. Original typed source, account,
+persistence, track-index, request-count and navigation assertions remain. The
+relaunch scenario retains the earlier seek that creates its saved checkpoint;
+the new oracle observes only the relaunched player's original startup. The
+automatic-cache case preserves the held remote response and original
+started-before-network assertion. The other 498 AppModel test bodies and all
+other app audit/navigation records are unchanged. Aggregate decisions reflect
+only the seven follow-up-to-keep transitions; historical assessments remain
+linked to their baseline.
+
+Validation on m2, Xcode 27.1 / Swift 6.4, iPhone 17 Pro iOS 26.5 Simulator:
+
+- Supported `scripts/xctest.sh` with each exact selector: **1/1 x3 for each of
+  seven identities**, retained in `i374-startup-final-focus-*` result bundles.
+- Owning `AppModelTests`: **505/505**. After all mutations, the restored full
+  `BleatAppTests` target passed **608/608**, including all seven corrected cases.
+  Every successful app bundle has zero failures, skips, expected failures and
+  structured runtime warnings; built discovery is verified by the runner.
+- Signed `scripts/test-host.sh`: **606/606** exact host inventory, zero
+  failures/errors/skips. XML aliases are not added together. This is separate
+  signed-Keychain evidence, not a macOS application or device run.
+- Replacing the original native queue seek with zero independently failed each
+  of the seven native-position oracles while model targets stayed unchanged.
+  Omitting startup play separately failed the bounded completed-play witness.
+  All eight were ordinary executed assertion failures, without supervisor
+  timeout. Application bytes were restored exactly before the 608-pass gate.
+- Final lint required naming the existing condition closure argument explicitly
+  instead of trailing-closure syntax. An exact whole-file transformation check
+  confirms no predicate, argument, budget or assertion change. The 21 focused,
+  505 owning and eight mutation outcomes precede that syntax-only correction;
+  the full 608-case app suite is rerun on the final text. Both source hashes
+  and bundles are retained separately.
+- Strict Swift lint, docs, source/audit scope and diff verification are retained
+  in `.build/i374-startup-verification.json` and its referenced artifacts.
+
+Earlier attempts remain separate: the multi-selector wrapper command rejected
+its arguments before execution; a preliminary case and intermediate 21 focused /
+505 owning passes preceded the stable completed-play witness. One final-source
+attempt failed before test launch with Simulator preflight `Busy`; the owned
+device was confirmed shutdown, booted explicitly and awaited through
+`simctl bootstatus -b` before a fresh sequence. The first mutation's expected
+native-position failure was initially rejected by an artifact check naming
+`XCTAssertEqual` instead of `XCTAssertEqualWithAccuracy`; only the artifact check
+was corrected, reusing that failure without another test invocation.
+
+Existing SDK build-version parsing diagnostics remain in raw app logs. Signed
+host logs retain the upstream watchOS deprecation, an unrelated optional-Bool
+`#require` ambiguity warning (followed by its explicit Boolean expectation),
+read-only SwiftData diagnostics and three intentional cleanup known issues.
+No warning suppression or blind retry was added. Fresh exact-head CI and
+independent review remain required. Broader #362/#369/#374 lifecycle, native
+worker/callback/timeout-observer drainage, live and physical-device/configuration
+acceptance remains open. The separately tracked fourteen missing audit entries
+are not repaired or claimed complete by this startup slice.
