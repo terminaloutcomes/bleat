@@ -24,6 +24,7 @@ struct PlaybackRuntimeSnapshotForTesting {
     let timeControlStatus: AVPlayer.TimeControlStatus?
     let playerRate: Float
     let wholeBookPosition: Double
+    let nativeWholeBookPosition: Double?
     let duration: Double
 }
 
@@ -517,6 +518,13 @@ final class PlaybackModel {
             timeControlStatus: player?.timeControlStatus,
             playerRate: player?.rate ?? 0,
             wholeBookPosition: currentTime,
+            nativeWholeBookPosition: (player?.currentItem).flatMap { item in
+                guard let offset = offsetsByItem[ObjectIdentifier(item)] else {
+                    return nil
+                }
+                let seconds = item.currentTime().seconds
+                return seconds.isFinite ? offset + seconds : nil
+            },
             duration: duration
         )
     }
