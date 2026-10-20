@@ -659,7 +659,7 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testTranscriptDeletionPreservesDownloadAndActivePlayback",
-      "line": 3704,
+      "line": 3757,
       "language": "swift"
     },
     {
@@ -5807,109 +5807,121 @@
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testSystemBrowserFactoryMapsProviderCompletions",
-      "line": 36,
+      "line": 43,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testSystemBrowserSessionCompletesAndConfiguresSession",
-      "line": 97,
+      "line": 104,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testSystemBrowserSessionRejectsMissingPresentationAnchor",
-      "line": 141,
+      "line": 148,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testSystemBrowserSessionMapsCancellationAndFailure",
-      "line": 167,
+      "line": 174,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testSystemBrowserSessionRejectsASecondActiveSession",
-      "line": 202,
+      "line": 209,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testPKCEUsesRFC7636ChallengeAndSecureShapes",
-      "line": 242,
+      "line": 282,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testPKCERandomFailureRemainsTyped",
-      "line": 274,
+      "line": 314,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testCallbackURLValidation",
-      "line": 305,
+      "line": 345,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testCallbackRequiresExactURLStateAndCode",
-      "line": 343,
+      "line": 383,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testCompleteCookieBoundFlowValidatesThenPersists",
-      "line": 417,
+      "line": 457,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testBeginRejectsInvalidResponsesAndCleansUp",
-      "line": 513,
+      "line": 553,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testBrowserCancellationAndFailureCleanUp",
-      "line": 572,
+      "line": 612,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testInvalidBrowserCallbacksNeverReachExchange",
-      "line": 629,
+      "line": 669,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testCallbackWithoutCodeNeverReachesExchange",
-      "line": 688,
+      "line": 728,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testConcurrentAttemptIsRejectedWithoutDisturbingActiveFlow",
-      "line": 718,
+      "line": 758,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testExchangeFailuresNeverPersistAndAlwaysCleanUp",
-      "line": 772,
+      "line": 859,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testAuthorizationAndPersistenceFailuresRemainTyped",
-      "line": 849,
+      "line": 936,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testInvalidAccountDoesNotTouchAttemptOrCookies",
-      "line": 930,
+      "line": 1017,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+      "name": "testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
+      "line": 1045,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+      "name": "testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers",
+      "line": 1076,
       "language": "swift"
     },
     {

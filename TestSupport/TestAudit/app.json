@@ -6616,8 +6616,8 @@
       "identifier": "AppModelTests/testTranscriptDeletionPreservesDownloadAndActivePlayback",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 3700,
-        "endLineBeforeNextTest": 3791
+        "line": 3757,
+        "endLineBeforeNextTest": 3897
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -6628,90 +6628,181 @@
       ],
       "actions": [
         {
-          "line": 3710,
+          "line": 3765,
           "expression": "defer { try? FileManager.default.removeItem(at: root) }"
         },
         {
-          "line": 3750,
+          "line": 3785,
+          "expression": "try await prepareCompleteDownload("
+        },
+        {
+          "line": 3805,
           "expression": "await appModel.start()"
         },
         {
-          "line": 3751,
+          "line": 3806,
           "expression": "let playbackOutcome = await appModel.startPlayback("
         },
         {
-          "line": 3756,
+          "line": 3811,
           "expression": "appModel.playback.pause()"
         },
         {
-          "line": 3762,
+          "line": 3812,
+          "expression": "await assertEventually("
+        },
+        {
+          "line": 3825,
+          "expression": "await appModel.playback.stop()"
+        },
+        {
+          "line": 3830,
+          "expression": "await appModel.playback.seek(to: 0.5)"
+        },
+        {
+          "line": 3841,
+          "expression": "await appModel.playback.stop()"
+        },
+        {
+          "line": 3844,
+          "expression": "let playbackPositionBeforeDeletion = appModel.playback.currentTime"
+        },
+        {
+          "line": 3849,
           "expression": "await coordinator.loadCachedTranscripts("
         },
         {
-          "line": 3768,
+          "line": 3855,
           "expression": "let deleted = await coordinator.deleteLocalData("
         },
         {
-          "line": 3791,
+          "line": 3882,
+          "expression": "appModel.playback.play()"
+        },
+        {
+          "line": 3883,
+          "expression": "await assertEventually("
+        },
+        {
+          "line": 3895,
           "expression": "await appModel.playback.stop()"
         }
       ],
       "assertions": [
         {
-          "line": 3774,
+          "line": 3831,
+          "expression": "XCTAssertEqual(appModel.playback.state, .paused)"
+        },
+        {
+          "line": 3832,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 3834,
+          "expression": "XCTAssertFalse(appModel.playback.isPlaybackRequested)"
+        },
+        {
+          "line": 3835,
+          "expression": "XCTAssertEqual(appModel.playback.currentTime, 0.5, accuracy: 0.01)"
+        },
+        {
+          "line": 3861,
           "expression": "XCTAssertEqual(playbackOutcome, .started(source: .downloaded))"
         },
         {
-          "line": 3775,
+          "line": 3862,
           "expression": "XCTAssertTrue(deleted)"
         },
         {
-          "line": 3776,
+          "line": 3863,
           "expression": "XCTAssertTrue(appModel.playback.hasActiveBook)"
         },
         {
-          "line": 3777,
+          "line": 3864,
           "expression": "XCTAssertEqual(appModel.playback.accountID, account.id)"
         },
         {
-          "line": 3778,
+          "line": 3865,
           "expression": "XCTAssertEqual(appModel.playback.itemID, detail.id)"
         },
         {
-          "line": 3779,
+          "line": 3866,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 3784,
+          "line": 3871,
           "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 3878,
+          "expression": "XCTAssertEqual(appModel.playback.state, .paused)"
+        },
+        {
+          "line": 3879,
+          "expression": "XCTAssertEqual("
+        },
+        {
+          "line": 3881,
+          "expression": "XCTAssertFalse(appModel.playback.isPlaybackRequested)"
         }
       ],
-      "synchronizationEvidence": [],
+      "synchronizationEvidence": [
+        {
+          "line": 3812,
+          "expression": "await assertEventually("
+        },
+        {
+          "line": 3830,
+          "expression": "await appModel.playback.seek(to: 0.5)"
+        },
+        {
+          "line": 3883,
+          "expression": "await assertEventually("
+        }
+      ],
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "Deleting transcript data leaves verified downloaded playback active at same paused position and retains download record.",
-        "purpose": "Unique temp root with complete downloaded fixture; cached transcript; local playback model.",
+        "intendedBehavior": "Deleting transcript data preserves the downloaded active book,account/item identity,verified paused position and download record,and playback can still resume afterward.",
+        "purpose": "Fresh complete downloaded media and transcript in a unique root;real AVFoundation player with in-process service/transcription fixtures.",
         "actionPostconditions": [
           {
-            "action": "Start downloaded playback at 0.5 and pause",
-            "postcondition": "stop."
+            "action": "Start downloaded playback,pause,and observe paused state/native rate zero within3seconds",
+            "postcondition": "Guard readiness failure and stop playback before fixture removal;no snapshot is taken from an unconfirmed pause."
+          },
+          {
+            "action": "Await explicit paused seek to0.5,then capture position/download snapshot",
+            "postcondition": "Typed paused state,zero native rate,no playing intent and0.5within original0.01 precision;completed seek is setup for deletion invariance,not initial-position forwarding."
+          },
+          {
+            "action": "Load/delete cached transcript data",
+            "postcondition": "All original started/deleted/active book/account/item/position/download assertions remain;unchanged0.01 position tolerance and download record equality."
+          },
+          {
+            "action": "Resume playback after deletion",
+            "postcondition": "Bound actual playing state,requested intent,native positive rate and playing time-control status;then await stop."
           }
         ],
-        "timeoutAndToleranceRationale": "Position asserted after explicit pause with 0.01s tolerance; transcript and playback actions awaited.",
+        "timeoutAndToleranceRationale": "Two3-second bounded state/rate observations use existing assertEventually with playbackDiagnostic. Existing async seek provides completion boundary before sampling. Position tolerance stays0.01 for a paused deletion invariant;no readiness sleep or widened tolerance. No exact numeric position is asserted while resumed playback advances.",
         "ruleAssessments": {
-          "1": "Start downloaded playback at 0.5 and pause; capture position/record; load/delete transcript; assert started/deleted, identity and position unchanged, download record equal; stop.",
-          "2": "Position asserted after explicit pause with 0.01s tolerance; transcript and playback actions awaited.",
-          "3": "Playback timing is N/A unless the intended behavior explicitly covers overlapping playback; where position is asserted, playback is paused first and the explicit tolerance is noted.",
-          "4": "All async operations/tasks are joined and gate cleanup is explicit on success; unresolved synchronization/cleanup is recorded as follow-up.",
-          "5": "Temp root removed.",
-          "6": "Uses deterministic fixtures and in-process AppModel/transcriber/service fakes. The iOS memory-warning case invokes the real notification boundary but not physical memory pressure.",
-          "7": "No retry-to-green or assertion removal; any wait weakness is captured as follow-up.",
-          "8": "Position asserted after explicit pause with 0.01s tolerance; transcript and playback actions awaited.",
-          "9": "Source-reviewed; owning Xcode execution/repetition evidence is pending."
+          "1": "All original semantic postconditions retained,plus confirmed paused/native-rate state,completed seek result and actual resumability after deletion.",
+          "2": "Bound/assert native paused state and rate,guard failure before dependent work;await seek and assert its semantic result before snapshot. Bound resumed real-player state/rate/time-control with diagnostics.",
+          "3": "Pause and completed seek establish stable snapshot for exact position preservation;resume occurs after numeric assertions and has state/rate checks only. This is not an initial-position forwarding oracle;seven unrelated startup oracles remain untouched.",
+          "4": "Stop playback on either new guard exit and at normal completion,before deferred temp-root deletion. No new tasks or global resources. Existing async transcript operations remain awaited.",
+          "5": "Fresh unique directory,download/account/item fixtures and test service per execution;no reliance on previous cleanup.",
+          "6": "Real AVFoundation playback on an owned Simulator with file-backed fixtures;not a live provider or physical-device route/background claim.",
+          "7": "Original CI failure at2f03cca is retained. No tolerance expansion,skip,dropped assertion or retry-to-green. Negative position mutation is checked separately.",
+          "8": "Named pause/resume phases retain caller location,elapsed/budget and playbackDiagnostic;original exact identity/position/download assertions remain.",
+          "9": "Focused independent repetitions,owning AppModel suite,restored source,negative mutation and exact final-head CI are retained separately."
         },
         "decision": {
           "outcome": "keep",
-          "reason": "The scenario has a controlled fixture and action-specific semantic postconditions."
+          "reason": "Source-reviewed correction establishes a completed paused baseline without weakening deletion/active-book assertions,and independently verifies downloaded playback can resume."
+        },
+        "ciCorrection": {
+          "failed_head": "2f03ccab33452fa03df91179c2feba3f8895da0d",
+          "observed": "0.519404209 versus pre-deletion0.5,+/-0.01",
+          "cause_boundary": "Immediate model snapshot after pause did not await a settled pause/seek;timing diagnosis,not proof transcript deletion moves playback.",
+          "scope": "One existing test;seven startup-clock oracles and production playback unchanged."
         }
       }
     },

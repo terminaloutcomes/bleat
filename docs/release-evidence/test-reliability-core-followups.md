@@ -2010,3 +2010,203 @@ This change remains local, with no push, new PR, issue comment, merge or CI
 acceptance claim. Final evidence-only documentation changes preserve the tested
 Swift bytes. Simulator launch and dependency registry verification remain open;
 broader #362/#372 and framework/device acceptance remain separate.
+
+## OpenID caller outcomes and private fixture retirement (issue #372)
+
+Two active-session/concurrent-attempt tests used `async let` for their original
+calls and awaited competing rejection probes inline. A missing callback could
+therefore hang either the direct probe, the final original outcome, or implicit
+structured-child cleanup after a failed readiness guard. Entry signals were
+already bounded; their older unbounded/yield descriptions were stale.
+
+Both original and rejection callers now own actual `Result` tasks and independent
+five-second terminal counters emitted only after the real browser/coordinator API
+returns or throws. Rejection must complete while the original browser remains
+held. Readiness and positive registration are guarded; task values are consumed
+only after a terminal witness. Awaited `withTestCleanup` cancels every started
+handle, retires fixture state on normal/guard/throwing exits, and bounds actual
+completion before joins. Failed observations never join unknown results.
+
+Private `OpenIDWebSessionFactory` retains retirement before late session creation;
+each session also retains it before `start()`. Retirement delivers the existing
+typed cancellation callback to every waiting session. Admission is recorded in
+the session array before start/signal delivery. `OpenIDBrowserGate` records entry
+before awaiting its signal, collects all continuation waiters, latches its first
+failure before detaching/resuming every waiter, and preserves that failure across
+repeated conflicting release and late calls. No production cancellation or
+browser lifecycle contract changes.
+
+Two new four-scenario contracts cross retirement before entry/after both positive
+registrations and cancellation/normal caller state. Each owns two simultaneous
+browser calls and a third late call, bounds their actual typed `.cancelled`
+outcomes, repeats retirement and checks three admissions plus zero pending
+fixture state. Task cancellation is a separate stimulus; explicit fixture
+retirement supplies cancellation callbacks. Cancellation alone is not claimed
+to terminate native browser work.
+
+Completed fake web-session objects remain retained for synthetic late callback
+delivery. Conflicting callbacks are delivered only after actual native API
+completion, without assuming main-actor Task FIFO ordering. This does not prove
+those internal callback Tasks have exited. The gate's conflicting first-failure
+behavior is independently checked through a fresh late caller. Test-owned caller
+return and zero pending fixture state do not establish whole AppAuth/native or
+private-worker/timeout-observer drainage. Those stronger per-owner lifecycle
+requirements remain for a separately scoped design; existing async lifecycle
+boundaries should be used where they already expose the needed completion.
+
+Original typed `.alreadyActive`, `.cancelled`, `.attemptAlreadyInProgress` and
+`.browserCancelled` assertions remain, as do two cookie clears, one request and
+nil coordinator attempt. Added exact admission/pending counts establish that the
+original flow remains held through the rejection. All seventeen neighboring test
+bodies are unchanged, including three real off-main callback-adapter variants
+and completion/refusal-start behavior. The already-bounded off-main adapter's
+stale audit label is not an implementation finding fixed by this slice.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused serial runs: **4/4 exact function identities each**;
+  both helper identities execute all four parameter scenarios. Owning
+  `OpenIDAuthenticationTests`: **21/21**; restored focus: **4/4**. Zero
+  failures/errors/skips in every final run.
+- Complete supported signed host gate: **605/605** exact inventory identities,
+  zero failures/errors/skips, including synchronizable Keychain. Combined and
+  per-target XML aliases reconcile without double counting.
+- Six expected-failing mutations are killed at required executed observations:
+  omitted original/probe terminal witnesses, omitted factory/gate retirement
+  latches and both production overlap rejection guards. No hang or continuation
+  trap; production/test bytes are restored exactly after each attempt.
+- Strict Swift lint, docs, all original semantic postconditions, seventeen
+  unchanged neighboring tests, source/audit scope and production-byte checks pass.
+  Existing dependency deployment warnings, three declared fixture-cleanup known
+  issues and intentional read-only SwiftData diagnostics remain visible.
+
+Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter` selecting the two original and two helper
+identities; reports use `.build/i415-compat-focused-{1,2,3}`. Owning selection is
+`OpenIDAuthenticationTests`, reports `i415-compat-owning`; restored focus uses
+`i415-compat-restored`. Signed command is `mise exec -- ./scripts/test-host.sh`,
+retained XML `.build/i415-compat-signed-results`. Exact verification/mutation
+manifests are `.build/i415-compat-verification.json` and
+`.build/i415-compat-mutations.json`; raw logs remain private.
+
+Two preliminary compile-only attempts failed at main-actor/global assertion
+closure isolation without running tests; the corrected preliminary owner passed
+21 identities separately from final repetitions. Two added function identities
+bring host inventory to **605**, source index to **1,591** and core audit to
+**601**. Only the two selected dispositions, two helper records and changed-file
+navigation/inventory/evidence change. Fresh exact-head CI and independent review
+are required. Broader #372/#362 acceptance, whole private-worker/timeout-observer
+drainage, seven app startup clock oracles and separate cover work remain open.
+
+
+### Swift 6.3.3 task-capture compatibility correction
+
+Published head `2f03cca` passed local Swift 6.4 / Xcode 27.1 validation but failed
+CI host compilation under Swift 6.3.3 / Xcode 26.6 (`17F113`): the region-based
+isolation checker could not check the new `firstAttempt = Task` pattern. No Swift
+host tests ran and no host XML artifact was produced. This is retained failure
+evidence, not a passing unsigned lane.
+
+The corrected concurrent-attempt test snapshots the same immutable `Sendable`
+callback URL before either task, rather than accessing dynamic `Self` metadata
+inside nested sending closures. Both tasks now have explicit result types and
+capture lists of their immutable values/actors. They retain inherited task
+isolation/context; no detached task, reduced isolation checking, changed CI
+compiler, new timeout or assertion change is introduced. Production bytes and
+all seventeen neighboring test bodies remain unchanged. Host inventory/discovery
+identities remain 605/21; only changed-file navigation and the corrected record
+are refreshed.
+
+The revised m2 lane uses the same full focus/repetition/owner/signed/restored and
+six-mutation checks above, with `i415-compat-` artifact names. The local machine
+has only Xcode 27.1 / Swift 6.4; Swift 6.3.3 is unavailable locally, so its result
+must come from fresh exact-head CI. Initial `i372-openid-` local evidence remains
+tied to the earlier source hash and is not substituted for compatibility proof.
+
+The same earlier CI run also recorded an unchanged app failure in
+`testTranscriptDeletionPreservesDownloadAndActivePlayback`: current position
+0.519404209 differed from the pre-deletion 0.5 snapshot beyond 0.01. Its bundle
+reports 609 passes, one failure and zero skips. That test calls `pause()` then
+immediately captures the model's position before awaited transcript operations;
+it does not establish a settled pause/seek observation. This is a separate timing
+hypothesis, not proof transcript deletion moves playback. That OpenID-only correction made no app-test or
+production playback edit. The separately authorized correction below confirms
+paused state/native rate zero, awaits an explicit paused seek, then captures the
+baseline and retain every original deletion/download/account/item/position
+postcondition and the same tolerance. Such a seek establishes a deletion
+invariant, not initial-position forwarding; independent startup oracles remain
+required. Neither a source correction nor a later passing run erases this
+recorded failure. Full CI must not be described as green while any failure
+remains.
+
+## Transcript deletion playback-position stability correction
+
+CI run `39387568129` at `2f03cca` recorded one unchanged app failure:
+`testTranscriptDeletionPreservesDownloadAndActivePlayback` sampled
+0.519404209 after transcript deletion against a pre-deletion 0.5 snapshot, with
+its unchanged 0.01 tolerance. Calling `pause()` alone did not establish a
+completed position-observation boundary before that immediate snapshot. The
+failure remains retained; it is not evidence that transcript deletion itself
+moves playback. No other task or open PR owned this test when the correction
+started.
+
+The existing test now bounds and asserts paused state/native rate zero with the
+existing diagnostic waiter, guards a changed observation with an explicit failure
+and awaited stop, then awaits the existing async seek to 0.5. It asserts paused
+state, zero rate, no playing intent and the completed seek result before capturing
+the baseline. Both new guard exits stop playback before deferred fixture removal.
+All original started/deleted/active-book/account/item/position/download-record
+assertions remain, with the same 0.01 precision. After those paused invariants,
+the test resumes playback and bounds actual playing state, requested intent,
+positive native rate and playing time-control status before stopping. Active
+playback coverage therefore includes real resumability after deletion, rather
+than only a retained model flag. No numeric position is asserted while that
+resumed clock advances.
+
+The explicit seek establishes a deletion-preservation invariant. It is not proof
+of initial-position forwarding. All seven separately recorded startup oracles,
+every other test body, production playback/authentication and test identities
+remain unchanged. Only this app audit disposition and the changed method's navigation
+are refreshed; no broad tracker reconciliation or new test is claimed.
+
+Validation uses the supported `scripts/xctest.sh` discovery/result gate on an
+owned iPhone 17 Pro Simulator running iOS 26.5, with Xcode 27.1 / Swift 6.4:
+
+- Final source passes three independent focused runs, **1/1 each**, the owning
+  `AppModelTests` suite **505/505**, and restored-source focus **1/1**. Every run
+  has zero failures, expected failures, skips or structured runtime warnings,
+  and the canonical runner verifies exact built discovery.
+- One expected-failing mutation performs a completed seek to 0.75 after deletion.
+  The original position-preservation assertion rejects 0.75 versus the 0.5
+  baseline using the unchanged tolerance. The outcome is an ordinary single
+  test failure, not a compile failure, hang or crash. Exact final source bytes
+  are restored before the final focused run.
+- After integrating already-merged #414 (`d9c7dcc`), the signed host gate passes
+  **606/606** exact identities with zero failures/errors/skips. The OpenID
+  source hash remains the independently repeated/six-mutation-checked capture
+  correction. CI `39392756147` at intermediate head `80c722e` separately confirms
+  Swift 6.3.3 / Xcode 26.6 compilation and execution: **605 passes plus only the
+  documented unsigned Keychain skip**, including both affected original cases
+  and both four-scenario contracts. That head does not include this app fix and
+  is not final-head CI evidence.
+- Strict Swift lint/docs, preservation of every original assertion and all other
+  app test bodies, unchanged startup-oracle records, and single-disposition/targeted
+  method navigation scope are verified. Raw Xcode SDK build-version parser
+  diagnostics remain in local logs; structured runtime-warning arrays are empty.
+  Existing host dependency warnings, three declared fixture-cleanup known issues
+  and intentional read-only SwiftData diagnostics remain separate.
+
+A preliminary source passed a focused preflight, three repetitions and the owner
+suite before adding the explicit diagnostic to a guard exit. Those bundles are
+retained separately; final-source results use `i415-transcript-final-` prefixes.
+The final command selects
+`BleatAppTests/AppModelTests/testTranscriptDeletionPreservesDownloadAndActivePlayback`
+(or owning `BleatAppTests/AppModelTests`) with `mise exec -- ./scripts/xctest.sh
+-s Bleat -d <owned Simulator destination> -t <selector> -r <result bundle>`.
+Final bundles/logs use `.build/i415-transcript-final-{focused-1,focused-2,focused-3,owning}`;
+the restored bundle uses `.build/i415-transcript-restored.xcresult`. Mutation
+artifacts use `.build/i415-transcript-position-mutation`, and verification is
+`.build/i415-transcript-verification.json`. Integrated signed XML is retained in
+`.build/i415-integrated-signed-results`. The owned Simulator is separate from the
+existing cover/auth-join/user devices; no global reset or process termination is
+used. Final-head CI and independent review are still required before any merge.

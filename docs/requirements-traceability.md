@@ -811,3 +811,24 @@ controls late recovery after retirement. It preserves typed rejection and token
 provenance assertions, bounds caller outcomes, and retires its private observation
 and fake waiters. Authentication semantics and broader lifecycle acceptance are
 unchanged; validation evidence is recorded with the local candidate.
+
+The [OpenID caller lifecycle slice](release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372)
+bounds original and competing calls in two active-session/concurrent-attempt
+cases while preserving callback/session/cancellation errors and account cleanup.
+Private fixture retirement covers existing and late arrivals, with two four-case
+contracts. Production lifecycle contracts are unchanged; whole retired-worker,
+timeout-observer and internal callback-task drainage remain separately scoped.
+
+The OpenID compatibility correction captures immutable callback arguments before
+explicitly typed tasks, preserving inherited isolation and lifecycle assertions.
+Swift 6.3.3 CI compilation must be verified separately from local Swift 6.4
+execution. The earlier transcript-deletion timing failure remains recorded; its separate
+app-test correction is described below.
+
+The [transcript-deletion playback stability correction](release-evidence/test-reliability-core-followups.md#transcript-deletion-playback-position-stability-correction)
+retains the APP-TRANSCRIPTION-001 deletion/download/active-book assertions with
+the same position precision. A confirmed paused player and completed seek define
+the pre-deletion baseline, followed by actual playback resumption after deletion.
+This is not an initial-position forwarding oracle; the seven separately recorded
+startup-oracle requirements remain unchanged. The app correction is a separate
+commit from the OpenID compiler compatibility change.
