@@ -1937,3 +1937,76 @@ failures are excluded from coverage. Corrected preflight passed 14 identities.
 Three new function identities bring host inventory to **603**, source index to
 **1,589** and core audit to **599**. Fresh revised-head CI and independent
 re-review are required; broader #372/#362 acceptance remains open.
+
+
+## Refresh join admission and late-arrival provenance
+
+`AuthenticatedRequestTests.testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh`
+previously created its joiner task and released the originator gates without
+observing join admission. Main CI and the cover PR CI both reported a successful
+joiner where the test expected `refreshRejected`. Caller-completion bounds did
+not establish the earlier admission condition.
+
+The coordinator now has an internal, optional, nonblocking native stream
+observation immediately after capturing an existing attempt. Its value carries
+only account and attempt identity, with no credential values. It adds no public
+API, authentication decision, request, error translation or suspension point.
+The observation is unset in ordinary operation. The test registers it before
+starting callers and requires the matching attempt before releasing either
+originator gate. Both original typed errors, originating rejected-token
+provenance, cached original-token rejection and one-refresh assertion remain.
+
+`testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance` independently
+drives the originator to completion and confirms attempt retirement before
+starting the late caller. Both argument cases are required: matching provenance
+uses the cached typed rejection; a different rejected token uses the newer store
+value. Both retain the originating completed record and issue no new refresh or
+HTTP retry. This keeps the late-arrival control separate from the admitted-join
+contract.
+
+File-private callers retain their exact API results, use the existing ten-second
+completion failure budget, then drain owned tasks. Cleanup cancels callers, opens
+all fake latches, removes the observation and finishes/drains its stream on
+normal, throwing and early-return exits. Cancellation alone is never proof of
+completion. Fresh in-memory state is constructed per test/argument; no sleeps or
+guessed yields establish ordering. The inventory adds one identity, and the
+scoped audit records all nine rules.
+
+Validation on source commit `9ae4087a8a381ed07840475f4ed537b3a1158b43`:
+
+- Three independent serial focused repetitions each passed **2/2 exact function
+  identities** and all **three argument cases**, with zero failures/errors/skips.
+  The initial focused pass is retained separately. The owning suite passed
+  **26/26**.
+- Complete unsigned host verification passed **603**, with one expected
+  synchronizable-Keychain skip; complete signed host verification passed
+  **604/604**, zero failures/errors/skips. Both XML inventories match exactly.
+- Strict Swift lint and documentation validation passed. Aggregate formatting
+  left the worktree unchanged. Changed Swift source hashes match the tested
+  commit after the aggregate and focused repetitions.
+- `mise run check` exited **1**. It completed site/documentation/schema checks,
+  Rust checks/tests, telemetry integration, signed host tests, Swift Release and
+  paid developer builds. Its app runner discovered **608** identities but
+  executed **zero** app tests: the isolated Simulator failed to launch Bleat,
+  with SpringBoard `Busy / Application failed preflight checks`. The result
+  bundle records one runner failure. No rerun or global Simulator cleanup was
+  performed; core live, app live and subsequent UI execution were not reached.
+- The aggregate dependency audit also reported a registry timeout while checking
+  yanked crates, despite its task finishing successfully. That check is
+  **unverified**, not a clean security result. Existing dependency deployment,
+  Swift Testing macro and SDK build-version warnings, three declared fixture
+  cleanup known issues and intentional read-only SwiftData diagnostics remain
+  visible; no suppression was added.
+
+Focused artifacts use `.build/auth-join-repeat-{1,2,3}.{xml,log}`; owning evidence
+uses `.build/auth-join-owning.{xml,log}`. Preserved complete host XML is in
+`.build/auth-join-unsigned-results` and `.build/auth-join-signed-results`.
+Aggregate log, failed app summary and exact source/inventory verification are
+`.build/auth-join-aggregate.log`,
+`.build/auth-join-aggregate-app-summary.json` and
+`.build/auth-join-verification.json`. Raw artifacts remain local.
+
+This change remains local, with no push, new PR, issue comment, merge or CI
+acceptance claim. Final evidence-only documentation changes preserve the tested
+Swift bytes. Simulator launch and dependency registry verification remain open;
+broader #362/#372 and framework/device acceptance remain separate.

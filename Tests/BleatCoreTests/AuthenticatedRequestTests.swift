@@ -374,122 +374,179 @@ final class AuthenticatedRequestTests {
     func testJoinerRecordsOriginatorRejectedTokenInCompletedRefresh()
         async throws
     {
-        let accountID = AccountID(rawValue: "originator-token")
-        let server = try NormalizedServerURL("https://example.com")
-        let oldTokens = try AuthenticationTokens(
-            accessToken: "old-access",
-            refreshToken: "old-refresh"
-        )
-        let midTokens = try AuthenticationTokens(
-            accessToken: "mid-access",
-            refreshToken: "mid-refresh"
-        )
-        let finalTokens = try AuthenticationTokens(
-            accessToken: "final-access",
-            refreshToken: "final-refresh"
-        )
-        let store = RequestCredentialStore(
-            credentials: [accountID: oldTokens]
-        )
-        let transport = GatedMidFlightRefreshTransport(
-            store: store,
-            accountID: accountID,
-            midTokens: midTokens,
-            finalTokens: finalTokens,
-            refreshSucceeds: false
-        )
-        let coordinator = AuthCoordinator(
-            transport: transport,
-            credentialStore: store
-        )
-        let request = try Self.request(for: .libraries, server: server)
-
-        let returnedA = AuthTelemetryTestCompletion<Bool>()
-        let returnedB = AuthTelemetryTestCompletion<Bool>()
-
-        let taskA = Task { () -> HTTPResponse in
-            do {
-                let value = try await coordinator.sendAuthenticated(
-                    request,
-                    route: .libraries,
-                    accountID: accountID,
-                    server: server
-                )
-                await returnedA.complete(true)
-                return value
-            } catch {
-                await returnedA.complete(true)
-                throw error
+        let fixture = try RejectedRefreshFixture(account: "originator-token")
+        let coordinator = fixture.coordinator
+        let transport = fixture.transport
+        let accountID = fixture.accountID
+        let request = try Self.request(for: .libraries, server: fixture.server)
+        let (joins, continuation) = AsyncStream<RefreshJoinObservation>
+            .makeStream(
+                bufferingPolicy: .bufferingNewest(1))
+        await coordinator.setRefreshJoinObservation(continuation)
+        let observation = RefreshTestCaller {
+            var iterator = joins.makeAsyncIterator()
+            return await iterator.next()
+        }
+        let originator = RefreshTestCaller {
+            try await coordinator.sendAuthenticated(
+                request, route: .libraries, accountID: accountID,
+                server: fixture.server)
+        }
+        try await withTestCleanup {
+            originator.cancel()
+            await transport.releaseAllGates()
+            await coordinator.setRefreshJoinObservation(nil)
+            continuation.finish()
+            await originator.drain(stage: "originator cleanup")
+            observation.cancel()
+            await observation.drain(stage: "join observation cleanup")
+        } operation: {
+            guard await transport.waitUntilRefreshStarted() else { return }
+            let activeID = await coordinator.refreshAttempts[accountID]?.id
+            let attemptID = try #require(activeID)
+            let joiner = RefreshTestCaller {
+                try await coordinator.recoverAccessToken(
+                    for: accountID, server: fixture.server,
+                    rejectedAccessToken: "other-token")
+            }
+            try await withTestCleanup {
+                joiner.cancel()
+                await transport.releaseAllGates()
+                await joiner.drain(stage: "joiner cleanup")
+            } operation: {
+                guard
+                    let observed = await observation.result(
+                        stage: "joiner admitted to originator refresh")
+                else { return }
+                let joined = try observed.get()
+                let admission = try #require(joined)
+                #expect(admission.accountID == accountID)
+                #expect(admission.attemptID == attemptID)
+                // B has captured the same attempt, not merely entered its API.
+                // Only now may A progress through the staged credential save.
+                await transport.releaseRefresh()
+                guard await transport.waitUntilMidSaved() else { return }
+                await transport.releaseMidSave()
+                guard
+                    let outcomeA = await originator.result(
+                        stage: "in-flight refresh originator returning"),
+                    let outcomeB = await joiner.result(
+                        stage: "in-flight refresh joiner returning")
+                else { return }
+                await assertThrowsErrorAsync(try outcomeA.get()) { error in
+                    #expect(
+                        error as? AuthenticatedRequestError == .refreshRejected)
+                }
+                await assertThrowsErrorAsync(try outcomeB.get()) { error in
+                    #expect(
+                        error as? AuthenticatedRequestError == .refreshRejected)
+                }
+                let recorded = await coordinator.completedRefreshes[accountID]?
+                    .rejectedAccessToken
+                #expect(recorded == fixture.oldTokens.accessToken)
+                let cachedRejection = RefreshTestCaller {
+                    try await coordinator.recoverAccessToken(
+                        for: accountID, server: fixture.server,
+                        rejectedAccessToken: fixture.oldTokens.accessToken)
+                }
+                try await withTestCleanup {
+                    cachedRejection.cancel()
+                    await transport.releaseAllGates()
+                    await cachedRejection.drain(
+                        stage: "cached rejection cleanup")
+                } operation: {
+                    guard
+                        let outcome = await cachedRejection.result(
+                            stage: "originator cached rejection returning")
+                    else { return }
+                    await assertThrowsErrorAsync(try outcome.get()) { error in
+                        #expect(
+                            error as? AuthenticatedRequestError
+                                == .refreshRejected)
+                    }
+                }
+                let counts = await transport.counts()
+                #expect(counts.refreshRequests == 1)
             }
         }
-        let refreshStarted = await transport.waitUntilRefreshStarted()
-        #expect(refreshStarted)
-        guard refreshStarted else {
-            await transport.releaseAllGates()
-            taskA.cancel()
-            return
-        }
+    }
 
-        let taskB = Task { () -> String in
-            do {
-                let value = try await coordinator.recoverAccessToken(
-                    for: accountID,
-                    server: server,
-                    rejectedAccessToken: "other-token"
-                )
-                await returnedB.complete(true)
-                return value
-            } catch {
-                await returnedB.complete(true)
-                throw error
+    @Test(arguments: [false, true])
+    func testLateRecoveryAfterRejectedRefreshRetainsOriginatorProvenance(
+        matchesOriginator: Bool
+    ) async throws {
+        let fixture = try RejectedRefreshFixture(
+            account: "late-originator-token")
+        let coordinator = fixture.coordinator
+        let transport = fixture.transport
+        let accountID = fixture.accountID
+        let request = try Self.request(for: .libraries, server: fixture.server)
+        let originator = RefreshTestCaller {
+            try await coordinator.sendAuthenticated(
+                request, route: .libraries, accountID: accountID,
+                server: fixture.server)
+        }
+        try await withTestCleanup {
+            originator.cancel()
+            await transport.releaseAllGates()
+            await originator.drain(stage: "late-arrival originator cleanup")
+        } operation: {
+            guard await transport.waitUntilRefreshStarted() else { return }
+            await transport.releaseRefresh()
+            guard await transport.waitUntilMidSaved() else { return }
+            await transport.releaseMidSave()
+            guard
+                let outcome = await originator.result(
+                    stage: "originator retired before late recovery")
+            else { return }
+            await assertThrowsErrorAsync(try outcome.get()) { error in
+                #expect(error as? AuthenticatedRequestError == .refreshRejected)
+            }
+            #expect(await coordinator.refreshAttempts[accountID]?.id == nil)
+            #expect(
+                await coordinator.completedRefreshes[accountID]?
+                    .rejectedAccessToken
+                    == fixture.oldTokens.accessToken)
+            let late = RefreshTestCaller {
+                try await coordinator.recoverAccessToken(
+                    for: accountID, server: fixture.server,
+                    rejectedAccessToken: matchesOriginator
+                        ? fixture.oldTokens.accessToken : "other-token")
+            }
+            try await withTestCleanup {
+                late.cancel()
+                await transport.releaseAllGates()
+                await late.drain(stage: "late recovery cleanup")
+            } operation: {
+                guard
+                    let result = await late.result(
+                        stage: "late recovery returning after retired refresh")
+                else { return }
+                if matchesOriginator {
+                    await assertThrowsErrorAsync(try result.get()) { error in
+                        #expect(
+                            error as? AuthenticatedRequestError
+                                == .refreshRejected)
+                    }
+                } else {
+                    // A late caller rejecting a different token reuses the
+                    // newer store value; it is not an in-flight joiner.
+                    let token = try result.get()
+                    #expect(token == fixture.midTokens.accessToken)
+                }
+                #expect(
+                    await coordinator.completedRefreshes[accountID]?
+                        .rejectedAccessToken
+                        == fixture.oldTokens.accessToken)
+                #expect(
+                    await coordinator.requiresReauthentication(for: accountID))
+                #expect(await coordinator.refreshAttempts[accountID]?.id == nil)
+                let counts = await transport.counts()
+                #expect(counts.refreshRequests == 1)
+                #expect(counts.midAccessRequests == 0)
+                #expect(counts.finalAccessRequests == 0)
             }
         }
-        await transport.releaseRefresh()
-        let midTokensSaved = await transport.waitUntilMidSaved()
-        #expect(midTokensSaved)
-        guard midTokensSaved else {
-            await transport.releaseAllGates()
-            taskA.cancel()
-            taskB.cancel()
-            return
-        }
-        await transport.releaseMidSave()
-
-        async let outcomeA = requireAuthTelemetryCompletion(
-            returnedA, stage: "in-flight refresh originator returning")
-        async let outcomeB = requireAuthTelemetryCompletion(
-            returnedB, stage: "in-flight refresh joiner returning")
-        let returned = await (outcomeA, outcomeB)
-        guard returned.0 == true, returned.1 == true else {
-            await transport.releaseAllGates()
-            taskA.cancel()
-            taskB.cancel()
-            return
-        }
-
-        await assertThrowsErrorAsync(try await taskA.value) { error in
-            #expect(error as? AuthenticatedRequestError == .refreshRejected)
-        }
-        await assertThrowsErrorAsync(try await taskB.value) { error in
-            #expect(error as? AuthenticatedRequestError == .refreshRejected)
-        }
-
-        let recordedToken = await coordinator.completedRefreshes[
-            accountID
-        ]?.rejectedAccessToken
-        #expect(recordedToken == "old-access")
-
-        await assertThrowsErrorAsync(
-            try await coordinator.recoverAccessToken(
-                for: accountID,
-                server: server,
-                rejectedAccessToken: "old-access"
-            )
-        ) { error in
-            #expect(error as? AuthenticatedRequestError == .refreshRejected)
-        }
-        let counts = await transport.counts()
-        #expect(counts.refreshRequests == 1)
     }
 
     @Test
@@ -1981,6 +2038,81 @@ private struct Fixture {
             accountID: accountID,
             server: server
         )
+    }
+}
+
+/// Each caller records its exact API outcome before its owned task terminates.
+/// The existing ten-second observation budget bounds failures, not scheduling.
+private struct RefreshTestCaller<Value: Sendable>: Sendable {
+    private let completion:
+        AuthTelemetryTestCompletion<Result<Value, any Error>>
+    private let task: Task<Void, Never>
+
+    init(_ operation: @escaping @Sendable () async throws -> Value) {
+        let completion = AuthTelemetryTestCompletion<Result<Value, any Error>>()
+        self.completion = completion
+        task = Task {
+            let result: Result<Value, any Error>
+            do { result = .success(try await operation()) } catch {
+                result = .failure(error)
+            }
+            await completion.complete(result)
+        }
+    }
+
+    func result(
+        stage: String, sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Result<Value, any Error>? {
+        guard
+            let result = await requireAuthTelemetryCompletion(
+                completion, stage: stage, sourceLocation: sourceLocation)
+        else { return nil }
+        await task.value
+        return result
+    }
+
+    func cancel() { task.cancel() }
+
+    func drain(
+        stage: String, sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        // Never await an unconfirmed caller after cancellation alone.
+        _ = await result(stage: stage, sourceLocation: sourceLocation)
+    }
+}
+
+extension AuthCoordinator {
+    fileprivate func setRefreshJoinObservation(
+        _ continuation: AsyncStream<RefreshJoinObservation>.Continuation?
+    ) {
+        refreshJoinObservation = continuation
+    }
+}
+
+private struct RejectedRefreshFixture: Sendable {
+    let accountID: AccountID
+    let server: NormalizedServerURL
+    let oldTokens: AuthenticationTokens
+    let midTokens: AuthenticationTokens
+    let transport: GatedMidFlightRefreshTransport
+    let coordinator:
+        AuthCoordinator<GatedMidFlightRefreshTransport, RequestCredentialStore>
+
+    init(account: String) throws {
+        accountID = AccountID(rawValue: account)
+        server = try NormalizedServerURL("https://example.com")
+        oldTokens = try AuthenticationTokens(
+            accessToken: "old-access", refreshToken: "old-refresh")
+        midTokens = try AuthenticationTokens(
+            accessToken: "mid-access", refreshToken: "mid-refresh")
+        let final = try AuthenticationTokens(
+            accessToken: "final-access", refreshToken: "final-refresh")
+        let store = RequestCredentialStore(credentials: [accountID: oldTokens])
+        transport = GatedMidFlightRefreshTransport(
+            store: store, accountID: accountID, midTokens: midTokens,
+            finalTokens: final, refreshSucceeds: false)
+        coordinator = AuthCoordinator(
+            transport: transport, credentialStore: store)
     }
 }
 
