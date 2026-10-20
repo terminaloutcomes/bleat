@@ -1843,3 +1843,97 @@ core audit **596**. Only the eight selected dispositions and changed-file source
 locations are refreshed, plus two helper records. Fresh exact-head CI and
 independent review are required before merge; broader #372/#362 acceptance,
 production drainage and seven startup clock oracles remain open.
+
+## Logout caller completion and private response latching (issue #372)
+
+Four `LogoutTests` concurrency cases bounded transport entry but consumed caller
+task values without a terminal bound. The refresh/logout case already bounded
+actual typed outcomes with thirty-second completions; its entry and signing-out
+observations needed guarded exits and cleanup on every path. Older descriptions
+of unbounded entry signals and guessed yields were stale. These are test-lifecycle
+findings, not observed production authentication defects.
+
+These four cases now retain every original and overlap caller's actual return or
+error in `Result`, emit a five-second terminal witness only after the coordinator
+API returns or throws, and consume task values only after that witness. Existing
+typed-error assertions remain. In both overlap tests, all four rejection probes
+run in owned tasks and must return while the original transport gate stays held.
+Normal execution independently asserts exactly one transport admission. Awaited
+outer cleanup cancels every started original/probe, releases all fake arrivals,
+bounds every actual terminal before joining and asserts zero pending storage.
+
+All five cases guard readiness and use awaited `withTestCleanup` on normal,
+guard and throwing exits. The refresh case retains its existing thirty-second
+signing-out and outcome budgets. Cleanup never manufactures completion. This
+bounds test-owned callers; it does not prove whole production-task graph drainage.
+
+`BlockingLogoutTransport` and `BlockingLoginTransport` count admission before any
+signal await, collect all pending continuations, and detach/resume every arrival
+on latched release. Unexpected extra sends cannot overwrite the original waiter.
+Late arrivals see the release latch. Their deliberate cancellation-ignoring
+behavior remains: explicit fixture release must settle cancelled callers.
+
+Private `InitialRequestRaceTransport` previously retained only a release Boolean.
+An HTTP 200 release before continuation registration therefore delivered HTTP 401,
+while release after registration delivered HTTP 200. It now latches the first
+actual response, preserves it across conflicting repeated release and detaches
+continuation storage before resume. The stale-success case independently asserts
+that HTTP 200 was actually delivered after completed logout.
+
+Three parameterized contracts cover eight initial-response scenarios (HTTP
+200/401, early/registered release, cancelled/normal), twelve single-caller
+logout/login/refresh scenarios and eight two-caller logout/login scenarios.
+Explicit entry gates control early ordering; late release requires every expected
+continuation to be registered. Every scenario bounds all actual returns and
+checks exact response/cancellation state, repeated release and zero pending
+storage. The two-caller contract also checks exactly two admissions. There are
+no readiness sleeps or guessed yield counts.
+
+Original overlap errors, invalid-credential failure, credential deletion,
+rotated refresh token, one refresh/logout, zero forbidden refreshes and old-request
+ordering remain. The six neighboring logout tests are byte-for-byte unchanged.
+Scope is five existing dispositions, three helper records, private fixtures and
+required inventory/navigation/traceability evidence. Production authentication,
+separate cover work, broad tracker reconciliation, seven app startup clock
+oracles and issue comments remain outside this slice.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three final independent serial focused runs: **8/8 exact function identities
+  each**; owning `LogoutTests`: **14/14**; restored-source focus: **8/8**. All
+  8/12/8 parameter scenarios execute in every run. Zero failures/errors/skips.
+- Supported complete signed host gate: **603/603** exact inventory identities,
+  zero failures/errors/skips, including synchronizable Keychain. Per-target and
+  combined XML aliases reconcile without double counting.
+- Eight expected-failing mutations are killed at executed assertions: missing
+  actual caller terminal witness, early HTTP 200 becoming HTTP 401, repeated
+  response overwrite, retained released continuation, and all four production
+  overlap rejection paths (logout during logout/login, authenticated request
+  during logout and duplicate login). Each rejection mutation has exactly one
+  ordinary assertion failure and no cleanup failure, retained waiter diagnostic,
+  hang or continuation trap. Production/test bytes are restored exactly after
+  every attempt; production sources are unchanged in the final diff.
+- Strict Swift lint, docs, original semantic postconditions, unchanged six
+  neighboring tests and scoped audit/index checks pass. Existing dependency
+  deployment warnings, three declared fixture-cleanup known issues and intentional
+  read-only SwiftData diagnostics remain visible; no suppression is added.
+
+Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter` selecting the five cases and three
+contracts; XML/logs are `.build/i413-overlap-focused-{1,2,3}`. Owning selection is
+`LogoutTests` with `i413-overlap-owning` reports; restored selection uses
+`i413-overlap-restored`. The signed command is
+`mise exec -- ./scripts/test-host.sh`, retained XML in
+`.build/i413-overlap-signed-results`. Verification/mutation manifests use
+`.build/i413-overlap-verification.json` and
+`.build/i413-overlap-mutations.json`; raw logs remain private.
+
+Independent review rejected initial head `63dd249` because four inline overlap
+probes remained unbounded and two private single-slot fakes could strand original
+callers when rejection regressed. Its earlier 7/7 repetitions, 13/13 owner,
+602/602 signed gate and green CI remain retained as superseded evidence, not
+proof that the review finding was covered. Two initial compile-only typing
+failures are excluded from coverage. Corrected preflight passed 14 identities.
+Three new function identities bring host inventory to **603**, source index to
+**1,589** and core audit to **599**. Fresh revised-head CI and independent
+re-review are required; broader #372/#362 acceptance remains open.

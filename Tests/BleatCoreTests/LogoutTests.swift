@@ -239,43 +239,103 @@ final class LogoutTests {
             transport: transport,
             credentialStore: store
         )
+        let firstLogoutCompleted = BoundedTestCounter()
         let firstLogout = Task {
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
-            )
+            await performLogoutTestCall(completed: firstLogoutCompleted) {
+                try await coordinator.logout(
+                    accountID: accountID,
+                    server: server
+                )
+            }
         }
-        #expect(await transport.waitUntilLogoutStarts())
+        let overlapLogoutCompleted = BoundedTestCounter()
+        let overlapRequestCompleted = BoundedTestCounter()
+        var overlapLogout: Task<Result<LogoutResult, any Error>, Never>?
+        var overlapRequest: Task<Result<HTTPResponse, any Error>, Never>?
+        try await withTestCleanup {
+            firstLogout.cancel()
+            overlapLogout?.cancel()
+            overlapRequest?.cancel()
+            await transport.completeLogout()
+            if await requireLogoutCaller(
+                firstLogoutCompleted, stage: "firstLogout cleanup")
+            {
+                _ = await firstLogout.value
+            }
+            if let overlapLogout,
+                await requireLogoutCaller(
+                    overlapLogoutCompleted, stage: "overlapLogout cleanup")
+            {
+                _ = await overlapLogout.value
+            }
+            if let overlapRequest,
+                await requireLogoutCaller(
+                    overlapRequestCompleted, stage: "overlapRequest cleanup")
+            {
+                _ = await overlapRequest.value
+            }
+            #expect(await transport.pendingRequestCount() == 0)
+        } operation: {
+            guard await transport.waitUntilLogoutStarts() else { return }
 
-        await assertThrowsErrorAsync(
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
+            let overlapLogoutTask = Task {
+                await performLogoutTestCall(completed: overlapLogoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapLogout = overlapLogoutTask
+            guard
+                await requireLogoutCaller(
+                    overlapLogoutCompleted,
+                    stage: "overlapLogout rejected while original gate held")
+            else { return }
+            await assertThrowsErrorAsync(
+                try await overlapLogoutTask.value.get()
+            ) { error in
+                #expect(error as? LogoutError == .accountOperationInProgress)
+            }
+
+            let librariesRequest = URLRequest(
+                url: try AudiobookshelfRouteBuilder(server: server)
+                    .url(for: .libraries)
             )
-        ) { error in
-            #expect(error as? LogoutError == .accountOperationInProgress)
-        }
+            let overlapRequestTask = Task {
+                await performLogoutTestCall(completed: overlapRequestCompleted)
+                {
+                    try await coordinator.sendAuthenticated(
+                        librariesRequest,
+                        route: .libraries,
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapRequest = overlapRequestTask
+            guard
+                await requireLogoutCaller(
+                    overlapRequestCompleted,
+                    stage: "overlapRequest rejected while original gate held")
+            else { return }
+            await assertThrowsErrorAsync(
+                try await overlapRequestTask.value.get()
+            ) { error in
+                #expect(
+                    error as? AuthenticatedRequestError
+                        == .accountOperationInProgress)
+            }
 
-        let librariesRequest = URLRequest(
-            url: try AudiobookshelfRouteBuilder(server: server)
-                .url(for: .libraries)
-        )
-        await assertThrowsErrorAsync(
-            try await coordinator.sendAuthenticated(
-                librariesRequest,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
-        ) { error in
-            #expect(
-                error as? AuthenticatedRequestError
-                    == .accountOperationInProgress)
+            #expect(await transport.admissionCount() == 1)
+            await transport.completeLogout()
+            guard
+                await requireLogoutCaller(
+                    firstLogoutCompleted, stage: "firstLogout returning")
+            else { return }
+            let result = try await firstLogout.value.get()
+            #expect(result.remoteStatus == .completed)
         }
-
-        await transport.completeLogout()
-        let result = try await firstLogout.value
-        #expect(result.remoteStatus == .completed)
     }
 
     @Test
@@ -288,42 +348,101 @@ final class LogoutTests {
             transport: transport,
             credentialStore: store
         )
+        let loginCompleted = BoundedTestCounter()
         let login = Task {
-            try await coordinator.login(
-                accountID: accountID,
-                server: server,
-                username: "reader",
-                password: "password"
-            )
+            await performLogoutTestCall(completed: loginCompleted) {
+                try await coordinator.login(
+                    accountID: accountID,
+                    server: server,
+                    username: "reader",
+                    password: "password"
+                )
+            }
         }
-        #expect(await transport.waitUntilLoginStarts())
+        let overlapLogoutCompleted = BoundedTestCounter()
+        let overlapLoginCompleted = BoundedTestCounter()
+        var overlapLogout: Task<Result<LogoutResult, any Error>, Never>?
+        var overlapLogin: Task<Result<AuthenticatedAccount, any Error>, Never>?
+        try await withTestCleanup {
+            login.cancel()
+            overlapLogout?.cancel()
+            overlapLogin?.cancel()
+            await transport.rejectLogin()
+            if await requireLogoutCaller(loginCompleted, stage: "login cleanup")
+            {
+                _ = await login.value
+            }
+            if let overlapLogout,
+                await requireLogoutCaller(
+                    overlapLogoutCompleted, stage: "overlapLogout cleanup")
+            {
+                _ = await overlapLogout.value
+            }
+            if let overlapLogin,
+                await requireLogoutCaller(
+                    overlapLoginCompleted, stage: "overlapLogin cleanup")
+            {
+                _ = await overlapLogin.value
+            }
+            #expect(await transport.pendingRequestCount() == 0)
+        } operation: {
+            guard await transport.waitUntilLoginStarts() else { return }
 
-        await assertThrowsErrorAsync(
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
-            )
-        ) { error in
-            #expect(error as? LogoutError == .accountOperationInProgress)
-        }
-        await assertThrowsErrorAsync(
-            try await coordinator.login(
-                accountID: accountID,
-                server: server,
-                username: "reader",
-                password: "password"
-            )
-        ) { error in
-            #expect(
-                error as? LocalAuthenticationError
-                    == .accountOperationInProgress)
-        }
+            let overlapLogoutTask = Task {
+                await performLogoutTestCall(completed: overlapLogoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            overlapLogout = overlapLogoutTask
+            guard
+                await requireLogoutCaller(
+                    overlapLogoutCompleted,
+                    stage: "overlapLogout rejected while original gate held")
+            else { return }
+            await assertThrowsErrorAsync(
+                try await overlapLogoutTask.value.get()
+            ) { error in
+                #expect(error as? LogoutError == .accountOperationInProgress)
+            }
+            let overlapLoginTask = Task {
+                await performLogoutTestCall(completed: overlapLoginCompleted) {
+                    try await coordinator.login(
+                        accountID: accountID,
+                        server: server,
+                        username: "reader",
+                        password: "password"
+                    )
+                }
+            }
+            overlapLogin = overlapLoginTask
+            guard
+                await requireLogoutCaller(
+                    overlapLoginCompleted,
+                    stage: "overlapLogin rejected while original gate held")
+            else { return }
+            await assertThrowsErrorAsync(
+                try await overlapLoginTask.value.get()
+            ) { error in
+                #expect(
+                    error as? LocalAuthenticationError
+                        == .accountOperationInProgress)
+            }
 
-        await transport.rejectLogin()
-        await assertThrowsErrorAsync(
-            try await login.value
-        ) { error in
-            #expect(error as? LocalAuthenticationError == .invalidCredentials)
+            #expect(await transport.admissionCount() == 1)
+            await transport.rejectLogin()
+            guard
+                await requireLogoutCaller(
+                    loginCompleted, stage: "login returning")
+            else { return }
+            await assertThrowsErrorAsync(
+                try await login.value.get()
+            ) { error in
+                #expect(
+                    error as? LocalAuthenticationError == .invalidCredentials)
+            }
         }
     }
 
@@ -372,88 +491,89 @@ final class LogoutTests {
             }
             await authenticatedRequestCompletion.complete(outcome)
         }
-        #expect(await transport.waitUntilRefreshStarts())
-
         let logoutCompletion = AuthTelemetryTestCompletion<
             Result<LogoutResult, LogoutError>
         >()
-        let logoutTask = Task {
-            let outcome: Result<LogoutResult, LogoutError>
-            do {
-                outcome = .success(
-                    try await coordinator.logout(
-                        accountID: accountID,
-                        server: server
-                    )
-                )
-            } catch let error as LogoutError {
-                outcome = .failure(error)
-            } catch {
-                Issue.record("Logout returned an unexpected error")
-                outcome = .failure(.credentialDeletionFailed)
-            }
-            await logoutCompletion.complete(outcome)
-        }
-        let signingOutReached = await requireAuthTelemetryCondition(
-            stage: "logout signing-out state",
-            timeout: .seconds(30)
-        ) {
-            await coordinator.isSigningOut(accountID: accountID)
-        }
-        #expect(signingOutReached)
-        await transport.completeRefresh()
-
-        let logoutOutcome = await requireAuthTelemetryCompletion(
-            logoutCompletion,
-            stage: "logout completion after refresh release",
-            timeout: .seconds(30)
-        )
-        let requestOutcome = await requireAuthTelemetryCompletion(
-            authenticatedRequestCompletion,
-            stage: "authenticated request completion after logout",
-            timeout: .seconds(30)
-        )
-        guard let logoutOutcome, let requestOutcome else {
+        var logoutTask: Task<Void, Never>?
+        try await withTestCleanup {
             authenticatedRequestTask.cancel()
-            logoutTask.cancel()
+            logoutTask?.cancel()
             await transport.completeRefresh()
-            let requestCleanup = await requireAuthTelemetryCompletion(
+            if await requireAuthTelemetryCompletion(
                 authenticatedRequestCompletion,
-                stage: "authenticated request cancellation cleanup",
-                timeout: .seconds(5)
-            )
-            let logoutCleanup = await requireAuthTelemetryCompletion(
-                logoutCompletion,
-                stage: "logout cancellation cleanup",
-                timeout: .seconds(5)
-            )
-            if requestCleanup != nil {
+                stage: "authenticated request cleanup", timeout: .seconds(5)
+            ) != nil {
                 await authenticatedRequestTask.value
             }
-            if logoutCleanup != nil {
+            if let logoutTask,
+                await requireAuthTelemetryCompletion(
+                    logoutCompletion,
+                    stage: "logout cleanup", timeout: .seconds(5)
+                ) != nil
+            {
                 await logoutTask.value
             }
-            return
-        }
-        await authenticatedRequestTask.value
-        await logoutTask.value
-        let logoutResult = try logoutOutcome.get()
-        switch requestOutcome {
-        case .success:
-            Issue.record(
-                "Authenticated request should be rejected during logout")
-        case .failure(let error):
-            #expect(error == .accountOperationInProgress)
-        }
-        let storedCredentials = try await store.credentials(for: accountID)
-        let counts = await transport.counts()
-        let logoutRefreshToken = await transport.logoutRefreshToken()
+        } operation: {
+            guard await transport.waitUntilRefreshStarts() else { return }
 
-        #expect(logoutResult.remoteStatus == .completed)
-        #expect(storedCredentials == nil)
-        #expect(counts.refreshRequests == 1)
-        #expect(counts.logoutRequests == 1)
-        #expect(logoutRefreshToken == "rotated-refresh")
+            let startedLogout = Task {
+                let outcome: Result<LogoutResult, LogoutError>
+                do {
+                    outcome = .success(
+                        try await coordinator.logout(
+                            accountID: accountID,
+                            server: server
+                        )
+                    )
+                } catch let error as LogoutError {
+                    outcome = .failure(error)
+                } catch {
+                    Issue.record("Logout returned an unexpected error")
+                    outcome = .failure(.credentialDeletionFailed)
+                }
+                await logoutCompletion.complete(outcome)
+            }
+            logoutTask = startedLogout
+            let signingOutReached = await requireAuthTelemetryCondition(
+                stage: "logout signing-out state",
+                timeout: .seconds(30)
+            ) {
+                await coordinator.isSigningOut(accountID: accountID)
+            }
+            guard signingOutReached else { return }
+            await transport.completeRefresh()
+
+            let logoutOutcome = await requireAuthTelemetryCompletion(
+                logoutCompletion,
+                stage: "logout completion after refresh release",
+                timeout: .seconds(30)
+            )
+            let requestOutcome = await requireAuthTelemetryCompletion(
+                authenticatedRequestCompletion,
+                stage: "authenticated request completion after logout",
+                timeout: .seconds(30)
+            )
+            guard let logoutOutcome, let requestOutcome else { return }
+            await authenticatedRequestTask.value
+            await startedLogout.value
+            let logoutResult = try logoutOutcome.get()
+            switch requestOutcome {
+            case .success:
+                Issue.record(
+                    "Authenticated request should be rejected during logout")
+            case .failure(let error):
+                #expect(error == .accountOperationInProgress)
+            }
+            let storedCredentials = try await store.credentials(for: accountID)
+            let counts = await transport.counts()
+            let logoutRefreshToken = await transport.logoutRefreshToken()
+
+            #expect(logoutResult.remoteStatus == .completed)
+            #expect(storedCredentials == nil)
+            #expect(counts.refreshRequests == 1)
+            #expect(counts.logoutRequests == 1)
+            #expect(logoutRefreshToken == "rotated-refresh")
+        }
     }
 
     @Test
@@ -477,37 +597,78 @@ final class LogoutTests {
             url: try AudiobookshelfRouteBuilder(server: server)
                 .url(for: .libraries)
         )
+        let authenticatedRequestCompleted = BoundedTestCounter()
         let authenticatedRequest = Task {
-            try await coordinator.sendAuthenticated(
-                librariesRequest,
-                route: .libraries,
-                accountID: accountID,
-                server: server
-            )
+            await performLogoutTestCall(
+                completed: authenticatedRequestCompleted
+            ) {
+                try await coordinator.sendAuthenticated(
+                    librariesRequest,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+            }
         }
-        #expect(await transport.waitUntilInitialRequestStarts())
-        let logout = Task {
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
-            )
-        }
-        #expect(await transport.waitUntilLogoutStarts())
-        await transport.rejectInitialRequest()
+        try await withTestCleanup {
+            authenticatedRequest.cancel()
+            await transport.rejectInitialRequest()
+            await transport.completeLogout()
+            if await requireLogoutCaller(
+                authenticatedRequestCompleted,
+                stage: "authenticatedRequest cleanup")
+            {
+                _ = await authenticatedRequest.value
+            }
+        } operation: {
+            guard await transport.waitUntilInitialRequestStarts() else {
+                return
+            }
+            let logoutCompleted = BoundedTestCounter()
+            let logout = Task {
+                await performLogoutTestCall(completed: logoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            try await withTestCleanup {
+                logout.cancel()
+                await transport.completeLogout()
+                if await requireLogoutCaller(
+                    logoutCompleted, stage: "logout cleanup")
+                {
+                    _ = await logout.value
+                }
+            } operation: {
+                guard await transport.waitUntilLogoutStarts() else { return }
+                await transport.rejectInitialRequest()
 
-        await assertThrowsErrorAsync(
-            try await authenticatedRequest.value
-        ) { error in
-            #expect(
-                error as? AuthenticatedRequestError
-                    == .accountOperationInProgress)
-        }
-        await transport.completeLogout()
-        let logoutResult = try await logout.value
-        let refreshCount = await transport.refreshCount()
+                guard
+                    await requireLogoutCaller(
+                        authenticatedRequestCompleted,
+                        stage: "authenticatedRequest returning")
+                else { return }
+                await assertThrowsErrorAsync(
+                    try await authenticatedRequest.value.get()
+                ) { error in
+                    #expect(
+                        error as? AuthenticatedRequestError
+                            == .accountOperationInProgress)
+                }
+                await transport.completeLogout()
+                guard
+                    await requireLogoutCaller(
+                        logoutCompleted, stage: "logout returning")
+                else { return }
+                let logoutResult = try await logout.value.get()
+                let refreshCount = await transport.refreshCount()
 
-        #expect(logoutResult.remoteStatus == .completed)
-        #expect(refreshCount == 0)
+                #expect(logoutResult.remoteStatus == .completed)
+                #expect(refreshCount == 0)
+            }
+        }
     }
 
     @Test
@@ -533,35 +694,191 @@ final class LogoutTests {
             url: try AudiobookshelfRouteBuilder(server: server)
                 .url(for: .libraries)
         )
+        let authenticatedRequestCompleted = BoundedTestCounter()
         let authenticatedRequest = Task {
-            try await coordinator.sendAuthenticated(
-                librariesRequest,
-                route: .libraries,
-                accountID: accountID,
-                server: server
+            await performLogoutTestCall(
+                completed: authenticatedRequestCompleted
+            ) {
+                try await coordinator.sendAuthenticated(
+                    librariesRequest,
+                    route: .libraries,
+                    accountID: accountID,
+                    server: server
+                )
+            }
+        }
+        try await withTestCleanup {
+            authenticatedRequest.cancel()
+            await transport.rejectInitialRequest()
+            await transport.completeLogout()
+            if await requireLogoutCaller(
+                authenticatedRequestCompleted,
+                stage: "authenticatedRequest cleanup")
+            {
+                _ = await authenticatedRequest.value
+            }
+        } operation: {
+            guard await transport.waitUntilInitialRequestStarts() else {
+                return
+            }
+
+            let logoutCompleted = BoundedTestCounter()
+            let logout = Task {
+                await performLogoutTestCall(completed: logoutCompleted) {
+                    try await coordinator.logout(
+                        accountID: accountID,
+                        server: server
+                    )
+                }
+            }
+            try await withTestCleanup {
+                logout.cancel()
+                await transport.completeLogout()
+                if await requireLogoutCaller(
+                    logoutCompleted, stage: "logout cleanup")
+                {
+                    _ = await logout.value
+                }
+            } operation: {
+                guard await transport.waitUntilLogoutStarts() else { return }
+                await transport.completeLogout()
+                guard
+                    await requireLogoutCaller(
+                        logoutCompleted, stage: "logout returning")
+                else { return }
+                let logoutResult = try await logout.value.get()
+                await transport.completeInitial(statusCode: 200)
+
+                guard
+                    await requireLogoutCaller(
+                        authenticatedRequestCompleted,
+                        stage: "authenticatedRequest returning")
+                else { return }
+                await assertThrowsErrorAsync(
+                    try await authenticatedRequest.value.get()
+                ) { error in
+                    #expect(
+                        error as? AuthenticatedRequestError
+                            == .accountOperationInProgress)
+                }
+                #expect(await transport.deliveredInitialStatusCode() == 200)
+                #expect(logoutResult.remoteStatus == .completed)
+            }
+        }
+    }
+
+    @Test(arguments: LogoutResponseScenario.all)
+    func testInitialRequestFixturePreservesReleasedResponse(
+        scenario: LogoutResponseScenario
+    ) async throws {
+        let (statusCode, beforeEntry, cancelled) = (
+            scenario.statusCode, scenario.beforeEntry, scenario.cancelled
+        )
+        let transport = InitialRequestRaceTransport()
+        let request = TracedHTTPRequest(
+            request: URLRequest(
+                url: try #require(
+                    URL(string: "https://example.com/api/libraries"))),
+            endpoint: .libraries
+        )
+        try await exerciseLogoutFixture(
+            beforeEntry: beforeEntry, cancelled: cancelled,
+            statusCode: statusCode,
+            send: { await transport.send(request) },
+            release: {
+                await transport.completeInitial(statusCode: statusCode)
+            },
+            repeatRelease: {
+                await transport.completeInitial(
+                    statusCode: statusCode == 200 ? 401 : 200)
+            },
+            pendingCount: { await transport.pendingInitialRequestCount() }
+        )
+        #expect(await transport.deliveredInitialStatusCode() == statusCode)
+    }
+
+    @Test(arguments: LogoutFixtureScenario.all)
+    func testLogoutFixtureReleaseSurvivesCancellationAndLateEntry(
+        scenario: LogoutFixtureScenario
+    ) async throws {
+        let (kind, beforeEntry, cancelled) = (
+            scenario.kind, scenario.beforeEntry, scenario.cancelled
+        )
+        let request = TracedHTTPRequest(
+            request: URLRequest(
+                url: try #require(
+                    URL(string: "https://example.com/auth/refresh"))),
+            endpoint: .refresh
+        )
+        switch kind {
+        case .logout:
+            let transport = BlockingLogoutTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: beforeEntry, cancelled: cancelled, statusCode: 200,
+                send: { await transport.send(request) },
+                release: { await transport.completeLogout() },
+                repeatRelease: { await transport.completeLogout() },
+                pendingCount: { await transport.pendingRequestCount() }
+            )
+        case .login:
+            let transport = BlockingLoginTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: beforeEntry, cancelled: cancelled, statusCode: 401,
+                send: { await transport.send(request) },
+                release: { await transport.rejectLogin() },
+                repeatRelease: { await transport.rejectLogin() },
+                pendingCount: { await transport.pendingRequestCount() }
+            )
+        case .refresh:
+            let transport = RefreshRaceTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: beforeEntry, cancelled: cancelled, statusCode: 200,
+                send: { await transport.send(request) },
+                release: { await transport.completeRefresh() },
+                repeatRelease: { await transport.completeRefresh() },
+                pendingCount: { await transport.pendingRequestCount() }
             )
         }
-        #expect(await transport.waitUntilInitialRequestStarts())
+    }
 
-        let logout = Task {
-            try await coordinator.logout(
-                accountID: accountID,
-                server: server
+    @Test(arguments: LogoutOverlapFixtureScenario.all)
+    func testOverlapTransportsRetireEveryUnexpectedCaller(
+        scenario: LogoutOverlapFixtureScenario
+    ) async throws {
+        let request = TracedHTTPRequest(
+            request: URLRequest(
+                url: try #require(URL(string: "https://example.com/logout"))),
+            endpoint: .logout
+        )
+        switch scenario.kind {
+        case .logout:
+            let transport = BlockingLogoutTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: scenario.beforeEntry,
+                cancelled: scenario.cancelled,
+                statusCode: 200, callerCount: 2,
+                send: { await transport.send(request) },
+                release: { await transport.completeLogout() },
+                repeatRelease: { await transport.completeLogout() },
+                pendingCount: { await transport.pendingRequestCount() }
             )
+            #expect(await transport.admissionCount() == 2)
+        case .login:
+            let transport = BlockingLoginTransport()
+            try await exerciseLogoutFixture(
+                beforeEntry: scenario.beforeEntry,
+                cancelled: scenario.cancelled,
+                statusCode: 401, callerCount: 2,
+                send: { await transport.send(request) },
+                release: { await transport.rejectLogin() },
+                repeatRelease: { await transport.rejectLogin() },
+                pendingCount: { await transport.pendingRequestCount() }
+            )
+            #expect(await transport.admissionCount() == 2)
+        case .refresh:
+            Issue.record(
+                "Overlap fixture scenarios must select logout or login")
         }
-        #expect(await transport.waitUntilLogoutStarts())
-        await transport.completeLogout()
-        let logoutResult = try await logout.value
-        await transport.completeInitial(statusCode: 200)
-
-        await assertThrowsErrorAsync(
-            try await authenticatedRequest.value
-        ) { error in
-            #expect(
-                error as? AuthenticatedRequestError
-                    == .accountOperationInProgress)
-        }
-        #expect(logoutResult.remoteStatus == .completed)
     }
 
     fileprivate static func authenticationJSON(
@@ -712,14 +1029,24 @@ private actor LogoutScriptedTransport: HTTPTransport {
 }
 
 private actor BlockingLogoutTransport: HTTPTransport {
-    private var logoutContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var logoutContinuations:
+        [CheckedContinuation<HTTPResponse, Never>] = []
+    private var admitted = 0
     nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var started = false
     private var completionReleased = false
 
+    func hasPendingRequest() -> Bool {
+        !logoutContinuations.isEmpty
+    }
+
+    func pendingRequestCount() -> Int { logoutContinuations.count }
+    func admissionCount() -> Int { admitted }
+
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
+        admitted += 1
         started = true
         await logoutStartedSignal.signal()
         return await withCheckedContinuation { continuation in
@@ -728,7 +1055,7 @@ private actor BlockingLogoutTransport: HTTPTransport {
                     returning: .init(data: Data(), statusCode: 200)
                 )
             } else {
-                logoutContinuation = continuation
+                logoutContinuations.append(continuation)
             }
         }
     }
@@ -746,22 +1073,35 @@ private actor BlockingLogoutTransport: HTTPTransport {
 
     func completeLogout() {
         completionReleased = true
-        logoutContinuation?.resume(
-            returning: .init(data: Data(), statusCode: 200)
-        )
-        logoutContinuation = nil
+        let continuations = logoutContinuations
+        logoutContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume(
+                returning: .init(data: Data(), statusCode: 200)
+            )
+        }
     }
 }
 
 private actor BlockingLoginTransport: HTTPTransport {
-    private var loginContinuation: CheckedContinuation<HTTPResponse, Never>?
+    private var loginContinuations: [CheckedContinuation<HTTPResponse, Never>] =
+        []
+    private var admitted = 0
     nonisolated let loginStartedSignal = AuthTelemetryTestSignal()
     private var started = false
     private var completionReleased = false
 
+    func hasPendingRequest() -> Bool {
+        !loginContinuations.isEmpty
+    }
+
+    func pendingRequestCount() -> Int { loginContinuations.count }
+    func admissionCount() -> Int { admitted }
+
     func send(
         _ tracedRequest: TracedHTTPRequest
     ) async -> HTTPResponse {
+        admitted += 1
         started = true
         await loginStartedSignal.signal()
         return await withCheckedContinuation { continuation in
@@ -770,7 +1110,7 @@ private actor BlockingLoginTransport: HTTPTransport {
                     returning: .init(data: Data(), statusCode: 401)
                 )
             } else {
-                loginContinuation = continuation
+                loginContinuations.append(continuation)
             }
         }
     }
@@ -788,10 +1128,13 @@ private actor BlockingLoginTransport: HTTPTransport {
 
     func rejectLogin() {
         completionReleased = true
-        loginContinuation?.resume(
-            returning: .init(data: Data(), statusCode: 401)
-        )
-        loginContinuation = nil
+        let continuations = loginContinuations
+        loginContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume(
+                returning: .init(data: Data(), statusCode: 401)
+            )
+        }
     }
 }
 
@@ -803,6 +1146,10 @@ private actor RefreshRaceTransport: HTTPTransport {
     private var refreshRequests = 0
     private var logoutRequests = 0
     private var recordedLogoutRefreshToken: String?
+
+    func pendingRequestCount() -> Int {
+        refreshContinuation == nil ? 0 : 1
+    }
 
     func send(
         _ tracedRequest: TracedHTTPRequest
@@ -857,7 +1204,9 @@ private actor RefreshRaceTransport: HTTPTransport {
 
     func completeRefresh() {
         refreshReleased = true
-        refreshContinuation?.resume(
+        let continuation = refreshContinuation
+        refreshContinuation = nil
+        continuation?.resume(
             returning: .init(
                 data: LogoutTests.authenticationJSON(
                     accessToken: "rotated-access",
@@ -866,7 +1215,6 @@ private actor RefreshRaceTransport: HTTPTransport {
                 statusCode: 200
             )
         )
-        refreshContinuation = nil
     }
 
     func counts() -> (
@@ -889,7 +1237,8 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     nonisolated let logoutStartedSignal = AuthTelemetryTestSignal()
     private var initialStarted = false
     private var logoutStarted = false
-    private var initialRequestReleased = false
+    private var initialResponse: HTTPResponse?
+    private var deliveredInitialStatus: Int?
     private var logoutReleased = false
     private var refreshRequests = 0
 
@@ -917,15 +1266,24 @@ private actor InitialRequestRaceTransport: HTTPTransport {
 
         initialStarted = true
         await initialStartedSignal.signal()
-        return await withCheckedContinuation { continuation in
-            if initialRequestReleased {
-                continuation.resume(
-                    returning: .init(data: Data(), statusCode: 401)
-                )
+        let response: HTTPResponse = await withCheckedContinuation {
+            continuation in
+            if let initialResponse {
+                continuation.resume(returning: initialResponse)
             } else {
                 initialRequestContinuation = continuation
             }
         }
+        deliveredInitialStatus = response.statusCode
+        return response
+    }
+
+    func pendingInitialRequestCount() -> Int {
+        initialRequestContinuation == nil ? 0 : 1
+    }
+
+    func deliveredInitialStatusCode() -> Int? {
+        deliveredInitialStatus
     }
 
     func waitUntilInitialRequestStarts(
@@ -955,19 +1313,21 @@ private actor InitialRequestRaceTransport: HTTPTransport {
     }
 
     func completeInitial(statusCode: Int) {
-        initialRequestReleased = true
-        initialRequestContinuation?.resume(
-            returning: .init(data: Data(), statusCode: statusCode)
-        )
+        guard initialResponse == nil else { return }
+        let response = HTTPResponse(data: Data(), statusCode: statusCode)
+        initialResponse = response
+        let continuation = initialRequestContinuation
         initialRequestContinuation = nil
+        continuation?.resume(returning: response)
     }
 
     func completeLogout() {
         logoutReleased = true
-        logoutContinuation?.resume(
+        let continuation = logoutContinuation
+        logoutContinuation = nil
+        continuation?.resume(
             returning: .init(data: Data(), statusCode: 200)
         )
-        logoutContinuation = nil
     }
 
     func refreshCount() -> Int {
@@ -979,4 +1339,155 @@ private enum LogoutTestError: Error {
     case missingResponse
     case store
     case transport
+}
+
+// The counter records actual API return/throw, never transport release or cleanup.
+private func performLogoutTestCall<Value: Sendable>(
+    completed: BoundedTestCounter,
+    operation: @Sendable () async throws -> Value
+) async -> Result<Value, any Error> {
+    let outcome: Result<Value, any Error>
+    do {
+        outcome = .success(try await operation())
+    } catch {
+        outcome = .failure(error)
+    }
+    await completed.increment()
+    return outcome
+}
+
+private func requireLogoutCaller(
+    _ completed: BoundedTestCounter,
+    count: Int = 1,
+    stage: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async -> Bool {
+    let wait = await completed.wait(untilAtLeast: count)
+    #expect(
+        wait.reached,
+        "\(stage): elapsed \(wait.elapsed), limit \(wait.timeout)",
+        sourceLocation: sourceLocation)
+    return wait.reached
+}
+
+private enum LogoutFixtureKind: CaseIterable, Sendable {
+    case logout, login, refresh
+}
+
+/// These fakes intentionally ignore cancellation to exercise stale-response fences.
+/// An explicit release must still settle a cancelled caller, including late entry.
+private func exerciseLogoutFixture(
+    beforeEntry: Bool, cancelled: Bool, statusCode: Int,
+    callerCount: Int = 1,
+    send: @escaping @Sendable () async -> HTTPResponse,
+    release: @escaping @Sendable () async -> Void,
+    repeatRelease: @escaping @Sendable () async -> Void,
+    pendingCount: @escaping @Sendable () async -> Int,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let start = AuthTelemetryTestSignal()
+    let completed = BoundedTestCounter()
+    let tasks = (0..<callerCount).map { _ in
+        Task {
+            guard
+                await requireAuthTelemetrySignal(
+                    start, stage: "fixture caller start",
+                    sourceLocation: sourceLocation)
+            else {
+                return (
+                    HTTPResponse(data: Data(), statusCode: 599),
+                    Task.isCancelled
+                )
+            }
+            let response = await send()
+            await completed.increment()
+            return (response, Task.isCancelled)
+        }
+    }
+    try await withTestCleanup {
+        for task in tasks { task.cancel() }
+        await start.signal()
+        await release()
+        if await requireLogoutCaller(
+            completed, count: callerCount, stage: "fixture caller cleanup",
+            sourceLocation: sourceLocation)
+        {
+            for task in tasks { _ = await task.value }
+        }
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
+    } operation: {
+        if beforeEntry {
+            if cancelled { for task in tasks { task.cancel() } }
+            await release()
+            await repeatRelease()
+            await start.signal()
+        } else {
+            await start.signal()
+            guard
+                await requireAuthTelemetryCondition(
+                    stage: "fixture continuation registration",
+                    sourceLocation: sourceLocation,
+                    condition: { await pendingCount() == callerCount })
+            else { return }
+            if cancelled { for task in tasks { task.cancel() } }
+            await release()
+            await repeatRelease()
+        }
+        guard
+            await requireLogoutCaller(
+                completed, count: callerCount,
+                stage: "fixture caller returning",
+                sourceLocation: sourceLocation)
+        else { return }
+        for task in tasks {
+            let (response, wasCancelled) = await task.value
+            #expect(
+                response.statusCode == statusCode,
+                sourceLocation: sourceLocation)
+            #expect(wasCancelled == cancelled, sourceLocation: sourceLocation)
+        }
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
+        await repeatRelease()
+        #expect(await pendingCount() == 0, sourceLocation: sourceLocation)
+    }
+}
+
+struct LogoutResponseScenario: Sendable {
+    let statusCode: Int
+    let beforeEntry: Bool
+    let cancelled: Bool
+    static let all: [Self] = [200, 401].flatMap { status in
+        [false, true].flatMap { before in
+            [false, true].map {
+                Self(statusCode: status, beforeEntry: before, cancelled: $0)
+            }
+        }
+    }
+}
+
+struct LogoutFixtureScenario: Sendable {
+    fileprivate let kind: LogoutFixtureKind
+    let beforeEntry: Bool
+    let cancelled: Bool
+    static let all: [Self] = LogoutFixtureKind.allCases.flatMap { kind in
+        [false, true].flatMap { before in
+            [false, true].map {
+                Self(kind: kind, beforeEntry: before, cancelled: $0)
+            }
+        }
+    }
+}
+
+struct LogoutOverlapFixtureScenario: Sendable {
+    fileprivate let kind: LogoutFixtureKind
+    let beforeEntry: Bool
+    let cancelled: Bool
+    static let all: [Self] = [LogoutFixtureKind.logout, .login].flatMap {
+        kind in
+        [false, true].flatMap { before in
+            [false, true].map {
+                Self(kind: kind, beforeEntry: before, cancelled: $0)
+            }
+        }
+    }
 }

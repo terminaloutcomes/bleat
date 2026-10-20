@@ -793,3 +793,13 @@ context, cancellation and typed-error contracts. Two parameterized fixture
 contracts cover early/registered cancellation and cleanup. Production search and
 authentication are unchanged; whole task-graph drainage and seven independent
 startup-position oracles remain unresolved.
+
+The [logout caller lifecycle slice](release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372)
+bounds actual caller outcomes and failure-safe cleanup in five concurrency cases
+while retaining the AUTH-012 security and typed-error assertions. Three fixture
+contracts cover early/registered release, repeated release, cancellation, two
+unexpected simultaneous callers and the private fake's first-response HTTP
+200/401 latch. All four overlap rejection probes finish under a bounded
+observation while the original gate stays held. Production authentication is
+unchanged; this does not resolve whole production-task drainage or the seven
+independent app startup-position oracles.
