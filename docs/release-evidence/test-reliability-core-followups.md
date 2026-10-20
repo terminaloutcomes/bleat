@@ -1937,3 +1937,90 @@ failures are excluded from coverage. Corrected preflight passed 14 identities.
 Three new function identities bring host inventory to **603**, source index to
 **1,589** and core audit to **599**. Fresh revised-head CI and independent
 re-review are required; broader #372/#362 acceptance remains open.
+
+## OpenID caller outcomes and private fixture retirement (issue #372)
+
+Two active-session/concurrent-attempt tests used `async let` for their original
+calls and awaited competing rejection probes inline. A missing callback could
+therefore hang either the direct probe, the final original outcome, or implicit
+structured-child cleanup after a failed readiness guard. Entry signals were
+already bounded; their older unbounded/yield descriptions were stale.
+
+Both original and rejection callers now own actual `Result` tasks and independent
+five-second terminal counters emitted only after the real browser/coordinator API
+returns or throws. Rejection must complete while the original browser remains
+held. Readiness and positive registration are guarded; task values are consumed
+only after a terminal witness. Awaited `withTestCleanup` cancels every started
+handle, retires fixture state on normal/guard/throwing exits, and bounds actual
+completion before joins. Failed observations never join unknown results.
+
+Private `OpenIDWebSessionFactory` retains retirement before late session creation;
+each session also retains it before `start()`. Retirement delivers the existing
+typed cancellation callback to every waiting session. Admission is recorded in
+the session array before start/signal delivery. `OpenIDBrowserGate` records entry
+before awaiting its signal, collects all continuation waiters, latches its first
+failure before detaching/resuming every waiter, and preserves that failure across
+repeated conflicting release and late calls. No production cancellation or
+browser lifecycle contract changes.
+
+Two new four-scenario contracts cross retirement before entry/after both positive
+registrations and cancellation/normal caller state. Each owns two simultaneous
+browser calls and a third late call, bounds their actual typed `.cancelled`
+outcomes, repeats retirement and checks three admissions plus zero pending
+fixture state. Task cancellation is a separate stimulus; explicit fixture
+retirement supplies cancellation callbacks. Cancellation alone is not claimed
+to terminate native browser work.
+
+Completed fake web-session objects remain retained for synthetic late callback
+delivery. Conflicting callbacks are delivered only after actual native API
+completion, without assuming main-actor Task FIFO ordering. This does not prove
+those internal callback Tasks have exited. The gate's conflicting first-failure
+behavior is independently checked through a fresh late caller. Test-owned caller
+return and zero pending fixture state do not establish whole AppAuth/native or
+private-worker/timeout-observer drainage. Those stronger per-owner lifecycle
+requirements remain for a separately scoped design; existing async lifecycle
+boundaries should be used where they already expose the needed completion.
+
+Original typed `.alreadyActive`, `.cancelled`, `.attemptAlreadyInProgress` and
+`.browserCancelled` assertions remain, as do two cookie clears, one request and
+nil coordinator attempt. Added exact admission/pending counts establish that the
+original flow remains held through the rejection. All seventeen neighboring test
+bodies are unchanged, including three real off-main callback-adapter variants
+and completion/refusal-start behavior. The already-bounded off-main adapter's
+stale audit label is not an implementation finding fixed by this slice.
+
+Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
+
+- Three independent focused serial runs: **4/4 exact function identities each**;
+  both helper identities execute all four parameter scenarios. Owning
+  `OpenIDAuthenticationTests`: **21/21**; restored focus: **4/4**. Zero
+  failures/errors/skips in every final run.
+- Complete supported signed host gate: **605/605** exact inventory identities,
+  zero failures/errors/skips, including synchronizable Keychain. Combined and
+  per-target XML aliases reconcile without double counting.
+- Six expected-failing mutations are killed at required executed observations:
+  omitted original/probe terminal witnesses, omitted factory/gate retirement
+  latches and both production overlap rejection guards. No hang or continuation
+  trap; production/test bytes are restored exactly after each attempt.
+- Strict Swift lint, docs, all original semantic postconditions, seventeen
+  unchanged neighboring tests, source/audit scope and production-byte checks pass.
+  Existing dependency deployment warnings, three declared fixture-cleanup known
+  issues and intentional read-only SwiftData diagnostics remain visible.
+
+Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
+--disable-xctest --no-parallel --filter` selecting the two original and two helper
+identities; reports use `.build/i372-openid-focused-{1,2,3}`. Owning selection is
+`OpenIDAuthenticationTests`, reports `i372-openid-owning`; restored focus uses
+`i372-openid-restored`. Signed command is `mise exec -- ./scripts/test-host.sh`,
+retained XML `.build/i372-openid-signed-results`. Exact verification/mutation
+manifests are `.build/i372-openid-verification.json` and
+`.build/i372-openid-mutations.json`; raw logs remain private.
+
+Two preliminary compile-only attempts failed at main-actor/global assertion
+closure isolation without running tests; the corrected preliminary owner passed
+21 identities separately from final repetitions. Two added function identities
+bring host inventory to **605**, source index to **1,591** and core audit to
+**601**. Only the two selected dispositions, two helper records and changed-file
+navigation/inventory/evidence change. Fresh exact-head CI and independent review
+are required. Broader #372/#362 acceptance, whole private-worker/timeout-observer
+drainage, seven app startup clock oracles and separate cover work remain open.

@@ -803,3 +803,10 @@ unexpected simultaneous callers and the private fake's first-response HTTP
 observation while the original gate stays held. Production authentication is
 unchanged; this does not resolve whole production-task drainage or the seven
 independent app startup-position oracles.
+
+The [OpenID caller lifecycle slice](release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372)
+bounds original and competing calls in two active-session/concurrent-attempt
+cases while preserving callback/session/cancellation errors and account cleanup.
+Private fixture retirement covers existing and late arrivals, with two four-case
+contracts. Production lifecycle contracts are unchanged; whole retired-worker,
+timeout-observer and internal callback-task drainage remain separately scoped.

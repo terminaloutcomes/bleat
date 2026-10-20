@@ -206,46 +206,75 @@ final class OpenIDAuthenticationTests {
 
     @MainActor
     @Test
-    func testSystemBrowserSessionRejectsASecondActiveSession()
-        async throws
-    {
+    func testSystemBrowserSessionRejectsASecondActiveSession() async throws {
         let authorizationURL = try #require(
             URL(string: "https://identity.example/authorize"))
         let factory = OpenIDWebSessionFactory(behavior: .wait)
         let browser = SystemOpenIDBrowserSession(
-            anchorProvider: { ASPresentationAnchor() },
-            sessionFactory: factory
+            anchorProvider: { ASPresentationAnchor() }, sessionFactory: factory
         )
-
-        async let firstCallback = browser.authenticate(
-            at: authorizationURL,
-            callbackScheme: "com.example.bleat"
-        )
-        let sessionStarted = await factory.waitUntilSessionStarts()
-        #expect(sessionStarted)
-        guard sessionStarted, let session = factory.sessions.first else {
-            return
+        let firstCompleted = BoundedTestCounter()
+        let probeCompleted = BoundedTestCounter()
+        let firstCallback = Task {
+            await performOpenIDTestCall(completed: firstCompleted) {
+                try await browser.authenticate(
+                    at: authorizationURL, callbackScheme: "com.example.bleat")
+            }
         }
-
-        do {
-            _ = try await browser.authenticate(
-                at: authorizationURL,
-                callbackScheme: "com.example.bleat"
-            )
-            Issue.record("Expected active-session rejection")
-        } catch {
-            #expect(error as? OpenIDBrowserError == .alreadyActive)
-        }
-
-        session.finish(
-            callbackURL: nil,
-            error: .cancelled
-        )
-        do {
-            _ = try await firstCallback
-            Issue.record("Expected cancellation")
-        } catch {
-            #expect(error as? OpenIDBrowserError == .cancelled)
+        var rejectionProbe: Task<Result<URL, any Error>, Never>?
+        try await withTestCleanup {
+            firstCallback.cancel()
+            rejectionProbe?.cancel()
+            factory.retireWaitingSessions()
+            if await requireOpenIDCaller(
+                firstCompleted, stage: "original browser cleanup")
+            {
+                _ = await firstCallback.value
+            }
+            if let rejectionProbe,
+                await requireOpenIDCaller(
+                    probeCompleted, stage: "browser rejection probe cleanup")
+            {
+                _ = await rejectionProbe.value
+            }
+            #expect(factory.pendingSessionCount == 0)
+        } operation: {
+            guard await factory.waitUntilSessionStarts() else { return }
+            let session = try #require(factory.sessions.first)
+            #expect(factory.pendingSessionCount == 1)
+            let probe = Task {
+                await performOpenIDTestCall(completed: probeCompleted) {
+                    try await browser.authenticate(
+                        at: authorizationURL,
+                        callbackScheme: "com.example.bleat")
+                }
+            }
+            rejectionProbe = probe
+            guard
+                await requireOpenIDCaller(
+                    probeCompleted,
+                    stage: "second browser rejected while first session held")
+            else { return }
+            do {
+                _ = try await probe.value.get()
+                Issue.record("Expected active-session rejection")
+            } catch {
+                #expect(error as? OpenIDBrowserError == .alreadyActive)
+            }
+            #expect(factory.sessions.count == 1)
+            #expect(factory.pendingSessionCount == 1)
+            session.finish(callbackURL: nil, error: .cancelled)
+            guard
+                await requireOpenIDCaller(
+                    firstCompleted,
+                    stage: "original browser cancellation returning")
+            else { return }
+            do {
+                _ = try await firstCallback.value.get()
+                Issue.record("Expected cancellation")
+            } catch {
+                #expect(error as? OpenIDBrowserError == .cancelled)
+            }
         }
     }
 
@@ -732,51 +761,89 @@ final class OpenIDAuthenticationTests {
         let transport = OpenIDTestTransport()
         let store = OpenIDCredentialStore()
         let coordinator = AuthCoordinator(
-            transport: transport,
-            credentialStore: store
-        )
+            transport: transport, credentialStore: store)
         let gate = OpenIDBrowserGate()
         let browser = SuspendingOpenIDBrowser(gate: gate)
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
-
-        async let firstAttempt = coordinator.loginWithOpenID(
-            accountID: accountID,
-            server: server,
-            callbackURL: Self.callbackURL,
-            browser: browser
-        )
-        #expect(await gate.waitUntilEntered())
-
-        await assertThrowsErrorAsync(
-            try await coordinator.loginWithOpenID(
-                accountID: AccountID(rawValue: "second-account"),
-                server: server,
-                callbackURL: Self.callbackURL,
-                browser: OpenIDTestBrowser.success(
-                    callbackURL: Self.callbackURL
+        let firstCompleted = BoundedTestCounter()
+        let probeCompleted = BoundedTestCounter()
+        let firstAttempt = Task {
+            await performOpenIDTestCall(completed: firstCompleted) {
+                try await coordinator.loginWithOpenID(
+                    accountID: accountID, server: server,
+                    callbackURL: Self.callbackURL, browser: browser)
+            }
+        }
+        var rejectionProbe:
+            Task<Result<AuthenticatedAccount, any Error>, Never>?
+        try await withTestCleanup {
+            firstAttempt.cancel()
+            rejectionProbe?.cancel()
+            await gate.fail(with: .cancelled)
+            if await requireOpenIDCaller(
+                firstCompleted, stage: "original OpenID attempt cleanup")
+            {
+                _ = await firstAttempt.value
+            }
+            if let rejectionProbe,
+                await requireOpenIDCaller(
+                    probeCompleted, stage: "OpenID rejection probe cleanup")
+            {
+                _ = await rejectionProbe.value
+            }
+            #expect(await gate.pendingCount() == 0)
+        } operation: {
+            guard await gate.waitUntilEntered() else { return }
+            guard
+                await requireAuthTelemetryCondition(
+                    stage: "original OpenID browser continuation registration",
+                    condition: { await gate.pendingCount() == 1 })
+            else { return }
+            let probe = Task {
+                await performOpenIDTestCall(completed: probeCompleted) {
+                    try await coordinator.loginWithOpenID(
+                        accountID: AccountID(rawValue: "second-account"),
+                        server: server,
+                        callbackURL: Self.callbackURL,
+                        browser: OpenIDTestBrowser.success(
+                            callbackURL: Self.callbackURL)
+                    )
+                }
+            }
+            rejectionProbe = probe
+            guard
+                await requireOpenIDCaller(
+                    probeCompleted,
+                    stage:
+                        "second OpenID attempt rejected while first browser held"
                 )
-            )
-        ) { error in
-            #expect(
-                error as? OpenIDAuthenticationError == .attemptAlreadyInProgress
-            )
+            else { return }
+            await assertThrowsErrorAsync(try await probe.value.get()) { error in
+                #expect(
+                    error as? OpenIDAuthenticationError
+                        == .attemptAlreadyInProgress)
+            }
+            #expect(await gate.entryCount() == 1)
+            #expect(await gate.pendingCount() == 1)
+            await gate.fail(with: .cancelled)
+            guard
+                await requireOpenIDCaller(
+                    firstCompleted,
+                    stage: "original OpenID attempt cancellation returning")
+            else { return }
+            var firstError: OpenIDAuthenticationError?
+            do { _ = try await firstAttempt.value.get() } catch let error
+                as OpenIDAuthenticationError
+            { firstError = error }
+            let clearCount = await transport.clearCount()
+            let requests = await transport.recordedRequests()
+            let openIDAttempt = await coordinator.openIDAttempt
+            #expect(firstError == .browserCancelled)
+            #expect(clearCount == 2)
+            #expect(requests.count == 1)
+            #expect(openIDAttempt == nil)
         }
-
-        await gate.fail(with: .cancelled)
-        var firstError: OpenIDAuthenticationError?
-        do {
-            _ = try await firstAttempt
-        } catch let error as OpenIDAuthenticationError {
-            firstError = error
-        }
-        let clearCount = await transport.clearCount()
-        let requests = await transport.recordedRequests()
-        let openIDAttempt = await coordinator.openIDAttempt
-        #expect(firstError == .browserCancelled)
-        #expect(clearCount == 2)
-        #expect(requests.count == 1)
-        #expect(openIDAttempt == nil)
     }
 
     @Test
@@ -964,6 +1031,59 @@ final class OpenIDAuthenticationTests {
         #expect(openIDAttempt == nil)
     }
 
+    @MainActor
+    @Test(arguments: OpenIDRetirementScenario.allCases)
+    func testWaitingWebSessionFactoryRetiresExistingAndLateSessions(
+        scenario: OpenIDRetirementScenario
+    ) async throws {
+        let url = try #require(
+            URL(string: "https://identity.example/authorize"))
+        let factory = OpenIDWebSessionFactory(behavior: .wait)
+        try await exerciseOpenIDRetirement(
+            scenario: scenario,
+            call: {
+                let browser = SystemOpenIDBrowserSession(
+                    anchorProvider: { ASPresentationAnchor() },
+                    sessionFactory: factory)
+                return try await browser.authenticate(
+                    at: url, callbackScheme: "com.example.bleat")
+            },
+            retire: { factory.retireWaitingSessions() },
+            repeatRetire: {
+                factory.retireWaitingSessions()
+                // Deliver conflicting late callbacks only after the original
+                // completions were accepted; do not assume Task FIFO ordering.
+                for session in factory.sessions {
+                    session.finish(callbackURL: url, error: nil)
+                }
+            },
+            pending: { factory.pendingSessionCount },
+            admitted: { factory.sessions.count }
+        )
+    }
+
+    @MainActor
+    @Test(arguments: OpenIDRetirementScenario.allCases)
+    func testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers(
+        scenario: OpenIDRetirementScenario
+    ) async throws {
+        let gate = OpenIDBrowserGate()
+        let browser = SuspendingOpenIDBrowser(gate: gate)
+        let url = try #require(
+            URL(string: "https://identity.example/authorize"))
+        try await exerciseOpenIDRetirement(
+            scenario: scenario,
+            call: {
+                try await browser.authenticate(
+                    at: url, callbackScheme: "com.example.bleat")
+            },
+            retire: { await gate.fail(with: .cancelled) },
+            repeatRetire: { await gate.fail(with: .failed) },
+            pending: { await gate.pendingCount() },
+            admitted: { await gate.entryCount() }
+        )
+    }
+
     private static let callbackURL = try! OpenIDCallbackURL(
         "com.example.bleat://oauth-callback"
     )
@@ -1099,6 +1219,14 @@ private final class OpenIDWebSessionFactory:
     let behavior: OpenIDWebSessionBehavior
     private(set) var sessions: [OpenIDWebSession] = []
     private let sessionStarted = AuthTelemetryTestSignal()
+    private var retired = false
+
+    var pendingSessionCount: Int { sessions.filter(\.isWaiting).count }
+
+    func retireWaitingSessions() {
+        retired = true
+        for session in sessions { session.retire() }
+    }
 
     init(behavior: OpenIDWebSessionBehavior) {
         self.behavior = behavior
@@ -1118,6 +1246,7 @@ private final class OpenIDWebSessionFactory:
             completion: completion
         )
         sessions.append(session)
+        if retired { session.retire() }
         return session
     }
 
@@ -1144,6 +1273,13 @@ private final class OpenIDWebSession: OpenIDWebAuthenticationSession {
     private let completion: @Sendable (URL?, OpenIDBrowserError?) -> Void
     private let sessionStarted: AuthTelemetryTestSignal
     private(set) var didStart = false
+    private(set) var isWaiting = false
+    private var retired = false
+
+    func retire() {
+        retired = true
+        if isWaiting { finish(callbackURL: nil, error: .cancelled) }
+    }
 
     init(
         authorizationURL: URL,
@@ -1174,6 +1310,8 @@ private final class OpenIDWebSession: OpenIDWebAuthenticationSession {
             completion(callbackURL, error)
             return false
         case .wait:
+            isWaiting = true
+            if retired { finish(callbackURL: nil, error: .cancelled) }
             return true
         }
     }
@@ -1182,6 +1320,7 @@ private final class OpenIDWebSession: OpenIDWebAuthenticationSession {
         callbackURL: URL?,
         error: OpenIDBrowserError?
     ) {
+        isWaiting = false
         completion(callbackURL, error)
     }
 }
@@ -1283,43 +1422,41 @@ private struct SuspendingOpenIDBrowser: OpenIDBrowserSession {
 }
 
 private actor OpenIDBrowserGate {
-    private var entered = false
+    private var entries = 0
     nonisolated let entrySignal = AuthTelemetryTestSignal()
     private var resolution: Result<URL, OpenIDBrowserError>?
-    private var resolutionWaiter: CheckedContinuation<URL, any Error>?
+    private var resolutionWaiters: [CheckedContinuation<URL, any Error>] = []
 
-    func enter() {
-        entered = true
-        Task { await entrySignal.signal() }
+    func enter() async {
+        entries += 1
+        await entrySignal.signal()
     }
 
-    func waitUntilEntered(
-        sourceLocation: SourceLocation = #_sourceLocation
-    ) async -> Bool {
-        if entered { return true }
+    func entryCount() -> Int { entries }
+    func pendingCount() -> Int { resolutionWaiters.count }
+
+    func waitUntilEntered(sourceLocation: SourceLocation = #_sourceLocation)
+        async -> Bool
+    {
+        if entries > 0 { return true }
         return await requireAuthTelemetrySignal(
-            entrySignal,
-            stage: "OpenID browser gate entry",
-            sourceLocation: sourceLocation
-        )
+            entrySignal, stage: "OpenID browser gate entry",
+            sourceLocation: sourceLocation)
     }
 
     func waitForResolution() async throws -> URL {
-        if let resolution {
-            return try resolution.get()
-        }
+        if let resolution { return try resolution.get() }
         return try await withCheckedThrowingContinuation { continuation in
-            resolutionWaiter = continuation
+            resolutionWaiters.append(continuation)
         }
     }
 
     func fail(with error: OpenIDBrowserError) {
-        if let resolutionWaiter {
-            self.resolutionWaiter = nil
-            resolutionWaiter.resume(throwing: error)
-        } else {
-            resolution = .failure(error)
-        }
+        guard resolution == nil else { return }
+        resolution = .failure(error)
+        let waiters = resolutionWaiters
+        resolutionWaiters.removeAll()
+        for waiter in waiters { waiter.resume(throwing: error) }
     }
 }
 
@@ -1469,4 +1606,143 @@ private enum OpenIDTestError: Error {
     case invalidBrowserRequest
     case invalidRequest
     case storeFailure
+}
+
+private func performOpenIDTestCall<Value: Sendable>(
+    completed: BoundedTestCounter,
+    operation: @Sendable () async throws -> Value
+) async -> Result<Value, any Error> {
+    let result: Result<Value, any Error>
+    do { result = .success(try await operation()) } catch {
+        result = .failure(error)
+    }
+    await completed.increment()
+    return result
+}
+
+private func requireOpenIDCaller(
+    _ completed: BoundedTestCounter, count: Int = 1,
+    stage: String, sourceLocation: SourceLocation = #_sourceLocation
+) async -> Bool {
+    let wait = await completed.wait(untilAtLeast: count)
+    #expect(
+        wait.reached,
+        "\(stage): elapsed \(wait.elapsed), limit \(wait.timeout)",
+        sourceLocation: sourceLocation)
+    return wait.reached
+}
+
+enum OpenIDRetirementScenario: CaseIterable, Sendable {
+    case retireBeforeEntry, cancelAndRetireBeforeEntry
+    case retireAfterRegistration, cancelAndRetireAfterRegistration
+    var beforeEntry: Bool {
+        self == .retireBeforeEntry || self == .cancelAndRetireBeforeEntry
+    }
+    var cancelled: Bool {
+        self == .cancelAndRetireBeforeEntry
+            || self == .cancelAndRetireAfterRegistration
+    }
+}
+
+@MainActor
+private func exerciseOpenIDRetirement(
+    scenario: OpenIDRetirementScenario,
+    call: @escaping @MainActor @Sendable () async throws -> URL,
+    retire: @escaping @MainActor @Sendable () async -> Void,
+    repeatRetire: @escaping @MainActor @Sendable () async -> Void,
+    pending: @escaping @MainActor @Sendable () async -> Int,
+    admitted: @escaping @MainActor @Sendable () async -> Int,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let start = AuthTelemetryTestSignal()
+    let completed = BoundedTestCounter()
+    var tasks: [Task<Result<URL, any Error>, Never>] = []
+    for _ in 0..<2 {
+        tasks.append(
+            Task {
+                guard
+                    await requireAuthTelemetrySignal(
+                        start, stage: "OpenID fixture caller start",
+                        sourceLocation: sourceLocation)
+                else { return .failure(OpenIDTestError.invalidBrowserRequest) }
+                return await performOpenIDTestCall(completed: completed) {
+                    try await call()
+                }
+            })
+    }
+    try await withTestCleanup {
+        for task in tasks { task.cancel() }
+        await start.signal()
+        await retire()
+        if await requireOpenIDCaller(
+            completed, count: tasks.count,
+            stage: "OpenID fixture caller cleanup",
+            sourceLocation: sourceLocation)
+        {
+            for task in tasks { _ = await task.value }
+        }
+        #expect(await pending() == 0, sourceLocation: sourceLocation)
+    } operation: {
+        if scenario.beforeEntry {
+            if scenario.cancelled { for task in tasks { task.cancel() } }
+            await retire()
+            await start.signal()
+        } else {
+            await start.signal()
+            guard
+                await requireAuthTelemetryCondition(
+                    stage: "both OpenID fixture continuations registered",
+                    sourceLocation: sourceLocation,
+                    condition: { await pending() == 2 })
+            else { return }
+            if scenario.cancelled { for task in tasks { task.cancel() } }
+            await retire()
+        }
+        guard
+            await requireOpenIDCaller(
+                completed, count: 2,
+                stage: "two OpenID fixture callers returning",
+                sourceLocation: sourceLocation)
+        else { return }
+        for task in tasks {
+            do {
+                _ = try await task.value.get()
+                Issue.record(
+                    "Expected retired OpenID browser cancellation",
+                    sourceLocation: sourceLocation)
+            } catch {
+                #expect(
+                    error as? OpenIDBrowserError == .cancelled,
+                    sourceLocation: sourceLocation)
+            }
+        }
+        await repeatRetire()
+        tasks.append(
+            Task {
+                await performOpenIDTestCall(completed: completed) {
+                    try await call()
+                }
+            })
+        guard
+            await requireOpenIDCaller(
+                completed, count: 3,
+                stage: "late OpenID fixture caller returning",
+                sourceLocation: sourceLocation)
+        else { return }
+        if let late = tasks.last {
+            do {
+                _ = try await late.value.get()
+                Issue.record(
+                    "Expected retired OpenID browser cancellation",
+                    sourceLocation: sourceLocation)
+            } catch {
+                #expect(
+                    error as? OpenIDBrowserError == .cancelled,
+                    sourceLocation: sourceLocation)
+            }
+        }
+        await repeatRetire()
+        #expect(await admitted() == 3, sourceLocation: sourceLocation)
+        #expect(await pending() == 0, sourceLocation: sourceLocation)
+    }
 }

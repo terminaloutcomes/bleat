@@ -12916,7 +12916,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserFactoryMapsProviderCompletions",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 36
+        "line": 43
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -12955,7 +12955,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionCompletesAndConfiguresSession",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 97
+        "line": 104
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -12994,7 +12994,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsMissingPresentationAnchor",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 141
+        "line": 148
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13033,7 +13033,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionMapsCancellationAndFailure",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 167
+        "line": 174
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13072,40 +13072,40 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsASecondActiveSession",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 202
+        "line": 209
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Reject a second active browser session while allowing first flow to complete through cancellation.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "OpenIDWebSessionFactory.waitUntilSessionStarts loops Task.yield without deadline; session completion then awaited.",
-        "action_postconditions": "Start first async auth; await session start helper; assert second `.alreadyActive`; finish first with cancellation and assert `.cancelled`."
+        "setup": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+        "action_postconditions": "Original native browser call starts a held private web session;bound the second actual authenticate outcome before first callback release,assert typed alreadyActive,one admitted/pending session;deliver cancellation,bound original return and assert typed cancelled."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "OpenIDWebSessionFactory.waitUntilSessionStarts loops Task.yield without deadline; session completion then awaited.",
-        "timeout_tolerance": "N/A: no elapsed-time or playback tolerance."
+        "synchronization": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
+        "timeout_tolerance": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change."
       },
       "compiler_skip_conditions": "No test-level compiler guard, skip, or opt-in.",
       "rules": {
-        "1": "Start first async auth; await session start helper; assert second `.alreadyActive`; finish first with cancellation and assert `.cancelled`.",
-        "2": "OpenIDWebSessionFactory.waitUntilSessionStarts loops Task.yield without deadline; session completion then awaited.",
+        "1": "Original native browser call starts a held private web session;bound the second actual authenticate outcome before first callback release,assert typed alreadyActive,one admitted/pending session;deliver cancellation,bound original return and assert typed cancelled.",
+        "2": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
         "3": "N/A: no playback position/seek assertion.",
-        "4": "Async work and first attempt results are awaited; callback/gate readiness is unbounded; see linked follow-up.",
-        "5": "New actor transport, credential store, browser factory and coordinator per scenario; fixed local URL/token fixtures.",
-        "6": "Deterministic host OpenID adapter test with local fakes.",
-        "7": "No blind retries or timing relaxation.",
-        "8": "Typed OAuth errors and exact route/token/cleanup state are asserted. Replace helper scheduler-yield polling with bounded started signal and assert the actual session-start transition.",
-        "9": "Source review only; per-test repetition not recorded."
+        "4": "Every started original/probe is owned,all are cancelled before fixture retirement,and only witnessed terminal tasks are joined. The factory retires current and late-created sessions;the gate latches its first failure and resumes every waiter. Native/private-worker termination beyond these observed boundaries remains separately scoped.",
+        "5": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+        "6": "Deterministic host browser/coordinator integration with private session/HTTP fixtures;no actual ASWebAuthenticationSession presentation.",
+        "7": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change.",
+        "8": "Caller source location,stage,elapsed/limit,typed error,admission/pending count and original cleanup counts diagnose failure.",
+        "9": "Final focused repeats,owner,signed exact inventory,restored source and expected-failing mutations are retained separately."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "OpenIDWebSessionFactory.waitUntilSessionStarts loops Task.yield without deadline; session completion then awaited.",
-      "action_postconditions": "Start first async auth; await session start helper; assert second `.alreadyActive`; finish first with cancellation and assert `.cancelled`.",
-      "synchronization": "OpenIDWebSessionFactory.waitUntilSessionStarts loops Task.yield without deadline; session completion then awaited.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host OpenID adapter test with local fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+      "action_postconditions": "Original native browser call starts a held private web session;bound the second actual authenticate outcome before first callback release,assert typed alreadyActive,one admitted/pending session;deliver cancellation,bound original return and assert typed cancelled.",
+      "synchronization": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
+      "timeout_tolerance": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change.",
+      "classification": "Deterministic host browser/coordinator integration with private session/HTTP fixtures;no actual ASWebAuthenticationSession presentation.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
-      "reason": "Replace helper scheduler-yield polling with bounded started signal and assert the actual session-start transition.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "reason": "Both original and rejection callers now have bounded actual Results and all-exit fixture retirement. Failed observations return without unknown task joins;typed errors,session admission and coordinator cleanup postconditions remain. This does not prove whole AppAuth/native/production task-graph drainage.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/BoundedTestCounter/withTestCleanup supply bounds and all-exit cleanup. Private factory/session retirement latches before late creation/start. Private gate tracks admission before signal await,stores all waiters and latches first resolution before detaching/resuming. Two four-scenario contracts test retirement/cancel+retirement before entry/after registration,two concurrent callers and a third late caller,conflicting repeated completion and zero pending state. Task cancellation alone is not claimed to complete native browser work.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
@@ -13119,13 +13119,14 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
-      }
+      },
+      "prior_openid_caller_finding": "Replace helper scheduler-yield polling with bounded started signal and assert the actual session-start transition."
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testPKCEUsesRFC7636ChallengeAndSecureShapes",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 242
+        "line": 282
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13164,7 +13165,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testPKCERandomFailureRemainsTyped",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 274
+        "line": 314
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13203,7 +13204,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackURLValidation",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 305
+        "line": 345
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13242,7 +13243,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackRequiresExactURLStateAndCode",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 343
+        "line": 383
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13281,7 +13282,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCompleteCookieBoundFlowValidatesThenPersists",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 417
+        "line": 457
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13320,7 +13321,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testBeginRejectsInvalidResponsesAndCleansUp",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 513
+        "line": 553
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13359,7 +13360,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testBrowserCancellationAndFailureCleanUp",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 572
+        "line": 612
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13398,7 +13399,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidBrowserCallbacksNeverReachExchange",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 629
+        "line": 669
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13437,7 +13438,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackWithoutCodeNeverReachesExchange",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 688
+        "line": 728
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13476,53 +13477,54 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testConcurrentAttemptIsRejectedWithoutDisturbingActiveFlow",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 718
+        "line": 758
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
       "purpose": "Reject a concurrent OpenID login attempt while preserving the original attempt until it is canceled.",
       "dependencies_setup_actions_postconditions": {
-        "setup": "OpenIDBrowserGate.waitUntilEntered uses unbounded checked continuation; waitForResolution is released by test.",
-        "action_postconditions": "Start first browser behind actor gate; await entry; assert second attemptAlreadyInProgress; release first with cancel; assert mapped browserCancelled, two cookie clears, one begin request, attempt cleared."
+        "setup": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+        "action_postconditions": "Original coordinator login reaches a positively registered browser waiter;bound second actual login before first gate release,assert typed attemptAlreadyInProgress,one browser admission/pending waiter;release cancellation,bound original return and assert browserCancelled,two cookie clears,one request and nil attempt."
       },
       "synchronization_timeout_tolerance": {
-        "synchronization": "OpenIDBrowserGate.waitUntilEntered uses unbounded checked continuation; waitForResolution is released by test.",
-        "timeout_tolerance": "N/A: no elapsed-time or playback tolerance."
+        "synchronization": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
+        "timeout_tolerance": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change."
       },
       "compiler_skip_conditions": "No test-level compiler guard, skip, or opt-in.",
       "rules": {
-        "1": "Start first browser behind actor gate; await entry; assert second attemptAlreadyInProgress; release first with cancel; assert mapped browserCancelled, two cookie clears, one begin request, attempt cleared.",
-        "2": "OpenIDBrowserGate.waitUntilEntered uses unbounded checked continuation; waitForResolution is released by test.",
+        "1": "Original coordinator login reaches a positively registered browser waiter;bound second actual login before first gate release,assert typed attemptAlreadyInProgress,one browser admission/pending waiter;release cancellation,bound original return and assert browserCancelled,two cookie clears,one request and nil attempt.",
+        "2": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
         "3": "N/A: no playback position/seek assertion.",
-        "4": "Async work and first attempt results are awaited; callback/gate readiness is unbounded; see linked follow-up.",
-        "5": "New actor transport, credential store, browser factory and coordinator per scenario; fixed local URL/token fixtures.",
-        "6": "Deterministic host OpenID adapter test with local fakes.",
-        "7": "No blind retries or timing relaxation.",
-        "8": "Typed OAuth errors and exact route/token/cleanup state are asserted. Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior.",
-        "9": "Source review only; per-test repetition not recorded."
+        "4": "Every started original/probe is owned,all are cancelled before fixture retirement,and only witnessed terminal tasks are joined. The factory retires current and late-created sessions;the gate latches its first failure and resumes every waiter. Native/private-worker termination beyond these observed boundaries remains separately scoped.",
+        "5": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+        "6": "Deterministic host browser/coordinator integration with private session/HTTP fixtures;no actual ASWebAuthenticationSession presentation.",
+        "7": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change.",
+        "8": "Caller source location,stage,elapsed/limit,typed error,admission/pending count and original cleanup counts diagnose failure.",
+        "9": "Final focused repeats,owner,signed exact inventory,restored source and expected-failing mutations are retained separately."
       },
-      "decision": "follow_up",
-      "dependencies_and_setup": "OpenIDBrowserGate.waitUntilEntered uses unbounded checked continuation; waitForResolution is released by test.",
-      "action_postconditions": "Start first browser behind actor gate; await entry; assert second attemptAlreadyInProgress; release first with cancel; assert mapped browserCancelled, two cookie clears, one begin request, attempt cleared.",
-      "synchronization": "OpenIDBrowserGate.waitUntilEntered uses unbounded checked continuation; waitForResolution is released by test.",
-      "timeout_tolerance": "N/A: no numeric timing tolerance.",
-      "classification": "Deterministic host OpenID adapter test with local fakes.",
+      "decision": "keep",
+      "dependencies_and_setup": "Fresh synthetic URL/account,private web-session factory or browser gate and in-memory transport/credential store. No real identity provider,network browser presentation or personal state.",
+      "action_postconditions": "Original coordinator login reaches a positively registered browser waiter;bound second actual login before first gate release,assert typed attemptAlreadyInProgress,one browser admission/pending waiter;release cancellation,bound original return and assert browserCancelled,two cookie clears,one request and nil attempt.",
+      "synchronization": "Existing ten-second bounded entry signals are guarded;positive continuation/session registration is observed. Separate five-second counters are emitted only after original/probe APIs actually return or throw,with rejection required while the original stays held. Awaited all-exit cleanup cancels both owned handles,retires existing/late fixture arrivals and bounds terminal outcomes before joins.",
+      "timeout_tolerance": "Diagnostic failure budgets,not latency assertions. No guessed yields,readiness sleeps,timeout increase or production cancellation-policy change.",
+      "classification": "Deterministic host browser/coordinator integration with private session/HTTP fixtures;no actual ASWebAuthenticationSession presentation.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
-      "reason": "Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "reason": "Both original and rejection callers now have bounded actual Results and all-exit fixture retirement. Failed observations return without unknown task joins;typed errors,session admission and coordinator cleanup postconditions remain. This does not prove whole AppAuth/native/production task-graph drainage.",
+      "shared_helper_review": "Existing AuthTelemetryTestSignal/BoundedTestCounter/withTestCleanup supply bounds and all-exit cleanup. Private factory/session retirement latches before late creation/start. Private gate tracks admission before signal await,stores all waiters and latches first resolution before detaching/resuming. Two four-scenario contracts test retirement/cancel+retirement before entry/after registration,two concurrent callers and a third late caller,conflicting repeated completion and zero pending state. Task cancellation alone is not claimed to complete native browser work.",
       "timing_batch": {
         "date": "2026-10-16",
         "baseline": "09908d5dc0a3f8a8c7032d12888fe59e8cc2c7aa",
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
-      }
+      },
+      "prior_openid_caller_finding": "Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior."
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testExchangeFailuresNeverPersistAndAlwaysCleanUp",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 772
+        "line": 850
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13561,7 +13563,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testAuthorizationAndPersistenceFailuresRemainTyped",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 849
+        "line": 927
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13600,7 +13602,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidAccountDoesNotTouchAttemptOrCookies",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 930
+        "line": 1008
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23506,6 +23508,70 @@
       },
       "decision": "keep",
       "reason": "Verify two unexpected simultaneous callers cannot overwrite a held logout/login continuation and all are retired safely."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
+      "source": {
+        "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+        "line": 1036
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Validate private web-session factory retirement across existing/late-created sessions through actual SystemOpenIDBrowserSession;deliver late conflicting callbacks only after accepted completion.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor/factory,explicit entry gate and owned Result tasks per scenario.",
+        "action_postconditions": "Four scenarios cross retirement before entry/after both positive registrations and caller cancellation/normal. Bound two real browser outcomes,repeat retirement,then bound a third late caller;all throw typed cancelled. Assert three admissions and zero pending storage. Conflicting callbacks occur after accepted native completions;gate conflicting failures preserve its first result."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Explicit bounded start gate,positive all-caller registration and five-second terminal counters after actual API return/throw;cleanup opens entry/retires fixtures and only joins fully witnessed callers.",
+        "timeout_tolerance": "Existing ten-second entry/condition and five-second terminal diagnostic budgets;no latency contract."
+      },
+      "compiler_skip_conditions": "No guard,skip or opt-in;four exhaustive parameter scenarios.",
+      "rules": {
+        "1": "Four scenarios cross retirement before entry/after both positive registrations and caller cancellation/normal. Bound two real browser outcomes,repeat retirement,then bound a third late caller;all throw typed cancelled. Assert three admissions and zero pending storage. Conflicting callbacks occur after accepted native completions;gate conflicting failures preserve its first result.",
+        "2": "Explicit bounded start gate,positive all-caller registration and five-second terminal counters after actual API return/throw;cleanup opens entry/retires fixtures and only joins fully witnessed callers.",
+        "3": "N/A:no media or latency measurement.",
+        "4": "Own all three callers;cancel/open entry/retire on normal,guard and throwing exits;bound actual completion before joins. Explicit fixture retirement drives typed cancellation;Task.cancel alone/native-worker drainage is not inferred. Completed fake sessions are intentionally retained for late callback delivery;pending flags and actual caller outcomes do not prove native callback-task termination.",
+        "5": "Fresh private factory/gate and synthetic URL per exhaustive scenario;no network,global browser state or user credentials.",
+        "6": "Private fixture plus existing browser boundary;no real provider/native browser/device evidence.",
+        "7": "No readiness sleep,guessed executor turns,retry-to-green or timeout increase.",
+        "8": "Caller source location,scenario,stage,elapsed/limit,typed cancellation and exact admission/pending counts.",
+        "9": "Focused repeats,owner/signed inventory and targeted negative controls recorded separately."
+      },
+      "decision": "keep",
+      "reason": "Validate private web-session factory retirement across existing/late-created sessions through actual SystemOpenIDBrowserSession;deliver late conflicting callbacks only after accepted completion."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers",
+      "source": {
+        "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+        "line": 1067
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Validate private OpenID browser gate first-failure retirement across simultaneous and late callers without overwritten continuations.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh private actor/factory,explicit entry gate and owned Result tasks per scenario.",
+        "action_postconditions": "Four scenarios cross retirement before entry/after both positive registrations and caller cancellation/normal. Bound two real browser outcomes,repeat retirement,then bound a third late caller;all throw typed cancelled. Assert three admissions and zero pending storage. Conflicting callbacks occur after accepted native completions;gate conflicting failures preserve its first result."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Explicit bounded start gate,positive all-caller registration and five-second terminal counters after actual API return/throw;cleanup opens entry/retires fixtures and only joins fully witnessed callers.",
+        "timeout_tolerance": "Existing ten-second entry/condition and five-second terminal diagnostic budgets;no latency contract."
+      },
+      "compiler_skip_conditions": "No guard,skip or opt-in;four exhaustive parameter scenarios.",
+      "rules": {
+        "1": "Four scenarios cross retirement before entry/after both positive registrations and caller cancellation/normal. Bound two real browser outcomes,repeat retirement,then bound a third late caller;all throw typed cancelled. Assert three admissions and zero pending storage. Conflicting callbacks occur after accepted native completions;gate conflicting failures preserve its first result.",
+        "2": "Explicit bounded start gate,positive all-caller registration and five-second terminal counters after actual API return/throw;cleanup opens entry/retires fixtures and only joins fully witnessed callers.",
+        "3": "N/A:no media or latency measurement.",
+        "4": "Own all three callers;cancel/open entry/retire on normal,guard and throwing exits;bound actual completion before joins. Explicit fixture retirement drives typed cancellation;Task.cancel alone/native-worker drainage is not inferred.",
+        "5": "Fresh private factory/gate and synthetic URL per exhaustive scenario;no network,global browser state or user credentials.",
+        "6": "Private fixture plus existing browser boundary;no real provider/native browser/device evidence.",
+        "7": "No readiness sleep,guessed executor turns,retry-to-green or timeout increase.",
+        "8": "Caller source location,scenario,stage,elapsed/limit,typed cancellation and exact admission/pending counts.",
+        "9": "Focused repeats,owner/signed inventory and targeted negative controls recorded separately."
+      },
+      "decision": "keep",
+      "reason": "Validate private OpenID browser gate first-failure retirement across simultaneous and late callers without overwritten continuations."
     }
   ],
   "issue_382": {
@@ -23725,5 +23791,16 @@
     "scope": "Five existing logout-concurrency cases including four overlap probes and their private transports;three parameterized fixture contracts,including two simultaneous unexpected callers;changed-file navigation/inventory and scoped evidence only.",
     "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
     "excluded": "Production authentication, whole production-task drainage, seven app clock oracles, cover work #400, and broad tracker or issue-comment updates."
+  },
+  "issue_372_openid_caller_lifecycle": {
+    "tests": [
+      "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsASecondActiveSession",
+      "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testConcurrentAttemptIsRejectedWithoutDisturbingActiveFlow",
+      "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
+      "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers"
+    ],
+    "scope": "Two existing active-session/concurrent-attempt cases,private fixture retirement and two helper contracts;changed-file navigation/inventory and scoped evidence.",
+    "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372",
+    "remaining": "Whole retired private-worker/timeout-observer drainage needs later per-owner design;production lifecycle contracts,off-main callback adapter and broad reconciliation remain unchanged."
   }
 }

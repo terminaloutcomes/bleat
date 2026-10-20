@@ -390,7 +390,9 @@
     "testExchangeFailuresNeverPersistAndAlwaysCleanUp()",
     "testAuthorizationAndPersistenceFailuresRemainTyped()",
     "testInvalidAccountDoesNotTouchAttemptOrCookies()",
-    "testNativeBrowserCallbackAdapterRunsOffMainActor()"
+    "testNativeBrowserCallbackAdapterRunsOffMainActor()",
+    "testWaitingWebSessionFactoryRetiresExistingAndLateSessions(scenario:)",
+    "testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers(scenario:)"
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
