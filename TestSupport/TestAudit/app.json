@@ -49501,7 +49501,7 @@
       "identifier": "AppModelTests/testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19153
+        "line": 19173
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -49523,7 +49523,7 @@
           "reason": "Exercises the confirmed stale-completion boundary with a newer upload held; preserves successful current-operation completion."
         }
       },
-      "execution": "Initial baseline failed as expected; first corrected focused run passed. Final commit validation and independent review pending."
+      "execution": "Source84840c1: three independent runs of this four-scenario identity passed; three adjacent playback/retry runs passed; owning624/624; live online/offline1+1; ReleaseSimulator/lint/docs passed. Zero Simulator failures/skips/runtime warnings. Independent final-source re-review found no actionable issues. Baseline red and first owning failure retained separately; no CI/device acceptance claim."
     }
   ],
   "decisionCounts": {
@@ -49564,7 +49564,7 @@
       "identifier": "AppModelTests/testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
       "finding": "Owning run at446299d recorded item-status equality failure; enum raw values and loop case were not captured. Initial readiness checked only model playing and there was no AVPlayer readiness witness after the paused baseline seek. Exact runtime root cause remains unproven.",
       "change": "Require readyToPlay item, positive rate and playing time-control before initial playing baseline; after paused seek, observe readyToPlay, paused, zero rate and paused time-control before preserving runtime snapshot. Existing five-second budgets and exact continuation/identity/position/rate assertions retained.",
-      "evidence": "cover-initial-save-owning-446299d.xcresult retained as failed attempt; corrected owning validation pending.",
+      "evidence": "Retained failed owning446299d. Source84840c1: three focused executions (normal and retry scenarios each), then full624/624owning, zero failures/skips/runtime warnings; independent re-review no findings. Exact original item-status transition remains unproven.",
       "rules": {
         "1": "Strengthen semantic readiness before unchanged audio continuation assertions.",
         "2": "Observe actual AVPlayer runtime properties, no readiness sleep.",

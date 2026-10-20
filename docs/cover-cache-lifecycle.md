@@ -167,3 +167,15 @@ the playing baseline, and independently observes ready-to-play plus paused/zero
 rate/time-control after its paused seek, before sampling preserved runtime state. Its five-second
 budget, paused-seek checks, playing-position tolerance and continuation assertions
 are unchanged. The original failed owning bundle is retained separately.
+
+
+Final local source validation at `84840c1`: three independent focused executions
+of the four ownership scenarios and three of the normal/retry playback-artwork
+case passed, followed by **624/624** app tests and both disposable online/offline
+app-live journeys. Release Simulator compilation, strict Swift lint and docs
+checks passed. Structured Simulator results have zero failures/skips/runtime
+warnings. Independent re-review found no actionable issues in the ownership and
+readiness changes. Original red/failed attempts remain retained in
+`.build/cover-initial-save-*`; final artifact/source-hash evidence is
+`.build/cover-initial-save-verification.json`. CI and physical acceptance remain
+separate from this local record.
