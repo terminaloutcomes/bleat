@@ -832,3 +832,22 @@ the pre-deletion baseline, followed by actual playback resumption after deletion
 This is not an initial-position forwarding oracle; the seven separately recorded
 startup-oracle requirements remain unchanged. The app correction is a separate
 commit from the OpenID compiler compatibility change.
+
+### Independent original startup seek evidence (#374)
+
+Seven startup-position tests capture the original completed native seek through
+the existing awaited pre-play diagnostic, checking copied model and actual
+AVPlayerItem position plus track offset with every original target/tolerance.
+Ready, zero-rate and paused state are confirmed at capture; a bounded existing
+completed-play event observes the subsequent native play request. No later seek
+manufactures an initial-position oracle. The application change is a read-only
+field in the existing testing snapshot; playback contracts are unchanged.
+
+Focused evidence is seven identities passing three times each, owning
+AppModel505/505, restored full app608/608 and signed host606/606. Eight controlled
+mutations failed the intended native-position/play-request assertions and source
+bytes were restored exactly. Source/audit scope and individual outcomes are
+verified. The final lint-only change names the same condition closure argument
+explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
+Exact-head CI and independent review remain separate requirements. Broader #362
+acceptance and #369's fourteen missing audit-entry repairs remain open.

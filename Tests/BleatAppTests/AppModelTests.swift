@@ -20452,10 +20452,13 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             playback: [.success(preparation)]
         )
+        let startup = StartupPlaybackDiagnosticRecorder()
         let playback = fixture.model(
             activation: TestAudioSessionActivation(),
-            service: service
+            service: service,
+            diagnostics: startup
         )
+        startup.playback = playback
 
         await playback.start(
             detail: fixture.detail,
@@ -20463,7 +20466,8 @@ final class AppModelTests: XCTestCase {
             initialTime: 0.75
         )
 
-        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        startup.assertInitialPosition(0.75, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         await playback.stop()
     }
 
@@ -20498,13 +20502,17 @@ final class AppModelTests: XCTestCase {
             activeAccount: .success(account),
             playback: [.success(preparation)]
         )
+        let startup = StartupPlaybackDiagnosticRecorder()
         let playback = fixture.model(
-            activation: TestAudioSessionActivation(), service: service
+            activation: TestAudioSessionActivation(), service: service,
+            diagnostics: startup
         )
+        startup.playback = playback
 
         await playback.start(detail: detail, account: account)
 
-        XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)
+        startup.assertInitialPosition(0.75, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         await playback.stop()
     }
 
@@ -20542,7 +20550,10 @@ final class AppModelTests: XCTestCase {
             ))
         await playback.stop()
 
-        let relaunched = fixture.model(activation: TestAudioSessionActivation())
+        let startup = StartupPlaybackDiagnosticRecorder()
+        let relaunched = fixture.model(
+            activation: TestAudioSessionActivation(), diagnostics: startup)
+        startup.playback = relaunched
         XCTAssertEqual(
             relaunched.preferredDownloadedStartTime(
                 detail: fixture.detail, accountID: account.id, initialTime: nil
@@ -20555,7 +20566,8 @@ final class AppModelTests: XCTestCase {
             account: nil
         )
 
-        XCTAssertEqual(relaunched.currentTime, 0.75, accuracy: 0.01)
+        startup.assertInitialPosition(0.75, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         XCTAssertNil(relaunched.positionConflict)
         await relaunched.stop()
     }
@@ -20567,9 +20579,12 @@ final class AppModelTests: XCTestCase {
         defer {
             fixture.cleanUp()
         }
+        let startup = StartupPlaybackDiagnosticRecorder()
         let playback = fixture.model(
-            activation: TestAudioSessionActivation()
+            activation: TestAudioSessionActivation(),
+            diagnostics: startup
         )
+        startup.playback = playback
 
         await playback.startDownloaded(
             detail: fixture.detail,
@@ -20579,7 +20594,8 @@ final class AppModelTests: XCTestCase {
             initialTime: 1.5
         )
 
-        XCTAssertEqual(playback.currentTime, 1.5, accuracy: 0.01)
+        startup.assertInitialPosition(1.5, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         XCTAssertEqual(playback.currentAudioFileIndex, 1)
         XCTAssertNil(playback.positionConflict)
         await playback.stop()
@@ -20770,12 +20786,15 @@ final class AppModelTests: XCTestCase {
             accounts: .success([account, otherAccount]),
             activeAccount: .success(account)
         )
+        let startup = StartupPlaybackDiagnosticRecorder()
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("complete-download-playback")
+                backgroundSessionIdentifier("complete-download-playback"),
+            diagnostics: startup
         )
+        startup.playback = model.playback
         await model.start()
 
         let outcome = await model.startPlayback(
@@ -20787,7 +20806,8 @@ final class AppModelTests: XCTestCase {
         let playbackRequests = await service.playbackOpenRequests()
 
         XCTAssertEqual(outcome, .started(source: .downloaded))
-        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+        startup.assertInitialPosition(0.75, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         XCTAssertTrue(detailRequests.isEmpty)
         XCTAssertTrue(playbackRequests.isEmpty)
         await model.playback.stop()
@@ -20922,12 +20942,15 @@ final class AppModelTests: XCTestCase {
             playback: [.success(remotePreparation)],
             playbackGate: playbackGate
         )
+        let startup = StartupPlaybackDiagnosticRecorder()
         let model = AppModel(
             service: service,
             downloadsStorageRootURL: root,
             downloadsBackgroundSessionIdentifier:
-                backgroundSessionIdentifier("cached-window-playback")
+                backgroundSessionIdentifier("cached-window-playback"),
+            diagnostics: startup
         )
+        startup.playback = model.playback
         await model.start()
         let started = expectation(
             description: "Cached playback starts before remote preparation"
@@ -20945,7 +20968,8 @@ final class AppModelTests: XCTestCase {
         await fulfillment(of: [started], timeout: 2)
 
         XCTAssertEqual(outcome, .started(source: .downloaded))
-        XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.05)
+        startup.assertInitialPosition(0.25, accuracy: 0.05)
+        await startup.assertNativePlayRequested()
         XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)
         XCTAssertTrue(
             model.playback.state == .buffering
@@ -21593,7 +21617,9 @@ final class AppModelTests: XCTestCase {
                 )
             ]
         )
-        let model = AppModel(service: service)
+        let startup = StartupPlaybackDiagnosticRecorder()
+        let model = AppModel(service: service, diagnostics: startup)
+        startup.playback = model.playback
         await model.start()
 
         let outcome = await model.startPlayback(
@@ -21603,7 +21629,8 @@ final class AppModelTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .started(source: .streamed))
-        XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)
+        startup.assertInitialPosition(0.75, accuracy: 0.01)
+        await startup.assertNativePlayRequested()
         XCTAssertNil(model.selectedBookID)
         XCTAssertEqual(model.bookDetail, .idle)
         XCTAssertEqual(model.bookBookmarks, .idle)
@@ -27376,7 +27403,8 @@ private struct PlaybackRecoveryFixture {
                     preparation: $0,
                     wholeBookTime: $1
                 )
-            }
+            },
+        diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder.shared
     ) -> PlaybackModel {
         PlaybackModel(
             service: service ?? self.service,
@@ -27391,6 +27419,7 @@ private struct PlaybackRecoveryFixture {
                 activation.activate()
             },
             queuePlanning: queuePlanning,
+            diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
     }
@@ -30011,5 +30040,79 @@ private actor PlaybackStartDiagnosticGateRecorder: DiagnosticRecording {
         else { return }
         didGate = true
         await gate.enterAndWait()
+    }
+}
+
+// PlaybackModel awaits this existing diagnostic after the initial native seek and
+// before play(). Copy values there so later playback cannot move the oracle.
+@MainActor
+private final class StartupPlaybackDiagnosticRecorder: DiagnosticRecording {
+    private struct Completion {
+        let state: PlaybackState
+        let playbackRequested: Bool
+        let snapshot: PlaybackRuntimeSnapshotForTesting
+    }
+
+    weak var playback: PlaybackModel?
+    private var completions: [Completion] = []
+    private var nativePlayRequests = 0
+
+    func record(_ event: DiagnosticEvent) async {
+        guard event.name == .operationCompleted else { return }
+        if event.operation == .play {
+            nativePlayRequests += 1
+            return
+        }
+        guard event.operation == .openPlayback, let playback else { return }
+        completions.append(
+            Completion(
+                state: playback.state,
+                playbackRequested: playback.isPlaybackRequested,
+                snapshot: playback.runtimeSnapshotForTesting))
+    }
+
+    func assertNativePlayRequested(
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        await assertEventually(
+            "the original startup native play request",
+            timeout: .seconds(3),
+            observed: {
+                "completed native play requests=\(self.nativePlayRequests)"
+            },
+            file: file, line: line,
+            condition: { self.nativePlayRequests == 1 }
+        )
+    }
+
+    func assertInitialPosition(
+        _ expected: Double, accuracy: Double,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertEqual(completions.count, 1, file: file, line: line)
+        guard let completion = completions.first else { return }
+        let diagnostic =
+            "Initial native seek before play: \(completion.snapshot)"
+        XCTAssertEqual(
+            completion.state, .ready, diagnostic, file: file, line: line)
+        XCTAssertFalse(
+            completion.playbackRequested, diagnostic, file: file, line: line)
+        XCTAssertEqual(
+            completion.snapshot.playerRate, 0, diagnostic, file: file,
+            line: line)
+        XCTAssertEqual(
+            completion.snapshot.timeControlStatus, .paused,
+            diagnostic, file: file, line: line)
+        XCTAssertEqual(
+            completion.snapshot.wholeBookPosition, expected, accuracy: accuracy,
+            diagnostic, file: file, line: line)
+        guard let nativePosition = completion.snapshot.nativeWholeBookPosition
+        else {
+            XCTFail(diagnostic, file: file, line: line)
+            return
+        }
+        XCTAssertEqual(
+            nativePosition, expected, accuracy: accuracy,
+            diagnostic, file: file, line: line)
     }
 }

@@ -2477,25 +2477,25 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testPlaybackStartUsesExplicitWholeBookPosition",
-      "line": 19399,
+      "line": 20429,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testStreamedResumeUsesFreshSessionInsteadOfStaleDetail",
-      "line": 19440,
+      "line": 20474,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testStreamedCheckpointResumesDownloadedPlaybackAfterRelaunch",
-      "line": 19481,
+      "line": 20519,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testDownloadedPlaybackUsesExplicitWholeBookPosition",
-      "line": 19533,
+      "line": 20575,
       "language": "swift"
     },
     {
@@ -2519,7 +2519,7 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testPlaybackStartDiscoversCompleteDownloadFromSummary",
-      "line": 19717,
+      "line": 20763,
       "language": "swift"
     },
     {
@@ -2531,7 +2531,7 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork",
-      "line": 19861,
+      "line": 20911,
       "language": "swift"
     },
     {
@@ -2585,7 +2585,7 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testPlaybackStartLoadsDetailWithoutChangingNavigationState",
-      "line": 20537,
+      "line": 21601,
       "language": "swift"
     },
     {

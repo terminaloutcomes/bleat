@@ -32636,8 +32636,8 @@
       "identifier": "AppModelTests/testPlaybackStartUsesExplicitWholeBookPosition",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19395,
-        "endLineBeforeNextTest": 19435
+        "line": 20429,
+        "endLineBeforeNextTest": 20474
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -32660,8 +32660,12 @@
       ],
       "assertions": [
         {
-          "line": 19434,
-          "expression": "XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)"
+          "line": 20469,
+          "expression": "startup.assertInitialPosition(0.75, accuracy: 0.01)"
+        },
+        {
+          "line": 20470,
+          "expression": "await startup.assertNativePlayRequested()"
         }
       ],
       "synchronizationEvidence": [],
@@ -32675,35 +32679,56 @@
             "postcondition": "Playback position is 0.75 within 0.01s; stop."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
       "identifier": "AppModelTests/testStreamedResumeUsesFreshSessionInsteadOfStaleDetail",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19436,
-        "endLineBeforeNextTest": 19476
+        "line": 20474,
+        "endLineBeforeNextTest": 20519
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -32726,8 +32751,12 @@
       ],
       "assertions": [
         {
-          "line": 19475,
-          "expression": "XCTAssertEqual(playback.currentTime, 0.75, accuracy: 0.01)"
+          "line": 20514,
+          "expression": "startup.assertInitialPosition(0.75, accuracy: 0.01)"
+        },
+        {
+          "line": 20515,
+          "expression": "await startup.assertNativePlayRequested()"
         }
       ],
       "synchronizationEvidence": [],
@@ -32741,35 +32770,56 @@
             "postcondition": "Current time is fresh session value 0.75; stop."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
       "identifier": "AppModelTests/testStreamedCheckpointResumesDownloadedPlaybackAfterRelaunch",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19477,
-        "endLineBeforeNextTest": 19528
+        "line": 20519,
+        "endLineBeforeNextTest": 20575
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -32812,23 +32862,27 @@
       ],
       "assertions": [
         {
-          "line": 19502,
+          "line": 20542,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 19507,
+          "line": 20547,
           "expression": "XCTAssertNil("
         },
         {
-          "line": 19514,
+          "line": 20557,
           "expression": "XCTAssertEqual("
         },
         {
-          "line": 19526,
-          "expression": "XCTAssertEqual(relaunched.currentTime, 0.75, accuracy: 0.01)"
+          "line": 20569,
+          "expression": "startup.assertInitialPosition(0.75, accuracy: 0.01)"
         },
         {
-          "line": 19527,
+          "line": 20570,
+          "expression": "await startup.assertNativePlayRequested()"
+        },
+        {
+          "line": 20571,
           "expression": "XCTAssertNil(relaunched.positionConflict)"
         }
       ],
@@ -32843,35 +32897,56 @@
             "postcondition": "Only correct account position persisted; relaunched downloaded playback starts 0.75 without conflict."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
       "identifier": "AppModelTests/testDownloadedPlaybackUsesExplicitWholeBookPosition",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19529,
-        "endLineBeforeNextTest": 19553
+        "line": 20575,
+        "endLineBeforeNextTest": 20604
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [],
@@ -32891,15 +32966,19 @@
       ],
       "assertions": [
         {
-          "line": 19550,
-          "expression": "XCTAssertEqual(playback.currentTime, 1.5, accuracy: 0.01)"
+          "line": 20597,
+          "expression": "startup.assertInitialPosition(1.5, accuracy: 0.01)"
         },
         {
-          "line": 19551,
+          "line": 20598,
+          "expression": "await startup.assertNativePlayRequested()"
+        },
+        {
+          "line": 20599,
           "expression": "XCTAssertEqual(playback.currentAudioFileIndex, 1)"
         },
         {
-          "line": 19552,
+          "line": 20600,
           "expression": "XCTAssertNil(playback.positionConflict)"
         }
       ],
@@ -32914,27 +32993,48 @@
             "postcondition": "Position is 1.5 within tolerance and correct audio file index 1; no conflict."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
@@ -33162,8 +33262,8 @@
       "identifier": "AppModelTests/testPlaybackStartDiscoversCompleteDownloadFromSummary",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19713,
-        "endLineBeforeNextTest": 19776
+        "line": 20763,
+        "endLineBeforeNextTest": 20831
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -33200,27 +33300,27 @@
       ],
       "assertions": [
         {
-          "line": 19757,
+          "line": 20808,
           "expression": "XCTAssertEqual(outcome, .started(source: .downloaded))"
         },
         {
-          "line": 19758,
-          "expression": "XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)"
+          "line": 20809,
+          "expression": "startup.assertInitialPosition(0.75, accuracy: 0.01)"
         },
         {
-          "line": 19759,
+          "line": 20810,
+          "expression": "await startup.assertNativePlayRequested()"
+        },
+        {
+          "line": 20811,
           "expression": "XCTAssertTrue(detailRequests.isEmpty)"
         },
         {
-          "line": 19760,
+          "line": 20812,
           "expression": "XCTAssertTrue(playbackRequests.isEmpty)"
         },
         {
-          "line": 19763,
-          "expression": "let record = try XCTUnwrap("
-        },
-        {
-          "line": 19773,
+          "line": 20825,
           "expression": "XCTAssertEqual("
         }
       ],
@@ -33235,27 +33335,48 @@
             "postcondition": "Downloaded source at requested position; no detail/stream requests; cross-account typed mismatch."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
@@ -33382,8 +33503,8 @@
       "identifier": "AppModelTests/testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 19857,
-        "endLineBeforeNextTest": 19924
+        "line": 20911,
+        "endLineBeforeNextTest": 20983
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -33416,19 +33537,23 @@
       ],
       "assertions": [
         {
-          "line": 19915,
+          "line": 20970,
           "expression": "XCTAssertEqual(outcome, .started(source: .downloaded))"
         },
         {
-          "line": 19916,
-          "expression": "XCTAssertEqual(model.playback.currentTime, 0.25, accuracy: 0.05)"
+          "line": 20971,
+          "expression": "startup.assertInitialPosition(0.25, accuracy: 0.05)"
         },
         {
-          "line": 19917,
+          "line": 20972,
+          "expression": "await startup.assertNativePlayRequested()"
+        },
+        {
+          "line": 20973,
           "expression": "XCTAssertEqual(model.playback.coverLoadPolicy, .cacheOnly)"
         },
         {
-          "line": 19918,
+          "line": 20974,
           "expression": "XCTAssertTrue("
         }
       ],
@@ -33452,27 +33577,48 @@
             "postcondition": "Downloaded source and cache-only covers before remote completes; remote task then cleaned up."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.05-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "Each action has semantic playback source/position/identity/session postconditions.",
-          "2": "Direct awaits, AsyncGates, explicit expectations or bounded condition waits; no yield-count polling in this batch.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Test audio activation/service are injected; gates and continuation expectations are awaited and playback is stopped at end.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Temporary roots/UserDefaults are isolated and fixtures cleaned via defer; no user storage touched.",
           "6": "Local playback/service boundary only; simulator audio/media behavior is not physical audio/device evidence.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "0.01s position tolerances compare floating-point media positions; explicit operation/expectation bounds are 2\u201330s.",
-          "9": "No test skip; simulator execution pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Controlled local media/service fixtures and exact playback/source/session postconditions preserve the covered behavior; simulator tests do not claim device audio validation."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Local fixture/audio operations are awaited. Position comparisons use 0.01s for floating-point media values; event waits use explicit bounded XCTest expectations or waitUntil.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
@@ -34254,8 +34400,8 @@
       "identifier": "AppModelTests/testPlaybackStartLoadsDetailWithoutChangingNavigationState",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 20533,
-        "endLineBeforeNextTest": 20570
+        "line": 21601,
+        "endLineBeforeNextTest": 21642
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -34286,27 +34432,31 @@
       ],
       "assertions": [
         {
-          "line": 20563,
+          "line": 21631,
           "expression": "XCTAssertEqual(outcome, .started(source: .streamed))"
         },
         {
-          "line": 20564,
-          "expression": "XCTAssertEqual(model.playback.currentTime, 0.75, accuracy: 0.01)"
+          "line": 21632,
+          "expression": "startup.assertInitialPosition(0.75, accuracy: 0.01)"
         },
         {
-          "line": 20565,
+          "line": 21633,
+          "expression": "await startup.assertNativePlayRequested()"
+        },
+        {
+          "line": 21634,
           "expression": "XCTAssertNil(model.selectedBookID)"
         },
         {
-          "line": 20566,
+          "line": 21635,
           "expression": "XCTAssertEqual(model.bookDetail, .idle)"
         },
         {
-          "line": 20567,
+          "line": 21636,
           "expression": "XCTAssertEqual(model.bookBookmarks, .idle)"
         },
         {
-          "line": 20569,
+          "line": 21638,
           "expression": "XCTAssertEqual(detailRequests.count, 1)"
         }
       ],
@@ -34321,27 +34471,48 @@
             "postcondition": "Stream starts at expected time; selectedBookID remains nil, details/bookmarks idle, one detail request."
           }
         ],
-        "timeoutAndToleranceRationale": "The unchanged 0.01-second position tolerance is numeric precision only; it does not bound clock advancement after startup begins playing. Existing awaited operations and bounded event observations do not freeze that clock. Initial-position forwarding needs an independent player/clock or direct initial-seek oracle; that correction remains unresolved.",
+        "timeoutAndToleranceRationale": "Original precision retained:0.01seconds,or0.05seconds for the automatic-cache case. Position is copied after completed native seek while rate0/timeControlpaused,beforeplay. Completed-play notification has a source-located3second condition budget,not a media-duration or scheduler-speed assertion.",
         "ruleAssessments": {
           "1": "The asserted final model identity/session/result directly follows the requested action.",
-          "2": "No scheduler sleeps; all preparation/close gates are awaited and released; task results are awaited.",
-          "3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
-          "4": "Playback fakes model async operations; gates establish callback/service entry and tasks are joined.",
+          "2": "Existing awaited openPlayback-completed boundary captures original seek before play,with no timer or settling loop. Existing completed-play event is latched by the recorder; shared assertEventually requires exactly one real native play request within3seconds and reports caller location,elapsed,timeout and observed count.",
+          "3": "Initial native seek completion is observed at the existing diagnostic boundary before play: state ready, playback intent false, native rate zero and timeControlStatus paused. The copied model position and independent native item position plus track offset retain the original expected position and tolerance. The test never repairs initial position with a later seek. After startup, a three-second bounded condition wait requires exactly one existing completed-play diagnostic; this observes the real native play request even if short media later ends.",
+          "4": "The recorder creates no tasks,continuations or player controls. The startup API and final stop remain awaited. The existing asynchronously emitted completed-play event is observed before stopping; no whole native-worker/timeout-observer drainage claim is made.",
           "5": "Download removal fixtures use unique temporary roots with deferred cleanup.",
           "6": "Injected playback/download service boundary; no live server or physical audio route.",
           "7": "Source finding following PR #408 advancing-clock failure. This neighboring test is not claimed to have reproduced that failure. No tolerance change, sleep, retry or app-source change made.",
-          "8": "Direct value assertions; no timing tolerance.",
-          "9": "No test skip; simulator result pending."
+          "8": "StartupPlaybackDiagnosticRecorder forwards the test call site and prints the captured runtime snapshot including actual native whole-book position on every position/state failure. Exactly one startup-completion snapshot is required.",
+          "9": "Before syntax-only closure-label correction:this identity1/1 x3,AppModelTests505/505 and eight intended mutation assertion failures. Exact whole-file transformation confirms unchanged predicate,budget,arguments/assertions. Restored app608/608 passed; final exact-text608/608 with zero failures/skips/expected failures/runtime warnings. Signed host606/606 zero errors/skips is separate and host source unchanged. All earlier attempts retained."
         },
         "decision": {
-          "outcome": "follow_up",
-          "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          "outcome": "keep",
+          "reason": "The original initial native seek is captured at the existing awaited openPlayback-completed diagnostic before play. Exact model and actual AVPlayer item time plus track offset are checked from that immutable snapshot with the original target/precision; no later seek manufactures the startup oracle. Existing source/account/navigation/request assertions remain and one original native play request must complete through the existing diagnostic event."
         },
         "priorDecisionBeforeStartupClockReview": {
           "outcome": "keep",
           "reason": "Request ownership, async barriers, typed result and resulting session/download state are explicitly asserted."
         },
-        "priorTimeoutRationaleBeforeStartupClockReview": "Calls, gates, and task outcomes are explicitly awaited. No timing tolerance."
+        "priorTimeoutRationaleBeforeStartupClockReview": "Calls, gates, and task outcomes are explicitly awaited. No timing tolerance.",
+        "startupClockResolution": {
+          "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+          "previousDecision": {
+            "outcome": "follow_up",
+            "reason": "Neighboring startup-position assertion still samples an advancing clock. Initial-position forwarding needs a true independent oracle; this remains unresolved after the isolated #408 paused-seek correction."
+          },
+          "previousRule3": "UNRESOLVED: startup calls play before returning; exact currentTime is sampled while its clock can advance. Preserve initial-position forwarding coverage with an independent controlled clock/player or a direct initial-seek oracle. A later explicit seek would erase that oracle and is not an acceptable substitute.",
+          "status": "verified;final text608/608 after exact syntax-only closure-label correction",
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374",
+          "validation": {
+            "focused": "1/1 x3 for this identity before syntax-only explicit condition-label correction;predicate,budget,arguments and assertions unchanged by exact transformation",
+            "owning": "AppModelTests505/505 before the same syntax-only correction",
+            "signed_host": "606/606;host code unchanged",
+            "failures": 0,
+            "skips": 0,
+            "runtimeWarnings": [],
+            "manifest": ".build/i374-startup-runs.json",
+            "restored_full_app": "Final text608/608 after mutation restoration and syntax-only closure-label correction;all seven individual outcomes passed"
+          },
+          "mutationEvidence": "All seven native-seek mutations and one missing-play mutation caused ordinary executed assertion failures; no supervisor timeout; application bytes restored exactly before full-app608/608."
+        }
       }
     },
     {
@@ -49499,8 +49670,8 @@
     }
   ],
   "decisionCounts": {
-    "keep": 505,
-    "follow_up": 84,
+    "keep": 512,
+    "follow_up": 77,
     "fix": 4
   },
   "startupClockNeighborReview": {
@@ -49514,7 +49685,19 @@
       "AppModelTests/testPlaybackStartUsesAutomaticCachedWindowWithoutAwaitingNetwork",
       "AppModelTests/testPlaybackStartLoadsDetailWithoutChangingNavigationState"
     ],
-    "status": "unresolved; no startup oracle has been replaced by a later seek",
-    "remaining_scope": "These seven source-reviewed neighboring startup assertions are explicitly open; this is not a repository-wide playback-clock reconciliation."
+    "status": "resolved for these seven oracles;focused21/21,owner505/505,eight mutation kills before exact syntax-only correction;final exact-textapp608/608;signedhost606/606",
+    "remaining_scope": "These seven original-seek oracles use an awaited pre-play diagnostic snapshot; execution is recorded separately. Other playback and lifecycle findings still need current reconciliation.",
+    "historicalStatus": "unresolved; no startup oracle has been replaced by a later seek"
+  },
+  "startupClockObserverReview": {
+    "source": "Tests/BleatAppTests/AppModelTests.swift::StartupPlaybackDiagnosticRecorder",
+    "application_observation": "App/PlaybackModel.swift::runtimeSnapshotForTesting.nativeWholeBookPosition",
+    "purpose": "Preserve each original initial-seek target independently of the freely advancing post-startup clock. Capture immutable model/native position values at the existing awaited completion before play.",
+    "isolation_and_ownership": "MainActor isolated; weak PlaybackModel reference; copied value snapshots and a latched completed-play count. Creates no tasks, continuations, players or controls. No reset/seek/pause is issued by the recorder.",
+    "postconditions": "Exactly one initial-seek snapshot; ready state; no playback request at capture; native rate zero; time-control paused; finite actual current-item time plus registered offset and model position match original expected target/tolerance. A bounded observation of the existing completed-play diagnostic establishes the initial native play request.",
+    "budget_and_diagnostics": "Existing assertEventually,3second budget; caller file/line forwarded; observed completed-play count and elapsed/timeout retained. Snapshot assertions include native position,rate,time-control and item state.",
+    "scope_limits": "A completed native play request is not proof of audible progression, physical-device behavior or whole worker/native-callback/timeout-observer drainage. Existing typed source/persistence/account/request/navigation assertions and awaited final stops remain.",
+    "decision": "keep;final exact-textapp608/608;focused21/21,AppModel505/505 and eight mutation kills before verified syntax-only closure-label correction;application bytes restored exactly",
+    "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374"
   }
 }
