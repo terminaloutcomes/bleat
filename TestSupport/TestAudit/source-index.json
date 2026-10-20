@@ -5891,31 +5891,31 @@
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testExchangeFailuresNeverPersistAndAlwaysCleanUp",
-      "line": 850,
+      "line": 859,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testAuthorizationAndPersistenceFailuresRemainTyped",
-      "line": 927,
+      "line": 936,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testInvalidAccountDoesNotTouchAttemptOrCookies",
-      "line": 1008,
+      "line": 1017,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
-      "line": 1036,
+      "line": 1045,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
       "name": "testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers",
-      "line": 1067,
+      "line": 1076,
       "language": "swift"
     },
     {

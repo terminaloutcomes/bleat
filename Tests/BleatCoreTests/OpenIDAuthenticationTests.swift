@@ -766,13 +766,21 @@ final class OpenIDAuthenticationTests {
         let browser = SuspendingOpenIDBrowser(gate: gate)
         let accountID = AccountID(rawValue: "account")
         let server = try NormalizedServerURL("https://example.com")
+        // Capture the immutable Sendable value before either task; avoid
+        // dynamic Self metadata in nested sending closures on Swift 6.3.3.
+        let callbackURL = OpenIDAuthenticationTests.callbackURL
         let firstCompleted = BoundedTestCounter()
         let probeCompleted = BoundedTestCounter()
-        let firstAttempt = Task {
+        let firstAttempt = Task<Result<AuthenticatedAccount, any Error>, Never>
+        {
+            [
+                coordinator, accountID, server, browser, callbackURL,
+                firstCompleted
+            ] in
             await performOpenIDTestCall(completed: firstCompleted) {
                 try await coordinator.loginWithOpenID(
                     accountID: accountID, server: server,
-                    callbackURL: Self.callbackURL, browser: browser)
+                    callbackURL: callbackURL, browser: browser)
             }
         }
         var rejectionProbe:
@@ -800,14 +808,15 @@ final class OpenIDAuthenticationTests {
                     stage: "original OpenID browser continuation registration",
                     condition: { await gate.pendingCount() == 1 })
             else { return }
-            let probe = Task {
+            let probe = Task<Result<AuthenticatedAccount, any Error>, Never> {
+                [coordinator, server, callbackURL, probeCompleted] in
                 await performOpenIDTestCall(completed: probeCompleted) {
                     try await coordinator.loginWithOpenID(
                         accountID: AccountID(rawValue: "second-account"),
                         server: server,
-                        callbackURL: Self.callbackURL,
+                        callbackURL: callbackURL,
                         browser: OpenIDTestBrowser.success(
-                            callbackURL: Self.callbackURL)
+                            callbackURL: callbackURL)
                     )
                 }
             }

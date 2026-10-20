@@ -13518,13 +13518,20 @@
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
       },
-      "prior_openid_caller_finding": "Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior."
+      "prior_openid_caller_finding": "Add bounded gate-entry wait and assert stage; retain active-attempt and cleanup behavior.",
+      "swift_633_compatibility_correction": {
+        "failed_head": "2f03ccab33452fa03df91179c2feba3f8895da0d",
+        "ci_toolchain": "Xcode26.6/Swift6.3.3",
+        "diagnostic": "region-based isolation checker cannot check firstAttempt Task pattern;compilation failed before Swift tests",
+        "change": "Read the same immutable Sendable callback fixture before both tasks;use explicit typed task results and Sendable capture lists,retaining inherited task isolation/context and all original lifecycle assertions.",
+        "validation": "Local Swift6.4 tests/mutations retained separately;Swift6.3.3 unavailable locally,so fresh exact-head CI must establish compatibility. No checker or toolchain settings changed."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testExchangeFailuresNeverPersistAndAlwaysCleanUp",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 850
+        "line": 859
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13563,7 +13570,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testAuthorizationAndPersistenceFailuresRemainTyped",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 927
+        "line": 936
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -13602,7 +13609,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidAccountDoesNotTouchAttemptOrCookies",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 1008
+        "line": 1017
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23513,7 +23520,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 1036
+        "line": 1045
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -23545,7 +23552,7 @@
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers",
       "source": {
         "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
-        "line": 1067
+        "line": 1076
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",

@@ -810,3 +810,9 @@ cases while preserving callback/session/cancellation errors and account cleanup.
 Private fixture retirement covers existing and late arrivals, with two four-case
 contracts. Production lifecycle contracts are unchanged; whole retired-worker,
 timeout-observer and internal callback-task drainage remain separately scoped.
+
+The OpenID compatibility correction captures immutable callback arguments before
+explicitly typed tasks, preserving inherited isolation and lifecycle assertions.
+Swift 6.3.3 CI compilation must be verified separately from local Swift 6.4
+execution. The unrelated transcript-deletion timing failure remains recorded and
+is not fixed by this OpenID slice.

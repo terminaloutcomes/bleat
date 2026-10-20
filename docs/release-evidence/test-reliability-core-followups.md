@@ -2009,12 +2009,12 @@ Validation on m2 (macOS 26.6.2, Xcode 27.1 / 27A9275):
 
 Focused commands use `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test
 --disable-xctest --no-parallel --filter` selecting the two original and two helper
-identities; reports use `.build/i372-openid-focused-{1,2,3}`. Owning selection is
-`OpenIDAuthenticationTests`, reports `i372-openid-owning`; restored focus uses
-`i372-openid-restored`. Signed command is `mise exec -- ./scripts/test-host.sh`,
-retained XML `.build/i372-openid-signed-results`. Exact verification/mutation
-manifests are `.build/i372-openid-verification.json` and
-`.build/i372-openid-mutations.json`; raw logs remain private.
+identities; reports use `.build/i415-compat-focused-{1,2,3}`. Owning selection is
+`OpenIDAuthenticationTests`, reports `i415-compat-owning`; restored focus uses
+`i415-compat-restored`. Signed command is `mise exec -- ./scripts/test-host.sh`,
+retained XML `.build/i415-compat-signed-results`. Exact verification/mutation
+manifests are `.build/i415-compat-verification.json` and
+`.build/i415-compat-mutations.json`; raw logs remain private.
 
 Two preliminary compile-only attempts failed at main-actor/global assertion
 closure isolation without running tests; the corrected preliminary owner passed
@@ -2024,3 +2024,44 @@ bring host inventory to **605**, source index to **1,591** and core audit to
 navigation/inventory/evidence change. Fresh exact-head CI and independent review
 are required. Broader #372/#362 acceptance, whole private-worker/timeout-observer
 drainage, seven app startup clock oracles and separate cover work remain open.
+
+
+### Swift 6.3.3 task-capture compatibility correction
+
+Published head `2f03cca` passed local Swift 6.4 / Xcode 27.1 validation but failed
+CI host compilation under Swift 6.3.3 / Xcode 26.6 (`17F113`): the region-based
+isolation checker could not check the new `firstAttempt = Task` pattern. No Swift
+host tests ran and no host XML artifact was produced. This is retained failure
+evidence, not a passing unsigned lane.
+
+The corrected concurrent-attempt test snapshots the same immutable `Sendable`
+callback URL before either task, rather than accessing dynamic `Self` metadata
+inside nested sending closures. Both tasks now have explicit result types and
+capture lists of their immutable values/actors. They retain inherited task
+isolation/context; no detached task, reduced isolation checking, changed CI
+compiler, new timeout or assertion change is introduced. Production bytes and
+all seventeen neighboring test bodies remain unchanged. Host inventory/discovery
+identities remain 605/21; only changed-file navigation and the corrected record
+are refreshed.
+
+The revised m2 lane uses the same full focus/repetition/owner/signed/restored and
+six-mutation checks above, with `i415-compat-` artifact names. The local machine
+has only Xcode 27.1 / Swift 6.4; Swift 6.3.3 is unavailable locally, so its result
+must come from fresh exact-head CI. Initial `i372-openid-` local evidence remains
+tied to the earlier source hash and is not substituted for compatibility proof.
+
+The same earlier CI run also recorded an unchanged app failure in
+`testTranscriptDeletionPreservesDownloadAndActivePlayback`: current position
+0.519404209 differed from the pre-deletion 0.5 snapshot beyond 0.01. Its bundle
+reports 609 passes, one failure and zero skips. That test calls `pause()` then
+immediately captures the model's position before awaited transcript operations;
+it does not establish a settled pause/seek observation. This is a separate timing
+hypothesis, not proof transcript deletion moves playback. No app-test or
+production playback edit is bundled here. A separate proposal is to confirm
+paused state/native rate zero, await an explicit paused seek, then capture the
+baseline and retain every original deletion/download/account/item/position
+postcondition and the same tolerance. Such a seek establishes a deletion
+invariant, not initial-position forwarding; independent startup oracles remain
+required. Neither a source correction nor a later passing run erases this
+recorded failure. Full CI must not be described as green while any failure
+remains.
