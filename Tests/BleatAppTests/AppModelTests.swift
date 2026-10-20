@@ -19238,6 +19238,90 @@ final class AppModelTests: XCTestCase {
         }
     }
 
+    func
+        testCoverRetrySelectionChangeRetiresBusyStateWithoutClearingNewerRetry()
+        async throws
+    {
+        for holdDuringInvalidation in [false, true] {
+            let account = try fixtureAccount()
+            let library = fixtureLibrary()
+            let page = fixturePage(libraryID: library.id)
+            let first = fixtureBookDetail(item: page.items[0])
+            let nextBook = fixtureBook(
+                id: "item-2", title: "Next fixture", libraryID: library.id)
+            let next = fixtureBookDetail(item: nextBook)
+            let oldGate = AsyncGate()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                libraries: .success([library]), firstPage: .success(page),
+                bookDetail: .success(first),
+                coverReplacement: .failure(.coverUpdate(.uploadRejected)))
+            let model = AppModel(
+                service: service,
+                invalidateBookCover: { url, _ in
+                    if holdDuringInvalidation,
+                        url.pathComponents.contains(first.id.rawValue)
+                    {
+                        await oldGate.enterAndWait()
+                    }
+                })
+            await model.start()
+            await model.saveBookEdits(
+                draft: BookMetadataDraft(detail: first), baseline: first,
+                coverJPEGData: Data([1]))
+            await service.setCoverReplacement(.success(first))
+            if !holdDuringInvalidation {
+                await service.setCoverReplacementGate(oldGate)
+            }
+            let entered = await oldGate.entryExpectation
+            let oldRetry = Task { await model.retryBookCoverUpload() }
+            await fulfillment(of: [entered], timeout: 3)
+
+            // No reset/dismiss callback or account switch: navigation alone
+            // must release the old editor's busy state while its caller waits.
+            await service.setBookDetail(.success(next))
+            await model.loadBookDetail(nextBook)
+            XCTAssertEqual(model.selectedBookID, next.id)
+            XCTAssertEqual(model.bookDetail, .loaded(next))
+            XCTAssertEqual(model.bookEditSaveState, .idle)
+            if !holdDuringInvalidation {
+                await oldGate.release()
+                await oldRetry.value
+                XCTAssertEqual(model.bookEditSaveState, .idle)
+            }
+
+            // Hold a newer owned retry before retiring the old caller. Its
+            // saving state must survive the old operation's final cleanup.
+            await service.setCoverReplacementGate(nil)
+            await service.setCoverReplacement(
+                .failure(.coverUpdate(.uploadRejected)))
+            await model.saveBookEdits(
+                draft: BookMetadataDraft(detail: next), baseline: next,
+                coverJPEGData: Data([2]))
+            XCTAssertEqual(
+                model.bookEditSaveState,
+                .metadataSavedCoverFailed(
+                    account.id, next, coverJPEGData: Data([2]),
+                    AppFailure(.replaceCover, .invalidInput)))
+            let newGate = AsyncGate()
+            await service.setCoverReplacement(.success(next))
+            await service.setCoverReplacementGate(newGate)
+            let newerEntered = await newGate.entryExpectation
+            let newRetry = Task { await model.retryBookCoverUpload() }
+            await fulfillment(of: [newerEntered], timeout: 3)
+            if holdDuringInvalidation {
+                await oldGate.release()
+                await oldRetry.value
+            }
+            XCTAssertEqual(model.bookEditSaveState, .saving)
+            XCTAssertEqual(model.selectedBookID, next.id)
+            XCTAssertEqual(model.bookDetail, .loaded(next))
+            await newGate.release()
+            await newRetry.value
+            XCTAssertEqual(model.bookEditSaveState, .coverSaved(next))
+        }
+    }
+
     func testBookDeletionForwardsModeAndRefreshesLibrary()
         async throws
     {

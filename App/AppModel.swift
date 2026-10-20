@@ -1697,7 +1697,14 @@ final class AppModel {
     private(set) var homeShelvesRefreshState: ResourceRefreshState = .idle
     private(set) var searchQuery = ""
     private(set) var searchResults: ResourceState<LibrarySearchResults> = .idle
-    private(set) var selectedBookID: LibraryItemID?
+    private(set) var selectedBookID: LibraryItemID? {
+        didSet {
+            guard selectedBookID != oldValue,
+                let operationID = bookCoverRetryOperationID
+            else { return }
+            retireBookCoverRetry(operationID)
+        }
+    }
     private(set) var bookDetail: ResourceState<LibraryBookDetail> = .idle
     private(set) var bookDetailRefreshState: ResourceRefreshState = .idle
     private(set) var bookBookmarks: ResourceState<[AudioBookmark]> = .idle
@@ -4739,6 +4746,7 @@ final class AppModel {
         let operationID = UUID()
         bookCoverRetryOperationID = operationID
         bookEditSaveState = .saving
+        defer { retireBookCoverRetry(operationID) }
         do {
             let updated = try await service.replaceCover(
                 for: account,
@@ -4780,6 +4788,14 @@ final class AppModel {
                 coverJPEGData: coverJPEGData,
                 AppFailure(operation: .replaceCover, serviceError: error)
             )
+        }
+    }
+
+    private func retireBookCoverRetry(_ operationID: UUID) {
+        guard bookCoverRetryOperationID == operationID else { return }
+        bookCoverRetryOperationID = nil
+        if bookEditSaveState == .saving {
+            bookEditSaveState = .idle
         }
     }
 

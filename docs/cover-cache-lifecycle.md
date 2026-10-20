@@ -43,7 +43,9 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   Successful in-app cover saves and retries invalidate every variant of the
   affected account/item before notifying views and active playback. Upload retry
   keeps its operation/account/book ownership through awaited invalidation and
-  rechecks it before publishing editor completion. Audio player,
+  rechecks it before publishing editor completion. Changing the selected book
+  retires only its owned retry and releases the editor's busy state immediately;
+  final cleanup checks the token so an older caller cannot clear newer work. Audio player,
   position, intent and queue are unchanged.
 - A successfully fetched variant with changed bytes retires sibling variants.
   Exact encoded bytes intentionally identify the rendered variant; a changed
