@@ -2129,12 +2129,84 @@ The same earlier CI run also recorded an unchanged app failure in
 reports 609 passes, one failure and zero skips. That test calls `pause()` then
 immediately captures the model's position before awaited transcript operations;
 it does not establish a settled pause/seek observation. This is a separate timing
-hypothesis, not proof transcript deletion moves playback. No app-test or
-production playback edit is bundled here. A separate proposal is to confirm
-paused state/native rate zero, await an explicit paused seek, then capture the
+hypothesis, not proof transcript deletion moves playback. That OpenID-only correction made no app-test or
+production playback edit. The separately authorized correction below confirms
+paused state/native rate zero, awaits an explicit paused seek, then captures the
 baseline and retain every original deletion/download/account/item/position
 postcondition and the same tolerance. Such a seek establishes a deletion
 invariant, not initial-position forwarding; independent startup oracles remain
 required. Neither a source correction nor a later passing run erases this
 recorded failure. Full CI must not be described as green while any failure
 remains.
+
+## Transcript deletion playback-position stability correction
+
+CI run `39387568129` at `2f03cca` recorded one unchanged app failure:
+`testTranscriptDeletionPreservesDownloadAndActivePlayback` sampled
+0.519404209 after transcript deletion against a pre-deletion 0.5 snapshot, with
+its unchanged 0.01 tolerance. Calling `pause()` alone did not establish a
+completed position-observation boundary before that immediate snapshot. The
+failure remains retained; it is not evidence that transcript deletion itself
+moves playback. No other task or open PR owned this test when the correction
+started.
+
+The existing test now bounds and asserts paused state/native rate zero with the
+existing diagnostic waiter, guards a changed observation with an explicit failure
+and awaited stop, then awaits the existing async seek to 0.5. It asserts paused
+state, zero rate, no playing intent and the completed seek result before capturing
+the baseline. Both new guard exits stop playback before deferred fixture removal.
+All original started/deleted/active-book/account/item/position/download-record
+assertions remain, with the same 0.01 precision. After those paused invariants,
+the test resumes playback and bounds actual playing state, requested intent,
+positive native rate and playing time-control status before stopping. Active
+playback coverage therefore includes real resumability after deletion, rather
+than only a retained model flag. No numeric position is asserted while that
+resumed clock advances.
+
+The explicit seek establishes a deletion-preservation invariant. It is not proof
+of initial-position forwarding. All seven separately recorded startup oracles,
+every other test body, production playback/authentication and test identities
+remain unchanged. Only this app audit disposition and the changed method's navigation
+are refreshed; no broad tracker reconciliation or new test is claimed.
+
+Validation uses the supported `scripts/xctest.sh` discovery/result gate on an
+owned iPhone 17 Pro Simulator running iOS 26.5, with Xcode 27.1 / Swift 6.4:
+
+- Final source passes three independent focused runs, **1/1 each**, the owning
+  `AppModelTests` suite **505/505**, and restored-source focus **1/1**. Every run
+  has zero failures, expected failures, skips or structured runtime warnings,
+  and the canonical runner verifies exact built discovery.
+- One expected-failing mutation performs a completed seek to 0.75 after deletion.
+  The original position-preservation assertion rejects 0.75 versus the 0.5
+  baseline using the unchanged tolerance. The outcome is an ordinary single
+  test failure, not a compile failure, hang or crash. Exact final source bytes
+  are restored before the final focused run.
+- After integrating already-merged #414 (`d9c7dcc`), the signed host gate passes
+  **606/606** exact identities with zero failures/errors/skips. The OpenID
+  source hash remains the independently repeated/six-mutation-checked capture
+  correction. CI `39392756147` at intermediate head `80c722e` separately confirms
+  Swift 6.3.3 / Xcode 26.6 compilation and execution: **605 passes plus only the
+  documented unsigned Keychain skip**, including both affected original cases
+  and both four-scenario contracts. That head does not include this app fix and
+  is not final-head CI evidence.
+- Strict Swift lint/docs, preservation of every original assertion and all other
+  app test bodies, unchanged startup-oracle records, and single-disposition/targeted
+  method navigation scope are verified. Raw Xcode SDK build-version parser
+  diagnostics remain in local logs; structured runtime-warning arrays are empty.
+  Existing host dependency warnings, three declared fixture-cleanup known issues
+  and intentional read-only SwiftData diagnostics remain separate.
+
+A preliminary source passed a focused preflight, three repetitions and the owner
+suite before adding the explicit diagnostic to a guard exit. Those bundles are
+retained separately; final-source results use `i415-transcript-final-` prefixes.
+The final command selects
+`BleatAppTests/AppModelTests/testTranscriptDeletionPreservesDownloadAndActivePlayback`
+(or owning `BleatAppTests/AppModelTests`) with `mise exec -- ./scripts/xctest.sh
+-s Bleat -d <owned Simulator destination> -t <selector> -r <result bundle>`.
+Final bundles/logs use `.build/i415-transcript-final-{focused-1,focused-2,focused-3,owning}`;
+the restored bundle uses `.build/i415-transcript-restored.xcresult`. Mutation
+artifacts use `.build/i415-transcript-position-mutation`, and verification is
+`.build/i415-transcript-verification.json`. Integrated signed XML is retained in
+`.build/i415-integrated-signed-results`. The owned Simulator is separate from the
+existing cover/auth-join/user devices; no global reset or process termination is
+used. Final-head CI and independent review are still required before any merge.

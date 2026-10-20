@@ -3809,6 +3809,38 @@ final class AppModelTests: XCTestCase {
             position: .absoluteTime(0.5)
         )
         appModel.playback.pause()
+        await assertEventually(
+            "paused downloaded player before transcript deletion",
+            timeout: .seconds(3),
+            observed: { self.playbackDiagnostic(appModel.playback) },
+            condition: {
+                appModel.playback.state == .paused
+                    && appModel.playback.runtimeSnapshotForTesting.playerRate
+                        == 0
+            })
+        guard appModel.playback.state == .paused,
+            appModel.playback.runtimeSnapshotForTesting.playerRate == 0
+        else {
+            XCTFail("Paused player changed before transcript-deletion baseline")
+            await appModel.playback.stop()
+            return
+        }
+        // Establish a completed paused seek before sampling the preservation
+        // baseline. This is not an initial-position forwarding oracle.
+        await appModel.playback.seek(to: 0.5)
+        XCTAssertEqual(appModel.playback.state, .paused)
+        XCTAssertEqual(
+            appModel.playback.runtimeSnapshotForTesting.playerRate, 0)
+        XCTAssertFalse(appModel.playback.isPlaybackRequested)
+        XCTAssertEqual(appModel.playback.currentTime, 0.5, accuracy: 0.01)
+        guard appModel.playback.state == .paused,
+            appModel.playback.runtimeSnapshotForTesting.playerRate == 0,
+            !appModel.playback.isPlaybackRequested,
+            abs(appModel.playback.currentTime - 0.5) <= 0.01
+        else {
+            await appModel.playback.stop()
+            return
+        }
         let playbackPositionBeforeDeletion = appModel.playback.currentTime
         let downloadBeforeDeletion = appModel.downloads.record(
             accountID: account.id,
@@ -3843,6 +3875,23 @@ final class AppModelTests: XCTestCase {
             ),
             downloadBeforeDeletion
         )
+        XCTAssertEqual(appModel.playback.state, .paused)
+        XCTAssertEqual(
+            appModel.playback.runtimeSnapshotForTesting.playerRate, 0)
+        XCTAssertFalse(appModel.playback.isPlaybackRequested)
+        appModel.playback.play()
+        await assertEventually(
+            "downloaded playback resumes after transcript deletion",
+            timeout: .seconds(3),
+            observed: { self.playbackDiagnostic(appModel.playback) },
+            condition: {
+                appModel.playback.state == .playing
+                    && appModel.playback.isPlaybackRequested
+                    && appModel.playback.runtimeSnapshotForTesting.playerRate
+                        > 0
+                    && appModel.playback.runtimeSnapshotForTesting
+                        .timeControlStatus == .playing
+            })
         await appModel.playback.stop()
     }
 

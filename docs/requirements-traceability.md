@@ -822,5 +822,13 @@ timeout-observer and internal callback-task drainage remain separately scoped.
 The OpenID compatibility correction captures immutable callback arguments before
 explicitly typed tasks, preserving inherited isolation and lifecycle assertions.
 Swift 6.3.3 CI compilation must be verified separately from local Swift 6.4
-execution. The unrelated transcript-deletion timing failure remains recorded and
-is not fixed by this OpenID slice.
+execution. The earlier transcript-deletion timing failure remains recorded; its separate
+app-test correction is described below.
+
+The [transcript-deletion playback stability correction](release-evidence/test-reliability-core-followups.md#transcript-deletion-playback-position-stability-correction)
+retains the APP-TRANSCRIPTION-001 deletion/download/active-book assertions with
+the same position precision. A confirmed paused player and completed seek define
+the pre-deletion baseline, followed by actual playback resumption after deletion.
+This is not an initial-position forwarding oracle; the seven separately recorded
+startup-oracle requirements remain unchanged. The app correction is a separate
+commit from the OpenID compiler compatibility change.
