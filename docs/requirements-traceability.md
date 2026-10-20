@@ -852,3 +852,17 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Bounded build-helper test commands (#370)
+
+Three environment/dependency/sandbox tests now retain their original assertions
+while owning each external process group through a 30-second command budget,
+three-second cleanup bound and typed native outcomes. Non-reaping exit
+observation prevents releasing the leader identity before signalling; successful
+cleanup requires child reaping and group disappearance. Anonymous output files
+avoid descendant-held pipe EOF. Eight native lifecycle regressions and all
+original semantic assertions are retained. Exact m2 evidence is35/35 owning and
+33/33 individual repeated outcomes; normal build dependencies are unchanged.
+See [scope, native corrections and limits](release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370).
+This is a bounded #370 slice, not full subprocess or epic acceptance. Independent
+review, final-head CI, other lifecycle owners and platform gates remain separate.

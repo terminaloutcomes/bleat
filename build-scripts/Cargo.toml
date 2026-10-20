@@ -15,4 +15,5 @@ url = "2.5.8"
 yaml-rust = "0.4.5"
 
 [dev-dependencies]
+libc = "0.2"
 tempfile = "3.27.0"

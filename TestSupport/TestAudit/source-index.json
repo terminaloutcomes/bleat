@@ -9568,6 +9568,54 @@
       "name": "testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
       "line": 19173,
       "language": "swift"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "captures_success_and_nonzero_exit_after_cleanup",
+      "line": 16,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "spawn_failure_retains_io_cause_without_a_child",
+      "line": 33,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "deadline_reaps_child_and_preserves_ready_diagnostics",
+      "line": 48,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "descendant_output_holder_is_retired_after_parent_exit",
+      "line": 75,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "deadline_retires_descendants_with_the_parent",
+      "line": 96,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "normal_exit_is_observed_before_reaping_group_leader",
+      "line": 114,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "unwinding_after_exit_observation_retires_the_owned_group",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "oversized_capture_reports_failure_after_group_cleanup",
+      "line": 192,
+      "language": "rust"
     }
   ]
 }
