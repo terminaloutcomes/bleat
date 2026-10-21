@@ -80,6 +80,8 @@ struct Driver<'a> {
     watchdog_fired: Arc<AtomicBool>,
     cleaned: bool,
     admitted: Option<Admitted>,
+    started: Instant,
+    watchdog_deadline: Instant,
 }
 #[derive(Clone, Copy)]
 struct Admitted {
@@ -96,6 +98,7 @@ struct Outcome {
     phase_absent_before_release: bool,
     descendant_absent_before_release: bool,
     watchdog_fired: bool,
+    elapsed: Duration,
 }
 fn group_exists(pid: i32) -> bool {
     // SAFETY: signal zero only observes the recorded synthetic group.
@@ -195,6 +198,8 @@ fn main() {{ let error = std::process::Command::new({:?}).args(std::env::args_os
             .process_group(0)
             .spawn()
             .expect("synthetic native host driver");
+        let started = Instant::now();
+        let watchdog_deadline = started + Duration::from_secs(60);
         let (stop, wait) = mpsc::channel();
         let release = fixture.path().join("release");
         let fired = Arc::new(AtomicBool::new(false));
@@ -217,6 +222,8 @@ fn main() {{ let error = std::process::Command::new({:?}).args(std::env::args_os
             watchdog_fired: fired,
             cleaned: false,
             admitted: None,
+            started,
+            watchdog_deadline,
         }
     }
     fn ready(&mut self) -> Option<Admitted> {
@@ -318,7 +325,19 @@ fn main() {{ let error = std::process::Command::new({:?}).args(std::env::args_os
         confirmed
     }
     fn finish(mut self) -> Outcome {
-        let returned = self.wait(Duration::from_secs(8)).unwrap_or(false);
+        // Eight seconds observes cancellation after positive native admission;
+        // it is not a startup/performance contract for a normal workflow. That
+        // workflow uses the independent fixture watchdog already registered at
+        // launch, including native Python startup and report/coverage completion.
+        let cancellation = self.admitted.is_some();
+        let budget = if cancellation {
+            Duration::from_secs(8)
+        } else {
+            self.watchdog_deadline
+                .saturating_duration_since(Instant::now())
+        };
+        let returned = self.wait(budget).unwrap_or(false);
+        let elapsed = self.started.elapsed();
         let retired_before_release = returned && self.native_retired();
         let phase_absent_before_release = self.admitted.is_some_and(|a| !process_exists(a.phase));
         let descendant_absent_before_release =
@@ -333,7 +352,8 @@ fn main() {{ let error = std::process::Command::new({:?}).args(std::env::args_os
         );
         assert!(
             returned,
-            "driver did not return before independent release; {log}"
+            "driver completion not observed; cancellation={cancellation}, elapsed={elapsed:?}, status={:?}; {log}",
+            self.status
         );
         Outcome {
             status: self.status.expect("observed driver status"),
@@ -342,6 +362,7 @@ fn main() {{ let error = std::process::Command::new({:?}).args(std::env::args_os
             phase_absent_before_release,
             descendant_absent_before_release,
             watchdog_fired: fired,
+            elapsed,
         }
     }
 }
@@ -503,6 +524,10 @@ esac
     fs::create_dir_all(sentinel.parent().expect("coverage directory")).expect("coverage setup");
     fs::write(&sentinel, b"retained").expect("unrelated sentinel");
     let outcome = Driver::start(&fixture).finish();
+    eprintln!(
+        "unsigned_fixture_driver elapsed={:?} status={:?} watchdog_fired={}",
+        outcome.elapsed, outcome.status, outcome.watchdog_fired
+    );
     assert!(outcome.status.success(), "{}", outcome.log);
     assert!(!outcome.watchdog_fired);
     assert!(

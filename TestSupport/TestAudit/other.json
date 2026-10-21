@@ -9129,7 +9129,7 @@
     {
       "id": "scripts::host_test_driver::sigterm_retires_admitted_native_phase_and_descendant",
       "path": "scripts/tests/host_test_driver.rs",
-      "line": 357,
+      "line": 378,
       "purpose": "Drive the unchanged public launcher with actual Cargo exec semantics; after two controlled native processes enter, SIGTERM only its original driver PID and require observed retirement before independent release.",
       "review": {
         "status": "reviewed",
@@ -9160,7 +9160,7 @@
     {
       "id": "scripts::host_test_driver::native_nonzero_exit_preserves_status_and_stops_before_later_phases",
       "path": "scripts/tests/host_test_driver.rs",
-      "line": 431,
+      "line": 452,
       "purpose": "Preserve the first failing native command status through the public host-driver CLI.",
       "review": {
         "status": "reviewed",
@@ -9191,7 +9191,7 @@
     {
       "id": "scripts::host_test_driver::missing_native_tool_reports_spawn_failure_without_real_tool_fallback",
       "path": "scripts/tests/host_test_driver.rs",
-      "line": 441,
+      "line": 462,
       "purpose": "Distinguish missing native command from observed nonzero exit.",
       "review": {
         "status": "reviewed",
@@ -9222,7 +9222,7 @@
     {
       "id": "scripts::host_test_driver::unsigned_product_reports_and_profiles_survive_full_synthetic_workflow",
       "path": "scripts/tests/host_test_driver.rs",
-      "line": 451,
+      "line": 472,
       "purpose": "Preserve product-specific unsigned reports, coverage copies, successful native stderr and unrelated artifacts through the complete synthetic driver workflow.",
       "review": {
         "status": "reviewed",
@@ -9422,7 +9422,7 @@
   "issue362_host_driver_cancellation": {
     "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
     "scope": "Active native phase process group under direct host-driver SIGTERM; not detached group ownership, deferred macOS app changes or Release cleanup.",
-    "execution": "Focused native CLI target4/4, exact typed entitlement function1/1, existing shared native-owner subset34/34 passed with zero failures or skips. Strict all-target/all-feature Clippy passed. Actual signed owning-host execution, independent final review and exact-head CI remain pending.",
+    "execution": "Required-signing owning host at e9835ae:609 exact identities passed,zero skips/failures;604core+5transcription products equal canonical inventory;configuration hash unchanged. Final harness correction changes no driver/host inputs:corrected CLI owning target4/4 and all5affected identities individually passed;entitlement owning1/1 and shared native-owner34/34 results remain tied to unchanged source. Strict Clippy,formatting and docs pass. Original individual workflow observation failure and every compile/parser attempt remain retained. Final delta review and exact-head CI pending.",
     "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
   }
 }

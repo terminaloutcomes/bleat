@@ -682,9 +682,27 @@ full synthetic unsigned reports/profiles, successful-query stderr and unrelated
 sentinels. The local native target passed four exact identities, entitlement
 validation passed one exact identity, and 34 existing shared native-owner
 identities passed, all with zero failures or skips. Strict all-target/all-feature
-Clippy passed. Two intermediate compile failures executed no tests and remain
-retained. Actual signed owning execution, independent final review and exact-head
-CI remain separate gates before release.
+Clippy passed. The required-signing owning run at `e9835ae` passed all 609
+inventory identities with zero failures or skips: 604 core and five transcription
+outcomes, whose union exactly matches the canonical XML. It verified the signed
+profile and all entitlement fields; the personal configuration hash was unchanged.
+The upstream OpenTelemetry watchOS minimum deprecation and eight intentional
+SwiftData diagnostics from three passing negative tests remain retained.
+
+An individual synthetic normal-workflow run failed the regression harness's
+eight-second observation window after reaching successful report/coverage output.
+That cancellation-specific window was incorrectly also applied to ordinary
+workflow completion. The harness now retains the eight-second cancellation bound
+and uses its existing independent fixture watchdog for ordinary completion,
+without changing driver execution policy. The failed run remains retained;
+subsequent focused/individual outcomes are recorded separately. This correction
+changes only the Rust regression harness and audit/documentation metadata, so the
+signed result remains explicitly tied to `e9835ae` with unchanged driver/host-input
+hash proof. It is not relabelled as execution of a later commit.
+
+Compile-only failed attempts and private-verifier failures are retained separately
+and count as no test coverage. Independent final delta review and exact-head CI
+remain separate gates before release.
 
 This repairs the demonstrated active command-group boundary. It does not prove
 retirement of detached groups, shared Xcode/CoreSimulator services, the three
