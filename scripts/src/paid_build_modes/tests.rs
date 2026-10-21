@@ -12,6 +12,14 @@ fn executable(root: &Path, body: &str) -> std::path::PathBuf {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("executable fixture");
     path
 }
+fn assert_private_chain(error: &dyn std::error::Error) {
+    let mut current = Some(error);
+    while let Some(cause) = current {
+        assert!(!format!("{cause}\n{cause:?}").contains("synthetic-private-json-marker"));
+        current = cause.source();
+    }
+}
+
 #[test]
 fn matrix_preserves_all_twelve_queries_and_exact_original_contracts() {
     let all = queries();
@@ -98,11 +106,37 @@ fn settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output(
     let error = verify_settings(Query::PaidDefault, private.as_bytes())
         .expect_err("mismatched private setting");
     assert!(!format!("{error}\n{error:?}").contains("synthetic-private-settings-marker"));
-    for invalid in ["null", "{}", "not json"] {
-        assert!(matches!(
-            verify_settings(Query::PaidDefault, invalid.as_bytes()),
-            Err(Error::Json { .. })
-        ));
+    for invalid in ["not json", r#"["synthetic-private-json-marker"#] {
+        let error =
+            verify_settings(Query::PaidDefault, invalid.as_bytes()).expect_err("malformed JSON");
+        assert_private_chain(&error);
+        assert!(matches!(error, Error::Json { .. }));
+    }
+    for (input, field, kind) in [
+        ("null", InputField::Root, InputKind::Null),
+        ("{}", InputField::Root, InputKind::Object),
+        (
+            r#"[{"target":"BleatApp","buildSettings":"synthetic-private-json-marker"}]"#,
+            InputField::BuildSettings,
+            InputKind::String,
+        ),
+        (
+            r#"[{"target":"synthetic-private-json-marker"}]"#,
+            InputField::BuildSettings,
+            InputKind::Missing,
+        ),
+        (
+            r#"[{"target":{"synthetic-private-json-marker":true}}]"#,
+            InputField::Target,
+            InputKind::Object,
+        ),
+    ] {
+        let error = verify_settings(Query::PaidDefault, input.as_bytes())
+            .expect_err("typed shape rejection");
+        assert_private_chain(&error);
+        assert!(
+            matches!(error, Error::Shape { field: actual_field, actual: actual_kind,.. } if actual_field == field && actual_kind == kind)
+        );
     }
     assert!(matches!(
         verify_settings(Query::PaidDefault, b"[]"),
@@ -321,6 +355,22 @@ fn plist_contracts_fail_closed_for_each_security_and_substitution_assertion() {
             matches!(verify_plists(root),Err(Error::PlistContract { path: actual,key:actual_key,.. }) if actual==path && (actual_key==key || actual_key=="icloud/appattest content"))
         );
     }
+    let mac = Fixture::new();
+    let root = mac.root.path();
+    plist_fixture(root);
+    let mut d = plist::Dictionary::new();
+    d.insert(
+        "com.apple.developer.carplay-audio".to_owned(),
+        plist::Value::Boolean(true),
+    );
+    write_plist(
+        root,
+        "App/BleatMac.carplay-enabled.entitlements",
+        plist::Value::Dictionary(d),
+    );
+    assert!(
+        matches!(verify_plists(root),Err(Error::PlistContract { path,key, requirement:PlistRequirement::Absent }) if path=="App/BleatMac.carplay-enabled.entitlements" && key=="com.apple.developer.carplay-audio")
+    );
     let f = Fixture::new();
     let root = f.root.path();
     plist_fixture(root);

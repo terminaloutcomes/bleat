@@ -584,5 +584,12 @@ wiring tests remain separate; the actual supported paid-build entry point must
 be executed and recorded independently. No application settings, trust, signing,
 manifest dependency or user configuration changes.
 
-Validation and independent review remain pending. No signed-host, Simulator,
+Independent source review of preliminary `5887f33` found two P2 issues: Serde
+shape errors could embed rejected JSON strings, and a macOS entitlement filename
+ending in `carplay-enabled` took the iOS-enabled branch. Decoding now distinguishes
+syntax/incomplete input from typed root/row/field shape failures without retaining
+payload-bearing Serde errors. Regressions check the entire error chain. macOS
+exclusion runs before suffix handling, including the reported filename fixture.
+Earlier executions remain intermediate evidence; corrected-source validation
+and independent re-review remain pending. No signed-host, Simulator,
 device, live-server or full-epic acceptance is claimed by this slice.

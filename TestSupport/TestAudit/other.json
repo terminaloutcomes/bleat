@@ -7809,7 +7809,7 @@
     {
       "id": "scripts::paid_build_modes::matrix_preserves_all_twelve_queries_and_exact_original_contracts",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 16,
+      "line": 24,
       "native_identity": "paid_build_modes::tests::matrix_preserves_all_twelve_queries_and_exact_original_contracts",
       "purpose": "Preserve all twelve original settings queries and exact target/SDK/override contracts.",
       "review": {
@@ -7837,7 +7837,7 @@
     {
       "id": "scripts::paid_build_modes::settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 92,
+      "line": 100,
       "native_identity": "paid_build_modes::tests::settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
       "purpose": "Reject malformed settings, absent targets, missing/non-string fields and wrong values without payload disclosure.",
       "review": {
@@ -7865,7 +7865,7 @@
     {
       "id": "scripts::paid_build_modes::native_query_retains_exit_spawn_capture_causes_and_private_output",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 134,
+      "line": 168,
       "native_identity": "paid_build_modes::tests::native_query_retains_exit_spawn_capture_causes_and_private_output",
       "purpose": "Retain native exit/spawn/capture causes and retire native output ownership.",
       "review": {
@@ -7893,7 +7893,7 @@
     {
       "id": "scripts::paid_build_modes::admitted_query_deadline_retires_child_before_returning",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 189,
+      "line": 223,
       "native_identity": "paid_build_modes::tests::admitted_query_deadline_retires_child_before_returning",
       "purpose": "Retire a positively admitted held query within its command/cleanup budgets.",
       "review": {
@@ -7921,7 +7921,7 @@
     {
       "id": "scripts::paid_build_modes::plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 269,
+      "line": 303,
       "native_identity": "paid_build_modes::tests::plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
       "purpose": "Preserve every entitlement exclusion, Keychain presence and Info.plist substitution.",
       "review": {
@@ -7949,7 +7949,7 @@
     {
       "id": "scripts::paid_build_modes::negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
       "path": "scripts/src/paid_build_modes/tests.rs",
-      "line": 361,
+      "line": 411,
       "native_identity": "paid_build_modes::tests::negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
       "purpose": "Require all four invalid variables to fail through their exact originating validator kind.",
       "review": {

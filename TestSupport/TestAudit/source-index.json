@@ -9833,37 +9833,37 @@
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "matrix_preserves_all_twelve_queries_and_exact_original_contracts",
-      "line": 16,
+      "line": 24,
       "language": "rust"
     },
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
-      "line": 92,
+      "line": 100,
       "language": "rust"
     },
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "native_query_retains_exit_spawn_capture_causes_and_private_output",
-      "line": 134,
+      "line": 168,
       "language": "rust"
     },
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "admitted_query_deadline_retires_child_before_returning",
-      "line": 189,
+      "line": 223,
       "language": "rust"
     },
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
-      "line": 269,
+      "line": 303,
       "language": "rust"
     },
     {
       "path": "scripts/src/paid_build_modes/tests.rs",
       "name": "negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
-      "line": 361,
+      "line": 411,
       "language": "rust"
     }
   ]

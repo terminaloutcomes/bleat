@@ -1,7 +1,6 @@
 //! Paid capability matrix; signed-host execution has a separate lifecycle.
 use crate::ci_smoke::owned_command::{self, Failure, Stage};
 use build_scripts::paid_build_settings::{PaidBuildSettingsError, validate_environment};
-use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path, process::Command, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -154,7 +153,14 @@ pub enum Error {
     Json {
         query: Query,
         #[source]
-        source: serde_json::Error,
+        source: JsonDecodeFailure,
+    },
+    #[error("paid-build settings query {query:?} has invalid {field:?} at row {row:?}: {actual:?}")]
+    Shape {
+        query: Query,
+        row: Option<usize>,
+        field: InputField,
+        actual: InputKind,
     },
     #[error("paid-build settings query {query:?} has no BleatApp target")]
     MissingTarget { query: Query },
@@ -191,6 +197,66 @@ pub enum Error {
         actual: Option<PaidBuildSettingsError>,
     },
 }
+#[derive(Debug, thiserror::Error)]
+#[error("{kind:?} at line {line}, column {column}")]
+pub struct JsonDecodeFailure {
+    kind: JsonFailureKind,
+    line: usize,
+    column: usize,
+}
+#[derive(Debug)]
+pub enum JsonFailureKind {
+    Io,
+    Syntax,
+    Shape,
+    Incomplete,
+}
+impl From<serde_json::Error> for JsonDecodeFailure {
+    fn from(source: serde_json::Error) -> Self {
+        use serde_json::error::Category;
+        Self {
+            kind: match source.classify() {
+                Category::Io => JsonFailureKind::Io,
+                Category::Syntax => JsonFailureKind::Syntax,
+                Category::Data => JsonFailureKind::Shape,
+                Category::Eof => JsonFailureKind::Incomplete,
+            },
+            line: source.line(),
+            column: source.column(),
+        }
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum InputField {
+    Root,
+    Row,
+    Target,
+    BuildSettings,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum InputKind {
+    Missing,
+    Null,
+    Boolean,
+    Number,
+    String,
+    Array,
+    Object,
+}
+impl InputKind {
+    fn of(value: Option<&serde_json::Value>) -> Self {
+        use serde_json::Value;
+        match value {
+            None => Self::Missing,
+            Some(Value::Null) => Self::Null,
+            Some(Value::Bool(_)) => Self::Boolean,
+            Some(Value::Number(_)) => Self::Number,
+            Some(Value::String(_)) => Self::String,
+            Some(Value::Array(_)) => Self::Array,
+            Some(Value::Object(_)) => Self::Object,
+        }
+    }
+}
 #[derive(Debug)]
 pub enum SettingValue {
     Missing,
@@ -216,15 +282,42 @@ pub enum PlistRequirement {
     KeychainPresent,
 }
 
-#[derive(Deserialize)]
-struct SettingsRow {
-    target: String,
-    #[serde(rename = "buildSettings")]
-    settings: BTreeMap<String, serde_json::Value>,
+struct SettingsRow<'a> {
+    target: &'a str,
+    settings: &'a serde_json::Map<String, serde_json::Value>,
 }
 fn verify_settings(query: Query, bytes: &[u8]) -> Result<(), Error> {
-    let rows: Vec<SettingsRow> =
-        serde_json::from_slice(bytes).map_err(|source| Error::Json { query, source })?;
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|source| Error::Json {
+        query,
+        source: JsonDecodeFailure::from(source),
+    })?;
+    let array = value.as_array().ok_or_else(|| Error::Shape {
+        query,
+        row: None,
+        field: InputField::Root,
+        actual: InputKind::of(Some(&value)),
+    })?;
+    let mut rows = Vec::new();
+    for (index, value) in array.iter().enumerate() {
+        let shape = |field, value| Error::Shape {
+            query,
+            row: Some(index),
+            field,
+            actual: InputKind::of(value),
+        };
+        let object = value
+            .as_object()
+            .ok_or_else(|| shape(InputField::Row, Some(value)))?;
+        let target = object.get("target");
+        let target = target
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| shape(InputField::Target, target))?;
+        let settings = object.get("buildSettings");
+        let settings = settings
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| shape(InputField::BuildSettings, settings))?;
+        rows.push(SettingsRow { target, settings });
+    }
     // Preserve the original any(BleatApp && all expected settings) contract.
     let expected = query.expected();
     let rows: Vec<_> = rows.iter().filter(|row| row.target == "BleatApp").collect();
@@ -343,7 +436,11 @@ fn verify_plists(root: &Path) -> Result<(), Error> {
         let value = read_plist(root, &path)?;
         let dict = dictionary(&value, &path)?;
         let key = "com.apple.developer.carplay-audio";
-        if name.ends_with(".carplay-enabled.entitlements") {
+        if name.starts_with("BleatMac.") {
+            if dict.contains_key(key) {
+                return Err(reject_key(&path, key));
+            }
+        } else if name.ends_with(".carplay-enabled.entitlements") {
             carplay_enabled_files += 1;
             if dict.get(key).and_then(plist::Value::as_boolean) != Some(true) {
                 return Err(Error::PlistContract {
