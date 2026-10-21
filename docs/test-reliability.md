@@ -5,6 +5,9 @@ opt-in cases. Issue [#362](https://github.com/terminaloutcomes/bleat/issues/362)
 tracks the repository-wide audit. These rules are requirements, not a claim
 that the existing suite has been fully reviewed or validated.
 
+See the [current delivery and acceptance checkpoint](release-evidence/test-reliability-current-status.md)
+for landed fixes, remaining record review and separately tracked configuration gaps.
+
 ## Review a test
 
 Record its identifier and source path, purpose, dependencies and initial state,

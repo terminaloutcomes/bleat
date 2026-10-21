@@ -1046,3 +1046,12 @@ Release gate at `cdd7a38` passed seven Python and nine native cases, then stoppe
 at the release-version preflight (`2026.10.21` versus checked-in `2026.10.14`).
 Archive and final surface-scan acceptance remain blocked on the authorized
 release metadata update. Ordinary Simulator success and exact-head CI are separate.
+
+### Current testing-epic dispositions (#362)
+
+The [current source/evidence checkpoint](release-evidence/test-reliability-current-status.md)
+separates landed bounded fixes, remaining formal audit work, current validation,
+deferred macOS work, optional source concerns and configuration/device acceptance.
+It credits #438/#439 and retains the unresolved iPad observation without claiming
+epic or release completion. Counts use distinct units; missing audit entries and
+historical follow-up labels are not current bug counts.
