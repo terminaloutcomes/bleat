@@ -871,6 +871,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
+ "libc",
  "plist",
  "serde_json",
  "tempfile",
@@ -4673,6 +4674,7 @@ dependencies = [
  "compact_jwt 0.6.0",
  "futures-util",
  "jsonwebtoken",
+ "libc",
  "md-5",
  "percent-encoding",
  "plist",

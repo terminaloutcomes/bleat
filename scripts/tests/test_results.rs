@@ -276,3 +276,130 @@ fn xcresult_summary_requires_zero_failures_expected_failures_and_runtime_warning
             .is_err()
     );
 }
+
+fn malformed_children_values() -> Vec<Value> {
+    vec![
+        Value::Null,
+        serde_json::json!(false),
+        serde_json::json!(7),
+        serde_json::json!("not an array"),
+        serde_json::json!({"nodeType": "Repetition", "result": "Failed"}),
+    ]
+}
+
+fn single_passed_case() -> Value {
+    serde_json::json!({"nodeType": "Test Case", "result": "Passed",
+        "nodeIdentifierURL": format!("test://com.apple.xcode/Bleat/{TEST_ID}")})
+}
+
+#[test]
+fn malformed_children_fields_reject_cases_and_containers() {
+    for invalid in malformed_children_values() {
+        let mut case = single_passed_case();
+        case["children"] = invalid.clone();
+        let input = serde_json::json!({"testNodes": [case]});
+        assert!(
+            matches!(
+                verify_result_json(&input.to_string(), &expected(1), &[]),
+                Err(VerifyError::InvalidResult("children must be an array"))
+            ),
+            "case children {invalid:?} must fail closed"
+        );
+        for kind in [
+            "Test Plan",
+            "Unit test bundle",
+            "UI test bundle",
+            "Test Suite",
+            "Repetition",
+        ] {
+            let input = serde_json::json!({"testNodes": [single_passed_case(),
+                {"nodeType": kind, "children": invalid}]});
+            assert!(
+                matches!(
+                    verify_result_json(&input.to_string(), &expected(1), &[]),
+                    Err(VerifyError::InvalidResult("children must be an array"))
+                ),
+                "{kind} children {invalid:?} must fail closed"
+            );
+        }
+    }
+}
+
+#[test]
+fn malformed_children_fields_reject_repetitions_and_messages() {
+    for invalid in malformed_children_values() {
+        let input = mutate_results(|value| {
+            value["testNodes"][0]["children"][0]["children"] = invalid.clone();
+        });
+        assert!(
+            matches!(
+                verify_result_json(&input, &expected(2), &[]),
+                Err(VerifyError::InvalidResult("children must be an array"))
+            ),
+            "nested repetition children {invalid:?} must fail closed"
+        );
+        for location in ["root", "case", "repetition"] {
+            let mut input: Value = serde_json::from_str(REAL_RESULTS).expect("native fixture");
+            let message = serde_json::json!({"nodeType": "Skip Message", "name": "synthetic message",
+                "children": invalid});
+            match location {
+                "root" => input["testNodes"]
+                    .as_array_mut()
+                    .expect("root nodes")
+                    .push(message),
+                "case" => input["testNodes"][0]["children"]
+                    .as_array_mut()
+                    .expect("case children")
+                    .push(message),
+                _ => {
+                    input["testNodes"][0]["children"][0]["children"] = serde_json::json!([message])
+                }
+            }
+            assert!(
+                matches!(
+                    verify_result_json(&input.to_string(), &expected(2), &[]),
+                    Err(VerifyError::InvalidResult("children must be an array"))
+                ),
+                "{location} message children {invalid:?} must fail closed"
+            );
+        }
+    }
+}
+
+#[test]
+fn omitted_and_empty_children_preserve_valid_native_shapes() {
+    for children in [None, Some(serde_json::json!([]))] {
+        let mut case = single_passed_case();
+        let mut auxiliary = serde_json::json!({"nodeType": "Test Suite"});
+        let mut message =
+            serde_json::json!({"nodeType": "Skip Message", "name": "synthetic message"});
+        if let Some(children) = &children {
+            for node in [&mut case, &mut auxiliary, &mut message] {
+                node["children"] = children.clone();
+            }
+        }
+        let input = serde_json::json!({"testNodes": [case, auxiliary, message]});
+        let report = verify_result_json(&input.to_string(), &expected(1), &[])
+            .expect("valid optional children");
+        assert_eq!((report.passed, report.skipped), (1, 0));
+        let input = mutate_results(|value| {
+            for repetition in value["testNodes"][0]["children"]
+                .as_array_mut()
+                .expect("native repetitions")
+            {
+                match &children {
+                    Some(children) => repetition["children"] = children.clone(),
+                    None => {
+                        repetition
+                            .as_object_mut()
+                            .expect("repetition object")
+                            .remove("children");
+                    }
+                }
+            }
+        });
+        let report =
+            verify_result_json(&input, &expected(2), &[]).expect("native repetition leaves");
+        assert_eq!((report.passed, report.skipped), (2, 0));
+    }
+}

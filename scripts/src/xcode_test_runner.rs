@@ -8,12 +8,28 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
+#[path = "xcode_test_runner/commands.rs"]
+mod commands;
+use commands::{NativeBudgets, NativeRole, XcodeAction, native_command_status};
+
+#[cfg(test)]
+#[path = "xcode_test_runner/lifecycle_tests.rs"]
+mod lifecycle_tests;
+
 type Result<T> = std::result::Result<T, XcodeRunnerError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum XcodeRunnerError {
+    #[error("{stage} native command failed: {source}")]
+    NativeCommand {
+        stage: String,
+        #[source]
+        source: Box<crate::test_results::CommandFailure>,
+    },
     #[error("{0}")]
     Message(String),
+    #[error(transparent)]
+    PaidBuildModes(#[from] crate::paid_build_modes::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -44,9 +60,10 @@ pub enum XcodeRunnerError {
         status: ExitStatus,
         verification: Box<Self>,
     },
-    #[error("{stage} could not start: {command}; result verification failed: {verification}")]
+    #[error("{stage} native command failed: {command}; result verification failed: {verification}")]
     TestStartAndVerificationFailed {
         stage: String,
+        #[source]
         command: Box<Self>,
         verification: Box<Self>,
     },
@@ -75,6 +92,8 @@ pub struct Cli {
 enum RunnerCommand {
     /// The full local core, Release build, and Simulator gate.
     Core,
+    /// Verify paid capability build modes with bounded native queries.
+    PaidBuildModes,
     /// The signed macOS build and test gate.
     Macos,
     /// Run a selected Xcode scheme using the legacy xctest.sh arguments.
@@ -107,6 +126,9 @@ pub fn run() -> Result<()> {
     let root = repository_root()?;
     match cli.command {
         RunnerCommand::Core => run_core(&root),
+        RunnerCommand::PaidBuildModes => {
+            crate::paid_build_modes::run(&root).map_err(XcodeRunnerError::PaidBuildModes)
+        }
         RunnerCommand::Macos => run_macos(&root),
         RunnerCommand::Xctest(arguments) => run_xctest(&root, arguments),
     }
@@ -160,6 +182,8 @@ fn run_id() -> String {
     format!("{}-{millis}", std::process::id())
 }
 
+// Aggregate scripts retain their own lifecycle/cleanup boundaries for a separate
+// slice. An outer group deadline would not prove nested owners or EXIT traps ran.
 fn command_status(command: &mut Command, stage: &str) -> Result<ExitStatus> {
     eprintln!("Running {stage}");
     command
@@ -181,8 +205,14 @@ fn ensure_success(status: ExitStatus, stage: &str) -> Result<()> {
     }
 }
 
-fn run_command(program: &str, args: &[&str], stage: &str) -> Result<()> {
-    let status = command_status(Command::new(program).args(args), stage)?;
+fn run_swift_release_build() -> Result<()> {
+    let stage = "Swift Release build";
+    let status = native_command_status(
+        Command::new("swift").args(["build", "-c", "release"]),
+        NativeRole::SwiftRelease,
+        stage,
+        NativeBudgets::default(),
+    )?;
     ensure_success(status, stage)
 }
 
@@ -191,7 +221,7 @@ fn run_core(root: &Path) -> Result<()> {
     let skip_simulator = env_boolean("BLEAT_SKIP_SIMULATOR", false)?;
     if !skip_host {
         ensure_success(
-            command_status(
+            native_command_status(
                 Command::new("cargo").args([
                     "test",
                     "--locked",
@@ -200,17 +230,15 @@ fn run_core(root: &Path) -> Result<()> {
                     "--test",
                     "release_versions",
                 ]),
+                NativeRole::ReleaseVersionTests,
                 "script release version tests",
+                NativeBudgets::default(),
             )?,
             "script release version tests",
         )?;
         run_script(root, "test-host.sh", "signed host tests")?;
-        run_command("swift", &["build", "-c", "release"], "Swift Release build")?;
-        run_script(
-            root,
-            "test-paid-developer-build-modes.sh",
-            "paid developer build modes",
-        )?;
+        run_swift_release_build()?;
+        crate::paid_build_modes::run(root)?;
     }
     if skip_simulator {
         return Ok(());
@@ -228,7 +256,7 @@ fn run_core(root: &Path) -> Result<()> {
     run_xcode_action(
         root,
         &simulator_build,
-        "-resolvePackageDependencies",
+        XcodeAction::ResolvePackages,
         &[],
         &[],
     )?;
@@ -240,7 +268,7 @@ fn run_core(root: &Path) -> Result<()> {
         settings.clone(),
         true,
     );
-    run_xcode_action(root, &release_build, "build", &[], &[])?;
+    run_xcode_action(root, &release_build, XcodeAction::Build, &[], &[])?;
 
     let destination = std::env::var("BLEAT_SIMULATOR_DESTINATION")
         .unwrap_or_else(|_| "platform=iOS Simulator,name=iPhone 17 Pro".to_owned());
@@ -454,7 +482,7 @@ type ResultVerifier<'a> = dyn Fn(&Path, &[ExpectedTest], &[TestId]) -> std::resu
 fn run_xcode_action(
     root: &Path,
     build: &XcodeBuildConfig,
-    action: &str,
+    action: XcodeAction,
     only: &[String],
     exclude: &[String],
 ) -> Result<ExitStatus> {
@@ -464,16 +492,21 @@ fn run_xcode_action(
 fn run_xcode_action_with(
     root: &Path,
     build: &XcodeBuildConfig,
-    action: &str,
+    action: XcodeAction,
     only: &[String],
     exclude: &[String],
     xcodebuild_path: &Path,
 ) -> Result<ExitStatus> {
     let mut command = xcodebuild_base(root, build, xcodebuild_path)?;
     add_selectors(&mut command, only, exclude);
-    command.arg(action);
-    let status = command_status(&mut command, action)?;
-    ensure_success(status, action)?;
+    command.arg(action.argument());
+    let status = native_command_status(
+        &mut command,
+        action.role(),
+        action.argument(),
+        NativeBudgets::default(),
+    )?;
+    ensure_success(status, action.argument())?;
     Ok(status)
 }
 
@@ -531,6 +564,22 @@ fn run_test_gate_with(
     xcodebuild_path: &Path,
     verifier: &ResultVerifier<'_>,
 ) -> Result<()> {
+    run_test_gate_with_budgets(
+        root,
+        request,
+        xcodebuild_path,
+        verifier,
+        NativeBudgets::default(),
+    )
+}
+
+fn run_test_gate_with_budgets(
+    root: &Path,
+    request: TestGateRequest,
+    xcodebuild_path: &Path,
+    verifier: &ResultVerifier<'_>,
+    budgets: NativeBudgets,
+) -> Result<()> {
     let TestGateRequest {
         build,
         only,
@@ -541,7 +590,7 @@ fn run_test_gate_with(
         result_bundle,
         stage,
     } = request;
-    if result_bundle.exists() {
+    if root.join(&result_bundle).exists() {
         return Err(XcodeRunnerError::ExistingResultBundle {
             path: root.join(&result_bundle),
         });
@@ -564,7 +613,12 @@ fn run_test_gate_with(
     add_selectors(&mut build_command, &only, &exclude);
     build_command.arg("build-for-testing");
     ensure_success(
-        command_status(&mut build_command, &format!("{stage} build-for-testing"))?,
+        native_command_status(
+            &mut build_command,
+            NativeRole::BuildForTesting,
+            &format!("{stage} build-for-testing"),
+            budgets,
+        )?,
         &format!("{stage} build-for-testing"),
     )?;
 
@@ -584,7 +638,12 @@ fn run_test_gate_with(
         ])
         .arg(root.join(&discovery_file));
     ensure_success(
-        command_status(&mut enumeration, &format!("{stage} test enumeration"))?,
+        native_command_status(
+            &mut enumeration,
+            NativeRole::Enumeration,
+            &format!("{stage} test enumeration"),
+            budgets,
+        )?,
         &format!("{stage} test enumeration"),
     )?;
     let discovery = fs::read_to_string(root.join(&discovery_file))?;
@@ -601,7 +660,7 @@ fn run_test_gate_with(
         .arg(root.join(&result_bundle))
         .arg("test-without-building");
     test.envs(runner_environment.iter().map(|(name, value)| (name, value)));
-    let test_result = command_status(&mut test, &stage);
+    let test_result = native_command_status(&mut test, NativeRole::Execution, &stage, budgets);
     let result_check =
         resolve_allowed_skips(&expected, &allowed_skip_selectors).and_then(|allow| {
             verifier(&root.join(&result_bundle), &expected, &allow)
@@ -714,7 +773,7 @@ mod tests {
         super::run_xcode_action_with(
             root,
             &config,
-            "-resolvePackageDependencies",
+            super::XcodeAction::ResolvePackages,
             &[],
             &[],
             &xcodebuild,

@@ -5790,6 +5790,100 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    #if DEBUG || BLEAT_UI_TESTING
+        func testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse()
+            async throws
+        {
+            enum Exit { case cancel, complete }
+            let suite = "EditDownloadFixture-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(suite, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: root, withIntermediateDirectories: true)
+            addTeardownBlock { @MainActor in
+                defaults.removePersistentDomain(forName: suite)
+                try FileManager.default.removeItem(at: root)
+            }
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "edit-fixture", title: "Edit fixture",
+                    libraryID: fixtureLibrary().id))
+            try await prepareCompleteDownload(
+                root: root, account: account, detail: detail)
+            let model = DownloadModel(
+                service: TestAppService(activeAccount: .success(account)),
+                defaults: defaults, storageRootURL: root,
+                backgroundSessionIdentifier: "bleat.tests.\(suite)")
+            addTeardownBlock { @MainActor in await model.removeAll() }
+            await model.start(accounts: [account])
+            XCTAssertEqual(model.records.count, 1)
+            let original = try XCTUnwrap(model.records.first)
+            let entry = try XCTUnwrap(original.manifest.entries.first)
+            XCTAssertGreaterThanOrEqual(entry.expectedByteLength, 200)
+            XCTAssertEqual(original.manifest.state, .complete)
+            XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            for exit in [Exit.cancel, .complete] {
+                let finished = expectation(
+                    description: "Edit fixture returned: \(exit)")
+                let operation = Task {
+                    await model.runEditPresentationDownloadFixture()
+                    finished.fulfill()
+                }
+                addTeardownBlock { @MainActor in
+                    operation.cancel()
+                    await operation.value
+                }
+                let running = await waitUntil(timeout: .seconds(30)) {
+                    model.editDownloadFixtureState == .running
+                }
+                XCTAssertTrue(
+                    running, "Edit fixture did not register its running state")
+                guard running else { return }
+                XCTAssertEqual(model.editDownloadFixtureProgress, 0)
+                XCTAssertEqual(
+                    model.records.first?.manifest.state, .downloading)
+                model.advanceEditDownloadFixture()
+                let advanced = await waitUntil(timeout: .seconds(30)) {
+                    model.editDownloadFixtureProgress == 2
+                }
+                XCTAssertTrue(
+                    advanced,
+                    "The requested fixture progress updates did not finish")
+                guard advanced else { return }
+                let runningRecord = try XCTUnwrap(model.records.first)
+                XCTAssertEqual(
+                    model.displayedDownloadedByteLength(for: runningRecord),
+                    entry.expectedByteLength * 2 / 200)
+                switch exit {
+                case .cancel:
+                    operation.cancel()
+                case .complete:
+                    model.completeEditDownloadFixture()
+                    model.completeEditDownloadFixture()
+                }
+                await fulfillment(of: [finished], timeout: 30)
+                operation.cancel()
+                await operation.value
+                XCTAssertEqual(
+                    model.editDownloadFixtureState,
+                    exit == .cancel ? .cancelled : .completed)
+                XCTAssertNil(model.failure)
+                XCTAssertEqual(model.records, [original])
+                XCTAssertEqual(
+                    model.displayedDownloadedByteLength(for: original),
+                    entry.expectedByteLength)
+                XCTAssertEqual(model.progress[original.manifest.downloadID], 1)
+                let persisted = try await storage.records()
+                XCTAssertEqual(persisted, [original])
+                XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+            }
+        }
+    #endif
+
     func testManualTrackAdvancesOnlyAfterActiveTrackFinalizes() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)

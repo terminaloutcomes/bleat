@@ -569,7 +569,8 @@
     "dailyBucketsAndCachedRangesUseUTCReportingCalendar()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
-    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"
+    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()",
+    "testObservationCleanupRetiresOnlyOwnedSubscription(exit:)"
   ],
   "BleatCoreTests.StatisticsTests": [
     "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
@@ -620,7 +621,8 @@
     "awaitsCleanupAfterSuccess()",
     "awaitsCleanupAfterOperationFailure()",
     "propagatesCleanupFailure()",
-    "retainsOperationFailureWhenCleanupAlsoFails()"
+    "retainsOperationFailureWhenCleanupAlsoFails()",
+    "reportsDefaultCleanupFailureAtTheTestCaller()"
   ],
   "BleatCoreTests.TokenVaultTests": [
     "testRoundTripReplacementIsolationAccessibilityAndDeletion()",

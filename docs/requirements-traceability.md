@@ -26,7 +26,7 @@ checks do not establish application behavior or refresh historical release evide
 | --- | --- | --- | --- | --- | --- |
 | TEST-BEARER-CAPTURE-382 | [Issue #382](https://github.com/terminaloutcomes/bleat/issues/382) under #372/#362 | Isolate the bearer-log privacy test in a bounded child with exact successful identity verification, complete bounded capture, and observed cleanup on success/failure/timeout/cancellation | `Tests/BleatCoreTests/BearerLogChild.swift`, original exporter test identity, nine `BearerLogChildTests` identities | [Source review and execution evidence](release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382); focused 10/10 passed; sequential repetitions 114/114; signed host 573/573 with zero skips | verified |
 | APP-FAILURE-PRESENTATION-001 | 5, 16; [GitHub issue #317](https://github.com/terminaloutcomes/bleat/issues/317) | Failure surfaces preserve typed titles, symbols, and explanatory messages. Refresh errors retain loaded content; retries and dismissal keep their existing behavior. Downloads distinguish storage, permissions, local context, invalid data, preparation, changed files, transfer, transport, and rejected requests. | `App/RootView.swift`, `App/LibraryCategoryContent.swift`, `App/PlaybackView.swift`, `App/MetadataEditorView.swift`, `App/DownloadModel.swift` | `AppModelTests.testAppFailuresPreserveTypedPresentation`, `testDownloadFailuresPreserveTypedPresentation`; native symbol availability; nine focused Simulator UI journeys covering Home with/without downloads, Library, categories, Search, Book Detail, refresh retention, and download-banner dismissal. Final focused Xcode result: 11 passed, zero failed/skipped/runtime warnings in `.build/issue-317-verified.xcresult`. Native macOS and large Dynamic Type layouts remain unverified | verified |
-| TEST-RELIABILITY-001 | [Issue #362](https://github.com/terminaloutcomes/bleat/issues/362) | Every test and shared helper has an individual reliability review, explicit decision, and appropriate repeated execution evidence | `docs/test-reliability.md`; bounded app test gate and context-download preparation assertions; exact Xcode and SwiftPM runner verification in `scripts/src/test_results.rs` and `scripts/src/swift_test_results.rs`; bounded workflow readiness in `scripts/src/runner_readiness.rs`; large-library ownership validation in `scripts/src/large_library.rs` | 1,552 individually reviewed source declarations plus shell/helper review and discovery reconciliation in `docs/release-evidence/test-reliability-audit.md`; runner remediation evidence in `docs/release-evidence/test-runner-verification.md`; follow-on timing execution, PR review corrections and retained findings in the audit evidence; generator ownership regression and wrapper evidence in `docs/release-evidence/performance-baseline.md`; [Private Cloud defaults lifecycle](release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372) adds owned-domain cleanup and success/typed-throw/unrelated-domain regressions; [read-only migration process boundary](release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372) requires observed exit, closed owned IO and checked root/domain cleanup after the real typed failure and byte-retention assertions; the historical retention experiment remains linked, while synchronization and other configuration/repetition evidence gaps remain | in-progress |
+| TEST-RELIABILITY-001 | [Issue #362](https://github.com/terminaloutcomes/bleat/issues/362) | Every test and shared helper has an individual reliability review, explicit decision, and appropriate repeated execution evidence | `docs/test-reliability.md`; bounded app test gate and context-download preparation assertions; exact Xcode and SwiftPM runner verification in `scripts/src/test_results.rs` and `scripts/src/swift_test_results.rs`; bounded workflow readiness in `scripts/src/runner_readiness.rs`; large-library ownership validation in `scripts/src/large_library.rs` | 1,552 individually reviewed source declarations plus shell/helper review and discovery reconciliation in `docs/release-evidence/test-reliability-audit.md`; runner remediation evidence in `docs/release-evidence/test-runner-verification.md`; follow-on timing execution, PR review corrections and retained findings in the audit evidence; generator ownership regression and wrapper evidence in `docs/release-evidence/performance-baseline.md`; [Private Cloud defaults lifecycle](release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372) adds owned-domain cleanup and success/typed-throw/unrelated-domain regressions; [read-only migration process boundary](release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372) requires observed exit, closed owned IO and checked root/domain cleanup after the real typed failure and byte-retention assertions; the historical retention experiment remains linked; [fixture gate cancellation and reuse](release-evidence/test-reliability-audit.md#fixture-gate-cancellation-and-reuse-375) adds direct app-hosted context/transcript/edit-download lifecycle regressions, with execution evidence recorded separately; synchronization and other configuration/repetition evidence gaps remain | in-progress |
 | APP-ABOUT-001 | 6, 16 | About shows the app version and website/News links. Diagnostics retains compile date, developer, and bundle identifier. Website News is generated from `CHANGELOG.md` for `/news/`. | `App/AboutView.swift`, `App/RootView.swift`, `scripts/src/site_news.rs`, `site/templates/base.html` | `BleatUITests.testAboutLinksAndDiagnosticBuildMetadata`; `site_news::tests`; `mise run site-check`, `mise run site-build` | verified |
 | APP-CALLBACK-CANCELLATION-001 | 14, 16, 19 | Framework callbacks do not block the main actor or inherit unsafe isolation; teardown follows framework queue/context rules; retired playback and stream callbacks cannot affect replacements | `App/PlaybackObservation.swift`, `App/PlaybackModel.swift`, `App/NowPlayingCoordinator.swift`, `App/BonjourDiscovery.swift`, `Sources/BleatCore/LiveUpdates.swift`, `Sources/BleatCore/PrivateCloudSync.swift` | `FrameworkCallbackTests`, `OpenIDAuthenticationTests.testNativeBrowserCallbackAdapterRunsOffMainActor`, `LiveUpdatesTests.testRetiredStreamTerminationCannotStopReplacement`, `testStopWhileRestoringEndpointDoesNotRetrieveCredentials`, `testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket`, callback-context and cancellation-drain `PrivateCloudSyncTests`; audit scope and physical-device gaps in `docs/release-evidence/callback-cancellation-audit.md` | implemented |
 | APP-RELEASE-API-001 | 16, 17 | Resolve an exact iOS build, inspect typed TestFlight states and existing groups, save localized test notes, submit ready beta review, and verify explicit app-owned group assignments through App Store Connect | `scripts/src/appstore_builds.rs`, `scripts/src/appstore_testflight.rs`, `scripts/src/bin/appstore-monitor.rs`; supported commands in `docs/development.md` | `scripts/tests/appstore_builds.rs`, `scripts/tests/appstore_testflight.rs` cover exact build matching, release payloads, pending-review reconciliation, blocked states, ownership, incomplete data, and post-mutation membership. Live group discovery works; end-to-end distribution remains blocked by local distribution signing access | implemented |
@@ -643,7 +643,11 @@ Its startup-completion gate also verifies that discarding a selection cancels
 an already-claimed resume task before bootstrap returns, so repeated Play cannot
 report acceptance of the discarded selection.
 `FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
-covers retirement followed by replacement playback. Deleted-book cold resume
+covers retirement followed by replacement playback. Its final prepared-playback
+pause now awaits its own callback-processing sequence advance before asserting
+exactly one delivered pause, with deferred coordinator cleanup; scoped evidence
+is recorded in [the final-pause review](release-evidence/test-reliability-app-followups.md#final-prepared-playback-pause-callback-374).
+Deleted-book cold resume
 also clears its paused native snapshot and retained retry identity;
 `AppModelTests.testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity`
 covers fresh and previously failed selections while retaining canonical positions.
@@ -853,6 +857,119 @@ explicitly; final full-app verification is repeated after that syntax correction
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
 
+### Local smoke runner lifecycle correction (#371)
+
+Controlled baseline regressions demonstrated a live child after stdin-write
+failure, a held boot preventing return, and lost combined native failure data.
+Private file input removes the post-spawn write hazard;owned command groups,
+non-reaping exit observation and a single build/readiness coordinator bound
+retirement and preserve both typed outcomes. Shared Simulators/services are not
+retired. Original selector assertions remain byte-identical;their audit now
+acknowledges external jq ownership. Final local evidence is 147/147 owning and
+42/42 exact individual repeated outcomes,including eleven new lifecycle cases.
+See [demonstration, policies and remaining boundaries](release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371).
+This is local fixture evidence only. Independent review, publication, Linux and
+real Xcode/Simulator gates remain pending;other runner command owners,platform
+requirements and broader #362/#369 reconciliation remain open.
+
+### Owned result report commands (#371)
+
+The modern test-tree, summary and legacy-fallback reads own their command groups,
+execution budgets and cleanup. Typed stage/cause, native status and capture
+errors remain inspectable while diagnostics omit payloads. Report read limits
+accept larger structured data without widening the existing smoke ceiling.
+Seven native regressions preserve argv and test deadlines, reaping, failure and
+encoding diagnostics, size rejection and large valid JSON. See [bounded report
+commands, retained baseline and exact evidence](release-evidence/test-runner-verification.md#bounded-result-report-commands-371).
+Other command owners, five specifically named missing legacy-test audit entries,
+full schema/source reconciliation and configuration/device gates remain open.
+
+Final-source evidence: 154 owning native outcomes, 21 focused executions and 7
+local Linux ARM64/Rust 1.97.1 functions passed; the owned container was removed.
+Strict checks pass. The changed reader accepts 626 outcomes from a retained real
+CI bundle with discovery agreement; this replay is separate from fresh app
+execution. Failed and superseded attempts remain documented. Independent
+review and exact-head CI are separate requirements.
+
+### Existing legacy-summary audit coverage (#369)
+
+Five already implemented inline legacy-summary tests receive substantive
+individual decisions and source-index locations while preserving all previous
+records. Their code and immutable fixture match the retained 154-outcome owning
+source, including all five exact identities. No new runtime test or execution is
+claimed. See [individual scope and revision-bound evidence](release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369).
+Broader audit, native Xcode/configuration/device evidence and integration remain
+open; independent review and exact-head CI are separate requirements.
+
+### Remaining smoke native command bounds (#371)
+
+The six smoke version/inventory/settings/enumeration/install/test invocations
+use finite typed stage policies and the existing invocation-owned native cleanup
+boundary. Captured structured output is retained without copying raw failures
+into diagnostics; status phases preserve live inherited console output. Result
+verification runs even after execution failure and both typed causes remain
+available. [Scope, native regressions and separate acceptance gates](release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371)
+retain remaining SwiftPM/general-Xcode ownership and broader #362 acceptance.
+
+### SwiftPM native command ownership (#371)
+
+SwiftPM discovery and execution use distinct finite typed native stages and the
+shared invocation-owned cleanup boundary. Discovery consumes complete stdout
+while retaining live compiler stderr; observer environment, selection and report
+contracts remain explicit. Failed execution still audits artifacts and preserves
+both typed causes. [Scoped source, regression and acceptance evidence](release-evidence/test-runner-verification.md#swiftpm-command-bounds-371)
+keeps actual execution and broader #362 acceptance separate.
+
+### Direct Xcode runner native ownership (#371)
+
+Six direct tool call sites use finite typed roles and the existing native group
+owner. Observed nonzero exit status remains distinct from spawn, deadline and
+cleanup failure; unconfirmed retirement cannot pass as a status. Exact result
+verification still runs after execution failure and retains both typed causes.
+[Scoped regression and acceptance evidence](release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371)
+keeps the two aggregate-script and shared-service boundaries explicitly open.
+
+### Repository-root result preservation (#371)
+
+The Xcode runner's existing-result check uses the same repository root as its
+native result arguments. Typed rejection protects absolute and relative result
+paths before any native command or verifier runs. [Source proof, retained probe
+and scoped regression evidence](release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371)
+preserve the distinction between reproduced guard bypass and unobserved data loss.
+
+### Bounded build-helper test commands (#370)
+
+Three environment/dependency/sandbox tests now retain their original assertions
+while owning each external process group through a 30-second command budget,
+three-second cleanup bound and typed native outcomes. Non-reaping exit
+observation prevents releasing the leader identity before signalling; successful
+cleanup requires child reaping and group disappearance. Anonymous output files
+avoid descendant-held pipe EOF. Eight native lifecycle regressions and all
+original semantic assertions are retained. Exact m2 evidence is35/35 owning and
+33/33 individual repeated outcomes; normal build dependencies are unchanged.
+See [scope, native corrections and limits](release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370).
+This is a bounded #370 slice, not full subprocess or epic acceptance. Independent
+review, final-head CI, other lifecycle owners and platform gates remain separate.
+
+### Structured result child-array validation (#371)
+
+Modern Xcode result verification rejects present malformed `children` fields at
+case, container, repetition and message boundaries with a typed schema failure.
+Absent/empty children and genuine repeated outcomes retain their existing
+contracts. Three focused regressions preserve all existing assertions and
+exercise synthetic invalid schemas independently of Xcode execution. See the
+[bounded schema fix and retained failures](release-evidence/test-runner-verification.md#structured-result-children-schema-371).
+Broader #371/#362 acceptance and platform evidence remain separate.
+
+### Cleanup helper caller diagnostics (#372)
+
+The test cleanup helper records secondary cleanup failures at the calling
+test's default or explicitly supplied source location while preserving the
+originating typed operation error. Narrow native issue matchers verify both
+cleanup cause and caller context; all success and single-failure assertions
+remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
+Signed-host, independent-review and exact-head CI evidence are recorded
+separately; broader epic acceptance is not established by this helper change.
 ### Typed optional completion assertion (#372)
 
 The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
@@ -862,6 +979,7 @@ remain covered. Error-exit task drainage remains a separate #372 concern.
 See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
 This does not change provider/transport lifecycle contracts or establish
 broader epic/configuration acceptance.
+
 
 ### Concurrent export callers after operation failure (#372)
 
@@ -879,3 +997,32 @@ three runs (9 scenarios), and 607 signed-host identities passed with zero failur
 or skips. Synchronizable-Keychain coverage and both new failure arguments are
 verified. Independent review and exact-head CI are separate requirements;
 retained warnings and intentional failure diagnostics remain linked above.
+
+### Paid build-mode orchestration (#371)
+
+The twelve paid-capability settings queries use bounded native ownership and
+decoded typed settings/plist assertions; exact isolated invalid-mode controls
+replace generic launcher-failure acceptance. [Scoped ownership and evidence](release-evidence/test-runner-verification.md#paid-build-mode-orchestration-371)
+keeps signed-host orchestration and independently created groups outstanding.
+
+### Missing audit records and scoped recurrence validation (#369)
+
+Five existing host functions and nine build-helper functions have individual
+source-reviewed decisions, setup/action/postcondition details, synchronization
+and cleanup boundaries, enabling conditions and applicable rule assessments.
+Current source-index locations and moved-path provenance are reconciled; retired
+SDK-override history remains explicit. Three command-driven records retain their
+historical unbounded-source assessments; the integrated #418 source uses the
+bounded owner and its current dispositions. See the [historical/current review
+reconciliation](release-evidence/test-reliability-audit.md#integration-of-historical-and-current-child-reviews-369370).
+The audit repair changes no application or existing test behavior, and no
+production leak/hang is inferred.
+
+The Rust parity checker and eight audited regressions reject orphaned active
+Rust records after attribute/declaration/file removal as well as missing/stale/
+duplicate/placeholder records and empty required scopes. Its scope is host
+inventory, build-helper source/test declarations and its own regressions;
+semantic review, compiler discovery and broader inventory are not certified by
+name parity. See [repair scope and exact evidence](release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369).
+Broader #362/#369 acceptance remains open; source/record coverage alone is not
+completion of the testing epic.

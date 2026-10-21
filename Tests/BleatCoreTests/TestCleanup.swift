@@ -6,6 +6,7 @@ import Testing
 /// Await cleanup on both exits, retaining the original operation failure.
 func withTestCleanup<T>(
     _ cleanup: () async throws -> Void,
+    sourceLocation: SourceLocation = #_sourceLocation,
     isolation: isolated (any Actor)? = #isolation,
     operation: () async throws -> T
 ) async throws -> T {
@@ -16,7 +17,8 @@ func withTestCleanup<T>(
         do {
             try await cleanup()
         } catch {
-            Issue.record(error, "Test cleanup failed")
+            Issue.record(
+                error, "Test cleanup failed", sourceLocation: sourceLocation)
         }
         throw error
     }

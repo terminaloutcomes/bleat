@@ -1,6 +1,11 @@
 #![cfg(target_os = "macos")]
 
-use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command, time::Duration};
+
+#[path = "../support/bounded_command.rs"]
+mod bounded_command;
+
+const COMMAND_BUDGET: Duration = Duration::from_secs(30);
 
 #[test]
 fn build_launchers_preserve_the_callers_toolchain_environment() {
@@ -48,18 +53,20 @@ printf '%s\n' "$@"
             repository.display()
         ),
     ] {
-        let result = Command::new("/bin/bash")
-            .args(["-c", &command])
-            .env("PATH", &path)
-            .env("SRCROOT", repository)
-            .env("TARGET_TEMP_DIR", fixture.path())
-            .env("RUSTC", "caller-rustc")
-            .env("RUSTDOC", "caller-rustdoc")
-            .env("RUSTC_WRAPPER", "caller-wrapper")
-            .env("RUSTC_WORKSPACE_WRAPPER", "caller-workspace-wrapper")
-            .env("SDKROOT", "caller-sdk")
-            .output()
-            .expect("launcher");
+        let result = bounded_command::run(
+            Command::new("/bin/bash")
+                .args(["-c", &command])
+                .env("PATH", &path)
+                .env("SRCROOT", repository)
+                .env("TARGET_TEMP_DIR", fixture.path())
+                .env("RUSTC", "caller-rustc")
+                .env("RUSTDOC", "caller-rustdoc")
+                .env("RUSTC_WRAPPER", "caller-wrapper")
+                .env("RUSTC_WORKSPACE_WRAPPER", "caller-workspace-wrapper")
+                .env("SDKROOT", "caller-sdk"),
+            COMMAND_BUDGET,
+        )
+        .expect("launcher completes and owned process group is retired");
         assert!(
             result.status.success(),
             "{}",
@@ -76,23 +83,25 @@ printf '%s\n' "$@"
 
 #[test]
 fn build_dependency_tree_excludes_operational_and_native_tooling() {
-    let result = Command::new(env!("CARGO"))
-        .args([
-            "tree",
-            "--locked",
-            "--offline",
-            "--package",
-            "build-scripts",
-            "--edges",
-            "normal,build",
-            "--prefix",
-            "none",
-            "--format",
-            "{p}",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("dependency tree");
+    let result = bounded_command::run(
+        Command::new(env!("CARGO"))
+            .args([
+                "tree",
+                "--locked",
+                "--offline",
+                "--package",
+                "build-scripts",
+                "--edges",
+                "normal,build",
+                "--prefix",
+                "none",
+                "--format",
+                "{p}",
+            ])
+            .current_dir(env!("CARGO_MANIFEST_DIR")),
+        COMMAND_BUDGET,
+    )
+    .expect("dependency tree completes and owned process group is retired");
     assert!(
         result.status.success(),
         "{}",
@@ -149,18 +158,20 @@ fn xcode_sandbox_can_read_every_cargo_workspace_member() {
             )
         })
         .collect();
-    let output = Command::new(env!("CARGO"))
-        .args([
-            "metadata",
-            "--locked",
-            "--offline",
-            "--no-deps",
-            "--format-version",
-            "1",
-        ])
-        .current_dir(repository)
-        .output()
-        .expect("workspace metadata");
+    let output = bounded_command::run(
+        Command::new(env!("CARGO"))
+            .args([
+                "metadata",
+                "--locked",
+                "--offline",
+                "--no-deps",
+                "--format-version",
+                "1",
+            ])
+            .current_dir(repository),
+        COMMAND_BUDGET,
+    )
+    .expect("workspace metadata completes and owned process group is retired");
     assert!(
         output.status.success(),
         "{}",

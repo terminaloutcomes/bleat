@@ -827,6 +827,81 @@ Subsequent branch updates require their own normal CI; the PR records its final
 head and checks. This batch does not close issue #362 or claim new physical-device,
 full app-live, signed macOS authentication or release archive evidence.
 
+
+## Fixture gate cancellation and reuse (#375)
+
+Three app-hosted regressions cover the actual fixture owners:
+`TestAsyncGateTests.testContextDownloadGateCancellationAfterRegistrationAndReuse`,
+`TestAsyncGateTests.testTranscriptCacheGateCancellationRepeatedReleaseAndReuse`,
+and `AppModelTests.testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse`.
+The gate tests establish positive registration before cancellation, require
+bounded completion and join each task, then exercise repeated release and reuse.
+The edit-download test uses isolated preferences, storage and session identity,
+checks two fixture byte-progress updates, then checks cancellation/completion,
+restoration of the original record and progress, structural equality of stored
+records, and absence of transfer admission. Teardown joins fixture tasks before
+removing the model's downloads and owned storage/preferences.
+
+The existing edit-fixture launch argument check now surrounds its sole
+application invocation in `App/RootView.swift`, under the same build condition.
+The fixture retains record/entry/identity validation. Tests can invoke it without
+changing process arguments. These are local fixture lifecycle assertions;
+network transfers, live application journeys and physical-device evidence remain
+separate. Focused and owning execution evidence is recorded separately from this
+source review.
+
+## Edit-download fixture menu availability (#385)
+
+`App/RootView.swift` applies `.menuActionDismissBehavior(.disabled)` only on
+iOS: the SwiftUI SDK marks that behavior unavailable on macOS. The fixture
+action and accessibility identifier remain available on both platforms.
+Signed Debug macOS build-for-testing passed without compiler warnings. The
+two iOS UI journeys `testBookDetailEditSurvivesSameBookDownloadProgress` and
+`testBookDetailEditSurvivesUnrelatedDownloadProgress` passed with zero failures,
+skips or runtime warnings in `.build/i385-fixture-menu-ios.xcresult`.
+
+This is build and iOS evidence only. Actual macOS app-hosted execution requires
+a separate isolation boundary: the current host constructs `AppBootstrap`,
+which can open the normal local store, and some tests instantiate models with
+shared preferences and the default download root. No macOS app or test was
+launched for this availability check.
+
+## Cleanup helper caller diagnostics (#372)
+
+`withTestCleanup` preserves the originating operation failure when cleanup also
+fails. Its secondary `Issue.record` previously used the helper's own default
+source location, and the existing known-issue test accepted any recorded issue.
+A new native default-location regression failed against the unchanged helper:
+the cleanup issue pointed to `TestCleanup.swift` and the caller-specific known
+issue was not matched. This is a test-helper diagnostic defect, not an observed
+application or credential failure.
+
+The helper now accepts a caller-default `SourceLocation` and forwards it only
+when recording the secondary cleanup error. The existing dual-failure test
+requires both the exact explicitly supplied location and `Failure.cleanup`,
+while retaining its `Failure.operation` assertion. The new test exercises the
+default call-site path and requires the typed cleanup issue in the calling
+test file. Success, operation-only failure, cleanup-only failure, actor
+isolation and awaited cleanup behavior remain unchanged. No global output or
+process state is redirected.
+
+Five owning helper identities passed, including both narrowed diagnostic
+contracts. Both affected identities passed three focused executions each
+(6/6), with final-source hashes and individual XML outcomes retained. The
+complete signed host gate verified607/607 native identities with zero failures
+or skips,including synchronizable-Keychain coverage. Four intentional typed
+cleanup issues are matched as known issues;they are not unexpected failures.
+Changed and repository Swift lint,documentation and diff checks passed.
+Independent review and exact-head CI remain separate required gates. Evidence is retained in
+`.build/i372-cleanup-verification.json`; the intentionally failing baseline
+XML/log remain available.
+
+The baseline build also retained an upstream OpenTelemetry watchOS-minimum
+deprecation and an existing optional-`#require` ambiguity in
+`AuthenticatedOtlpSpanExporterTests.swift`. Neither is hidden or claimed fixed
+by this caller-location change. Broader #372/#362 acceptance remains open.
+
+
 ## Optional completion assertion (#372)
 
 The eight-caller concurrent OTLP export test unwraps a bounded `Bool?`
@@ -853,3 +928,108 @@ Independent review and exact-head CI remain separate gates,retained in
 `.build/i372-optional-verification.json`. The unrelated upstream OpenTelemetry
 watchOS-minimum deprecation remains visible. Broader #372/#362 acceptance
 remains open.
+
+## Statistics observer retirement (#372)
+
+Four `StatisticsExplorationTests` observers now use an awaited cleanup scope:
+`observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`,
+`boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`,
+`observationHistoryAndPresentationAreAccountScoped`, and
+`unchangedPausedSamplesDoNotPublishOrFetchAndProgressSurvivesCoalescing`.
+Their original actions and assertions remain intact. Early returns and throws
+now stop the exact subscription, verify removal and consume at most one buffered
+update before requiring bounded stream termination. Typed cleanup errors retain
+the caller location while an originating operation error remains primary.
+
+`testObservationCleanupRetiresOnlyOwnedSubscription(exit:)` covers return and
+throw before and after the initial read, preserves the injected typed failure,
+and verifies a peer subscription remains registered until its own cleanup.
+This proves subscription retirement, not drainage of the full production task
+graph. Native XML counts this parameterized declaration once; native logs retain
+all four scenarios. Focused repetitions, owning-suite and signed-host outcomes
+are retained separately with the delivery evidence.
+
+## Missing audit entry repair (#369)
+
+The bounded repair adds substantive records for five existing host functions:
+three DownloadStorage fixture-cleanup contracts (including both deletion-failure
+arguments), unexpected OpenID route cleanup, and cache-child cancellation/reap
+supervision. Nine build-helper functions gain individual records: six typed
+paid-build validation cases and three caller-environment/dependency/sandbox-input
+checks. Each has concrete setup, actions/postconditions, applicable rule
+assessments, compiler/argument conditions, rationale and version-specific
+execution evidence. No underlying test or application implementation changes.
+
+Current declaration matching also reconciles 18 moved build-helper records and
+index locations. Some old `scripts` files still exist with different consumer
+tests, so checking only path existence was insufficient. The obsolete SDK
+compiler-override test is preserved in explicit historical arrays, with its
+removal commit and three replacement contracts; it is not a current missing
+function. Existing unrelated assessments remain unchanged. The current core
+record set has 606 default runtime identities plus the retained opt-in
+250,000-slice case; the historical 562-record source-review count remains a
+baseline, not a new current-discovery claim.
+
+The Rust `validate-test-audit` check requires current audit/index presence for
+host inventory and ordinary Rust tests in build-helper source/tests and its own
+regression file. Eight new audited/indexed regressions cover the actual
+checkout, missing host/Rust audits, missing indexes, stale identities/source,
+duplicates, placeholder reviews and empty required scopes. Active scoped Rust
+audit/index records are also checked in reverse against declarations. The checker performs
+no builds, network calls or writes; compiler discovery, argument cases, semantic
+truth and the remaining repository inventory require separate evidence.
+
+Source review found no per-child deadline in the three newly recorded command
+boundary tests. They retain actionable follow-ups under #370 with owner,
+remaining risk and next verification action; a passing Cargo command is not
+claimed as kill/reap proof. This is not an exhaustive subprocess-lifecycle audit.
+Broader #362/#369 reconciliation and other lifecycle/configuration gates remain
+open.
+
+Validation on m2 after integration of the reviewed #416 main merge:
+
+- Final checker regression target: **8/8** exact native function identities,
+  zero failures, ignored or filtered tests. Unknown decisions/unreviewed states
+  and empty build-helper sources are rejected as well as the original missing,
+  stale, duplicate and placeholder cases.
+- Existing build-helper all-target suite: **27/27** exact module-qualified
+  identities, zero failures or skips, with unchanged package source.
+- Final parity command: **606 host functions and 35 scoped Rust functions**
+  (27 build-helper declarations plus eight checker regressions). These are
+  source/record counts, not an additional runtime execution count.
+- Strict all-target scripts Clippy, workspace formatting, documentation,
+  scope/preservation and diff checks pass. Detailed source hashes, commands,
+  identities and retained attempts are in `.build/i369-audit-verification.json`.
+
+The initial checker runs passed seven negative fixture identities but correctly
+rejected the current repository for stale release-version audit/index paths.
+Both failed attempts remain retained; mappings were corrected using actual
+function declarations, and no assertion or case was removed. Retained signed
+host evidence has 606 exact passing identities, including both known-issue
+cleanup arguments; it is tied to unchanged Swift source and is not a fresh run
+caused by these metadata edits. The retired SDK record and all 602 existing core
+assessments are preserved; unrelated source/index/other records are unchanged.
+Fresh exact-head CI and independent review remain separate requirements.
+
+Independent local review of `aef2911` found a P2 in the checker: removing a
+Rust test attribute while retaining its audit/index rows still passed with 34
+Rust declarations. The local correction checks active scoped Rust records in
+both directions. The existing stale-record regression now removes the attribute,
+the declaration and the source file in isolated fixtures; each case requires
+the exact typed orphaned-audit error, then the orphaned-index error after the
+audit is removed. A surviving build test prevents empty-scope rejection from
+masking these assertions. Historical arrays remain outside active comparison.
+The original eight-pass evidence is retained separately from review-corrected
+validation; exact-head re-review and CI are still required before clearance.
+
+## Integration of historical and current child reviews (#369/#370)
+
+The missing-entry repair above describes its reviewed source revision. The
+assembled #417/#418 changes retain that full assessment on each of the three
+build-helper command records and apply #418's current child-owner disposition
+to the active fields. The original toolchain, dependency and sandbox assertions
+remain unchanged. The current commands use the 30-second execution and
+three-second cleanup owner; prior unbounded-command findings remain historical.
+The 35-function parity snapshot above is also revision-bound: the checker derives
+current source counts rather than enforcing that historical count. Broader
+subprocess/platform evidence and integration CI remain separate.
