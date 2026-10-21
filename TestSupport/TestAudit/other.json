@@ -9280,6 +9280,105 @@
         "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
         "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
       }
+    },
+    {
+      "id": "build-scripts::accepts_https_loopback_for_instrumented_release_simulator",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 169,
+      "purpose": "Admit the existing HTTPS fixture only in instrumented Release Simulator validation.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "New deterministic positive regression reproduces the original build-policy mismatch; the unchanged validator rejected the first map with InsecureTelemetryAuthBaseUrl."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts paid_build_settings integration target on supported build hosts; the tested platform/configuration are explicit map inputs, not host or process environment.",
+      "setup_dependencies": "Two fresh settings maps use localhost or 127.0.0.1, Release, iphonesimulator, the exact marker among unrelated compilation conditions, and HTTPS OTLP.",
+      "action_postconditions": "Require successful validation for both loopback hosts; original production/device settings are tested separately.",
+      "synchronization_timeout": "Pure synchronous policy validation over bounded local table rows; no wait, network, child, clock or global environment mutation.",
+      "rules": {
+        "1": "Require successful validation for both loopback hosts; original production/device settings are tested separately.",
+        "2": "Finite map/table evaluation; there is no asynchronous transition or guessed completion delay.",
+        "3": "N/A: no playback, seek, clock position or audible progression.",
+        "4": "No tasks, callbacks, continuations or external owners are created; all validation is direct synchronous map evaluation.",
+        "5": "Two fresh settings maps use localhost or127.0.0.1, Release, iphonesimulator, the exact marker among unrelated compilation conditions, and HTTPS OTLP. Every map and owned String is local to its row and dropped; settings/validate helpers do not mutate the process environment.",
+        "6": "Deterministic parser/policy boundary. It does not establish certificate trust or native Release-journey execution; those remain separate integration evidence.",
+        "7": "The original real gate exit65/zero-test attempt and one-function baseline failure remain retained; no assertion, retry or timeout relaxation replaces them.",
+        "8": "Direct Rust assertions identify the failing source. Scope negatives include platform/configuration/conditions; typed variants and exit codes preserve causes. All endpoint credentials are synthetic.",
+        "9": "Final source executed each new function individually and all 38 owning build-helper functions, zero failures/ignored/filtered in the owning run. Native build/gate and exact-head CI remain separate evidence."
+      },
+      "release_scan_build_admission": {
+        "issue": 362,
+        "source_sha256": "ecd8921c361511847dc2dfa784a4330ed1061d064bb6e6306e791db43e12c4b3",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution_manifest": ".build/i362-release-scan-final-checks.json"
+      }
+    },
+    {
+      "id": "build-scripts::keeps_release_device_and_uninstrumented_loopback_rejected",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 190,
+      "purpose": "Preserve normal Release/device endpoint rejection while recognizing only the exact test compilation condition.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Keep the new admission narrower than a general endpoint override; ordinary Release, device Release and nonmatching conditions remain denied."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts paid_build_settings integration target on supported build hosts; the tested platform/configuration are explicit map inputs, not host or process environment.",
+      "setup_dependencies": "Six fresh maps vary device/simulator platform, configuration and missing/lookalike/wrong-case compilation conditions against one synthetic HTTPS loopback origin.",
+      "action_postconditions": "Each map must return exactly InsecureTelemetryAuthBaseUrl and exit code 2.",
+      "synchronization_timeout": "Pure synchronous policy validation over bounded local table rows; no wait, network, child, clock or global environment mutation.",
+      "rules": {
+        "1": "Each map must return exactly InsecureTelemetryAuthBaseUrl and exit code2.",
+        "2": "Finite map/table evaluation; there is no asynchronous transition or guessed completion delay.",
+        "3": "N/A: no playback, seek, clock position or audible progression.",
+        "4": "No tasks, callbacks, continuations or external owners are created; all validation is direct synchronous map evaluation.",
+        "5": "Six fresh maps vary device/simulator platform, configuration and missing/lookalike/wrong-case compilation conditions against one synthetic HTTPS loopback origin. Every map and owned String is local to its row and dropped; settings/validate helpers do not mutate the process environment.",
+        "6": "Deterministic parser/policy boundary. It does not establish certificate trust or native Release-journey execution; those remain separate integration evidence.",
+        "7": "The original real gate exit65/zero-test attempt and one-function baseline failure remain retained; no assertion, retry or timeout relaxation replaces them.",
+        "8": "Direct Rust assertions identify the failing source. Scope negatives include platform/configuration/conditions; typed variants and exit codes preserve causes. All endpoint credentials are synthetic.",
+        "9": "Final source executed each new function individually and all 38 owning build-helper functions, zero failures/ignored/filtered in the owning run. Native build/gate and exact-head CI remain separate evidence."
+      },
+      "release_scan_build_admission": {
+        "issue": 362,
+        "source_sha256": "ecd8921c361511847dc2dfa784a4330ed1061d064bb6e6306e791db43e12c4b3",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution_manifest": ".build/i362-release-scan-final-checks.json"
+      }
+    },
+    {
+      "id": "build-scripts::release_scan_simulator_preserves_https_and_otlp_origin_policy",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 228,
+      "purpose": "Keep HTTP and malformed OTLP origins rejected even when the instrumented Simulator admission is enabled.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "The test flag admits HTTPS auth loopback only; it must not disable transport or OTLP origin validation."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts paid_build_settings integration target on supported build hosts; the tested platform/configuration are explicit map inputs, not host or process environment.",
+      "setup_dependencies": "Six independent instrumented Release Simulator maps vary authHTTP and OTLPHTTP/path/query/fragment/synthetic credentials.",
+      "action_postconditions": "Require the exact originating typed policy cause and original exit code 2 for each invalid map.",
+      "synchronization_timeout": "Pure synchronous policy validation over bounded local table rows; no wait, network, child, clock or global environment mutation.",
+      "rules": {
+        "1": "Require the exact originating typed policy cause and original exit code2 for each invalid map.",
+        "2": "Finite map/table evaluation; there is no asynchronous transition or guessed completion delay.",
+        "3": "N/A: no playback, seek, clock position or audible progression.",
+        "4": "No tasks, callbacks, continuations or external owners are created; all validation is direct synchronous map evaluation.",
+        "5": "Six independent instrumented Release Simulator maps vary authHTTP and OTLPHTTP/path/query/fragment/synthetic credentials. Every map and owned String is local to its row and dropped; settings/validate helpers do not mutate the process environment.",
+        "6": "Deterministic parser/policy boundary. It does not establish certificate trust or native Release-journey execution; those remain separate integration evidence.",
+        "7": "The original real gate exit65/zero-test attempt and one-function baseline failure remain retained; no assertion, retry or timeout relaxation replaces them.",
+        "8": "Direct Rust assertions identify the failing source. Scope negatives include platform/configuration/conditions; typed variants and exit codes preserve causes. All endpoint credentials are synthetic.",
+        "9": "Final source executed each new function individually and all 38 owning build-helper functions, zero failures/ignored/filtered in the owning run. Native build/gate and exact-head CI remain separate evidence."
+      },
+      "release_scan_build_admission": {
+        "issue": 362,
+        "source_sha256": "ecd8921c361511847dc2dfa784a4330ed1061d064bb6e6306e791db43e12c4b3",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution_manifest": ".build/i362-release-scan-final-checks.json"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
