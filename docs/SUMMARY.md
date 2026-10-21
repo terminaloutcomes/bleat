@@ -29,6 +29,7 @@
 # Release Evidence
 
 - [Test reliability audit progress](release-evidence/test-reliability-audit.md)
+  - [Current delivery and acceptance](release-evidence/test-reliability-current-status.md)
   - [Runner and shell-case review](release-evidence/test-reliability-runners.md)
   - [Runner verification batch](release-evidence/test-runner-verification.md)
   - [App test follow-ups](release-evidence/test-reliability-app-followups.md)

@@ -1041,5 +1041,22 @@ recorded at the tested revision; this is not whole-epic completion.
 
 The [scoped Release build evidence](release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362)
 records the two reproduced gate build failures, typed settings regression,
-fixture compiler-condition repair and exact focused outcomes. The full repaired
-secret scan and final CI remain pending; ordinary Simulator success is separate.
+fixture compiler-condition repair and exact focused outcomes. The repaired
+Release gate at `cdd7a38` passed seven Python and nine native cases, then stopped
+at the release-version preflight (`2026.10.21` versus checked-in `2026.10.14`).
+The documented explicit marketing-version setting supports rebuilding that
+checked-in version with a fresh UTC build number; its preflight passed without
+metadata changes. Full acceptance at clean `4542700` passed: seven Python regressions, nine native
+cases, the inspected Release archive and nine-surface scan (667 files,
+1,677,234,199 bytes, zero prohibited findings; two expected disposable-server
+redactions). Owned resources were verified retired. Original failures remain
+retained; no metadata bump, validation bypass or deployment was made. Ordinary Simulator success and exact-head CI are separate.
+
+### Current testing-epic dispositions (#362)
+
+The [current source/evidence checkpoint](release-evidence/test-reliability-current-status.md)
+separates landed bounded fixes, remaining formal audit work, current validation,
+deferred macOS work, optional source concerns and configuration/device acceptance.
+It credits #438/#439 and retains the unresolved iPad observation without claiming
+epic or release completion. Counts use distinct units; missing audit entries and
+historical follow-up labels are not current bug counts.

@@ -465,6 +465,10 @@ The instrumented Release Simulator build permits HTTPS loopback telemetry only
 with the exact `BLEAT_RELEASE_SECRET_SCAN` compilation condition. Device builds
 and ordinary Release builds retain their production-origin validation. The
 disposable Simulator installs its own test CA; TLS trust checks remain enabled.
+When validating the checked-in release on a later day, set
+`BLEAT_MARKETING_VERSION` to the `MARKETING_VERSION` in `project.yml`, as
+documented under [Release packaging](#release-packaging). The archive retains
+a fresh UTC build number and all source/generated/changelog consistency checks.
 
 ## Release packaging
 
