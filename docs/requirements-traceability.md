@@ -853,7 +853,6 @@ explicitly; final full-app verification is repeated after that syntax correction
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
 
-<<<<<<< HEAD
 ### Local smoke runner lifecycle correction (#371)
 
 Controlled baseline regressions demonstrated a live child after stdin-write
@@ -967,7 +966,6 @@ cleanup cause and caller context; all success and single-failure assertions
 remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
 Signed-host, independent-review and exact-head CI evidence are recorded
 separately; broader epic acceptance is not established by this helper change.
-=======
 ### Typed optional completion assertion (#372)
 
 The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
@@ -977,4 +975,21 @@ remain covered. Error-exit task drainage remains a separate #372 concern.
 See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
 This does not change provider/transport lifecycle contracts or establish
 broader epic/configuration acceptance.
->>>>>>> f8237eedd5d023d292d71bc8a3c947d2f7119c95
+
+
+### Concurrent export callers after operation failure (#372)
+
+The concurrent OTLP test observes each owned caller before consuming its task
+value on both success and throwing cleanup exits. Controlled failures before
+entry and after all eight provider registrations retain the original typed
+error and assert caller completion, empty fake waiters, zero RPCs and repeated
+cleanup. Existing success, coalescing and bearer assertions remain unchanged.
+See [scope, retained failing baseline and exact validation](release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372).
+This establishes these callers' ownership; internal worker/observer drainage,
+other owners and platform/configuration acceptance remain separate open work.
+
+Final source evidence: 25 owning identities, 6 focused function executions across
+three runs (9 scenarios), and 607 signed-host identities passed with zero failures
+or skips. Synchronizable-Keychain coverage and both new failure arguments are
+verified. Independent review and exact-head CI are separate requirements;
+retained warnings and intentional failure diagnostics remain linked above.
