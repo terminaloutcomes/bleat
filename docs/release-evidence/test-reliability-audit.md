@@ -849,3 +849,19 @@ changing process arguments. These are local fixture lifecycle assertions;
 network transfers, live application journeys and physical-device evidence remain
 separate. Focused and owning execution evidence is recorded separately from this
 source review.
+
+## Edit-download fixture menu availability (#385)
+
+`App/RootView.swift` applies `.menuActionDismissBehavior(.disabled)` only on
+iOS: the SwiftUI SDK marks that behavior unavailable on macOS. The fixture
+action and accessibility identifier remain available on both platforms.
+Signed Debug macOS build-for-testing passed without compiler warnings. The
+two iOS UI journeys `testBookDetailEditSurvivesSameBookDownloadProgress` and
+`testBookDetailEditSurvivesUnrelatedDownloadProgress` passed with zero failures,
+skips or runtime warnings in `.build/i385-fixture-menu-ios.xcresult`.
+
+This is build and iOS evidence only. Actual macOS app-hosted execution requires
+a separate isolation boundary: the current host constructs `AppBootstrap`,
+which can open the normal local store, and some tests instantiate models with
+shared preferences and the default download root. No macOS app or test was
+launched for this availability check.

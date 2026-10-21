@@ -4672,7 +4672,9 @@ private struct BookDetailView: View {
                                         model.downloads
                                             .advanceEditDownloadFixture()
                                     }
-                                    .menuActionDismissBehavior(.disabled)
+                                    #if os(iOS)
+                                        .menuActionDismissBehavior(.disabled)
+                                    #endif
                                     .accessibilityIdentifier(
                                         "testing.download.advance")
                                 }
