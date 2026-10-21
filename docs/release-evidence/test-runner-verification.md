@@ -554,3 +554,39 @@ Artifacts are `.build/i371-result-guard-verification.json`, its exact native
 outcomes and before/after probe references. Parent native Xcode evidence remains
 revision-bound; no expensive real Xcode run was duplicated for this guard-only
 change. Independent review and exact-head CI remain separate gates.
+
+## Structured result children schema (#371)
+
+The structured Xcode verifier previously treated a present, non-array `children`
+field as an absent child list. A synthetic offline CLI fixture with a passed
+case and an object-valued child containing a failed repetition was accepted as
+one pass. Two new regressions failed against the unchanged parser at the null
+case and repetition boundaries. These are invalid-schema reproductions, not an
+observed malformed Xcode run or application failure.
+
+The parser now distinguishes absent children from present malformed values and
+returns typed `InvalidResult("children must be an array")` for the latter. The
+same check applies to cases, containers, nested repetitions and messages.
+Borrowed child slices also avoid cloning the result subtree. Omitted fields and
+empty arrays retain their existing behavior. No outcome, identity, repetition,
+summary, skip or legacy-warning assertion is removed.
+
+Three native regression functions cover 50 invalid shapes (null, Boolean,
+number, string and object across structural locations), plus absent/empty
+compatibility checks and the retained genuine Xcode repetitions. All five
+existing integration test bodies and their original line positions are
+preserved byte for byte. Three substantive audit/index entries are added; all
+existing rows are preserved.
+
+Final m2 validation verified139/139 exact owning scripts outcomes across11
+nonempty targets;16 zero-test CLI targets are compilation evidence only. All
+eight verifier identities passed three independent focused executions each
+(24/24). Strict all-target Clippy,formatting,documentation and preservation
+checks passed. The fixed binary also accepted all626 outcomes from the retained
+#418 iOS CI JSON against its own discovery;this is replay evidence,not fresh
+iOS execution. The original malformed CLI fixture now rejects with the exact
+typed schema error. Commands,identities,exits and source hashes are retained in
+`.build/i371-schema-verification.json`. Independent review and exact-head CI
+remain required before reporting this bounded slice reviewable. The original
+accepting CLI probe and two failing native regressions remain retained. Broader
+verifier acceptance and epic configuration reconciliation remain open.

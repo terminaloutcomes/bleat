@@ -946,3 +946,13 @@ original semantic assertions are retained. Exact m2 evidence is35/35 owning and
 See [scope, native corrections and limits](release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370).
 This is a bounded #370 slice, not full subprocess or epic acceptance. Independent
 review, final-head CI, other lifecycle owners and platform gates remain separate.
+
+### Structured result child-array validation (#371)
+
+Modern Xcode result verification rejects present malformed `children` fields at
+case, container, repetition and message boundaries with a typed schema failure.
+Absent/empty children and genuine repeated outcomes retain their existing
+contracts. Three focused regressions preserve all existing assertions and
+exercise synthetic invalid schemas independently of Xcode execution. See the
+[bounded schema fix and retained failures](release-evidence/test-runner-verification.md#structured-result-children-schema-371).
+Broader #371/#362 acceptance and platform evidence remain separate.
