@@ -7771,6 +7771,40 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371",
         "source_sha256": "2d8007345829528f42af6b1275e6e20c44afb35fa2d5b9490959e8ce0d723b00"
       }
+    },
+    {
+      "id": "scripts::xcode_runner_result_guard::existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths",
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "line": 348,
+      "native_identity": "xcode_test_runner::lifecycle_tests::existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths",
+      "purpose": "Protect existing result bundles against cwd-relative guard bypass while retaining absolute-path support.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For absolute and repository-relative result paths, create an existing private bundle with an opaque sentinel. Invoke the real gate from a different process cwd using its explicit root. Require typed ExistingResultBundle with the exact resolved path, no native-canary invocation and byte-identical retained sentinel. The must-not-call verifier rejects any accidental continuation."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts unit test on supported Unix macOS/Linux. No actual Xcode, signing, Simulator, server, opt-in or skip required.",
+      "setup_dependencies": "Fresh private Fixture per path mode, existing result directory/sentinel and native canary. Root is passed explicitly; parent cwd never changes.",
+      "action_postconditions": "For absolute and repository-relative result paths, create an existing private bundle with an opaque sentinel. Invoke the real gate from a different process cwd using its explicit root. Require typed ExistingResultBundle with the exact resolved path, no native-canary invocation and byte-identical retained sentinel. The must-not-call verifier rejects any accidental continuation.",
+      "synchronization_timeout": "Synchronous filesystem guard. Native canary is controlled exit31 and retains two-second/one-second ownership budgets if a regression reaches it; the passing guard launches no native work. No global chdir, environment mutation, delay or worker is used.",
+      "rules": {
+        "1": "For absolute and repository-relative result paths, create an existing private bundle with an opaque sentinel. Invoke the real gate from a different process cwd using its explicit root. Require typed ExistingResultBundle with the exact resolved path, no native-canary invocation and byte-identical retained sentinel. The must-not-call verifier rejects any accidental continuation.",
+        "2": "Synchronous filesystem guard. Native canary is controlled exit31 and retains two-second/one-second ownership budgets if a regression reaches it; the passing guard launches no native work. No global chdir, environment mutation, delay or worker is used.",
+        "3": "No playback, elapsed-time performance or position assertion.",
+        "4": "The guard must return before native work or verification. If broken, the existing owner retires the controlled canary; Fixture cleanup affects only private inputs.",
+        "5": "Both path modes establish their own existing artifact and preserve its bytes. No personal or actual result bundle is touched.",
+        "6": "Real filesystem plus production gate control flow with a stub native tool. This is not actual app/Xcode execution.",
+        "7": "Retain the original private CLI probe: root rejected before invocation, nested cwd invoked the stub, both sentinels unchanged. Do not claim a real overwrite or an untouched-parent unit baseline.",
+        "8": "Match typed ExistingResultBundle and structural PathBuf equality. Exact sentinel bytes deliberately test opaque artifact retention; no serialized error-string decision.",
+        "9": "The exact new native identity passed three serial focused executions, each covering two path modes. The owning gate passed 172 exact outcomes across 11 nonempty targets, with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy and static checks passed. The fixed public CLI rejected both root/nested cases before the native stub while retaining sentinel bytes. These are two synthetic CLI cases, not real Xcode or test executions. Source review and exact-head CI remain separate."
+      },
+      "issue371_result_root_guard": {
+        "base_revision": "7f05e2bd003c0b6ccb1d8883d9ec3b74a5354588",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371",
+        "source_sha256": "ebd72d4ca2a1dee3c9fea75a728a2fb27c94cc6ea9d1df098453e1ab834026a9"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

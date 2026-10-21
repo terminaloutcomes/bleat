@@ -924,3 +924,11 @@ cleanup failure; unconfirmed retirement cannot pass as a status. Exact result
 verification still runs after execution failure and retains both typed causes.
 [Scoped regression and acceptance evidence](release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371)
 keeps the two aggregate-script and shared-service boundaries explicitly open.
+
+### Repository-root result preservation (#371)
+
+The Xcode runner's existing-result check uses the same repository root as its
+native result arguments. Typed rejection protects absolute and relative result
+paths before any native command or verifier runs. [Source proof, retained probe
+and scoped regression evidence](release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371)
+preserve the distinction between reproduced guard bypass and unobserved data loss.

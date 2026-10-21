@@ -9823,6 +9823,12 @@
       "name": "direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures",
       "line": 187,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths",
+      "line": 348,
+      "language": "rust"
     }
   ]
 }

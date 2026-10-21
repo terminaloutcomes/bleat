@@ -343,3 +343,60 @@ fn direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures() {
         }
     }
 }
+
+#[test]
+fn existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths() {
+    // This process stays in its normal working directory. The isolated root
+    // models a CLI invocation from another directory without global chdir.
+    for absolute in [true, false] {
+        let fixture = Fixture::new();
+        let root = fixture.root.path();
+        let relative = PathBuf::from(".build/preserved.xcresult");
+        let retained = root.join(&relative);
+        fs::create_dir_all(&retained).expect("existing private result bundle");
+        let sentinel = retained.join("synthetic-result-bytes");
+        fs::write(&sentinel, b"existing synthetic result").expect("retained opaque result");
+        let tool = root.join("xcodebuild");
+        fs::write(
+            &tool,
+            "#!/bin/sh\nprintf called > native-was-called\nexit 31\n",
+        )
+        .expect("private native canary");
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).expect("executable canary");
+        let request = TestGateRequest {
+            build: XcodeBuildConfig::new(
+                "Bleat",
+                None,
+                "platform=iOS Simulator,id=synthetic",
+                ".build/derived",
+                vec![],
+                false,
+            ),
+            only: vec![],
+            exclude: vec![],
+            allowed_skip_selectors: vec![],
+            enable_code_coverage: false,
+            runner_environment: vec![],
+            result_bundle: if absolute { retained.clone() } else { relative },
+            stage: "existing result guard".to_owned(),
+        };
+        let verifier =
+            |_: &std::path::Path, _: &[crate::test_results::ExpectedTest], _: &[TestId]| {
+                panic!("Existing result guard must reject before invoking verification")
+            };
+        let error = run_test_gate_with_budgets(root, request, &tool, &verifier, budgets())
+            .expect_err("existing result must be rejected before native execution");
+        assert!(
+            matches!(error, XcodeRunnerError::ExistingResultBundle { path } if path == retained)
+        );
+        assert!(
+            !root.join("native-was-called").exists(),
+            "guard invoked the native tool before rejecting existing results"
+        );
+        // Exact bytes deliberately prove retention of an opaque artifact.
+        assert_eq!(
+            fs::read(sentinel).expect("retained result remains readable"),
+            b"existing synthetic result"
+        );
+    }
+}

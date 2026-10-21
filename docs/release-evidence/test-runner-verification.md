@@ -516,3 +516,41 @@ the stub native tool from nested cwd; both retained sentinels stayed unchanged.
 Independent review corroborated the guard bypass. No real overwrite is claimed.
 The guard is unchanged in this ownership slice and requires its own bounded
 #371 correction; it is not hidden by the fresh successful result path.
+
+## Repository-root result preservation guard (#371)
+
+The general Xcode gate resolved discovery/result paths against its repository
+root, but checked an existing relative bundle against process cwd. A private
+synthetic CLI probe at `1f59c44` rejected the retained bundle from root cwd and
+invoked the stub from nested cwd. The guard clause is identical at parent
+`7f05e2b`. Both sentinels stayed unchanged; this demonstrates guard bypass,
+not a real result overwrite. The finding was reported before implementation.
+
+The one production condition now checks `root.join(result_bundle)`, matching the
+root already used by native arguments and the typed ExistingResultBundle path.
+Absolute paths retain their behavior. All other production bytes and previous
+native test bodies are unchanged. No SDK, configuration, cleanup policy or
+credential behavior changes.
+
+One regression covers absolute and relative paths from an explicit isolated root
+without changing process cwd. It requires exact typed rejection, no native tool
+or verifier invocation and unchanged opaque artifact bytes. One nine-rule audit
+and declaration append while preserving all 427 prior other rows and 1,633
+index rows. Focused repetitions, owning outcomes, the post-fix CLI probe, review
+and exact-head CI must be inspected separately; no actual Xcode/Simulator run
+is claimed by these synthetic guard cases. Broader #362/#369 acceptance and
+aggregate-script ownership remain open.
+
+Local final-source verification passed the exact new native identity in three
+serial focused runs (two path modes per execution), plus 172 exact owning
+outcomes across 11 nonempty targets with zero failures, ignored or filtered
+tests. Sixteen empty CLI targets count only as compilation. Strict Clippy,
+formatting, documentation and diff checks passed. The fixed public CLI probe
+now rejects both root and nested invocations before the stub, preserving both
+sentinels. These two synthetic CLI cases are not actual Xcode/test executions.
+The original failing guard observation remains separate and unmodified.
+
+Artifacts are `.build/i371-result-guard-verification.json`, its exact native
+outcomes and before/after probe references. Parent native Xcode evidence remains
+revision-bound; no expensive real Xcode run was duplicated for this guard-only
+change. Independent review and exact-head CI remain separate gates.

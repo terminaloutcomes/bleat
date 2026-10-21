@@ -587,7 +587,7 @@ fn run_test_gate_with_budgets(
         result_bundle,
         stage,
     } = request;
-    if result_bundle.exists() {
+    if root.join(&result_bundle).exists() {
         return Err(XcodeRunnerError::ExistingResultBundle {
             path: root.join(&result_bundle),
         });
