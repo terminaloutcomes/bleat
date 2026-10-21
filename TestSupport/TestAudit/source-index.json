@@ -9829,6 +9829,24 @@
       "name": "existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths",
       "line": 348,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+      "name": "testContextDownloadGateCancellationAfterRegistrationAndReuse",
+      "line": 114,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+      "name": "testTranscriptCacheGateCancellationRepeatedReleaseAndReuse",
+      "line": 151,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse",
+      "line": 5794,
+      "language": "swift"
     }
   ]
 }

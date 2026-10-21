@@ -5646,9 +5646,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         // Only the disposable UI-test record is changed; no network transfer runs.
         func runEditPresentationDownloadFixture() async {
             guard
-                ProcessInfo.processInfo.arguments.contains(
-                    "--ui-testing-edit-download-progress"
-                ), let completed = records.first,
+                let completed = records.first,
                 let entry = completed.manifest.entries.first,
                 let identity = Self.identity(for: entry, record: completed)
             else { return }

@@ -111,6 +111,79 @@ final class TestAsyncGateTests: XCTestCase {
             gate.release()
         }
 
+        func testContextDownloadGateCancellationAfterRegistrationAndReuse()
+            async
+        {
+            let gate = UITestContextDownloadGate()
+            for exit in [FixtureGateExit.cancel, .release] {
+                let finished = expectation(
+                    description: "Fixture waiter returned: \(exit)")
+                let operation = Task {
+                    await gate.wait()
+                    finished.fulfill()
+                }
+                addTeardownBlock { @MainActor in
+                    operation.cancel()
+                    gate.release()
+                    await operation.value
+                }
+                await assertEventually(
+                    "fixture waiter registration", timeout: .seconds(30),
+                    observed: { "isWaiting=\(gate.isWaiting), exit=\(exit)" },
+                    condition: { gate.isWaiting })
+                guard gate.isWaiting else { return }
+                switch exit {
+                case .cancel:
+                    operation.cancel()
+                case .release:
+                    gate.release()
+                    gate.release()
+                }
+                await fulfillment(of: [finished], timeout: 30)
+                // Release before joining even if cancellation regresses. The
+                // completion timeout remains a failure, and teardown can drain.
+                gate.release()
+                await operation.value
+                XCTAssertFalse(gate.isWaiting)
+            }
+        }
+
+        func testTranscriptCacheGateCancellationRepeatedReleaseAndReuse() async
+        {
+            let gate = UITestTranscriptCacheGate()
+            for exit in [FixtureGateExit.cancel, .release, .release] {
+                let finished = expectation(
+                    description: "Fixture waiter returned: \(exit)")
+                let operation = Task {
+                    await gate.wait()
+                    finished.fulfill()
+                }
+                addTeardownBlock { @MainActor in
+                    operation.cancel()
+                    gate.release()
+                    await operation.value
+                }
+                await assertEventually(
+                    "fixture waiter registration", timeout: .seconds(30),
+                    observed: { "isWaiting=\(gate.isWaiting), exit=\(exit)" },
+                    condition: { gate.isWaiting })
+                guard gate.isWaiting else { return }
+                switch exit {
+                case .cancel:
+                    operation.cancel()
+                case .release:
+                    gate.release()
+                    gate.release()
+                }
+                await fulfillment(of: [finished], timeout: 30)
+                // Release before joining even if cancellation regresses. The
+                // completion timeout remains a failure, and teardown can drain.
+                gate.release()
+                await operation.value
+                XCTAssertFalse(gate.isWaiting)
+            }
+        }
+
         func testPipelineEntryBeforeWaitingAndRepeatedRelease() async {
             let gate = OneShotPipelineBuildGate()
             let finished = expectation(description: "worker finished")
@@ -155,3 +228,5 @@ final class TestAsyncGateTests: XCTestCase {
         }
     #endif
 }
+
+private enum FixtureGateExit { case cancel, release }

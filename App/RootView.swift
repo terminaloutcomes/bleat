@@ -4638,7 +4638,11 @@ private struct BookDetailView: View {
             }
             await model.loadBookDetail(book)
             #if DEBUG || BLEAT_UI_TESTING
-                await model.downloads.runEditPresentationDownloadFixture()
+                if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-edit-download-progress")
+                {
+                    await model.downloads.runEditPresentationDownloadFixture()
+                }
             #endif
         }
         .task(id: transcriptPresenceTaskID) {

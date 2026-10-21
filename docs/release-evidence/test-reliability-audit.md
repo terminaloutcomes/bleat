@@ -826,3 +826,26 @@ iOS smoke passes and zero skips in [Validate Bleat run 39021211739](https://gith
 Subsequent branch updates require their own normal CI; the PR records its final
 head and checks. This batch does not close issue #362 or claim new physical-device,
 full app-live, signed macOS authentication or release archive evidence.
+
+
+## Fixture gate cancellation and reuse (#375)
+
+Three app-hosted regressions cover the actual fixture owners:
+`TestAsyncGateTests.testContextDownloadGateCancellationAfterRegistrationAndReuse`,
+`TestAsyncGateTests.testTranscriptCacheGateCancellationRepeatedReleaseAndReuse`,
+and `AppModelTests.testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse`.
+The gate tests establish positive registration before cancellation, require
+bounded completion and join each task, then exercise repeated release and reuse.
+The edit-download test uses isolated preferences, storage and session identity,
+checks two fixture byte-progress updates, then checks cancellation/completion,
+restoration of the original record and progress, structural equality of stored
+records, and absence of transfer admission. Teardown joins fixture tasks before
+removing the model's downloads and owned storage/preferences.
+
+The existing edit-fixture launch argument check now surrounds its sole
+application invocation in `App/RootView.swift`, under the same build condition.
+The fixture retains record/entry/identity validation. Tests can invoke it without
+changing process arguments. These are local fixture lifecycle assertions;
+network transfers, live application journeys and physical-device evidence remain
+separate. Focused and owning execution evidence is recorded separately from this
+source review.
