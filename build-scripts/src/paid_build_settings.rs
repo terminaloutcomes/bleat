@@ -65,7 +65,7 @@ pub fn validate_environment<E>(
     if platform == "macosx" {
         messages.push("✅ Running on macOS platform, telemetry checks skipped".to_owned());
     } else if ["iphoneos", "iphonesimulator"].contains(&platform.as_str()) {
-        validate_ios_settings(&mut get, &mut messages)?;
+        validate_ios_settings(&mut get, &mut messages, &platform)?;
     }
     Ok(messages)
 }
@@ -119,6 +119,7 @@ fn parse_telemetry_url(value: &str, requires_origin: bool) -> Result<Url, PaidBu
 fn validate_ios_settings<E>(
     get: &mut impl FnMut(&str) -> Result<String, E>,
     messages: &mut Vec<String>,
+    platform: &str,
 ) -> Result<(), PaidBuildSettingsError> {
     check_values(
         get,
@@ -136,12 +137,24 @@ fn validate_ios_settings<E>(
     let base_url = required(get, "BLEAT_TELEMETRY_AUTH_BASE_URL")?;
     let base_url = parse_telemetry_url(&base_url, false)?;
     let is_https = base_url.scheme().to_lowercase() == "https";
-    let debug_config = get("CONFIGURATION")
-        .map(|value| value == "Debug")
-        .unwrap_or(false);
+    let configuration = get("CONFIGURATION").ok();
+    let debug_config = configuration.as_deref() == Some("Debug");
+    // The instrumented Release Simulator gate uses a disposable HTTPS server.
+    // Neither ordinary Release builds nor device builds gain this admission.
+    // Certificate trust still belongs to the normal system TLS validation.
+    let release_scan_simulator = platform == "iphonesimulator"
+        && configuration.as_deref() == Some("Release")
+        && is_https
+        && get("SWIFT_ACTIVE_COMPILATION_CONDITIONS")
+            .map(|value| {
+                value
+                    .split_whitespace()
+                    .any(|condition| condition == "BLEAT_RELEASE_SECRET_SCAN")
+            })
+            .unwrap_or(false);
     let is_loopback =
         ["localhost", "127.0.0.1", "::1"].contains(&base_url.host_str().unwrap_or(""));
-    if (!debug_config && is_loopback) || (!is_loopback && !is_https) {
+    if (!debug_config && !release_scan_simulator && is_loopback) || (!is_loopback && !is_https) {
         return Err(PaidBuildSettingsError::InsecureTelemetryAuthBaseUrl);
     }
 

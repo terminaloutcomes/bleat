@@ -26,7 +26,7 @@ checks do not establish application behavior or refresh historical release evide
 | --- | --- | --- | --- | --- | --- |
 | TEST-BEARER-CAPTURE-382 | [Issue #382](https://github.com/terminaloutcomes/bleat/issues/382) under #372/#362 | Isolate the bearer-log privacy test in a bounded child with exact successful identity verification, complete bounded capture, and observed cleanup on success/failure/timeout/cancellation | `Tests/BleatCoreTests/BearerLogChild.swift`, original exporter test identity, nine `BearerLogChildTests` identities | [Source review and execution evidence](release-evidence/test-reliability-core-followups.md#bearer-log-subprocess-issue-382); focused 10/10 passed; sequential repetitions 114/114; signed host 573/573 with zero skips | verified |
 | APP-FAILURE-PRESENTATION-001 | 5, 16; [GitHub issue #317](https://github.com/terminaloutcomes/bleat/issues/317) | Failure surfaces preserve typed titles, symbols, and explanatory messages. Refresh errors retain loaded content; retries and dismissal keep their existing behavior. Downloads distinguish storage, permissions, local context, invalid data, preparation, changed files, transfer, transport, and rejected requests. | `App/RootView.swift`, `App/LibraryCategoryContent.swift`, `App/PlaybackView.swift`, `App/MetadataEditorView.swift`, `App/DownloadModel.swift` | `AppModelTests.testAppFailuresPreserveTypedPresentation`, `testDownloadFailuresPreserveTypedPresentation`; native symbol availability; nine focused Simulator UI journeys covering Home with/without downloads, Library, categories, Search, Book Detail, refresh retention, and download-banner dismissal. Final focused Xcode result: 11 passed, zero failed/skipped/runtime warnings in `.build/issue-317-verified.xcresult`. Native macOS and large Dynamic Type layouts remain unverified | verified |
-| TEST-RELIABILITY-001 | [Issue #362](https://github.com/terminaloutcomes/bleat/issues/362) | Every test and shared helper has an individual reliability review, explicit decision, and appropriate repeated execution evidence | `docs/test-reliability.md`; bounded app test gate and context-download preparation assertions; exact Xcode and SwiftPM runner verification in `scripts/src/test_results.rs` and `scripts/src/swift_test_results.rs`; bounded workflow readiness in `scripts/src/runner_readiness.rs`; large-library ownership validation in `scripts/src/large_library.rs` | 1,552 individually reviewed source declarations plus shell/helper review and discovery reconciliation in `docs/release-evidence/test-reliability-audit.md`; runner remediation evidence in `docs/release-evidence/test-runner-verification.md`; follow-on timing execution, PR review corrections and retained findings in the audit evidence; generator ownership regression and wrapper evidence in `docs/release-evidence/performance-baseline.md`; [Private Cloud defaults lifecycle](release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372) adds owned-domain cleanup and success/typed-throw/unrelated-domain regressions; [read-only migration process boundary](release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372) requires observed exit, closed owned IO and checked root/domain cleanup after the real typed failure and byte-retention assertions; the historical retention experiment remains linked, while synchronization and other configuration/repetition evidence gaps remain | in-progress |
+| TEST-RELIABILITY-001 | [Issue #362](https://github.com/terminaloutcomes/bleat/issues/362) | Every test and shared helper has an individual reliability review, explicit decision, and appropriate repeated execution evidence | `docs/test-reliability.md`; bounded app test gate and context-download preparation assertions; exact Xcode and SwiftPM runner verification in `scripts/src/test_results.rs` and `scripts/src/swift_test_results.rs`; bounded workflow readiness in `scripts/src/runner_readiness.rs`; large-library ownership validation in `scripts/src/large_library.rs` | 1,552 individually reviewed source declarations plus shell/helper review and discovery reconciliation in `docs/release-evidence/test-reliability-audit.md`; runner remediation evidence in `docs/release-evidence/test-runner-verification.md`; follow-on timing execution, PR review corrections and retained findings in the audit evidence; generator ownership regression and wrapper evidence in `docs/release-evidence/performance-baseline.md`; [Private Cloud defaults lifecycle](release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372) adds owned-domain cleanup and success/typed-throw/unrelated-domain regressions; [read-only migration process boundary](release-evidence/test-reliability-core-followups.md#read-only-migration-process-boundary-issue-372) requires observed exit, closed owned IO and checked root/domain cleanup after the real typed failure and byte-retention assertions; the historical retention experiment remains linked; [fixture gate cancellation and reuse](release-evidence/test-reliability-audit.md#fixture-gate-cancellation-and-reuse-375) adds direct app-hosted context/transcript/edit-download lifecycle regressions, with execution evidence recorded separately; synchronization and other configuration/repetition evidence gaps remain | in-progress |
 | APP-ABOUT-001 | 6, 16 | About shows the app version and website/News links. Diagnostics retains compile date, developer, and bundle identifier. Website News is generated from `CHANGELOG.md` for `/news/`. | `App/AboutView.swift`, `App/RootView.swift`, `scripts/src/site_news.rs`, `site/templates/base.html` | `BleatUITests.testAboutLinksAndDiagnosticBuildMetadata`; `site_news::tests`; `mise run site-check`, `mise run site-build` | verified |
 | APP-CALLBACK-CANCELLATION-001 | 14, 16, 19 | Framework callbacks do not block the main actor or inherit unsafe isolation; teardown follows framework queue/context rules; retired playback and stream callbacks cannot affect replacements | `App/PlaybackObservation.swift`, `App/PlaybackModel.swift`, `App/NowPlayingCoordinator.swift`, `App/BonjourDiscovery.swift`, `Sources/BleatCore/LiveUpdates.swift`, `Sources/BleatCore/PrivateCloudSync.swift` | `FrameworkCallbackTests`, `OpenIDAuthenticationTests.testNativeBrowserCallbackAdapterRunsOffMainActor`, `LiveUpdatesTests.testRetiredStreamTerminationCannotStopReplacement`, `testStopWhileRestoringEndpointDoesNotRetrieveCredentials`, `testStopDuringCredentialRetrievalReportsCancellationWithoutOpeningSocket`, callback-context and cancellation-drain `PrivateCloudSyncTests`; audit scope and physical-device gaps in `docs/release-evidence/callback-cancellation-audit.md` | implemented |
 | APP-RELEASE-API-001 | 16, 17 | Resolve an exact iOS build, inspect typed TestFlight states and existing groups, save localized test notes, submit ready beta review, and verify explicit app-owned group assignments through App Store Connect | `scripts/src/appstore_builds.rs`, `scripts/src/appstore_testflight.rs`, `scripts/src/bin/appstore-monitor.rs`; supported commands in `docs/development.md` | `scripts/tests/appstore_builds.rs`, `scripts/tests/appstore_testflight.rs` cover exact build matching, release payloads, pending-review reconciliation, blocked states, ownership, incomplete data, and post-mutation membership. Live group discovery works; end-to-end distribution remains blocked by local distribution signing access | implemented |
@@ -74,7 +74,7 @@ checks do not establish application behavior or refresh historical release evide
 | APP-DETAIL-001 | 4.2, 5.2, 8.2, 16; [GitHub issue #174](https://github.com/terminaloutcomes/bleat/issues/174) | Library and search results navigate to an online-first/cache-fallback expanded audiobook detail with compact comma-delimited author and series controls that wrap for Dynamic Type while remaining individually accessible, narrators, chapter and percentage progress directly below Play/Resume, description, collapsible Details and Chapters sections, a separate chapter count, confirmed chapter playback navigation, bookmarks after chapters, and multi-account attribution as the final Details row. Only the visible book destination owns initial detail loading, which uses a stable task container and a 30-second typed timeout with retry; cancellation offers retry and late responses cannot replace a newer attempt. Primary Play and available Download actions precede long-form content; completed manual downloads and completed automatic windows suppress further per-book Download actions, with completed automatic windows presented as Downloaded at 100% while whole-book completion remains distinct. Permitted editing is available from the top-right actions menu; typed missing-item, permission, authentication, invalid-response, local-storage, offline-cache, and transient-server failures render a specific reason and offer retry only when repeating the exact item request can succeed without a permission or account change; account access policy is evaluated before actions are exposed. Native pull-to-refresh fetches current detail from the server while keeping loaded content visible; typed refresh failure leaves it usable and offers retry | `App/AppService.swift`, `App/AppModel.swift`, `App/RootView.swift` | `AppModelTests.testRepeatedBookNavigationOwnershipFollowsNestedStackAndSelectedTab`, `testBookDetailTimeoutAllowsRetryAndRejectsLateResponse`, `testCancelledBookDetailLoadDoesNotLeaveSpinner`, `BleatUITests.testBookDetailTimeoutShowsRetryAndRecovers`, `testSecondSeriesBookDetailRemainsLoaded`, `testRepeatedSeriesBookDetailKeepsOnlyTopEntryActive`, `AppModelTests.testBookDetailLoadsForExactAccountLibraryAndItem`, `testBookDetailPlaybackActionPausesCurrentRequestedBook`, `testBookDetailFailureRemainsTyped`, `testBookDetailRetryReloadsTheExactBook`, `testBookDetailRefreshUsesRemoteResultAndKeepsLoadedDetailOnFailure`, `testBookDetailRefreshDoesNotReplaceNewSelection`, `testFailedRefreshDoesNotStrandPendingBookmarks`, `testCancelledRefreshDoesNotStrandPendingBookmarks`, `testCompletedSaveSupersedesPendingDetailRefresh`, `BleatUITests.testBookDetailUsesPullToRefresh`, `testBookDetailRefreshFailureKeepsContentVisible`, `testBookDetailFailuresHaveSpecificRedactedDiagnosticCodes`, `testLoadingWithoutAccountUsesTypedFailure`, `SeriesCoverMotionTests`, `BleatUITests.testBookDetailDisclosuresAndConfirmedChapterNavigation`, `testAuthorAndSeriesControlsUseTheirBrowseDestinations`, `testBookDetailPlacesChapterProgressBelowPlayback`, `testBookDetailHidesDownloadForCachedBook`, `testCompletedAutomaticWindowHasNoDownloadActions`, `BleatUITests.testBookDetailDownloadStatusWrapsAtLargestDynamicType`, `testBookDetailDownloadStatusFitsAtDefaultDynamicType`, `BleatDynamicTypeUITests.testPrimaryJourneysRemainUsableAtLargestDynamicType`, `testSeriesCoverBrowserDisablesDepthMotionWhenRequested`, `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload`, `testBookEditorOwnsCoverAndServerDeletionControls`, `testLimitedPermissionsShowPlayWithoutEditOrDownload` | verified |
 | APP-METADATA-001 | 4.5, 5.2, 7, 8.3, 15, 16 | Update-permitted native accounts can edit supported book metadata, including ordered inline series memberships with separate name/free-form sequence fields, draft-only add/edit/remove, cancellation, and blank-name validation; patches contain only changed scalars and complete replacement arrays, retain server prefixes, use bearer authentication, refetch after success, and offer a best-effort choice when the server revision changed | `Sources/BleatCore/MetadataEditing.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/MetadataEditorView.swift`, `App/RootView.swift` | `MetadataEditingTests` (format-character cleanup before patch validation, inherited metadata on unrelated edits, empty sanitized titles, and control rejection), `MetadataEditingLiveTests.testPinnedRootAndPrefixMetadataUpdates` (add/edit/remove and string round-trips) through `scripts/test-live.sh`, `AppModelTests.testMetadataSaveForwardsDraftAndPublishesSuccess`, `testServiceErrorsMapToStablePresentationFailures`, `BookActionPolicyTests.testAllowedActionsExactlyMatchServerPermissions` | verified |
 | APP-BOOK-DELETE-001 | 4.5, 5.2, 7, 8.4, 15, 16, 18 | Delete-permitted accounts can choose library-record removal or confirmed permanent server-file deletion from the bottom of the unified editor; active matching playback stops first and its local download is removed only after server success, inactive downloads remain, account-scoped derived caches refresh, and partial cleanup remains distinct from server failure | `Sources/BleatCore/BookDeletion.swift`, `Sources/BleatCore/BookActionPolicy.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/MetadataEditorView.swift` | `MetadataEditingTests.testBookDeletionUsesAuthenticatedPrefixedContract`, `testBookDeletionMapsPermissionAndMissingItemStatuses`, `BookActionPolicyTests.testAllowedActionsExactlyMatchServerPermissions`, `AppModelTests.testBookDeletionForwardsModeAndRefreshesLibrary`, `BleatUITests.testBookEditorOwnsCoverAndServerDeletionControls` | verified |
-| APP-DOWNLOAD-001 | 4.4, 5.2, 7, 9.2, 10, 14, 16 | Download-permitted native accounts can preflight expected bytes plus a safety margin, schedule one bearer-authenticated bounded HTTP range chunk per book under a persisted Wi-Fi-only or cellular policy, prefer a track with durable partial bytes, validate `206` and exact `Content-Range` (discarding an ambiguous system-resumed suffix and retrying the bounded chunk from its durable offset), retain validators for `If-Range`, and commit each completed chunk to an app-owned partial file. User Pause persists a paused manifest state, Continue schedules from the filesystem byte offset, Cancel discards unfinished partial bytes while preserving completed tracks, each control establishes its intent before yielding, diagnostic recording remains outside transfer-control transactions, and playback throttling remains independent. Downloads automatically cache whole source files while listening with a persisted 1, 3, 5, or 10 file/chapter lookahead target, defaulting to five (All creates or promotes a normal full-book download excluded from automatic cleanup), reserve bandwidth through initial buffering and later playback stalls, report target-relative durable plus current in-flight bytes without aggregating abandoned requests or claiming full-book completion, aggregate book state across all tracks so a failed track cannot present the book as failed while another retained track is still downloading, promote a cache in place, recover interrupted transfers, resume interrupted non-paused downloads whose startup plan lookup failed while offline once connectivity returns — from the durable partial-file offset, bounded to one attempt per network-path event per account, never duplicating surviving tasks, and leaving user-paused downloads paused — preserve range headers through authentication refresh and server fallback, honor valid HTTP 429/503 `Retry-After` delta-seconds and HTTP-date values within a one-hour bound, emit only the bounded chosen retry delay and typed source in opted-in telemetry, show typed waiting/retrying states, never infer failure solely from elapsed time between progress callbacks, keep whole-book playback local-only, support repair/removal, quarantine unrecoverable entries with typed causes while retaining verified tracks and rejected bytes, preserve malformed manifests alongside their media, and delete account-scoped or orphaned records. Home and Library context menus remove matching manual or automatic local records and all owned media while protecting matching active playback; [GitHub issue #80](https://github.com/terminaloutcomes/bleat/issues/80) | `Sources/BleatCore/DownloadModels.swift`, `Sources/BleatCore/DownloadRanges.swift`, `Sources/BleatCore/DownloadStorage.swift`, `Sources/BleatCore/DownloadManifest.swift`, `Sources/BleatCore/RemoteTelemetry.swift`, `Sources/BleatCore/RemoteTelemetryRuntime.swift`, `App/DownloadModel.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/PlaybackModel.swift`, `App/BookCoverView.swift`, `App/NowPlayingCoordinator.swift`, `App/RootView.swift`, `App/BleatApp.swift`; [GitHub issues #77](https://github.com/terminaloutcomes/bleat/issues/77) and [#124](https://github.com/terminaloutcomes/bleat/issues/124) | `BackgroundDownloadTests.testAutomaticDownloadLookaheadTransitionsAndPersistence`, `PrivateCloudSyncTests.testConfigurationNormalizesLookaheadBeforeApplying`, `AppModelTests.testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup`, `testAllLookaheadRequiresLargeCellularDownloadConfirmation`, `BleatUITests.testDownloadSettingsUseDiscreteFilesAheadValues`, `AppModelTests.testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist`, `testAutomaticDownloadPlannerFallsBackToCurrentPlusFilesAhead`, `BackgroundDownloadTests.testRangeChunksBuildBoundedHeadersAndValidateResponses`, `testChunkDescriptionRoundTripsWithoutCredentials`, `testFailedTrackDoesNotFailBookWhileAnotherTrackIsDownloading`, `testUnauthorizedTaskGetsNewRequestAfterSingleFlightRefresh`, `DownloadStorageTests.testAutomaticCacheMetadataAndFullBookPromotionPersist`, `DownloadStorageTests.testReconciledFullCacheSurvivesStaleChapterCleanup`, `AppModelTests.testAutomaticCachedWindowRequiresVerifiedTimedLocalTrack`, `AppModelTests.testCompleteSingleFileCachePromotesToDownloadedPlayback`, `DownloadStorageTests.testInvalidEntryPreservesHealthyTrackAndBytes`, `testMalformedRecordIsQuarantinedWithoutHidingHealthyRecords`, `AppModelTests.testDownloadRestorePreservesQuarantinedLegacyTrackAndPresentsTypedCause`, `DownloadStorageTests.testDurableChunksSurviveRecreationAndFinalizeAtExactLength`, `testChunkAppendRejectsWrongOffsetAndOversizedResult`, `testConditionalFailureDoesNotOverwritePauseOrContinueState`, `testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled`, `RemoteTelemetryTests.testDownloadLifecycleProducesTypedCorrelatedLogs`, `AppModelTests.testManualDownloadSchedulingAndCancellationEmitTaskSpans`, `testDownloadDiagnosticsRemainOrderedWithoutBlockingStart`, `testPauseIntentPrecedesConcurrentTerminalCallback`, `testPauseStorageFailureIsVisibleAndDoesNotResume`, `testPauseDoesNotOverwriteTrackCompletedWhilePending`, `testGatedPauseRejectsConcurrentCancel`, `testAccountRemovalInvalidatesGatedPauseAndDeletesDownload`, `testCancelledDownloadRejectsDelayedPause`, `testGatedPauseRejectsConcurrentContinue`, `testGatedContinueRejectsConcurrentCancel`, `testSystemResumedRangeSuffixRetriesFromDurableOffset`, `testTransferFailureIsNotPresentedWhileManifestIsDownloading`, `testOfflineRelaunchRecoveryResumesInterruptedDownloadFromDurableOffset`, `testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch`, `testNetworkRecoveryLeavesUserPausedDownloadsPaused`, `testRepeatedNetworkRecoveryDoesNotDuplicateTransfers`, `testNetworkRecoveryIsScopedToTheRequestedAccount`, `testTransportFailureWaitsForNetworkAndDropsTransientProgress`, `testTransportFailureUsesChangedPrimaryFallbackExactlyOnce`, `testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff`, `testRetryAfterHeaderDelaysRetryableServerReplacement`, `testRetryAfterExpiryAndNetworkRecoveryScheduleOneTransfer`, `testRepairDurablyResetsRetryBudgetBeforeScheduling`, `testRepairAndNetworkRecoveryScheduleOneTransferPerBook`, `testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup`, `testDownloadRetryAfterParsingAndBackoffRemainBounded`, `BleatUITests.testBookContextMenuRemovesLocalDownloadFromHome`, `testBookContextMenuRemovesLocalDownloadFromLibrary`, automatic-cache, repair, account-removal, network-policy, downloaded-playback, live download, and physical-device playback coverage | implemented |
+| APP-DOWNLOAD-001 | 4.4, 5.2, 7, 9.2, 10, 14, 16 | Download-permitted native accounts can preflight expected bytes plus a safety margin, schedule one bearer-authenticated bounded HTTP range chunk per book under a persisted Wi-Fi-only or cellular policy, prefer a track with durable partial bytes, validate `206` and exact `Content-Range` (discarding an ambiguous system-resumed suffix and retrying the bounded chunk from its durable offset), retain validators for `If-Range`, and commit each completed chunk to an app-owned partial file. User Pause persists a paused manifest state, Continue schedules from the filesystem byte offset, Cancel discards unfinished partial bytes while preserving completed tracks, each control establishes its intent before yielding, diagnostic recording remains outside transfer-control transactions, and playback throttling remains independent. Downloads automatically cache whole source files while listening with a persisted 1, 3, 5, or 10 file/chapter lookahead target, defaulting to five (All creates or promotes a normal full-book download excluded from automatic cleanup), reserve bandwidth through initial buffering and later playback stalls, report target-relative durable plus current in-flight bytes without aggregating abandoned requests or claiming full-book completion, aggregate book state across all tracks so a failed track cannot present the book as failed while another retained track is still downloading, promote a cache in place, recover interrupted transfers, resume interrupted non-paused downloads whose startup plan lookup failed while offline once connectivity returns — from the durable partial-file offset, bounded to one attempt per network-path event per account, never duplicating surviving tasks, and leaving user-paused downloads paused — preserve range headers through authentication refresh and server fallback, honor valid HTTP 429/503 `Retry-After` delta-seconds and HTTP-date values within a one-hour bound, emit only the bounded chosen retry delay and typed source in opted-in telemetry, show typed waiting/retrying states, never infer failure solely from elapsed time between progress callbacks, keep whole-book playback local-only, support repair/removal, quarantine unrecoverable entries with typed causes while retaining verified tracks and rejected bytes, preserve malformed manifests alongside their media, and delete account-scoped or orphaned records. Home and Library context menus remove matching manual or automatic local records and all owned media while protecting matching active playback; [GitHub issue #80](https://github.com/terminaloutcomes/bleat/issues/80) | `Sources/BleatCore/DownloadModels.swift`, `Sources/BleatCore/DownloadRanges.swift`, `Sources/BleatCore/DownloadStorage.swift`, `Sources/BleatCore/DownloadManifest.swift`, `Sources/BleatCore/RemoteTelemetry.swift`, `Sources/BleatCore/RemoteTelemetryRuntime.swift`, `App/DownloadModel.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/PlaybackModel.swift`, `App/BookCoverView.swift`, `App/NowPlayingCoordinator.swift`, `App/RootView.swift`, `App/BleatApp.swift`; [GitHub issues #77](https://github.com/terminaloutcomes/bleat/issues/77) and [#124](https://github.com/terminaloutcomes/bleat/issues/124) | `BackgroundDownloadTests.testAutomaticDownloadLookaheadTransitionsAndPersistence`, `PrivateCloudSyncTests.testConfigurationNormalizesLookaheadBeforeApplying`, `AppModelTests.testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup`, `testAllLookaheadRequiresLargeCellularDownloadConfirmation`, `BleatUITests.testDownloadSettingsUseDiscreteFilesAheadValues`, `AppModelTests.testAutomaticDownloadSettingsUseRequestedDefaultsAndPersist`, `testAutomaticDownloadPlannerFallsBackToCurrentPlusFilesAhead`, `BackgroundDownloadTests.testRangeChunksBuildBoundedHeadersAndValidateResponses`, `testChunkDescriptionRoundTripsWithoutCredentials`, `testFailedTrackDoesNotFailBookWhileAnotherTrackIsDownloading`, `testUnauthorizedTaskGetsNewRequestAfterSingleFlightRefresh`, `DownloadStorageTests.testAutomaticCacheMetadataAndFullBookPromotionPersist`, `DownloadStorageTests.testReconciledFullCacheSurvivesStaleChapterCleanup`, `AppModelTests.testAutomaticCachedWindowRequiresVerifiedTimedLocalTrack`, `AppModelTests.testCompleteSingleFileCachePromotesToDownloadedPlayback`, `DownloadStorageTests.testInvalidEntryPreservesHealthyTrackAndBytes`, `testMalformedRecordIsQuarantinedWithoutHidingHealthyRecords`, `AppModelTests.testDownloadRestorePreservesQuarantinedLegacyTrackAndPresentsTypedCause`, `DownloadStorageTests.testDurableChunksSurviveRecreationAndFinalizeAtExactLength`, `testChunkAppendRejectsWrongOffsetAndOversizedResult`, `testConditionalFailureDoesNotOverwritePauseOrContinueState`, `testRetryDeadlineSurvivesRecreationAndClearsWhenScheduled`, `RemoteTelemetryTests.testDownloadLifecycleProducesTypedCorrelatedLogs`, `AppModelTests.testManualDownloadSchedulingAndCancellationEmitTaskSpans`, `testDownloadDiagnosticsRemainOrderedWithoutBlockingStart`, `testPauseIntentPrecedesConcurrentTerminalCallback`, `testPauseStorageFailureIsVisibleAndDoesNotResume`, `testPauseDoesNotOverwriteTrackCompletedWhilePending`, `testGatedPauseRejectsConcurrentCancel`, `testAccountRemovalInvalidatesGatedPauseAndDeletesDownload`, `testCancelledDownloadRejectsDelayedPause`, `testGatedPauseRejectsConcurrentContinue`, `testGatedContinueRejectsConcurrentCancel`, `testSystemResumedRangeSuffixRetriesFromDurableOffset`, `testTransferFailureIsNotPresentedWhileManifestIsDownloading`, `testOfflineRelaunchRecoveryResumesInterruptedDownloadFromDurableOffset`, `testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch`, `testNetworkRecoveryLeavesUserPausedDownloadsPaused`, `testRepeatedNetworkRecoveryDoesNotDuplicateTransfers`, `testNetworkRecoveryIsScopedToTheRequestedAccount`, `testTransportFailureWaitsForNetworkAndDropsTransientProgress`, `testTransportFailureUsesChangedPrimaryFallbackExactlyOnce` ([completion evidence](release-evidence/test-reliability-app-followups.md#primary-fallback-recovery-completion-374)), `testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff`, `testRetryAfterHeaderDelaysRetryableServerReplacement`, `testRetryAfterExpiryAndNetworkRecoveryScheduleOneTransfer`, `testRepairDurablyResetsRetryBudgetBeforeScheduling`, `testRepairAndNetworkRecoveryScheduleOneTransferPerBook`, `testAllLookaheadCreatesAndPromotesManualDownloadsThatSurviveCleanup`, `testDownloadRetryAfterParsingAndBackoffRemainBounded`, `BleatUITests.testBookContextMenuRemovesLocalDownloadFromHome`, `testBookContextMenuRemovesLocalDownloadFromLibrary`, automatic-cache, repair, account-removal, network-policy, downloaded-playback, live download, and physical-device playback coverage | implemented |
 | APP-OFFLINE-POSITION-001 | 7, 10.3, 11.1, 11.4, 16 | Streamed and local-file playback share an account/item-scoped whole-book checkpoint; local-file playback resumes from that checkpoint after relaunch even when earlier listening was streamed. Playback persists that position at least every five seconds and on pause, seek, backgrounding, completion, and stop without awaiting network work; later acknowledged local-session synchronization performs conflict detection, adopts the sole changed side, or asks which position to retain when both changed | `Sources/BleatCore/ProgressSync.swift`, `App/PlaybackPositionStore.swift`, `App/PlaybackModel.swift`, `App/PlaybackView.swift` | `ProgressSyncTests`, `PlaybackPositionStoreTests.testReconcilerDetectsBothChangedAndAdoptsSingleChange`, `AppModelTests.testDownloadedPlaybackControlsNeverStartNetworkRequests`, `ProgressSyncLiveTests.testPinnedRootAndPrefixProgressContracts` through `scripts/test-live.sh`, and `BleatLiveUITests.testLiveOfflineCachedDownloadAndLocalProgress` through `scripts/test-app-live.sh`; `AppModelTests.testStreamedCheckpointResumesDownloadedPlaybackAfterRelaunch`, `testStreamedResumeUsesFreshSessionInsteadOfStaleDetail` (focused iOS Simulator regressions) | verified |
 | APP-OFFLINE-SESSION-001 | 7, 11.3, 15, 16 | Downloaded playback creates and durably persists a UUIDv4 local session with measured monotonic listening time, batches all pending sessions per native account, removes only matching successful acknowledgements, retries failed or ambiguous imports with the same ID after relaunch/account restoration or a new network-path event, and refreshes server progress when an import reports that progress was not synchronized; the coalesced retry is background work and does not block playback or launch | `Sources/BleatCore/LocalPlaybackSession.swift`, `App/LocalPlaybackSessionStore.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/PlaybackModel.swift` | `LocalPlaybackSessionTests`, `AppModelTests.testLocalSessionStorePersistsAndRemovesOnlyAcknowledgedIDs`, `testPendingLocalSessionsRetryWithSameIDUntilAcknowledged`, `testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch`, `LocalPlaybackSessionLiveTests.testPinnedRootAndPrefixImportOneIdempotentLocalSession` through `scripts/test-live.sh` | implemented |
 | APP-FINISHED-001 | 5.2, 11.4, 16 | Book Detail and browsing context menus explicitly mark a book finished or unfinished through one typed, account/item-scoped current-user progress operation. HTTP 200 commits local state before detached server reconciliation; preparation, rejection, timeout, uncertainty, duplicate suppression, stale-account publication, Continue Listening removal, and unplayed shelf behavior are explicit. Pre-submission progress conflict comparison remains tracked by [GitHub issue #146](https://github.com/terminaloutcomes/bleat/issues/146) | `Sources/BleatCore/ProgressSync.swift`, `App/AppService.swift`, `App/AppModel.swift`, `App/RootView.swift` | `ProgressSyncTests.testFetchAndPatchUseExactAuthenticatedContract`, `ProgressSyncLiveTests.testPinnedRootAndPrefixProgressContracts` through `scripts/test-live.sh`, and the focused `AppModelTests.testSetFinished*` mutation suite; conflict-check evidence remains outstanding under issue #146 | implemented |
@@ -643,7 +643,11 @@ Its startup-completion gate also verifies that discarding a selection cancels
 an already-claimed resume task before bootstrap returns, so repeated Play cannot
 report acceptance of the discarded selection.
 `FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
-covers retirement followed by replacement playback. Deleted-book cold resume
+covers retirement followed by replacement playback. Its final prepared-playback
+pause now awaits its own callback-processing sequence advance before asserting
+exactly one delivered pause, with deferred coordinator cleanup; scoped evidence
+is recorded in [the final-pause review](release-evidence/test-reliability-app-followups.md#final-prepared-playback-pause-callback-374).
+Deleted-book cold resume
 also clears its paused native snapshot and retained retry identity;
 `AppModelTests.testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity`
 covers fresh and previously failed selections while retaining canonical positions.
@@ -852,3 +856,207 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Local smoke runner lifecycle correction (#371)
+
+Controlled baseline regressions demonstrated a live child after stdin-write
+failure, a held boot preventing return, and lost combined native failure data.
+Private file input removes the post-spawn write hazard;owned command groups,
+non-reaping exit observation and a single build/readiness coordinator bound
+retirement and preserve both typed outcomes. Shared Simulators/services are not
+retired. Original selector assertions remain byte-identical;their audit now
+acknowledges external jq ownership. Final local evidence is 147/147 owning and
+42/42 exact individual repeated outcomes,including eleven new lifecycle cases.
+See [demonstration, policies and remaining boundaries](release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371).
+This is local fixture evidence only. Independent review, publication, Linux and
+real Xcode/Simulator gates remain pending;other runner command owners,platform
+requirements and broader #362/#369 reconciliation remain open.
+
+### Owned result report commands (#371)
+
+The modern test-tree, summary and legacy-fallback reads own their command groups,
+execution budgets and cleanup. Typed stage/cause, native status and capture
+errors remain inspectable while diagnostics omit payloads. Report read limits
+accept larger structured data without widening the existing smoke ceiling.
+Seven native regressions preserve argv and test deadlines, reaping, failure and
+encoding diagnostics, size rejection and large valid JSON. See [bounded report
+commands, retained baseline and exact evidence](release-evidence/test-runner-verification.md#bounded-result-report-commands-371).
+Other command owners, five specifically named missing legacy-test audit entries,
+full schema/source reconciliation and configuration/device gates remain open.
+
+Final-source evidence: 154 owning native outcomes, 21 focused executions and 7
+local Linux ARM64/Rust 1.97.1 functions passed; the owned container was removed.
+Strict checks pass. The changed reader accepts 626 outcomes from a retained real
+CI bundle with discovery agreement; this replay is separate from fresh app
+execution. Failed and superseded attempts remain documented. Independent
+review and exact-head CI are separate requirements.
+
+### Existing legacy-summary audit coverage (#369)
+
+Five already implemented inline legacy-summary tests receive substantive
+individual decisions and source-index locations while preserving all previous
+records. Their code and immutable fixture match the retained 154-outcome owning
+source, including all five exact identities. No new runtime test or execution is
+claimed. See [individual scope and revision-bound evidence](release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369).
+Broader audit, native Xcode/configuration/device evidence and integration remain
+open; independent review and exact-head CI are separate requirements.
+
+### Remaining smoke native command bounds (#371)
+
+The six smoke version/inventory/settings/enumeration/install/test invocations
+use finite typed stage policies and the existing invocation-owned native cleanup
+boundary. Captured structured output is retained without copying raw failures
+into diagnostics; status phases preserve live inherited console output. Result
+verification runs even after execution failure and both typed causes remain
+available. [Scope, native regressions and separate acceptance gates](release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371)
+retain remaining SwiftPM/general-Xcode ownership and broader #362 acceptance.
+
+### SwiftPM native command ownership (#371)
+
+SwiftPM discovery and execution use distinct finite typed native stages and the
+shared invocation-owned cleanup boundary. Discovery consumes complete stdout
+while retaining live compiler stderr; observer environment, selection and report
+contracts remain explicit. Failed execution still audits artifacts and preserves
+both typed causes. [Scoped source, regression and acceptance evidence](release-evidence/test-runner-verification.md#swiftpm-command-bounds-371)
+keeps actual execution and broader #362 acceptance separate.
+
+### Direct Xcode runner native ownership (#371)
+
+Six direct tool call sites use finite typed roles and the existing native group
+owner. Observed nonzero exit status remains distinct from spawn, deadline and
+cleanup failure; unconfirmed retirement cannot pass as a status. Exact result
+verification still runs after execution failure and retains both typed causes.
+[Scoped regression and acceptance evidence](release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371)
+keeps the two aggregate-script and shared-service boundaries explicitly open.
+
+### Repository-root result preservation (#371)
+
+The Xcode runner's existing-result check uses the same repository root as its
+native result arguments. Typed rejection protects absolute and relative result
+paths before any native command or verifier runs. [Source proof, retained probe
+and scoped regression evidence](release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371)
+preserve the distinction between reproduced guard bypass and unobserved data loss.
+
+### Bounded build-helper test commands (#370)
+
+Three environment/dependency/sandbox tests now retain their original assertions
+while owning each external process group through a 30-second command budget,
+three-second cleanup bound and typed native outcomes. Non-reaping exit
+observation prevents releasing the leader identity before signalling; successful
+cleanup requires child reaping and group disappearance. Anonymous output files
+avoid descendant-held pipe EOF. Eight native lifecycle regressions and all
+original semantic assertions are retained. Exact m2 evidence is35/35 owning and
+33/33 individual repeated outcomes; normal build dependencies are unchanged.
+See [scope, native corrections and limits](release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370).
+This is a bounded #370 slice, not full subprocess or epic acceptance. Independent
+review, final-head CI, other lifecycle owners and platform gates remain separate.
+
+### Structured result child-array validation (#371)
+
+Modern Xcode result verification rejects present malformed `children` fields at
+case, container, repetition and message boundaries with a typed schema failure.
+Absent/empty children and genuine repeated outcomes retain their existing
+contracts. Three focused regressions preserve all existing assertions and
+exercise synthetic invalid schemas independently of Xcode execution. See the
+[bounded schema fix and retained failures](release-evidence/test-runner-verification.md#structured-result-children-schema-371).
+Broader #371/#362 acceptance and platform evidence remain separate.
+
+### Cleanup helper caller diagnostics (#372)
+
+The test cleanup helper records secondary cleanup failures at the calling
+test's default or explicitly supplied source location while preserving the
+originating typed operation error. Narrow native issue matchers verify both
+cleanup cause and caller context; all success and single-failure assertions
+remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
+Signed-host, independent-review and exact-head CI evidence are recorded
+separately; broader epic acceptance is not established by this helper change.
+### Typed optional completion assertion (#372)
+
+The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
+and retains its separate true-result assertion. Missing completion,failed
+export,all eight success-path caller joins,request counts and exact metadata
+remain covered. Error-exit task drainage remains a separate #372 concern.
+See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
+This does not change provider/transport lifecycle contracts or establish
+broader epic/configuration acceptance.
+
+
+### Concurrent export callers after operation failure (#372)
+
+The concurrent OTLP test observes each owned caller before consuming its task
+value on both success and throwing cleanup exits. Controlled failures before
+entry and after all eight provider registrations retain the original typed
+error and assert caller completion, empty fake waiters, zero RPCs and repeated
+cleanup. Existing success, coalescing and bearer assertions remain unchanged.
+See [scope, retained failing baseline and exact validation](release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372).
+This establishes these callers' ownership; internal worker/observer drainage,
+other owners and platform/configuration acceptance remain separate open work.
+
+Final source evidence: 25 owning identities, 6 focused function executions across
+three runs (9 scenarios), and 607 signed-host identities passed with zero failures
+or skips. Synchronizable-Keychain coverage and both new failure arguments are
+verified. Independent review and exact-head CI are separate requirements;
+retained warnings and intentional failure diagnostics remain linked above.
+
+### Paid build-mode orchestration (#371)
+
+The twelve paid-capability settings queries use bounded native ownership and
+decoded typed settings/plist assertions; exact isolated invalid-mode controls
+replace generic launcher-failure acceptance. [Scoped ownership and evidence](release-evidence/test-runner-verification.md#paid-build-mode-orchestration-371)
+keeps signed-host orchestration and independently created groups outstanding.
+
+### Missing audit records and scoped recurrence validation (#369)
+
+Five existing host functions and nine build-helper functions have individual
+source-reviewed decisions, setup/action/postcondition details, synchronization
+and cleanup boundaries, enabling conditions and applicable rule assessments.
+Current source-index locations and moved-path provenance are reconciled; retired
+SDK-override history remains explicit. Three command-driven records retain their
+historical unbounded-source assessments; the integrated #418 source uses the
+bounded owner and its current dispositions. See the [historical/current review
+reconciliation](release-evidence/test-reliability-audit.md#integration-of-historical-and-current-child-reviews-369370).
+The audit repair changes no application or existing test behavior, and no
+production leak/hang is inferred.
+
+The Rust parity checker and eight audited regressions reject orphaned active
+Rust records after attribute/declaration/file removal as well as missing/stale/
+duplicate/placeholder records and empty required scopes. Its scope is host
+inventory, build-helper source/test declarations and its own regressions;
+semantic review, compiler discovery and broader inventory are not certified by
+name parity. See [repair scope and exact evidence](release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369).
+Broader #362/#369 acceptance remains open; source/record coverage alone is not
+completion of the testing epic.
+
+### Host driver cancellation (#362)
+
+A controlled native-command probe demonstrated that driver-only SIGTERM left its
+active Swift phase and descendant alive. Rust orchestration now owns the native
+phase group through interruption and observed retirement while preserving signed
+identity, reports and coverage contracts. [Scope, original failure and evidence](release-evidence/test-runner-verification.md#host-driver-cancellation-362)
+keep detached/nested owners, Release cleanup and deferred macOS app work separate.
+Final focused/signed owning execution, independent review and exact-head CI are
+recorded at the tested revision; this is not whole-epic completion.
+
+## Release secret-scan build admission (#362)
+
+The [scoped Release build evidence](release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362)
+records the two reproduced gate build failures, typed settings regression,
+fixture compiler-condition repair and exact focused outcomes. The repaired
+Release gate at `cdd7a38` passed seven Python and nine native cases, then stopped
+at the release-version preflight (`2026.10.21` versus checked-in `2026.10.14`).
+The documented explicit marketing-version setting supports rebuilding that
+checked-in version with a fresh UTC build number; its preflight passed without
+metadata changes. Full acceptance at clean `4542700` passed: seven Python regressions, nine native
+cases, the inspected Release archive and nine-surface scan (667 files,
+1,677,234,199 bytes, zero prohibited findings; two expected disposable-server
+redactions). Owned resources were verified retired. Original failures remain
+retained; no metadata bump, validation bypass or deployment was made. Ordinary Simulator success and exact-head CI are separate.
+
+### Current testing-epic dispositions (#362)
+
+The [current source/evidence checkpoint](release-evidence/test-reliability-current-status.md)
+separates landed bounded fixes, remaining formal audit work, current validation,
+deferred macOS work, optional source concerns and configuration/device acceptance.
+It credits #438/#439 and retains the unresolved iPad observation without claiming
+epic or release completion. Counts use distinct units; missing audit entries and
+historical follow-up labels are not current bug counts.

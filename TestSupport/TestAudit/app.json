@@ -11162,6 +11162,28 @@
           "outcome": "keep",
           "reason": "Behavior is asserted through exact typed state and owned fixtures."
         }
+      },
+      "primaryFallbackCompletionReview": {
+        "date": "2026-10-21",
+        "baseline": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "status": "source_fixed_execution_recorded",
+        "scope": "Only the recorded primary-fallback test completion race and its failure-safe fixture cleanup; historical assessments remain preserved.",
+        "observedFailure": "Validate Bleat run 39562779417 at 1f7ee5b failed only this pending-empty assertion among 626 outcomes. Its test body matches the baseline.",
+        "orderingWitness": "A private checkpoint experiment retained the old task-count predicate and all original transfer assertions. Exactly one intentional pending-empty assertion failed in 0.94 seconds while two registered replacements were visible and the original callback-completion sequence was unchanged. All checkpoint instrumentation was removed.",
+        "synchronization": "One unchanged two-second deadline now covers both at least two registered replacement requests and empty pending recovery. Exact count, primary URL, Range, If-Range and descriptor/index assertions remain; the aggregate callback sequence is diagnostic only.",
+        "cleanup": "Synthetic session invalidation is deferred; awaited model removal runs before checked storage deletion through reverse-ordered XCTest teardown. This is not a claim that all framework callbacks joined.",
+        "ruleAssessments": {
+          "1": "Exact two primary requests, ranges, validator, empty pending recovery and descriptors [0,1] retained.",
+          "2": "The bounded predicate now observes the recovery state needed by the following assertions, not registration alone.",
+          "3": "Not applicable: no advancing player or position assertion.",
+          "4": "Cleanup registered before callbacks and waits; session invalidation and awaited model cleanup cover thrown waits and assertion exits.",
+          "5": "Existing unique storage root, background session identity, account and scripted requests retained; no preference mutation.",
+          "6": "App-hosted Simulator delegate test; synthetic service and TEST-NET requests, no live Audiobookshelf or physical-device claim.",
+          "7": "Original CI failure and private witness retained separately; no retry-to-green, assertion removal, production change or budget increase.",
+          "8": "Caller assertions include elapsed time, two-second budget, request count, pending IDs, callback sequence and record states.",
+          "9": "Final source: one focused pass, ten unconditional focused repetitions and all 627 distinct owning BleatAppTests identities passed; exact outcomes verified, zero failures/skips/expected failures/runtime warnings."
+        },
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#primary-fallback-recovery-completion-374"
       }
     },
     {
@@ -44185,6 +44207,34 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "finalPauseReview": {
+        "date": "2026-10-21",
+        "baseline": "3deee8a748e0f7acac54f563abd07d5b36933e41",
+        "status": "source_fixed_execution_recorded",
+        "scope": "Only the accepted final prepared-playback pause callback and failure-safe coordinator cleanup.",
+        "actionPostconditions": [
+          "Retain retired bootstrap Play rejection and the empty handler capture after its processing sequence advances.",
+          "Capture a second processing-sequence baseline before admitting pause, await its advance, assert completion and exactly [.pause]."
+        ],
+        "synchronization": "Existing callback processing sequence increments in defer after generation rejection or handler delivery; separate bounded 30-second waits establish both callbacks processed. The budget is a failure watchdog, not a settling delay.",
+        "cleanup": "Immediately deferred coordinator.clear() runs on every exit, invalidates admission and clears playback state; the coordinator retains the command handler until deallocation.",
+        "ruleAssessments": {
+          "1": "Final pause admission now has exact delivered-command postcondition; earlier assertions retained.",
+          "2": "Second baseline precedes pause admission; asserted bounded completion precedes command equality.",
+          "3": "Not applicable: synthetic snapshot and command adapter; no advancing player.",
+          "4": "Deferred coordinator cleanup; no new worker, continuation or observer. This is not proof of unrelated native task drainage.",
+          "5": "Fresh coordinator and local capture; no preferences, network, storage or personal fixture state.",
+          "6": "App-hosted Simulator adapter test; no physical MediaPlayer or device claim.",
+          "7": "No assertion removed, retry or timing budget increase.",
+          "8": "Named pause-drain failure at the caller assertion; exact commands report missing or extra delivery.",
+          "9": "One focused pass, ten focused repetitions and all 624 owning BleatAppTests identities passed on the final Swift source; exact outcomes verified against built discovery."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "The bounded final-pause gap is fixed and has focused and owning Simulator evidence. Historical callback assessments and broader lifecycle findings remain separate."
+        },
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#final-prepared-playback-pause-callback-374"
       }
     },
     {
@@ -49308,10 +49358,12 @@
       "identifier": "UITestPlaybackFixturesTests/testSeparateJourneysDoNotShareDownloadStorage",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 13,
-        "endLineBeforeNextTest": 23
+        "line": 15,
+        "endLineBeforeNextTest": 25
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "TestAppService"
       ],
@@ -49357,16 +49409,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testBundledMediaIsPlayableAndMatchesTrackDurations",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 24,
-        "endLineBeforeNextTest": 38
+        "line": 26,
+        "endLineBeforeNextTest": 41
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "AVURLAsset"
       ],
@@ -49417,16 +49480,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testPlaybackServiceUsesBundledMedia",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 39,
-        "endLineBeforeNextTest": 68
+        "line": 42,
+        "endLineBeforeNextTest": 73
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "AVURLAsset",
         "TestAppService"
@@ -49498,16 +49572,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testMissingBundleResourceKeepsTypedFailureThroughPlayback",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 69,
-        "endLineBeforeNextTest": 97
+        "line": 74,
+        "endLineBeforeNextTest": 102
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "TestAppService"
       ],
@@ -49578,16 +49663,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testMissingHalfHourResourceHasDistinctPresentationAndDiagnostic",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 98,
-        "endLineBeforeNextTest": 135
+        "line": 103,
+        "endLineBeforeNextTest": 144
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "temporaryDirectory"
       ],
@@ -49666,6 +49762,15 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
@@ -49695,6 +49800,108 @@
         }
       },
       "execution": "Source84840c1: three independent runs of this four-scenario identity passed; three adjacent playback/retry runs passed; owning624/624; live online/offline1+1; ReleaseSimulator/lint/docs passed. Zero Simulator failures/skips/runtime warnings. Independent final-source re-review found no actionable issues. Baseline red and first owning failure retained separately; no CI/device acceptance claim."
+    },
+    {
+      "identifier": "TestAsyncGateTests/testContextDownloadGateCancellationAfterRegistrationAndReuse",
+      "source": {
+        "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+        "line": 114
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Context gate cancellation after positive registration, followed by repeated release and reuse.",
+        "purpose": "Exercise the actual app fixture implementation rather than a downstream mock.",
+        "ruleAssessments": {
+          "1": "Cancel only after isWaiting; require completion; release defensively before joining; assert no registration remains; repeat with two releases.",
+          "2": "Wait on registration/state/progress with asserted 30-second condition/completion budgets; no guessed delay or retry.",
+          "3": "N/A: byte progress and gate lifecycle, no playing media clock.",
+          "4": "Owned tasks registered for teardown before waits; cancel and join before removing model/defaults/storage. Native AsyncStream and Task.sleep cancellation remain cooperative; no arbitrary task-graph drainage claim.",
+          "5": "Fresh local UITestContextDownloadGate and two owned tasks; no shared singleton or storage.",
+          "6": "App-hosted deterministic fixtures with local SwiftData/filesystem and native task cancellation; no network transfer/live-server/device claim.",
+          "7": "Retain any failed attempts; no automatic retries or timeout relaxation.",
+          "8": "Named stage diagnostics, expected/observed typed states and exact structural/byte comparisons; shared assertEventually forwards caller location.",
+          "9": "Require focused repetitions and owning app-suite evidence with exact result identities; execution recorded separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Context gate cancellation after positive registration, followed by repeated release and reuse."
+        }
+      },
+      "execution": "Actual iOS Simulator: initial focused3 passed before syntax-only lint correction;corrected focused3 passed;each new identity passed in isolation;owning gate suite12 pluseditfixture1 passed. Exactindividual bundles canonical-verified with0failures/skips/expectedfailures/runtimewarnings. Each new final-source identity executed in focused,isolated andowning selections. These local selections cover one AppModelTests identity; full AppModel suite coverage requires separate exact-head delivery evidence.",
+      "issue375FixtureLifecycle": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#fixture-gate-cancellation-and-reuse-375"
+      },
+      "compilerAndSkipConditions": [
+        "#if DEBUG && os(iOS)"
+      ]
+    },
+    {
+      "identifier": "TestAsyncGateTests/testTranscriptCacheGateCancellationRepeatedReleaseAndReuse",
+      "source": {
+        "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+        "line": 151
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Transcript gate registered cancellation, repeated release and two reuse cycles.",
+        "purpose": "Exercise the actual app fixture implementation rather than a downstream mock.",
+        "ruleAssessments": {
+          "1": "Cancel registered waiter; assert no pending waiter after joined completion; perform two registered release cycles with repeated release.",
+          "2": "Wait on registration/state/progress with asserted 30-second condition/completion budgets; no guessed delay or retry.",
+          "3": "N/A: byte progress and gate lifecycle, no playing media clock.",
+          "4": "Owned tasks registered for teardown before waits; cancel and join before removing model/defaults/storage. Native AsyncStream and Task.sleep cancellation remain cooperative; no arbitrary task-graph drainage claim.",
+          "5": "Fresh local UITestTranscriptCacheGate; three owned tasks and completion expectations.",
+          "6": "App-hosted deterministic fixtures with local SwiftData/filesystem and native task cancellation; no network transfer/live-server/device claim.",
+          "7": "Retain any failed attempts; no automatic retries or timeout relaxation.",
+          "8": "Named stage diagnostics, expected/observed typed states and exact structural/byte comparisons; shared assertEventually forwards caller location.",
+          "9": "Require focused repetitions and owning app-suite evidence with exact result identities; execution recorded separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Transcript gate registered cancellation, repeated release and two reuse cycles."
+        }
+      },
+      "execution": "Actual iOS Simulator: initial focused3 passed before syntax-only lint correction;corrected focused3 passed;each new identity passed in isolation;owning gate suite12 pluseditfixture1 passed. Exactindividual bundles canonical-verified with0failures/skips/expectedfailures/runtimewarnings. Each new final-source identity executed in focused,isolated andowning selections. These local selections cover one AppModelTests identity; full AppModel suite coverage requires separate exact-head delivery evidence.",
+      "issue375FixtureLifecycle": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#fixture-gate-cancellation-and-reuse-375"
+      },
+      "compilerAndSkipConditions": [
+        "#if DEBUG && os(iOS)"
+      ]
+    },
+    {
+      "identifier": "AppModelTests/testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 5794
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Edit-download fixture cancellation after fixture byte progress restores the original record and permits successful reuse.",
+        "purpose": "Exercise the actual app fixture implementation rather than a downstream mock.",
+        "ruleAssessments": {
+          "1": "Wait for running state/counter reset; request exactly two fixture byte-progress updates; assert computed displayed bytes; cancel/join then reuse and complete/join; require typed state, original record/progress, structurally unchanged persistence and zero active transfer admissions.",
+          "2": "Wait on registration/state/progress with asserted 30-second condition/completion budgets; no guessed delay or retry.",
+          "3": "N/A: byte progress and gate lifecycle, no playing media clock.",
+          "4": "Owned tasks registered for teardown before waits; cancel and join before removing model/defaults/storage. Native AsyncStream and Task.sleep cancellation remain cooperative; no arbitrary task-graph drainage claim.",
+          "5": "Fresh defaults suite, temporary storage, one seeded complete WAV download, fake service, unique background session, and inactive telemetry.",
+          "6": "App-hosted deterministic fixtures with local SwiftData/filesystem and native task cancellation; no network transfer/live-server/device claim.",
+          "7": "Retain any failed attempts; no automatic retries or timeout relaxation.",
+          "8": "Named stage diagnostics, expected/observed typed states and exact structural/byte comparisons; shared assertEventually forwards caller location.",
+          "9": "Require focused repetitions and owning app-suite evidence with exact result identities; execution recorded separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Edit-download fixture cancellation after fixture byte progress restores the original record and permits successful reuse."
+        }
+      },
+      "execution": "Actual iOS Simulator: initial focused3 passed before syntax-only lint correction;corrected focused3 passed;each new identity passed in isolation;owning gate suite12 pluseditfixture1 passed. Exactindividual bundles canonical-verified with0failures/skips/expectedfailures/runtimewarnings. Each new final-source identity executed in focused,isolated andowning selections. These local selections cover one AppModelTests identity; full AppModel suite coverage requires separate exact-head delivery evidence.",
+      "issue375FixtureLifecycle": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#fixture-gate-cancellation-and-reuse-375"
+      },
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ]
     }
   ],
   "decisionCounts": {

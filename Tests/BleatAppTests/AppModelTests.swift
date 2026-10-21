@@ -5790,6 +5790,100 @@ final class AppModelTests: XCTestCase {
         await model.removeAll()
     }
 
+    #if DEBUG || BLEAT_UI_TESTING
+        func testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse()
+            async throws
+        {
+            enum Exit { case cancel, complete }
+            let suite = "EditDownloadFixture-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(suite, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: root, withIntermediateDirectories: true)
+            addTeardownBlock { @MainActor in
+                defaults.removePersistentDomain(forName: suite)
+                try FileManager.default.removeItem(at: root)
+            }
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "edit-fixture", title: "Edit fixture",
+                    libraryID: fixtureLibrary().id))
+            try await prepareCompleteDownload(
+                root: root, account: account, detail: detail)
+            let model = DownloadModel(
+                service: TestAppService(activeAccount: .success(account)),
+                defaults: defaults, storageRootURL: root,
+                backgroundSessionIdentifier: "bleat.tests.\(suite)")
+            addTeardownBlock { @MainActor in await model.removeAll() }
+            await model.start(accounts: [account])
+            XCTAssertEqual(model.records.count, 1)
+            let original = try XCTUnwrap(model.records.first)
+            let entry = try XCTUnwrap(original.manifest.entries.first)
+            XCTAssertGreaterThanOrEqual(entry.expectedByteLength, 200)
+            XCTAssertEqual(original.manifest.state, .complete)
+            XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+            let storage = DownloadStorage(
+                layout: try DownloadStorageLayout(rootURL: root))
+            for exit in [Exit.cancel, .complete] {
+                let finished = expectation(
+                    description: "Edit fixture returned: \(exit)")
+                let operation = Task {
+                    await model.runEditPresentationDownloadFixture()
+                    finished.fulfill()
+                }
+                addTeardownBlock { @MainActor in
+                    operation.cancel()
+                    await operation.value
+                }
+                let running = await waitUntil(timeout: .seconds(30)) {
+                    model.editDownloadFixtureState == .running
+                }
+                XCTAssertTrue(
+                    running, "Edit fixture did not register its running state")
+                guard running else { return }
+                XCTAssertEqual(model.editDownloadFixtureProgress, 0)
+                XCTAssertEqual(
+                    model.records.first?.manifest.state, .downloading)
+                model.advanceEditDownloadFixture()
+                let advanced = await waitUntil(timeout: .seconds(30)) {
+                    model.editDownloadFixtureProgress == 2
+                }
+                XCTAssertTrue(
+                    advanced,
+                    "The requested fixture progress updates did not finish")
+                guard advanced else { return }
+                let runningRecord = try XCTUnwrap(model.records.first)
+                XCTAssertEqual(
+                    model.displayedDownloadedByteLength(for: runningRecord),
+                    entry.expectedByteLength * 2 / 200)
+                switch exit {
+                case .cancel:
+                    operation.cancel()
+                case .complete:
+                    model.completeEditDownloadFixture()
+                    model.completeEditDownloadFixture()
+                }
+                await fulfillment(of: [finished], timeout: 30)
+                operation.cancel()
+                await operation.value
+                XCTAssertEqual(
+                    model.editDownloadFixtureState,
+                    exit == .cancel ? .cancelled : .completed)
+                XCTAssertNil(model.failure)
+                XCTAssertEqual(model.records, [original])
+                XCTAssertEqual(
+                    model.displayedDownloadedByteLength(for: original),
+                    entry.expectedByteLength)
+                XCTAssertEqual(model.progress[original.manifest.downloadID], 1)
+                let persisted = try await storage.records()
+                XCTAssertEqual(persisted, [original])
+                XCTAssertEqual(model.activeTransferAdmissionCountForTesting, 0)
+            }
+        }
+    #endif
+
     func testManualTrackAdvancesOnlyAfterActiveTrackFinalizes() throws {
         let plan = try DownloadPlan.decodeExpandedItem(
             from: Data(Self.downloadPlanJSON(secondSize: 8).utf8)
@@ -7312,7 +7406,11 @@ final class AppModelTests: XCTestCase {
                 "BleatPrimaryFallback-\(UUID().uuidString)",
                 isDirectory: true
             )
-        defer { try? FileManager.default.removeItem(at: root) }
+        addTeardownBlock {
+            if FileManager.default.fileExists(atPath: root.path) {
+                try FileManager.default.removeItem(at: root)
+            }
+        }
         let account = try fixtureAccount()
         let detail = fixtureBookDetail(
             item: fixtureBook(
@@ -7355,6 +7453,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.primary-fallback.\(UUID().uuidString)"
         )
+        addTeardownBlock { @MainActor in await model.removeAll() }
         await model.start(accounts: [account])
         let identities = try plan.tracks.map { track in
             try DownloadTaskIdentity(
@@ -7381,6 +7480,7 @@ final class AppModelTests: XCTestCase {
             ),
         ]
         let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
         let tasks = try zip(identities, ranges).enumerated().map {
             index, pair in
             let task = session.downloadTask(with: failedRequests[index])
@@ -7400,17 +7500,26 @@ final class AppModelTests: XCTestCase {
         }
         var fallbackRequests: [URLRequest] = []
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
+        let startedAt = clock.now
+        let deadline = startedAt.advanced(by: .seconds(2))
         repeat {
             fallbackRequests =
                 await model.scheduledTransferRequestsForTesting()
-            if fallbackRequests.count >= 2 {
+            if fallbackRequests.count >= 2,
+                model.pendingRecoveryDownloadIDsForTesting.isEmpty
+            {
                 break
             }
             try await Task.sleep(for: .milliseconds(10))
         } while clock.now < deadline
 
-        XCTAssertEqual(fallbackRequests.count, 2)
+        let recoveryDiagnostic =
+            "Primary fallback recovery after \(startedAt.duration(to: clock.now)); "
+            + "budget=2s; requests=\(fallbackRequests.count); "
+            + "pending=\(model.pendingRecoveryDownloadIDsForTesting); "
+            + "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+            + "record states=\(model.records.map { $0.manifest.state })"
+        XCTAssertEqual(fallbackRequests.count, 2, recoveryDiagnostic)
         XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
         XCTAssertEqual(
             Set(
@@ -7425,7 +7534,10 @@ final class AppModelTests: XCTestCase {
                     == "\"validator\""
             }
         )
-        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        XCTAssertTrue(
+            model.pendingRecoveryDownloadIDsForTesting.isEmpty,
+            recoveryDiagnostic
+        )
         let descriptors =
             await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.count, 2)
@@ -7433,8 +7545,6 @@ final class AppModelTests: XCTestCase {
             descriptors.map(\.identity.trackIndex).sorted(),
             [0, 1]
         )
-        session.invalidateAndCancel()
-        await model.removeAll()
     }
 
     func testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff()

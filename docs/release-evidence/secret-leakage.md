@@ -70,3 +70,48 @@ build stage. Its Simulator stage reported two unrelated unchanged test failures.
 serial rerun. `testPausedCachedBoundaryResumesPreparedContinuation` failed again
 because `coverLoadPolicy` did not become `allowNetwork` within its two-second
 wait. Issue #48 changes neither that playback/cache path nor its test.
+
+## Revalidation 2026-10-21 (#362)
+
+The native-authentication gate passed at clean source
+`4542700bc9c9f6e84017403630aa18afbcb904b7` using the existing supported
+`BLEAT_MARKETING_VERSION=2026.10.14 mise run test:release-secrets` configuration.
+All build/test inputs match reviewed and merged #440; only evidence documents
+differ. The inspected normal Release archive reports version `2026.10.14` and
+fresh UTC build `20261021.1653.50`, using configured signing. Project metadata,
+TLS trust and capability policy were unchanged; nothing was uploaded or deployed.
+Toolchain: Xcode 27.1 (27A9275), iOS Simulator 26.5.
+
+All seven scanner Python regressions and these nine exact native identities
+passed, with no failed or skipped native cases:
+
+- `BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload`
+- `BleatAppTests/ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh`
+- `BleatUITests/BleatLiveUITests/testReleaseSecretScanRefreshAfterTokenInvalidation`
+- `BleatAppTests/ReleaseSecretLeakageTests/testCaptureRotatedTokens`
+- `BleatAppTests/ReleaseSecretLeakageTests/testRemovePrivateCapture`
+- `BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress`
+- `BleatUITests/BleatLiveUITests/testReleaseSecretScanLogout`
+- `BleatAppTests/ReleaseSecretLeakageTests/testLogoutRemovedSessionCredentials`
+- `BleatAppTests/ReleaseSecretLeakageTests/testPrivateCaptureRemainsRemovedAfterLogout`
+
+The final scan covered all nine surfaces listed above: 667 files totaling
+1,677,234,199 bytes, with zero prohibited findings. Two refresh-token occurrences
+were redacted only in the disposable server's `compose.log` copy, as in the
+original gate; production-relevant Bleat surfaces were not pre-redacted. The
+retained report contains no secret values or secret digests. This gate still
+does not cover the OIDC/cookie/playback-route scope excluded above.
+
+Independent after-run checks found no owned Simulator, container, volume or
+private secret-broker process. The non-secret `report.json`, `scan.json` and
+`tests.json` are retained under
+`.build/i362-release-scan-explicit-version-retained-report/`, with exact identity
+and cleanup verification in `.build/i362-release-scan-explicit-version-verified.json`.
+
+The original Release build failure and the subsequent default-version archive
+preflight failure remain retained separately. #440 repaired the two demonstrated
+build blockers. The latter version mismatch needed the documented explicit
+checked-in marketing version, not a source-version bump or validation bypass.
+The supported rebuild keeps a fresh UTC build number and validates project,
+generated settings and changelog consistency. This result is local disposable
+server/Simulator/archive evidence, not physical-device acceptance.

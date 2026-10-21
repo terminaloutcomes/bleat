@@ -4,7 +4,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+#[path = "swift_test_results/commands.rs"]
+pub(crate) mod commands;
+use crate::test_results::CommandFailure;
+use commands::{SwiftCommand, finish_execution, run_command};
 
 use regex::Regex;
 use roxmltree::Document;
@@ -80,6 +85,20 @@ pub enum XCTestObservationOutcome {
 
 #[derive(Debug, Error)]
 pub enum SwiftTestResultsError {
+    #[error("SwiftPM command failed: {0}")]
+    Command(#[source] Box<CommandFailure>),
+    #[error("SwiftPM execution failed: {command}; result audit failure: {report_audit:?}")]
+    ExecutionAndAudit {
+        #[source]
+        command: Box<CommandFailure>,
+        report_audit: Option<Box<Self>>,
+    },
+    #[error("SwiftPM {runner:?} discovery encoding failed: {source}")]
+    DiscoveryEncoding {
+        runner: TestRunner,
+        #[source]
+        source: std::str::Utf8Error,
+    },
     #[error("invalid SwiftPM test invocation: {0}")]
     InvalidInvocation(String),
     #[error("invalid SwiftPM test selection pattern: {0}")]
@@ -267,12 +286,9 @@ pub fn run_and_verify(
     } else {
         command.env_remove("BLEAT_XCTEST_OBSERVATION_PATH");
     }
-    command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
-    let status = command
-        .status()
-        .map_err(|error| SwiftTestResultsError::InvalidInvocation(error.to_string()))?;
-    if !status.success() {
-        let report_audit = verify_execution_results(
+    let execution = run_command(&mut command, SwiftCommand::Execution);
+    finish_execution(execution, || {
+        verify_execution_results(
             &expected,
             &reports,
             &observation_prefix,
@@ -280,22 +296,7 @@ pub fn run_and_verify(
             options.swift_testing_enabled,
             allowed_skips,
         )
-        .err()
-        .map(|error| error.to_string());
-        return Err(SwiftTestResultsError::TestCommandFailed {
-            status: status.to_string(),
-            report_audit,
-        });
-    }
-
-    verify_execution_results(
-        &expected,
-        &reports,
-        &observation_prefix,
-        options.xctest_enabled,
-        options.swift_testing_enabled,
-        allowed_skips,
-    )
+    })
 }
 
 fn parse_invocation(arguments: &[OsString]) -> Result<InvocationOptions, SwiftTestResultsError> {
@@ -406,31 +407,10 @@ fn discover(
     runner: TestRunner,
     package_path: Option<&OsStr>,
 ) -> Result<BTreeSet<String>, SwiftTestResultsError> {
-    let mut command = Command::new("swift");
-    command.arg("test");
-    if let Some(path) = package_path {
-        command.arg("--package-path").arg(path);
-    }
-    command
-        .arg("list")
-        .arg(runner.discovery_flag())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-    let output = command
-        .output()
-        .map_err(|error| SwiftTestResultsError::InvalidInvocation(error.to_string()))?;
-    if !output.status.success() {
-        return Err(SwiftTestResultsError::DiscoveryFailed {
-            runner: runner.label(),
-            status: output.status.to_string(),
-        });
-    }
-    let stdout = String::from_utf8(output.stdout).map_err(|error| {
-        SwiftTestResultsError::InvalidDiscoveredIdentity {
-            runner: runner.label(),
-            identity: format!("non-UTF-8 SwiftPM output: {error}"),
-        }
-    })?;
+    let phase = SwiftCommand::Discovery(runner);
+    let mut command = commands::discovery_command(runner, package_path);
+    let output = run_command(&mut command, phase).map_err(SwiftTestResultsError::Command)?;
+    let stdout = commands::decode_discovery_output(output.stdout, runner)?;
     let mut identities = BTreeSet::new();
     for line in stdout
         .lines()

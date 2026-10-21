@@ -167,6 +167,14 @@ its own Keychain access group. It verifies the signature, embedded profile, and
 entitlements before running tests. It never changes the installed Xcode helper
 or exports signing keys. A missing signing configuration fails the gate.
 
+The shell entry point execs the Rust `host-test-driver`. During a native phase,
+the driver handles termination signals and retires its exclusively owned command
+group before returning the interruption status. Native command stderr remains
+visible, including successful path-query warnings. This adds no command execution
+deadlines. Detached groups, shared framework services and the Swift fixtures' own
+nested-child lifecycle remain separate boundaries. See the [controlled HOST-1
+reproduction and evidence](release-evidence/test-runner-verification.md#host-driver-cancellation-362).
+
 The host uses Swift Testing with global serialization and selects each built
 test product explicitly. This avoids XCTest subclass discovery and prevents a
 later empty target from overwriting another target's XML report. It supports
@@ -446,12 +454,21 @@ mise run test:release-secrets
 
 The gate uses disposable Audiobookshelf, telemetry, and Simulator resources;
 exercises login, token refresh, authenticated browsing, download, offline
-playback, diagnostics, telemetry, and logout; creates a normal unsigned Release
-archive; and scans the collected production-relevant surfaces for private
+playback, diagnostics, telemetry, and logout; creates a normal Release
+archive using the configured signing mode; and scans the collected production-relevant surfaces for private
 sentinels. Collected unified logs are decoded to NDJSON before their messages
 are scanned. Private manifests, the raw log archive, and raw server artifacts
 are deleted during cleanup. The retained non-secret result is
 `.build/release-secret-scan/report.json`.
+
+The instrumented Release Simulator build permits HTTPS loopback telemetry only
+with the exact `BLEAT_RELEASE_SECRET_SCAN` compilation condition. Device builds
+and ordinary Release builds retain their production-origin validation. The
+disposable Simulator installs its own test CA; TLS trust checks remain enabled.
+When validating the checked-in release on a later day, set
+`BLEAT_MARKETING_VERSION` to the `MARKETING_VERSION` in `project.yml`, as
+documented under [Release packaging](#release-packaging). The archive retains
+a fresh UTC build number and all source/generated/changelog consistency checks.
 
 ## Release packaging
 

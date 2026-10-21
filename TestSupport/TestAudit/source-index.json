@@ -3713,31 +3713,31 @@
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testSeparateJourneysDoNotShareDownloadStorage",
-      "line": 13,
+      "line": 15,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testBundledMediaIsPlayableAndMatchesTrackDurations",
-      "line": 24,
+      "line": 26,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testPlaybackServiceUsesBundledMedia",
-      "line": 39,
+      "line": 42,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testMissingBundleResourceKeepsTypedFailureThroughPlayback",
-      "line": 69,
+      "line": 74,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testMissingHalfHourResourceHasDistinctPresentationAndDiagnostic",
-      "line": 98,
+      "line": 103,
       "language": "swift"
     },
     {
@@ -4379,50 +4379,138 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationUnblocksTokenWaitAndShutsTransportOnce",
-      "line": 818,
-      "language": "swift"
+      "line": 812,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 818,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 819
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncTransportShutdownWaitsForClosureCompletion",
-      "line": 886,
-      "language": "swift"
+      "line": 880,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 886,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 887
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
-      "line": 923,
-      "language": "swift"
+      "line": 917,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 923,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 924
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
-      "line": 983,
-      "language": "swift"
+      "line": 977,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 983,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 984
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
-      "line": 1044,
-      "language": "swift"
+      "line": 1038,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1044,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 1045
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
-      "line": 1083,
-      "language": "swift"
+      "line": 1077,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1083,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 1084
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInExporterOrFailureDescriptions",
-      "line": 1146,
-      "language": "swift"
+      "line": 1140,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1146,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 1147
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInCapturedProcessLogs",
-      "line": 1200,
-      "language": "swift"
+      "line": 1194,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1200,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      },
+      "prior_navigation": [
+        {
+          "baseline": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+          "line": 1201
+        }
+      ]
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",
@@ -8897,20 +8985,35 @@
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "selects_installed_runtime_even_when_newer_sdk_has_no_device",
-      "line": 289,
-      "language": "rust"
+      "line": 438,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 289,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "prefers_newest_available_runtime_by_numeric_version",
-      "line": 302,
-      "language": "rust"
+      "line": 451,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 302,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/ci_smoke.rs",
       "name": "rejects_missing_devices_old_runtimes_and_other_platforms",
-      "line": 318,
-      "language": "rust"
+      "line": 467,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/src/ci_smoke.rs",
+        "line": 318,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "path": "scripts/src/listening_repair.rs",
@@ -9129,42 +9232,6 @@
       "language": "rust"
     },
     {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "generates_metadata_without_mutating_template_or_build_setting_placeholders",
-      "line": 58,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "reads_commit_from_detached_worktree_git_file",
-      "line": 87,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "missing_git_preserves_existing_output_and_reports_git_stage",
-      "line": 116,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "distinguishes_missing_malformed_and_non_dictionary_templates",
-      "line": 137,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "output_failure_is_typed",
-      "line": 161,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/build_metadata.rs",
-      "name": "command_works_with_canonical_sandbox_inputs_and_only_derived_output_writable",
-      "line": 176,
-      "language": "rust"
-    },
-    {
       "path": "scripts/tests/ci_artifact_retry.rs",
       "name": "cli_propagates_validation_and_terminal_gate_failures",
       "line": 14,
@@ -9316,60 +9383,6 @@
     },
     {
       "path": "scripts/tests/release_version_check.rs",
-      "name": "accepts_consistent_metadata_and_effective_build_version",
-      "line": 15,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_timestamp_or_cli_override_without_source_bump",
-      "line": 26,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_stale_missing_or_wrong_generated_configurations",
-      "line": 40,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_wrong_or_missing_built_app_versions_before_installing",
-      "line": 60,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "accepts_later_rebuilds_but_rejects_invalid_or_predating_timestamps",
-      "line": 96,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_stale_fallback_build_numbers",
-      "line": 113,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_missing_duplicate_stale_or_empty_release_notes",
-      "line": 128,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "rejects_malformed_sources_and_invalid_calendar_dates",
-      "line": 146,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
-      "name": "command_rejects_real_pbxproj_version_drift_before_building",
-      "line": 170,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_version_check.rs",
       "name": "device_rebuild_keeps_source_version_and_generates_next_day_timestamp",
       "line": 223,
       "language": "rust"
@@ -9378,30 +9391,6 @@
       "path": "scripts/tests/release_version_check.rs",
       "name": "telemetry_validation_preserves_typed_failure_without_secret_values",
       "line": 251,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_versions.rs",
-      "name": "generates_and_validates_build_numbers",
-      "line": 7,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_versions.rs",
-      "name": "derives_and_validates_marketing_versions",
-      "line": 36,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_versions.rs",
-      "name": "command_line_resolvers_use_environment_without_shells",
-      "line": 65,
-      "language": "rust"
-    },
-    {
-      "path": "scripts/tests/release_versions/xcode_host_sdk.rs",
-      "name": "xcode_cargo_launchers_isolate_host_compiler_environment",
-      "line": 18,
       "language": "rust"
     },
     {
@@ -9568,6 +9557,787 @@
       "name": "testInitialCoverSaveCannotCompleteNewerSaveAfterInvalidation",
       "line": 19173,
       "language": "swift"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "stdin_write_failure_retires_started_child",
+      "line": 144,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "held_boot_returns_within_preparation_budget",
+      "line": 179,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "preparation_retains_both_native_failures",
+      "line": 234,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "completed_peer_retains_native_failure_instead_of_cancellation",
+      "line": 282,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "dropping_owner_retires_the_started_wrapper",
+      "line": 324,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "captured_payload_is_retained_without_error_format_disclosure",
+      "line": 343,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "build_failure_retires_held_readiness_and_keeps_both_causes",
+      "line": 384,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "readiness_failure_retires_held_build_and_keeps_both_causes",
+      "line": 403,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "boot_then_readiness_preserves_success_and_reaps_wrappers",
+      "line": 422,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "exhausted_boot_budget_does_not_start_readiness",
+      "line": 437,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/lifecycle_tests.rs",
+      "name": "fixture_supervisor_releases_and_joins_on_assertion_unwind",
+      "line": 467,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_arguments_preserve_all_native_report_modes",
+      "line": 16,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_failures_keep_stage_status_and_redact_payload",
+      "line": 45,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_deadlines_reap_each_admitted_native_report",
+      "line": 75,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_capture_limit_rejects_output_without_partial_success",
+      "line": 123,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_invalid_utf8_keeps_encoding_stage_without_payload",
+      "line": 157,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_accepts_bounded_large_valid_utf8_json",
+      "line": 190,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_spawn_and_invalid_limit_keep_exact_typed_causes",
+      "line": 209,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "missing_modern_warning_field_uses_real_legacy_empty_array_shape",
+      "line": 967,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "legacy_warning_and_error_summaries_fail_closed",
+      "line": 975,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "legacy_record_requires_nonempty_actions_and_action_issues",
+      "line": 996,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "non_object_summary_is_rejected_before_legacy_fallback",
+      "line": 1019,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "null_modern_warning_field_does_not_use_legacy_fallback",
+      "line": 1031,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_policies_keep_distinct_stages_and_finite_budgets",
+      "line": 20,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_deadlines_reap_each_admitted_command",
+      "line": 28,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_native_exits_and_missing_tools_keep_exact_causes",
+      "line": 76,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_structured_output_failure_redacts_capture_and_retains_cause",
+      "line": 113,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_success_keeps_structured_bytes_and_streaming_modes",
+      "line": 138,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_result_verification_runs_after_every_execution_outcome",
+      "line": 176,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_policies_and_discovery_arguments_keep_runner_and_package_selection",
+      "line": 40,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_deadlines_reap_each_admitted_native_command",
+      "line": 73,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_native_failure_causes_and_captured_payload_remain_separate",
+      "line": 117,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_discovery_transport_keeps_complete_output_and_typed_encoding",
+      "line": 163,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_stdout_only_capture_rejects_oversize_without_partial_acceptance",
+      "line": 224,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_execution_preserves_child_only_observation_environment",
+      "line": 256,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_execution_always_audits_reports_and_keeps_both_typed_causes",
+      "line": 293,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_roles_preserve_policy_status_and_original_spawn_causes",
+      "line": 62,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_deadlines_reap_all_admitted_roles",
+      "line": 114,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_status_never_hides_unconfirmed_cleanup",
+      "line": 161,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures",
+      "line": 187,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "existing_result_bundle_guard_uses_repository_root_for_relative_and_absolute_paths",
+      "line": 348,
+      "language": "rust"
+    },
+    {
+      "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+      "name": "testContextDownloadGateCancellationAfterRegistrationAndReuse",
+      "line": 114,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/TestAsyncGateTests.swift",
+      "name": "testTranscriptCacheGateCancellationRepeatedReleaseAndReuse",
+      "line": 151,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEditDownloadFixtureCancellationRestoresRecordAndPermitsReuse",
+      "line": 5794,
+      "language": "swift"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "captures_success_and_nonzero_exit_after_cleanup",
+      "line": 16,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "spawn_failure_retains_io_cause_without_a_child",
+      "line": 33,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "deadline_reaps_child_and_preserves_ready_diagnostics",
+      "line": 48,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "descendant_output_holder_is_retired_after_parent_exit",
+      "line": 75,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "deadline_retires_descendants_with_the_parent",
+      "line": 96,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "normal_exit_is_observed_before_reaping_group_leader",
+      "line": 114,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "unwinding_after_exit_observation_retires_the_owned_group",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/bounded_command.rs",
+      "name": "oversized_capture_reports_failure_after_group_cleanup",
+      "line": 192,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "malformed_children_fields_reject_cases_and_containers",
+      "line": 296,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "malformed_children_fields_reject_repetitions_and_messages",
+      "line": 329,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "omitted_and_empty_children_preserve_valid_native_shapes",
+      "line": 370,
+      "language": "rust"
+    },
+    {
+      "path": "Tests/BleatCoreTests/TestCleanupTests.swift",
+      "name": "reportsDefaultCleanupFailureAtTheTestCaller",
+      "line": 58,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+      "name": "testConcurrentExportCleanupJoinsCallersAfterOperationFailure",
+      "line": 1258,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
+      "name": "testObservationCleanupRetiresOnlyOwnedSubscription",
+      "line": 298,
+      "language": "swift"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "matrix_preserves_all_twelve_queries_and_exact_original_contracts",
+      "line": 24,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
+      "line": 100,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "native_query_retains_exit_spawn_capture_causes_and_private_output",
+      "line": 168,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "admitted_query_deadline_retires_child_before_returning",
+      "line": 223,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
+      "line": 303,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "name": "negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
+      "line": 411,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "generates_metadata_without_mutating_template_or_build_setting_placeholders",
+      "line": 58,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 58,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "reads_commit_from_detached_worktree_git_file",
+      "line": 87,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 87,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "missing_git_preserves_existing_output_and_reports_git_stage",
+      "line": 116,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 116,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "distinguishes_missing_malformed_and_non_dictionary_templates",
+      "line": 137,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 137,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "output_failure_is_typed",
+      "line": 161,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 161,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/build_metadata.rs",
+      "name": "command_works_with_canonical_sandbox_inputs_and_only_derived_output_writable",
+      "line": 176,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 176,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "accepts_consistent_metadata_and_effective_build_version",
+      "line": 15,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 15,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_timestamp_or_cli_override_without_source_bump",
+      "line": 26,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 26,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_stale_missing_or_wrong_generated_configurations",
+      "line": 40,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 40,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_wrong_or_missing_built_app_versions_before_installing",
+      "line": 60,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 60,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "accepts_later_rebuilds_but_rejects_invalid_or_predating_timestamps",
+      "line": 96,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 96,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_stale_fallback_build_numbers",
+      "line": 113,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 113,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_missing_duplicate_stale_or_empty_release_notes",
+      "line": 128,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 128,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "rejects_malformed_sources_and_invalid_calendar_dates",
+      "line": 146,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 146,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_version_cli.rs",
+      "name": "command_rejects_real_pbxproj_version_drift_before_building",
+      "line": 3,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 170,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_versions.rs",
+      "name": "generates_and_validates_build_numbers",
+      "line": 7,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 7,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_versions.rs",
+      "name": "derives_and_validates_marketing_versions",
+      "line": 36,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 36,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "build-scripts/tests/release_versions.rs",
+      "name": "command_line_resolvers_use_environment_without_shells",
+      "line": 65,
+      "language": "rust",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 65,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
+    },
+    {
+      "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+      "name": "testFixtureCleanupRemovesRootAfterSuccess",
+      "line": 1753,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+      "name": "testFixtureCleanupRemovesRootAfterOperationFailure",
+      "line": 1763,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+      "name": "testFixtureCleanupReportsDeletionFailure",
+      "line": 1779,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
+      "name": "testOpenIDTransportUnexpectedRouteThrowsAndCleansUp",
+      "line": 585,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift",
+      "name": "testCacheHeartbeatChildCancellationReapsChild",
+      "line": 388,
+      "language": "swift"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "validates_common_and_macos_settings_without_requiring_telemetry_values",
+      "line": 28,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "validates_ios_secure_endpoints_and_debug_loopback",
+      "line": 45,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "reports_typed_missing_and_invalid_common_settings_with_original_exit_codes",
+      "line": 69,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "rejects_insecure_auth_urls_and_non_origin_otlp_endpoints",
+      "line": 84,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "rejects_otlp_policy_violations_by_typed_variant",
+      "line": 116,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "rejects_invalid_telemetry_urls_without_losing_the_variable_identity",
+      "line": 153,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "name": "build_launchers_preserve_the_callers_toolchain_environment",
+      "line": 6,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "name": "build_dependency_tree_excludes_operational_and_native_tooling",
+      "line": 78,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "name": "xcode_sandbox_can_read_every_cargo_workspace_member",
+      "line": 127,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "current_repository_has_scoped_audit_parity",
+      "line": 64,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "missing_host_audit_is_rejected",
+      "line": 74,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "missing_rust_audit_is_rejected",
+      "line": 83,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "missing_source_index_entries_are_rejected",
+      "line": 95,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "stale_audit_identity_is_rejected",
+      "line": 113,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "duplicate_audit_entries_are_rejected",
+      "line": 171,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "placeholder_reviews_are_rejected",
+      "line": 189,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "name": "empty_required_scopes_are_rejected",
+      "line": 224,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "sigterm_retires_admitted_native_phase_and_descendant",
+      "line": 378,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "native_nonzero_exit_preserves_status_and_stops_before_later_phases",
+      "line": 452,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "missing_native_tool_reports_spawn_failure_without_real_tool_fallback",
+      "line": 462,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "unsigned_product_reports_and_profiles_survive_full_synthetic_workflow",
+      "line": 472,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/host_test_driver/tests.rs",
+      "name": "signed_entitlements_require_exact_team_application_and_keychain_group",
+      "line": 10,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "accepts_https_loopback_for_instrumented_release_simulator",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "keeps_release_device_and_uninstrumented_loopback_rejected",
+      "line": 190,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "release_scan_simulator_preserves_https_and_otlp_origin_policy",
+      "line": 228,
+      "language": "rust"
+    }
+  ],
+  "historicalRetiredDeclarations": [
+    {
+      "path": "scripts/tests/release_versions/xcode_host_sdk.rs",
+      "name": "xcode_cargo_launchers_isolate_host_compiler_environment",
+      "line": 18,
+      "language": "rust",
+      "retirement": {
+        "removed_by": "18e41aadeda3ccdd404c6808e63b0ac69c815667",
+        "reason": "The SDK/compiler override strategy was superseded by isolated build helpers preserving the caller environment. This obsolete test is retained as history, not an active missing declaration.",
+        "replacements": [
+          "build_launchers_preserve_the_callers_toolchain_environment",
+          "build_dependency_tree_excludes_operational_and_native_tooling",
+          "xcode_sandbox_can_read_every_cargo_workspace_member"
+        ],
+        "issue": 370,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#build-helper-dependency-isolation-2026-10-16"
+      }
     }
   ]
 }

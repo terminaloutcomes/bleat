@@ -98,7 +98,8 @@
     "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures()",
     "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry()",
     "testBearerNeverAppearsInExporterOrFailureDescriptions()",
-    "testBearerNeverAppearsInCapturedProcessLogs()"
+    "testBearerNeverAppearsInCapturedProcessLogs()",
+    "testConcurrentExportCleanupJoinsCallersAfterOperationFailure(stage:)"
   ],
   "BleatCoreTests.AuthenticatedRequestTests": [
     "testCoalescingTransportReleasesRegisteredAndLateCallersOnce(kind:)",
@@ -568,7 +569,8 @@
     "dailyBucketsAndCachedRangesUseUTCReportingCalendar()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
-    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"
+    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()",
+    "testObservationCleanupRetiresOnlyOwnedSubscription(exit:)"
   ],
   "BleatCoreTests.StatisticsTests": [
     "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
@@ -619,7 +621,8 @@
     "awaitsCleanupAfterSuccess()",
     "awaitsCleanupAfterOperationFailure()",
     "propagatesCleanupFailure()",
-    "retainsOperationFailureWhenCleanupAlsoFails()"
+    "retainsOperationFailureWhenCleanupAlsoFails()",
+    "reportsDefaultCleanupFailureAtTheTestCaller()"
   ],
   "BleatCoreTests.TokenVaultTests": [
     "testRoundTripReplacementIsolationAccessibilityAndDeletion()",

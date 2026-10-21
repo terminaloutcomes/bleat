@@ -3513,6 +3513,31 @@
         },
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372",
         "remaining_limits": "Whole underlying production task drainage remains unproven; shared gate/helper redesign and unrelated acceptance are outside this slice."
+      },
+      "issue_372_optional_completion_assertion": {
+        "decision": "fixed",
+        "owner": "Bleat maintainers / @yaleman",
+        "source_review": "Explicit Bool? cast selects optional unwrapping in #require. Existing #expect(success),eight caller values,one refresh,eight client exports,metadata equality and cleanup order remain. No wait,budget,scope or production change.",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#optional-completion-assertion-372",
+        "source_sha256": "9b747702625b487c552c7d9187c82122b10c339c5393ea74bbe72bcec02429ca"
+      },
+      "concurrent_export_cleanup_review": {
+        "base_revision": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+        "decision": "fix",
+        "scope": "Observe the eight owned callers on normal and throwing cleanup exits; full production task graph drainage remains separate.",
+        "rules": {
+          "1": "Retain all eight actual success Bools, one refresh, eight client exports and exact shared bearer metadata in the original scenario. Inject the typed fixture operation error in two additional argument cases and assert the original error survives cleanup, all eight actual caller results are consumed, no pending provider waits remain, no RPC starts and repeated cleanup preserves the same results.",
+          "2": "Keep the existing eight-waiter admission signal and release order. The new failure fixture holds caller entry explicitly; beforeEntry throws with that gate closed, afterAllEntries positively observes eight registered provider continuations before throwing. No scheduler turn or readiness delay is used.",
+          "3": "No playback or position tolerance. Existing completion observations retain ten-second per-caller bounds. Only the new failure fixture uses a thirty-second production timeout to avoid its ordinary deadline supplying the cancellation stimulus; the original success fixture timeout is unchanged.",
+          "4": "Cancel all eight callers, request exporter cancellation, release provider and optional entry gates, then observe each own actual-export-return completion before consuming that task value. A missing completion records an indexed source-located issue and skips that unknown join while continuing with remaining callers. This proves owned caller consumption, not complete drainage of internal production/provider observer task graphs.",
+          "5": "Fresh in-memory provider, recording client, exporter, span, entry signal and eight separate completion actors for each method/argument. No shared preferences, credentials, files, server, simulator or process-global output interception.",
+          "6": "Deterministic host Swift Testing coverage of the real exporter with existing local fakes. All prior success semantics remain; this is test ownership repair, not evidence of a production leak or live/device behavior.",
+          "7": "No retry, guessed sleep, deadline widening in the original scenario or dropped assertion. Retain the initial compile failure separately from the extracted legacy-cleanup failing baseline and final corrected executions.",
+          "8": "Reuse the existing completion helper with exact caller index and source location; only synthetic stage names are emitted. Preserve typed operation failure rather than replacing it with cleanup results.",
+          "9": "Verify both failure arguments and the original success identity through repeated focused runs, owning suite and required-signing host inventory. Independent review and exact-head CI remain separate requirements; artifacts retain exact source hashes and outcomes."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372",
+        "execution": "Final source:25/25 owning function identities;three focused native runs verify6/6 function executions and9/9 scenarios,including beforeEntry and afterAllEntries each run;required-signing host607/607 unique identities,zero failures/errors/skips,including synchronizable-Keychain coverage. Strict Swift lint and documentation checks pass. Three expected cleanup known issues and eight intentional read-only SwiftData diagnostics in three passing negative tests are retained. Extracted legacy cleanup baseline:one function,two failed argument cases/two expected count issues;initial private-visibility compile failed before tests. Independent review and exact-head CI remain separate."
       }
     },
     {
@@ -19478,6 +19503,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19524,6 +19553,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19609,6 +19642,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19648,7 +19685,11 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
@@ -21910,7 +21951,12 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Fresh fixed inputs with a direct result assertion."
+      "reason": "Fresh fixed inputs with a direct result assertion.",
+      "issue_372_cleanup_caller_diagnostics": {
+        "decision": "fixed",
+        "reason": "Retains primary operation error and now permits only the typed cleanup failure at an explicit exact caller location;the broad known-issue matcher is replaced. Historical assessment remains unchanged.",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TokenVaultTests.swift::testRoundTripReplacementIsolationAccessibilityAndDeletion",
@@ -23647,6 +23693,306 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
         "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/TestCleanupTests.swift::reportsDefaultCleanupFailureAtTheTestCaller",
+      "source": {
+        "path": "Tests/BleatCoreTests/TestCleanupTests.swift",
+        "line": 58
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Record the typed secondary cleanup error at the calling test while preserving the original operation error.",
+      "dependencies_and_setup": "Fresh local observed error and two distinct synthetic throwing closures;serialized helper suite;caller SourceLocation captured in this test.",
+      "action_postconditions": "Run both failing phases without supplying a location. withKnownIssue matches only Failure.cleanup in the caller file;assert propagated Failure.operation. Missing or unexpected issues fail natively.",
+      "synchronization": "Await withKnownIssue and withTestCleanup;no worker,observer,external operation or manual wait.",
+      "timeout_tolerance": "N/A:finite throwing closures,no elapsed-time or playback assertion.",
+      "classification": "Deterministic host Swift Testing diagnostic contract.",
+      "compiler_skip": "Default native host test;no opt-in/skip/parameter conditions.",
+      "decision": "keep",
+      "reason": "The old helper fails this regression with helper-file attribution and a missing matched issue. Caller-default forwarding now preserves useful source context without replacing primary cause.",
+      "rules": {
+        "1": "Require both the typed cleanup diagnostic at the caller file and the original typed operation failure.",
+        "2": "N/A:both closures throw synchronously inside an awaited async cleanup contract;no guessed timing.",
+        "3": "N/A:no playback or media clock.",
+        "4": "All async scopes awaited;no tasks or observers escape. Existing helper isolation parameter remains intact.",
+        "5": "Only fresh local error state and synthetic closures;no filesystem,preferences,environment or global output mutation.",
+        "6": "Native Swift Testing issue delivery and matcher;no app,network,signing or device integration claim.",
+        "7": "Retain the exact intended baseline failure;no broad known-issue allowance,retry or tolerance adjustment.",
+        "8": "The default invocation must report in this caller file;the neighboring existing test checks an explicit exact SourceLocation and typed cleanup cause.",
+        "9": "Require focused repetitions,both affected identities and full signed owning-host evidence;commands,identities and original failures retained separately."
+      },
+      "issue_372_cleanup_caller_diagnostics": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372"
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportCleanupJoinsCallersAfterOperationFailure",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1258
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove before-entry and after-all-entry operation failures settle and consume all eight owned export callers while preserving the original typed error.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh existing SingleFlightTokenProvider and recording client; eight caller tasks held behind a latched entry signal; thirty-second exporter timeout only for these injected failure cases.",
+        "action_postconditions": "Throw typed fixture error before entry or after eight registered provider waits. Await cleanup, assert eight false caller results, zero pending provider waits, zero RPCs, same original error, and equal results/empty state after repeated retirement."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Positive controlled entry/arrival signals and per-caller terminal completion actors, with the existing ten-second observation budgets. Release gates before observing completion; only confirmed callers are joined.",
+        "timeout_tolerance": "No elapsed-time success threshold, sleep or playback tolerance; original success fixture remains unchanged."
+      },
+      "compiler_skip_conditions": "Two arguments: beforeEntry and afterAllEntries; no test-level platform guard, skip or opt-in. SwiftPM BleatCoreTests, serialized owning suite. Signed host evidence includes the separate synchronizable-Keychain case.",
+      "rules": {
+        "1": "Retain all eight actual success Bools, one refresh, eight client exports and exact shared bearer metadata in the original scenario. Inject the typed fixture operation error in two additional argument cases and assert the original error survives cleanup, all eight actual caller results are consumed, no pending provider waits remain, no RPC starts and repeated cleanup preserves the same results.",
+        "2": "Keep the existing eight-waiter admission signal and release order. The new failure fixture holds caller entry explicitly; beforeEntry throws with that gate closed, afterAllEntries positively observes eight registered provider continuations before throwing. No scheduler turn or readiness delay is used.",
+        "3": "No playback or position tolerance. Existing completion observations retain ten-second per-caller bounds. Only the new failure fixture uses a thirty-second production timeout to avoid its ordinary deadline supplying the cancellation stimulus; the original success fixture timeout is unchanged.",
+        "4": "Cancel all eight callers, request exporter cancellation, release provider and optional entry gates, then observe each own actual-export-return completion before consuming that task value. A missing completion records an indexed source-located issue and skips that unknown join while continuing with remaining callers. This proves owned caller consumption, not complete drainage of internal production/provider observer task graphs.",
+        "5": "Fresh in-memory provider, recording client, exporter, span, entry signal and eight separate completion actors for each method/argument. No shared preferences, credentials, files, server, simulator or process-global output interception.",
+        "6": "Deterministic host Swift Testing coverage of the real exporter with existing local fakes. All prior success semantics remain; this is test ownership repair, not evidence of a production leak or live/device behavior.",
+        "7": "No retry, guessed sleep, deadline widening in the original scenario or dropped assertion. Retain the initial compile failure separately from the extracted legacy-cleanup failing baseline and final corrected executions.",
+        "8": "Reuse the existing completion helper with exact caller index and source location; only synthetic stage names are emitted. Preserve typed operation failure rather than replacing it with cleanup results.",
+        "9": "Verify both failure arguments and the original success identity through repeated focused runs, owning suite and required-signing host inventory. Independent review and exact-head CI remain separate requirements; artifacts retain exact source hashes and outcomes."
+      },
+      "decision": "keep",
+      "classification": "Deterministic test-only failure-path ownership regression.",
+      "reason": "The two controlled scenarios cover a throwing exit before release/admission and after all provider waits register. Cleanup actively cancels/releases all owners and observes their actual return before task-value consumption; repeated cleanup and exact typed failure remain asserted.",
+      "shared_helper_review": "AuthTelemetryTestCompletion has a latched Bool and one observer at a time; normal operation observation has finished or expired before cleanup starts. AuthTelemetryTestSignal retains early release. SingleFlightTokenProvider releases and removes registered continuations synchronously and caches release for late entry. Private retirement continues after any missing caller observation and never awaits an unconfirmed task value. No production helper changes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372",
+      "execution": "Final source:25/25 owning function identities;three focused native runs verify6/6 function executions and9/9 scenarios,including beforeEntry and afterAllEntries each run;required-signing host607/607 unique identities,zero failures/errors/skips,including synchronizable-Keychain coverage. Strict Swift lint and documentation checks pass. Three expected cleanup known issues and eight intentional read-only SwiftData diagnostics in three passing negative tests are retained. Extracted legacy cleanup baseline:one function,two failed argument cases/two expected count issues;initial private-visibility compile failed before tests. Independent review and exact-head CI remain separate."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::testObservationCleanupRetiresOnlyOwnedSubscription",
+      "source": {
+        "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
+        "line": 298
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retire only the owned statistics subscription across return/throw before/after consuming its initial buffered update.",
+      "dependencies_and_setup": "Fresh in-memory StatisticsRepository, two UUID subscriptions and two bounded readers per scenario; no persisted personal state.",
+      "action_postconditions": "Assert owned registration, optionally read initial update, return or throw injected typed failure; await removal and terminal stream; assert peer remains registered until its own awaited cleanup.",
+      "synchronization": "Await repository calls and withTestCleanup; BoundedAsyncStreamReader joins its reader/timeout task-group children.",
+      "timeout_tolerance": "Default reader deadline bounds cancellation-cooperative AsyncStream next; at most one buffered update is allowed by bufferingNewest(1).",
+      "classification": "Deterministic host Swift Testing subscription lifecycle regression with in-memory SwiftData.",
+      "compiler_skip": "Four enum cases; default host lane, no opt-in or skips.",
+      "decision": "keep",
+      "reason": "Protect failure-exit retirement without replacing operation failures or stopping peer subscriptions.",
+      "rules": {
+        "1": "Assert registration, typed original throw, removal, repeat terminal read and unaffected peer.",
+        "2": "Registration precedes reads; condition waits use bounded native reader.",
+        "3": "N/A: no playing media or position clock.",
+        "4": "Both owners use awaited cleanup on every exit; reader children join before return. Internal production graph drainage is outside this assertion.",
+        "5": "Fresh repository, in-memory container and IDs; no personal state or shared preferences.",
+        "6": "Host subscription lifecycle only; no live server/device evidence claimed.",
+        "7": "No retries or relaxed waits; preserve all original semantic assertions.",
+        "8": "Helper forwards caller SourceLocation; timeout cause retains UUID, elapsed and limit.",
+        "9": "Retain clean focused repeats, owning suite and signed host gate separately."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372"
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupRemovesRootAfterSuccess",
+      "source": {
+        "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+        "line": 1753
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove normal fixture completion removes its actual filesystem root before returning.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh UUID filesystem root, DownloadStorage/layout and fixed account/item/download identifiers created by withFixture.",
+        "action_postconditions": "Observe root present inside the awaited operation; return its URL; require it absent after withFixture completes."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await withFixture and withTestCleanup; normal cleanup attempts removeRoot before returning. No readiness loop, clock tolerance or external service.",
+        "timeout_tolerance": "No numeric tolerance. The process-supervision case retains its existing phase budgets; other cases await operation boundaries directly."
+      },
+      "compiler_skip_conditions": "No compiler guard, opt-in or skip; default signed and unsigned host discovery.",
+      "rules": {
+        "1": "Observe root present inside the awaited operation; return its URL; require it absent after withFixture completes.",
+        "2": "Await withFixture and withTestCleanup; normal cleanup attempts removeRoot before returning. No readiness loop, clock tolerance or external service.",
+        "3": "N/A: no active AVPlayer, seek or playback-clock assertion. Child supervision budgets concern termination, not media position.",
+        "4": "Await withFixture and withTestCleanup; normal cleanup attempts removeRoot before returning. No readiness loop, clock tolerance or external service. Preserve helper ownership boundaries; no new async implementation or whole native task-graph claim is introduced by this audit.",
+        "5": "Fresh UUID filesystem root, DownloadStorage/layout and fixed account/item/download identifiers created by withFixture.",
+        "6": "Deterministic host-local filesystem/fixture integration; no real download, server or device.",
+        "7": "Original source is unchanged. No blind retry, timeout increase, assertion removal or warning suppression is used to repair this missing record.",
+        "8": "Swift Testing expectations and typed failure causes identify the original case. Cleanup failure matching includes caller SourceLocation; child errors retain bounded diagnostic output rather than reporting command exit alone.",
+        "9": "Retained unchanged-source signed host run 606/606,zero skips/errors/failures. Exact XML identities verified. Deletion-failure case has two explicit arguments/two known cleanup issues; no new execution is inferred from adding this audit row."
+      },
+      "decision": "keep",
+      "reason": "The concrete root-presence/absence pair proves cleanup at this normal-return boundary; it does not certify process-abort cleanup.",
+      "shared_helper_review": "Await withFixture and withTestCleanup; normal cleanup attempts removeRoot before returning. No readiness loop, clock tolerance or external service.",
+      "audit_entry_repair": {
+        "issue": 369,
+        "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+        "source_sha256": "bccd202e1a510922fe15d46a160c2ca9486e062a2adc13aad7420be57fac2f2e",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained exact unchanged host source from signed606 gate; see .build/i374-startup-signed-verification.json and log. XML aliases are not added."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupRemovesRootAfterOperationFailure",
+      "source": {
+        "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+        "line": 1763
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove a typed operation throw preserves its cause and removes the owned fixture root.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh withFixture root and a caller-retained optional URL; deterministic FixtureFailure.operation injected after allocation.",
+        "action_postconditions": "Require exactly FixtureFailure.operation through async expect; reject never-entered setup; require captured root absent after throw propagation."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await typed throwing operation and cleanup; root removal precedes rethrow. No timer, task admission guess or network.",
+        "timeout_tolerance": "No numeric tolerance. The process-supervision case retains its existing phase budgets; other cases await operation boundaries directly."
+      },
+      "compiler_skip_conditions": "No compiler guard, opt-in or skip; default signed and unsigned host discovery.",
+      "rules": {
+        "1": "Require exactly FixtureFailure.operation through async expect; reject never-entered setup; require captured root absent after throw propagation.",
+        "2": "Await typed throwing operation and cleanup; root removal precedes rethrow. No timer, task admission guess or network.",
+        "3": "N/A: no active AVPlayer, seek or playback-clock assertion. Child supervision budgets concern termination, not media position.",
+        "4": "Await typed throwing operation and cleanup; root removal precedes rethrow. No timer, task admission guess or network. Preserve helper ownership boundaries; no new async implementation or whole native task-graph claim is introduced by this audit.",
+        "5": "Fresh withFixture root and a caller-retained optional URL; deterministic FixtureFailure.operation injected after allocation.",
+        "6": "Deterministic host-local filesystem/fixture integration; no real download, server or device.",
+        "7": "Original source is unchanged. No blind retry, timeout increase, assertion removal or warning suppression is used to repair this missing record.",
+        "8": "Swift Testing expectations and typed failure causes identify the original case. Cleanup failure matching includes caller SourceLocation; child errors retain bounded diagnostic output rather than reporting command exit alone.",
+        "9": "Retained unchanged-source signed host run 606/606,zero skips/errors/failures. Exact XML identities verified. Deletion-failure case has two explicit arguments/two known cleanup issues; no new execution is inferred from adding this audit row."
+      },
+      "decision": "keep",
+      "reason": "Typed throw plus observed root deletion covers the failing-operation path without swallowing the original error.",
+      "shared_helper_review": "Await typed throwing operation and cleanup; root removal precedes rethrow. No timer, task admission guess or network.",
+      "audit_entry_repair": {
+        "issue": 369,
+        "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+        "source_sha256": "bccd202e1a510922fe15d46a160c2ca9486e062a2adc13aad7420be57fac2f2e",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained exact unchanged host source from signed606 gate; see .build/i374-startup-signed-verification.json and log. XML aliases are not added."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupReportsDeletionFailure",
+      "source": {
+        "path": "Tests/BleatCoreTests/DownloadStorageTests.swift",
+        "line": 1779
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove cleanup failure is reported at the original caller on both successful and throwing operations.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Two explicit Boolean arguments false/true; caller SourceLocation captured; owned root deliberately removed before the helper cleanup attempts a second removal.",
+        "action_postconditions": "withKnownIssue matches only the exact caller and FixtureCleanupFailure(NSCocoaErrorDomain,fileNoSuchFile); preserve FixtureFailure.operation when requested and require final root absent."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await each fixture operation/cleanup. Expected cleanup diagnostics are narrowly matched, mandatory known issues, not ignored outcomes or skips.",
+        "timeout_tolerance": "No numeric tolerance. The process-supervision case retains its existing phase budgets; other cases await operation boundaries directly."
+      },
+      "compiler_skip_conditions": "No compiler guard, opt-in or skip; default signed and unsigned host discovery. Parameter arguments false/true execute two cases; each deliberately reports the exact known cleanup issue, neither is skipped.",
+      "rules": {
+        "1": "withKnownIssue matches only the exact caller and FixtureCleanupFailure(NSCocoaErrorDomain,fileNoSuchFile); preserve FixtureFailure.operation when requested and require final root absent.",
+        "2": "Await each fixture operation/cleanup. Expected cleanup diagnostics are narrowly matched, mandatory known issues, not ignored outcomes or skips.",
+        "3": "N/A: no active AVPlayer, seek or playback-clock assertion. Child supervision budgets concern termination, not media position.",
+        "4": "Await each fixture operation/cleanup. Expected cleanup diagnostics are narrowly matched, mandatory known issues, not ignored outcomes or skips. Preserve helper ownership boundaries; no new async implementation or whole native task-graph claim is introduced by this audit.",
+        "5": "Two explicit Boolean arguments false/true; caller SourceLocation captured; owned root deliberately removed before the helper cleanup attempts a second removal.",
+        "6": "Deterministic host-local filesystem/fixture integration; no real download, server or device.",
+        "7": "Original source is unchanged. No blind retry, timeout increase, assertion removal or warning suppression is used to repair this missing record.",
+        "8": "Swift Testing expectations and typed failure causes identify the original case. Cleanup failure matching includes caller SourceLocation; child errors retain bounded diagnostic output rather than reporting command exit alone.",
+        "9": "Retained unchanged-source signed host run 606/606,zero skips/errors/failures. Exact XML identities verified. Deletion-failure case has two explicit arguments/two known cleanup issues; no new execution is inferred from adding this audit row."
+      },
+      "decision": "keep",
+      "reason": "Both argument cases require the intended cleanup issue while preserving the operation result/cause; unexpected issue types or locations cannot satisfy the allowance.",
+      "shared_helper_review": "Await each fixture operation/cleanup. Expected cleanup diagnostics are narrowly matched, mandatory known issues, not ignored outcomes or skips.",
+      "audit_entry_repair": {
+        "issue": 369,
+        "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+        "source_sha256": "bccd202e1a510922fe15d46a160c2ca9486e062a2adc13aad7420be57fac2f2e",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained exact unchanged host source from signed606 gate; see .build/i374-startup-signed-verification.json and log. XML aliases are not added."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportUnexpectedRouteThrowsAndCleansUp",
+      "source": {
+        "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
+        "line": 585
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove an unexpected OpenID fixture route reaches its caller and leaves cookies and handler cleared.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Serialized HTTPTransport suite; fresh ephemeral URLSession cookie storage, checked fixture URLs, URLProtocolStub handler and CookieFlowRecorder. No real identity provider.",
+        "action_postconditions": "Require initial 302 and two cookies; await the unexpected route; assert bridged NSError domain/code and structured fixturePath; then require zero cookies and no installed handler."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Native transport calls and withTestCleanup are awaited. clearSession deletes owned cookies before returning; defer clears the global stub handler on all operation exits. No extra settling sleep; native session/task-graph drainage is not asserted.",
+        "timeout_tolerance": "No numeric tolerance. The process-supervision case retains its existing phase budgets; other cases await operation boundaries directly."
+      },
+      "compiler_skip_conditions": "No compiler guard, opt-in or skip; default signed and unsigned host discovery.",
+      "rules": {
+        "1": "Require initial 302 and two cookies; await the unexpected route; assert bridged NSError domain/code and structured fixturePath; then require zero cookies and no installed handler.",
+        "2": "Native transport calls and withTestCleanup are awaited. clearSession deletes owned cookies before returning; defer clears the global stub handler on all operation exits. No extra settling sleep; native session/task-graph drainage is not asserted.",
+        "3": "N/A: no active AVPlayer, seek or playback-clock assertion. Child supervision budgets concern termination, not media position.",
+        "4": "Native transport calls and withTestCleanup are awaited. clearSession deletes owned cookies before returning; defer clears the global stub handler on all operation exits. No extra settling sleep; native session/task-graph drainage is not asserted. Preserve helper ownership boundaries; no new async implementation or whole native task-graph claim is introduced by this audit.",
+        "5": "Serialized HTTPTransport suite; fresh ephemeral URLSession cookie storage, checked fixture URLs, URLProtocolStub handler and CookieFlowRecorder. No real identity provider.",
+        "6": "Native URLSession plus scripted URLProtocol integration, serialized stub ownership; no live server.",
+        "7": "Original source is unchanged. No blind retry, timeout increase, assertion removal or warning suppression is used to repair this missing record.",
+        "8": "Swift Testing expectations and typed failure causes identify the original case. Cleanup failure matching includes caller SourceLocation; child errors retain bounded diagnostic output rather than reporting command exit alone.",
+        "9": "Retained unchanged-source signed host run 606/606,zero skips/errors/failures. Exact XML identities verified. Deletion-failure case has two explicit arguments/two known cleanup issues; no new execution is inferred from adding this audit row."
+      },
+      "decision": "keep",
+      "reason": "Typed bridge cause/path and direct cookie/handler postconditions establish this fixture cleanup contract, not every URLSession lifecycle guarantee.",
+      "shared_helper_review": "Native transport calls and withTestCleanup are awaited. clearSession deletes owned cookies before returning; defer clears the global stub handler on all operation exits. No extra settling sleep; native session/task-graph drainage is not asserted.",
+      "audit_entry_repair": {
+        "issue": 369,
+        "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+        "source_sha256": "4bc98da2a5cbf547948867ab473fc1a37b5de2984adc1da31d5bfc28b87cd74e",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained exact unchanged host source from signed606 gate; see .build/i374-startup-signed-verification.json and log. XML aliases are not added."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheHeartbeatChildCancellationReapsChild",
+      "source": {
+        "path": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift",
+        "line": 388
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove the externally supervised cancellation scenario finishes with exact child execution evidence.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh owned child report directory, pipes, readiness/termination observers and child executable; cancellation mode itself exercises pre-cancelled, startup and ready-child paths with hanging nested children.",
+        "action_postconditions": "Require no parent timeout, exit 0, exactly one named child test and the cancellation-cleanup-complete marker. Nested helper checks actual process exit/reap and output-reader completion before propagating cancellation."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "The outer cancellation-mode child has15 second readiness and25 second workload budgets; nested phases use explicit launch/ready notifications and rescue supervision. These are failure bounds, not a performance acceptance window.",
+        "timeout_tolerance": "No numeric tolerance. The process-supervision case retains its existing phase budgets; other cases await operation boundaries directly."
+      },
+      "compiler_skip_conditions": "No compiler guard, opt-in or skip; default signed and unsigned host discovery.",
+      "rules": {
+        "1": "Require no parent timeout, exit 0, exactly one named child test and the cancellation-cleanup-complete marker. Nested helper checks actual process exit/reap and output-reader completion before propagating cancellation.",
+        "2": "The outer cancellation-mode child has15 second readiness and25 second workload budgets; nested phases use explicit launch/ready notifications and rescue supervision. These are failure bounds, not a performance acceptance window.",
+        "3": "N/A: no active AVPlayer, seek or playback-clock assertion. Child supervision budgets concern termination, not media position.",
+        "4": "The outer cancellation-mode child has15 second readiness and25 second workload budgets; nested phases use explicit launch/ready notifications and rescue supervision. These are failure bounds, not a performance acceptance window. Preserve helper ownership boundaries; no new async implementation or whole native task-graph claim is introduced by this audit.",
+        "5": "Fresh owned child report directory, pipes, readiness/termination observers and child executable; cancellation mode itself exercises pre-cancelled, startup and ready-child paths with hanging nested children.",
+        "6": "Real local process supervision and intentionally hanging nested children; no physical-device or live-server claim.",
+        "7": "Original source is unchanged. No blind retry, timeout increase, assertion removal or warning suppression is used to repair this missing record.",
+        "8": "Swift Testing expectations and typed failure causes identify the original case. Cleanup failure matching includes caller SourceLocation; child errors retain bounded diagnostic output rather than reporting command exit alone.",
+        "9": "Retained unchanged-source signed host run 606/606,zero skips/errors/failures. Exact XML identities verified. Deletion-failure case has two explicit arguments/two known cleanup issues; no new execution is inferred from adding this audit row."
+      },
+      "decision": "keep",
+      "reason": "Exact child identity/result and observed cleanup distinguish cancellation from merely requesting a kill. This case is not a fresh10k cache benchmark or proof against arbitrary OS failure.",
+      "shared_helper_review": "The outer cancellation-mode child has15 second readiness and25 second workload budgets; nested phases use explicit launch/ready notifications and rescue supervision. These are failure bounds, not a performance acceptance window.",
+      "audit_entry_repair": {
+        "issue": 369,
+        "baseline": "dd3ef9a08adbfeba2cf36c1e111899e6a971e8dd",
+        "source_sha256": "f4feafdcff58eae499e22b7740940ff46fc0ae5723c1258ef5d8c69e8a30be9e",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained exact unchanged host source from signed606 gate; see .build/i374-startup-signed-verification.json and log. XML aliases are not added."
+      }
     }
   ],
   "issue_382": {
@@ -23894,5 +24240,30 @@
       "core_audit_after": 600
     },
     "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
+  },
+  "issue_372_cleanup_caller_diagnostics": {
+    "owner": "Bleat maintainers / @yaleman",
+    "helper": "Tests/BleatCoreTests/TestCleanup.swift::withTestCleanup",
+    "current_disposition": "Default SourceLocation is captured at helper invocation and forwarded when secondary cleanup failure is recorded. Original operation error is rethrown;success/operation-only/cleanup-only completion contracts unchanged.",
+    "original_failure": "Default-location native regression rejected helper-file attribution and missing expected known issue.",
+    "configuration_limits": "Swift Testing host test-helper diagnostics;no production/logging or device behavior claim.",
+    "baseline_counts_are_historical": {
+      "review_revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+      "declaration_count": 562,
+      "current_core_records": 603
+    }
+  },
+  "currentEntryCoverage": {
+    "baseline_review_count": 562,
+    "current_records": 607,
+    "scope": "Host inventory functions plus retained opt-in source cases; current name parity is validated separately and does not re-review old assessments.",
+    "newly_reviewed_missing_entries": [
+      "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupRemovesRootAfterSuccess",
+      "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupRemovesRootAfterOperationFailure",
+      "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupReportsDeletionFailure",
+      "Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportUnexpectedRouteThrowsAndCleansUp",
+      "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheHeartbeatChildCancellationReapsChild"
+    ],
+    "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369"
   }
 }
