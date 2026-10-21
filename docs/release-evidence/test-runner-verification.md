@@ -741,7 +741,20 @@ bodies and assertions. Release build-for-testing then passed; the five exact
 Debug fixture tests passed with no skips, failures or runtime warnings. This
 compile-only result is not a completed secret-leakage gate.
 
-The full repaired gate and final exact-head CI remain pending. Local receipts
-are retained in `.build/i362-release-scan-final-checks.json`,
+The full repaired gate at clean `cdd7a38` passed all seven scanner Python
+regressions and all nine exact native cases: online login/playback/download,
+initial token capture/forced refresh, refresh journey, rotated token capture,
+private capture removal, offline restoration, logout, session-Keychain removal
+and final private-capture absence. It then exited 1 at the archive stage, before
+the final surface scan. The exact first archive preflight independently
+reproduced the blocker: generated version `2026.10.21` differs from the checked-in
+`2026.10.14`. No version override, metadata bump, upload or deployment was made.
+Archive/full-scan acceptance requires an authorized release-version update;
+these nine passing cases do not certify secret nondisclosure across all surfaces.
+Independent checks again found no remaining owned Simulator, container, volume
+or private broker. The original baseline and later failed gate are both retained.
+
+Final exact-head CI is a separate gate. Local receipts are retained in
+`.build/i362-release-scan-fixed-verified.json`, `.build/i362-release-scan-final-checks.json`,
 `.build/i362-release-scan-debug-fixtures-verified.json` and the original
 `.build/i362-important-release-failed-baseline/` directory.

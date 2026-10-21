@@ -1041,5 +1041,8 @@ recorded at the tested revision; this is not whole-epic completion.
 
 The [scoped Release build evidence](release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362)
 records the two reproduced gate build failures, typed settings regression,
-fixture compiler-condition repair and exact focused outcomes. The full repaired
-secret scan and final CI remain pending; ordinary Simulator success is separate.
+fixture compiler-condition repair and exact focused outcomes. The repaired
+Release gate at `cdd7a38` passed seven Python and nine native cases, then stopped
+at the release-version preflight (`2026.10.21` versus checked-in `2026.10.14`).
+Archive and final surface-scan acceptance remain blocked on the authorized
+release metadata update. Ordinary Simulator success and exact-head CI are separate.
