@@ -382,6 +382,9 @@ discovery and execution stages. Discovery has a 1,200-second execution policy;
 execution has 3,600 seconds. Cleanup retains its existing three-second policy
 and bounded Drop fallback. Native descendants in the owned process group are
 retired; independently managed services are a separate boundary.
+These noninteractive batch commands use the shared owner's null stdin. Discovery
+already used null stdin; execution now receives EOF rather than inheriting
+interactive parent input.
 
 Discovery captures complete stdout up to a 64 MiB accepted-read ceiling and
 preserves inherited live compiler stderr. Compiler stderr is never buffered or
@@ -405,3 +408,38 @@ records. Actual focused, owning, representative SwiftPM, review and CI acceptanc
 remain separate gates; no fixture is fresh SwiftPM, app, signed-Keychain, live or
 device execution. The general Xcode runner and broader #369/#362 reconciliation
 remain open.
+
+Local final-source verification passed all seven exact new native function
+identities in three serial runs (21 executions), and 167 exact owning outcomes
+across 11 nonempty targets. There were zero failures, ignored or filtered tests
+in the owning gate; 16 empty CLI targets are compilation only. Strict Clippy,
+formatting, documentation and diff checks passed. Independent source review
+cleared `9809a3c`; final metadata review and exact-head CI remain separate.
+
+Fresh actual SwiftPM selections through the changed binary verified three
+`TelemetryLiveTestConfigurationTests` XCTest identities using authoritative
+native observer records, plus two controlled-clock `PrivateCloudSyncTests`
+identities repeated three times (six Swift Testing passes). Exact selections,
+individual outcomes and XML/observer artifacts reconcile with zero skips. The
+existing configured package cache at `f8237ee` was reused for these fresh
+executions; selected tests, helpers, observer, production sources and manifest
+were hash-equal to this checkout. No cache relocation, compiler/SDK override,
+server, actual CloudKit device or signed-Keychain result is claimed. This also
+supplies the previously unclear focused controlled-clock evidence under #373;
+its broader audit disposition remains separate.
+
+The native XCTest invocation emitted two upstream OpenTelemetry manifest
+warnings about deprecated watchOS4 (four matching diagnostic lines); the three
+clock logs had no warnings. The older unrelated Package.swift sysroot diagnostic
+remains retained and unresolved; its absence here does not establish its cause.
+
+The first native fixture run had six passes and one failure: an assertion
+expected an unboxed Failure from Error::source. The final assertion instead
+verifies the exact originating typed deadline cause and duration fields through
+the error chain, retaining direct stage and paired-error assertions. Its earlier
+failure is preserved, separate from the clean 21-execution sequence. An actual
+SwiftPM attempt also rejected unsupported `--skip-build` before discovery or
+execution (zero tests); the supported invocation above ran subsequently without
+changing the implementation. Neither attempt is counted as acceptance coverage.
+Artifacts are `.build/i371-swiftpm-verification.json`, its native selections and
+linked logs/manifests. No observed production hang or disclosure is claimed.

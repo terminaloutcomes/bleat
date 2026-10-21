@@ -7423,7 +7423,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7457,7 +7457,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7491,7 +7491,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7525,7 +7525,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7559,7 +7559,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7593,7 +7593,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
@@ -7627,7 +7627,7 @@
         "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
         "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
         "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
-        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+        "9": "Final source passed all seven exact native function identities in three serial runs (21 executions), then 167 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests. Sixteen empty CLI targets are compilation only. Strict Clippy and static gates passed. Actual changed-runner selections verified three XCTest cases and two unchanged controlled-clock Swift Testing identities repeated three times (six passes), with native observer/selection/XML artifacts and no skips. Independent final metadata review and exact-head CI remain separate."
       },
       "issue371_swiftpm_commands": {
         "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
