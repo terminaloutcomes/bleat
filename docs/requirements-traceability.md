@@ -906,3 +906,12 @@ into diagnostics; status phases preserve live inherited console output. Result
 verification runs even after execution failure and both typed causes remain
 available. [Scope, native regressions and separate acceptance gates](release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371)
 retain remaining SwiftPM/general-Xcode ownership and broader #362 acceptance.
+
+### SwiftPM native command ownership (#371)
+
+SwiftPM discovery and execution use distinct finite typed native stages and the
+shared invocation-owned cleanup boundary. Discovery consumes complete stdout
+while retaining live compiler stderr; observer environment, selection and report
+contracts remain explicit. Failed execution still audits artifacts and preserves
+both typed causes. [Scoped source, regression and acceptance evidence](release-evidence/test-runner-verification.md#swiftpm-command-bounds-371)
+keeps actual execution and broader #362 acceptance separate.

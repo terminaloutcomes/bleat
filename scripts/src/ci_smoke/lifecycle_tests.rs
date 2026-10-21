@@ -500,3 +500,6 @@ mod report_tests;
 
 #[path = "smoke_command_tests.rs"]
 mod smoke_command_tests;
+
+#[path = "swiftpm_command_tests.rs"]
+mod swiftpm_command_tests;

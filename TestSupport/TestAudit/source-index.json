@@ -9757,6 +9757,48 @@
       "name": "smoke_result_verification_runs_after_every_execution_outcome",
       "line": 176,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_policies_and_discovery_arguments_keep_runner_and_package_selection",
+      "line": 40,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_deadlines_reap_each_admitted_native_command",
+      "line": 73,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_native_failure_causes_and_captured_payload_remain_separate",
+      "line": 117,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_discovery_transport_keeps_complete_output_and_typed_encoding",
+      "line": 163,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_stdout_only_capture_rejects_oversize_without_partial_acceptance",
+      "line": 224,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_execution_preserves_child_only_observation_environment",
+      "line": 256,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "name": "swiftpm_execution_always_audits_reports_and_keeps_both_typed_causes",
+      "line": 293,
+      "language": "rust"
     }
   ]
 }

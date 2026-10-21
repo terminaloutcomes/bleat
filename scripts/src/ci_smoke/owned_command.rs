@@ -25,6 +25,9 @@ pub enum Stage {
     TestEnumeration,
     SimulatorInstall,
     TestExecution,
+    SwiftPMXCTestDiscovery,
+    SwiftTestingDiscovery,
+    SwiftPMExecution,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Cause {
@@ -262,6 +265,13 @@ fn capture(file: &mut File, limit: u64) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
+#[derive(Clone, Copy)]
+enum OutputMode {
+    Both,
+    Stdout,
+    Inherit,
+}
+
 /// No pipe is written after spawn. Input/capture preparation finishes first.
 /// Error formatting exposes byte counts, never captured JSON or stderr payloads.
 pub(super) struct Running {
@@ -271,7 +281,7 @@ pub(super) struct Running {
     deadline: Instant,
     budget: Duration,
     cleanup_budget: Duration,
-    captures: Option<(File, File)>,
+    captures: Option<(File, Option<File>)>,
     capture_limit: u64,
 }
 impl Running {
@@ -289,7 +299,11 @@ impl Running {
             budget,
             cleanup_budget,
             input,
-            capture_output,
+            if capture_output {
+                OutputMode::Both
+            } else {
+                OutputMode::Inherit
+            },
             MAX_CAPTURE,
         )
     }
@@ -300,7 +314,7 @@ impl Running {
         budget: Duration,
         cleanup_budget: Duration,
         input: Option<&[u8]>,
-        capture_output: bool,
+        mode: OutputMode,
         capture_limit: u64,
     ) -> Result<Self, Box<Failure>> {
         if capture_limit == 0 || capture_limit.checked_add(1).is_none() {
@@ -325,20 +339,29 @@ impl Running {
         } else {
             Stdio::null()
         };
-        let captures = if capture_output {
+        let captures = if !matches!(mode, OutputMode::Inherit) {
             let out = tempfile::tempfile()
                 .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?;
-            let err = tempfile::tempfile()
-                .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?;
-            command
-                .stdout(
-                    out.try_clone()
+            let err = if matches!(mode, OutputMode::Both) {
+                Some(
+                    tempfile::tempfile()
                         .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?,
                 )
-                .stderr(
+            } else {
+                None
+            };
+            command.stdout(
+                out.try_clone()
+                    .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?,
+            );
+            if let Some(err) = &err {
+                command.stderr(
                     err.try_clone()
                         .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?,
                 );
+            } else {
+                command.stderr(Stdio::inherit());
+            }
             Some((out, err))
         } else {
             command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
@@ -405,9 +428,11 @@ impl Running {
                 Ok(bytes) => captured.stdout = bytes,
                 Err(e) => capture_errors.push(("stdout", e)),
             }
-            match capture(err, self.capture_limit) {
-                Ok(bytes) => captured.stderr = bytes,
-                Err(e) => capture_errors.push(("stderr", e)),
+            if let Some(err) = err {
+                match capture(err, self.capture_limit) {
+                    Ok(bytes) => captured.stderr = bytes,
+                    Err(e) => capture_errors.push(("stderr", e)),
+                }
             }
         }
         if !capture_errors.is_empty() && cause.is_none() {
@@ -462,13 +487,70 @@ pub(crate) fn run_with_capture_limit(
     input: Option<&[u8]>,
     capture_limit: u64,
 ) -> Result<Output, Box<Failure>> {
+    run_with_mode(
+        command,
+        stage,
+        budget,
+        cleanup,
+        input,
+        OutputMode::Both,
+        capture_limit,
+    )
+}
+
+/// Preserve streaming console output while retaining native lifecycle ownership.
+pub(crate) fn run_inherited(
+    command: &mut Command,
+    stage: Stage,
+    budget: Duration,
+    cleanup: Duration,
+) -> Result<Output, Box<Failure>> {
+    run_with_mode(
+        command,
+        stage,
+        budget,
+        cleanup,
+        None,
+        OutputMode::Inherit,
+        MAX_CAPTURE,
+    )
+}
+
+/// SwiftPM discovery consumes stdout identities and preserves live compiler stderr.
+pub(crate) fn run_stdout(
+    command: &mut Command,
+    stage: Stage,
+    budget: Duration,
+    cleanup: Duration,
+    capture_limit: u64,
+) -> Result<Output, Box<Failure>> {
+    run_with_mode(
+        command,
+        stage,
+        budget,
+        cleanup,
+        None,
+        OutputMode::Stdout,
+        capture_limit,
+    )
+}
+
+fn run_with_mode(
+    command: &mut Command,
+    stage: Stage,
+    budget: Duration,
+    cleanup: Duration,
+    input: Option<&[u8]>,
+    mode: OutputMode,
+    capture_limit: u64,
+) -> Result<Output, Box<Failure>> {
     let mut running = Running::start_with_capture_limit(
         command,
         stage,
         budget,
         cleanup,
         input,
-        true,
+        mode,
         capture_limit,
     )?;
     loop {

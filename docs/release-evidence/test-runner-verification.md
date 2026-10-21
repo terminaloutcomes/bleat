@@ -372,3 +372,36 @@ captured output and does not count that parser failure as test coverage. An
 unavailable Python TOML import also stopped before setup execution; the exact
 checked-in setup script subsequently ran successfully. No observed production
 hang or payload disclosure is claimed.
+
+## SwiftPM command bounds (#371)
+
+At base `6ec96a59e6bad297f2860f45c83bee3ac2543765`, SwiftPM discovery and
+execution still used unbounded native calls. They now use the same
+invocation-owned process boundary with distinct XCTest discovery, Swift Testing
+discovery and execution stages. Discovery has a 1,200-second execution policy;
+execution has 3,600 seconds. Cleanup retains its existing three-second policy
+and bounded Drop fallback. Native descendants in the owned process group are
+retired; independently managed services are a separate boundary.
+
+Discovery captures complete stdout up to a 64 MiB accepted-read ceiling and
+preserves inherited live compiler stderr. Compiler stderr is never buffered or
+replayed to the parent's console. Existing capture-both and inherited-output
+callers keep their policies. Anonymous files may grow until the deadline; the
+ceiling is not a disk quota. Encoding failures retain the runner and original
+UTF8 error without embedding captured bytes in diagnostics.
+
+Selection, observer environment, report preparation and identity interpretation
+remain unchanged. Every execution outcome now audits existing result artifacts,
+including spawn/deadline failures. Native and report failures remain separate
+typed causes rather than a status/audit string. The exact accepted verification
+summary is returned only after native success and a successful audit.
+
+Seven controlled native/pure regressions cover arguments and budgets, actual
+admitted child deadlines/reaping, missing tools versus native exits, selective
+stdout transport/encoding, capture rejection, child-only observer environment,
+and the four native/audit outcome combinations. Seven individual nine-rule audit
+records append while preserving all 416 prior other records and 1,622 index
+records. Actual focused, owning, representative SwiftPM, review and CI acceptance
+remain separate gates; no fixture is fresh SwiftPM, app, signed-Keychain, live or
+device execution. The general Xcode runner and broader #369/#362 reconciliation
+remain open.

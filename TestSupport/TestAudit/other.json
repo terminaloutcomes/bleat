@@ -7397,6 +7397,244 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
         "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
       }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_policies_and_discovery_arguments_keep_runner_and_package_selection",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 40,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_policies_and_discovery_arguments_keep_runner_and_package_selection",
+      "purpose": "Preserve exact XCTest and Swift Testing discovery arguments and separate finite phase policies.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Assert three distinct stages and 1,200/3,600-second budgets. Build both runner flags with and without a package path containing spaces; compare structural OsStr argument vectors."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "Assert three distinct stages and 1,200/3,600-second budgets. Build both runner flags with and without a package path containing spaces; compare structural OsStr argument vectors.",
+      "synchronization_timeout": "Pure synchronous policy and argument table. No process, asynchronous worker, playback assertion or cleanup applies.",
+      "rules": {
+        "1": "Assert three distinct stages and 1,200/3,600-second budgets. Build both runner flags with and without a package path containing spaces; compare structural OsStr argument vectors.",
+        "2": "Pure synchronous policy and argument table. No process, asynchronous worker, playback assertion or cleanup applies.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Pure synchronous policy and argument table. No process, asynchronous worker, playback assertion or cleanup applies.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_deadlines_reap_each_admitted_native_command",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 73,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_deadlines_reap_each_admitted_native_command",
+      "purpose": "Bound and retire both discovery variants and execution after positive child admission.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Read the owned fixture PID before observing return. Independently supervise the two-second native and one-second cleanup budgets within five seconds, release and join before assertions, then require exact stage, deadline elapsed >= budget, attempted signal, child status, group disappearance and absent PID."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "Read the owned fixture PID before observing return. Independently supervise the two-second native and one-second cleanup budgets within five seconds, release and join before assertions, then require exact stage, deadline elapsed >= budget, attempted signal, child status, group disappearance and absent PID.",
+      "synchronization_timeout": "Bounded PID/release condition polling and channels. FixtureWorker releases and joins on assertion unwind; Fixture drains only recorded owned children. No shared Simulator or service is reset.",
+      "rules": {
+        "1": "Read the owned fixture PID before observing return. Independently supervise the two-second native and one-second cleanup budgets within five seconds, release and join before assertions, then require exact stage, deadline elapsed >= budget, attempted signal, child status, group disappearance and absent PID.",
+        "2": "Bounded PID/release condition polling and channels. FixtureWorker releases and joins on assertion unwind; Fixture drains only recorded owned children. No shared Simulator or service is reset.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Bounded PID/release condition polling and channels. FixtureWorker releases and joins on assertion unwind; Fixture drains only recorded owned children. No shared Simulator or service is reset.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_native_failure_causes_and_captured_payload_remain_separate",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 117,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_native_failure_causes_and_captured_payload_remain_separate",
+      "purpose": "Retain each native stage and exit status, distinguish missing tools, and omit captured stdout from diagnostics.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "All three phases require typed Exit(23) and completed cleanup. Both discovery variants retain exact synthetic stdout while Display and Debug omit it. A missing private executable must produce Spawn(NotFound), the same stage and no cleanup handle."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "All three phases require typed Exit(23) and completed cleanup. Both discovery variants retain exact synthetic stdout while Display and Debug omit it. A missing private executable must produce Spawn(NotFound), the same stage and no cleanup handle.",
+      "synchronization_timeout": "Finite native shell or missing executable, with two-second execution and one-second cleanup budgets. Environment is child-only. Execution emits no marker because its console remains inherited.",
+      "rules": {
+        "1": "All three phases require typed Exit(23) and completed cleanup. Both discovery variants retain exact synthetic stdout while Display and Debug omit it. A missing private executable must produce Spawn(NotFound), the same stage and no cleanup handle.",
+        "2": "Finite native shell or missing executable, with two-second execution and one-second cleanup budgets. Environment is child-only. Execution emits no marker because its console remains inherited.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Finite native shell or missing executable, with two-second execution and one-second cleanup budgets. Environment is child-only. Execution emits no marker because its console remains inherited.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_discovery_transport_keeps_complete_output_and_typed_encoding",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 163,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_discovery_transport_keeps_complete_output_and_typed_encoding",
+      "purpose": "Preserve complete stdout beyond 1 MiB, live compiler stderr and a distinct encoding failure.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For both runners, native cat returns 2 MiB of whitespace plus one identity unchanged; the stderr control is inherited rather than buffered or replayed. A second output containing a synthetic marker and 0xff yields DiscoveryEncoding with exact offsets and original Utf8Error source. Error formatting omits the marker."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "For both runners, native cat returns 2 MiB of whitespace plus one identity unchanged; the stderr control is inherited rather than buffered or replayed. A second output containing a synthetic marker and 0xff yields DiscoveryEncoding with exact offsets and original Utf8Error source. Error formatting omits the marker.",
+      "synchronization_timeout": "Private finite files and owned processes use two-second execution and one-second cleanup. Exact bytes deliberately test transport; identity semantics are parsed separately. This does not execute the actual Swift compiler or demonstrate a production disclosure.",
+      "rules": {
+        "1": "For both runners, native cat returns 2 MiB of whitespace plus one identity unchanged; the stderr control is inherited rather than buffered or replayed. A second output containing a synthetic marker and 0xff yields DiscoveryEncoding with exact offsets and original Utf8Error source. Error formatting omits the marker.",
+        "2": "Private finite files and owned processes use two-second execution and one-second cleanup. Exact bytes deliberately test transport; identity semantics are parsed separately. This does not execute the actual Swift compiler or demonstrate a production disclosure.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Private finite files and owned processes use two-second execution and one-second cleanup. Exact bytes deliberately test transport; identity semantics are parsed separately. This does not execute the actual Swift compiler or demonstrate a production disclosure.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_stdout_only_capture_rejects_oversize_without_partial_acceptance",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 224,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_stdout_only_capture_rejects_oversize_without_partial_acceptance",
+      "purpose": "Reject oversized selectively captured stdout instead of accepting a truncated identity list.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For both discovery stages, send 65 synthetic bytes through a 64-byte injected read ceiling. Require Capture, stdout FileTooLarge, empty accepted output and completed group cleanup."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "For both discovery stages, send 65 synthetic bytes through a 64-byte injected read ceiling. Require Capture, stdout FileTooLarge, empty accepted output and completed group cleanup.",
+      "synchronization_timeout": "Finite cat output with two-second execution and one-second cleanup. Production accepts up to 64 MiB of stdout. Capture files may grow until the deadline; this is not a disk quota.",
+      "rules": {
+        "1": "For both discovery stages, send 65 synthetic bytes through a 64-byte injected read ceiling. Require Capture, stdout FileTooLarge, empty accepted output and completed group cleanup.",
+        "2": "Finite cat output with two-second execution and one-second cleanup. Production accepts up to 64 MiB of stdout. Capture files may grow until the deadline; this is not a disk quota.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Finite cat output with two-second execution and one-second cleanup. Production accepts up to 64 MiB of stdout. Capture files may grow until the deadline; this is not a disk quota.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_execution_preserves_child_only_observation_environment",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 256,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_execution_preserves_child_only_observation_environment",
+      "purpose": "Preserve explicit observer environment and its removal without changing the parent environment.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "A native execution child writes a configured marker to the private path containing spaces supplied by BLEAT_XCTEST_OBSERVATION_PATH. Assert content, native success and empty captures. Another command sets then removes the variable and requires it absent in the child."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "A native execution child writes a configured marker to the private path containing spaces supplied by BLEAT_XCTEST_OBSERVATION_PATH. Assert content, native success and empty captures. Another command sets then removes the variable and requires it absent in the child.",
+      "synchronization_timeout": "Finite private native commands use two-second execution and one-second cleanup. Command::env and env_remove affect only the child. No actual XCTest observer or personal configuration is used.",
+      "rules": {
+        "1": "A native execution child writes a configured marker to the private path containing spaces supplied by BLEAT_XCTEST_OBSERVATION_PATH. Assert content, native success and empty captures. Another command sets then removes the variable and requires it absent in the child.",
+        "2": "Finite private native commands use two-second execution and one-second cleanup. Command::env and env_remove affect only the child. No actual XCTest observer or personal configuration is used.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Finite private native commands use two-second execution and one-second cleanup. Command::env and env_remove affect only the child. No actual XCTest observer or personal configuration is used.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
+    },
+    {
+      "id": "scripts::swiftpm_commands::swiftpm_execution_always_audits_reports_and_keeps_both_typed_causes",
+      "path": "scripts/src/ci_smoke/swiftpm_command_tests.rs",
+      "line": 293,
+      "native_identity": "ci_smoke::lifecycle_tests::swiftpm_command_tests::swiftpm_execution_always_audits_reports_and_keeps_both_typed_causes",
+      "purpose": "Audit artifacts for every execution outcome and preserve native and report failures independently.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Exercise all four native/audit combinations. Assert the audit runs every time; accept only dual success with the exact summary. Preserve the original verification failure after native success. After native failure, retain the exact SwiftPMExecution deadline, optional typed EmptySelection audit cause and original Error::source."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix macOS/Linux. No skip, opt-in, server, signing, Swift or Xcode installation is required for these controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and per-command synthetic inputs. Reuse the existing FixtureWorker guard; pure policy and control-flow cases allocate no child.",
+      "action_postconditions": "Exercise all four native/audit combinations. Assert the audit runs every time; accept only dual success with the exact summary. Preserve the original verification failure after native success. After native failure, retain the exact SwiftPMExecution deadline, optional typed EmptySelection audit cause and original Error::source.",
+      "synchronization_timeout": "Synchronous typed output/failure and injected audit closure allocate no child or worker. This tests acceptance control flow, not report schema or fresh SwiftPM execution.",
+      "rules": {
+        "1": "Exercise all four native/audit combinations. Assert the audit runs every time; accept only dual success with the exact summary. Preserve the original verification failure after native success. After native failure, retain the exact SwiftPMExecution deadline, optional typed EmptySelection audit cause and original Error::source.",
+        "2": "Synchronous typed output/failure and injected audit closure allocate no child or worker. This tests acceptance control flow, not report schema or fresh SwiftPM execution.",
+        "3": "No playback or media-position assertion. Execution and cleanup budgets bound failure, rather than define a performance tolerance.",
+        "4": "Synchronous typed output/failure and injected audit closure allocate no child or worker. This tests acceptance control flow, not report schema or fresh SwiftPM execution.",
+        "5": "Private inputs and owned native groups only. No process-global environment/output mutation, personal credentials, shared service reset or unrelated worktree changes.",
+        "6": "Controlled native Unix process or pure logic as described. Fresh actual SwiftPM selection and native Apple CI remain separate acceptance gates.",
+        "7": "Retain unsuccessful and zero-test attempts separately. Do not retry away failures, drop assertions or infer observed production hangs from controlled fixtures.",
+        "8": "Distinct typed stage, cause, encoding offsets and paired report audit remain inspectable. Captured payloads format as byte counts. Discovery compiler stderr and execution console output stay inherited.",
+        "9": "Exact focused and owning outcomes, representative SwiftPM execution, independent review and CI must be recorded separately. Source review alone does not establish acceptance."
+      },
+      "issue371_swiftpm_commands": {
+        "base_revision": "6ec96a59e6bad297f2860f45c83bee3ac2543765",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
+        "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
