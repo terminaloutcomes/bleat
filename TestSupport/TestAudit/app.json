@@ -11162,6 +11162,28 @@
           "outcome": "keep",
           "reason": "Behavior is asserted through exact typed state and owned fixtures."
         }
+      },
+      "primaryFallbackCompletionReview": {
+        "date": "2026-10-21",
+        "baseline": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "status": "source_fixed_execution_recorded",
+        "scope": "Only the recorded primary-fallback test completion race and its failure-safe fixture cleanup; historical assessments remain preserved.",
+        "observedFailure": "Validate Bleat run 39562779417 at 1f7ee5b failed only this pending-empty assertion among 626 outcomes. Its test body matches the baseline.",
+        "orderingWitness": "A private checkpoint experiment retained the old task-count predicate and all original transfer assertions. Exactly one intentional pending-empty assertion failed in 0.94 seconds while two registered replacements were visible and the original callback-completion sequence was unchanged. All checkpoint instrumentation was removed.",
+        "synchronization": "One unchanged two-second deadline now covers both at least two registered replacement requests and empty pending recovery. Exact count, primary URL, Range, If-Range and descriptor/index assertions remain; the aggregate callback sequence is diagnostic only.",
+        "cleanup": "Synthetic session invalidation is deferred; awaited model removal runs before checked storage deletion through reverse-ordered XCTest teardown. This is not a claim that all framework callbacks joined.",
+        "ruleAssessments": {
+          "1": "Exact two primary requests, ranges, validator, empty pending recovery and descriptors [0,1] retained.",
+          "2": "The bounded predicate now observes the recovery state needed by the following assertions, not registration alone.",
+          "3": "Not applicable: no advancing player or position assertion.",
+          "4": "Cleanup registered before callbacks and waits; session invalidation and awaited model cleanup cover thrown waits and assertion exits.",
+          "5": "Existing unique storage root, background session identity, account and scripted requests retained; no preference mutation.",
+          "6": "App-hosted Simulator delegate test; synthetic service and TEST-NET requests, no live Audiobookshelf or physical-device claim.",
+          "7": "Original CI failure and private witness retained separately; no retry-to-green, assertion removal, production change or budget increase.",
+          "8": "Caller assertions include elapsed time, two-second budget, request count, pending IDs, callback sequence and record states.",
+          "9": "Final source: one focused pass, ten unconditional focused repetitions and all 627 distinct owning BleatAppTests identities passed; exact outcomes verified, zero failures/skips/expected failures/runtime warnings."
+        },
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#primary-fallback-recovery-completion-374"
       }
     },
     {
