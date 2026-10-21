@@ -886,3 +886,13 @@ Strict checks pass. The changed reader accepts 626 outcomes from a retained real
 CI bundle with discovery agreement; this replay is separate from fresh app
 execution. Failed and superseded attempts remain documented. Independent
 review and exact-head CI are separate requirements.
+
+### Existing legacy-summary audit coverage (#369)
+
+Five already implemented inline legacy-summary tests receive substantive
+individual decisions and source-index locations while preserving all previous
+records. Their code and immutable fixture match the retained 154-outcome owning
+source, including all five exact identities. No new runtime test or execution is
+claimed. See [individual scope and revision-bound evidence](release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369).
+Broader audit, native Xcode/configuration/device evidence and integration remain
+open; independent review and exact-head CI are separate requirements.

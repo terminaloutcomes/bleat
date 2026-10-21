@@ -9691,6 +9691,36 @@
       "name": "report_command_spawn_and_invalid_limit_keep_exact_typed_causes",
       "line": 209,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "missing_modern_warning_field_uses_real_legacy_empty_array_shape",
+      "line": 967,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "legacy_warning_and_error_summaries_fail_closed",
+      "line": 975,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "legacy_record_requires_nonempty_actions_and_action_issues",
+      "line": 996,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "non_object_summary_is_rejected_before_legacy_fallback",
+      "line": 1019,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/test_results.rs",
+      "name": "null_modern_warning_field_does_not_use_legacy_fallback",
+      "line": 1031,
+      "language": "rust"
     }
   ]
 }

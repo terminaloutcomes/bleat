@@ -7013,6 +7013,186 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
         "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
       }
+    },
+    {
+      "id": "scripts::legacy_summary_audit::missing_modern_warning_field_uses_real_legacy_empty_array_shape",
+      "path": "scripts/src/test_results.rs",
+      "line": 967,
+      "native_identity": "test_results::tests::missing_modern_warning_field_uses_real_legacy_empty_array_shape",
+      "purpose": "Accept the retained typed empty-issue legacy shape only through explicit fallback when modern runtimeWarnings is absent.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Create a fresh two-pass summary without runtimeWarnings and decode the immutable legacy fixture. Assert fallback validation succeeds and direct modern-summary validation rejects the missing field. The test does not assert returned counts; separate verifier tests retain count accounting."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Existing default scripts library unit test under cfg(test); no platform guard, opt-in, skipped/ignored attribute or parameterized native declaration. Internal finite tables remain explicit in the assessment.",
+      "setup_dependencies": "The retained fixture is compiled with include_str; its Array wrapper/type shape is reviewed together with validate_summary_with_legacy_fallback and validate_legacy_issue_summaries.",
+      "action_postconditions": "Create a fresh two-pass summary without runtimeWarnings and decode the immutable legacy fixture. Assert fallback validation succeeds and direct modern-summary validation rejects the missing field. The test does not assert returned counts; separate verifier tests retain count accounting.",
+      "synchronization_timeout": "The legacy loader is a finite inline closure returning the decoded fixture. Two direct success/error oracles; no native tool, filesystem mutation or asynchronous work.",
+      "rules": {
+        "1": "Create a fresh two-pass summary without runtimeWarnings and decode the immutable legacy fixture. Assert fallback validation succeeds and direct modern-summary validation rejects the missing field. The test does not assert returned counts; separate verifier tests retain count accounting.",
+        "2": "The legacy loader is a finite inline closure returning the decoded fixture. Two direct success/error oracles; no native tool, filesystem mutation or asynchronous work.",
+        "3": "Not applicable: no playback, media position, monotonic clock or timing tolerance.",
+        "4": "Finite pure validation owns no background work, native command, callback, continuation or persistent resource; no async-to-sync adapter or cleanup omission is introduced.",
+        "5": "Fresh serde_json::Value data per method/table iteration and immutable compiled fixture bytes. No account, credentials, server, network, personal files, environment mutation or shared output capture.",
+        "6": "Deterministic schema/legacy compatibility assertion; no actual Xcode 26.6 execution or new platform/live/device evidence claimed.",
+        "7": "Runtime assertions, loader behavior, fixture, code and dependencies are byte-identical to base. Metadata adds no test, retry, timeout, weakened assertion or new coverage. Earlier unsuccessful/superseded executions remain in the retained source evidence.",
+        "8": "Existing typed Result/VerifyError oracles are described exactly; generic is_ok/is_err and wildcard variants are not promoted to stronger reason/count assertions. Test-only loader rejection signals remain intact.",
+        "9": "Retained final-source evidence at 8e49600: all five exact identities passed inside the 154-outcome owning package gate, zero failures/ignored/filtered. Source and fixture hashes match this metadata-only branch. No new runtime execution or focused repetitions of these five are claimed; the report-reader 21 focused executions cover different functions."
+      },
+      "issue369_legacy_summary_entries": {
+        "base_revision": "8e49600401f93dcb0379f1da86a353cf9bbe222a",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369",
+        "source_sha256": "c1422c3ff4e452bd9ad437d6b95750a0bcf67efa308d82f1eed6f5fe568b06cb",
+        "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
+        "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
+      }
+    },
+    {
+      "id": "scripts::legacy_summary_audit::legacy_warning_and_error_summaries_fail_closed",
+      "path": "scripts/src/test_results.rs",
+      "line": 975,
+      "native_identity": "test_results::tests::legacy_warning_and_error_summaries_fail_closed",
+      "purpose": "Reject every relevant nonempty legacy warning/error issue collection.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Clone the retained fixture for each of five fields: warningSummaries,testWarningSummaries,analyzerWarningSummaries,errorSummaries,testFailureSummaries. Insert one typed issue entry and require VerifyError::FailedOutcome for each; do not claim exact diagnostic text is asserted."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Existing default scripts library unit test under cfg(test); no platform guard, opt-in, skipped/ignored attribute or parameterized native declaration. Internal finite tables remain explicit in the assessment.",
+      "setup_dependencies": "legacy_with_issue clones/decode the immutable fixture,sets the chosen action-result issue collection to a typed Array with one entry,and does not mutate shared state.",
+      "action_postconditions": "Clone the retained fixture for each of five fields: warningSummaries,testWarningSummaries,analyzerWarningSummaries,errorSummaries,testFailureSummaries. Insert one typed issue entry and require VerifyError::FailedOutcome for each; do not claim exact diagnostic text is asserted.",
+      "synchronization_timeout": "Five explicit field/type pairs form a finite table. Each iteration constructs fresh Values; no timer, scheduler assumption or fixture release gate.",
+      "rules": {
+        "1": "Clone the retained fixture for each of five fields: warningSummaries,testWarningSummaries,analyzerWarningSummaries,errorSummaries,testFailureSummaries. Insert one typed issue entry and require VerifyError::FailedOutcome for each; do not claim exact diagnostic text is asserted.",
+        "2": "Five explicit field/type pairs form a finite table. Each iteration constructs fresh Values; no timer, scheduler assumption or fixture release gate.",
+        "3": "Not applicable: no playback, media position, monotonic clock or timing tolerance.",
+        "4": "Finite pure validation owns no background work, native command, callback, continuation or persistent resource; no async-to-sync adapter or cleanup omission is introduced.",
+        "5": "Fresh serde_json::Value data per method/table iteration and immutable compiled fixture bytes. No account, credentials, server, network, personal files, environment mutation or shared output capture.",
+        "6": "Deterministic schema/legacy compatibility assertion; no actual Xcode 26.6 execution or new platform/live/device evidence claimed.",
+        "7": "Runtime assertions, loader behavior, fixture, code and dependencies are byte-identical to base. Metadata adds no test, retry, timeout, weakened assertion or new coverage. Earlier unsuccessful/superseded executions remain in the retained source evidence.",
+        "8": "Existing typed Result/VerifyError oracles are described exactly; generic is_ok/is_err and wildcard variants are not promoted to stronger reason/count assertions. Test-only loader rejection signals remain intact.",
+        "9": "Retained final-source evidence at 8e49600: all five exact identities passed inside the 154-outcome owning package gate, zero failures/ignored/filtered. Source and fixture hashes match this metadata-only branch. No new runtime execution or focused repetitions of these five are claimed; the report-reader 21 focused executions cover different functions."
+      },
+      "issue369_legacy_summary_entries": {
+        "base_revision": "8e49600401f93dcb0379f1da86a353cf9bbe222a",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369",
+        "source_sha256": "c1422c3ff4e452bd9ad437d6b95750a0bcf67efa308d82f1eed6f5fe568b06cb",
+        "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
+        "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
+      }
+    },
+    {
+      "id": "scripts::legacy_summary_audit::legacy_record_requires_nonempty_actions_and_action_issues",
+      "path": "scripts/src/test_results.rs",
+      "line": 996,
+      "native_identity": "test_results::tests::legacy_record_requires_nonempty_actions_and_action_issues",
+      "purpose": "Fail closed when legacy action evidence lacks required action issues or has no actions.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Use separate fresh fixture Values for removing actionResult.issues and replacing actions._values with an empty array. Both must return InvalidResult; the assertions match the typed variant rather than a specific reason string."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Existing default scripts library unit test under cfg(test); no platform guard, opt-in, skipped/ignored attribute or parameterized native declaration. Internal finite tables remain explicit in the assessment.",
+      "setup_dependencies": "Review fixture structure and validate_legacy_issue_summaries nonempty-action/per-action-issues requirements. The original fixture and helper functions remain unchanged.",
+      "action_postconditions": "Use separate fresh fixture Values for removing actionResult.issues and replacing actions._values with an empty array. Both must return InvalidResult; the assertions match the typed variant rather than a specific reason string.",
+      "synchronization_timeout": "Two finite structural mutations and synchronous pure validation; no subprocess/native Xcode invocation.",
+      "rules": {
+        "1": "Use separate fresh fixture Values for removing actionResult.issues and replacing actions._values with an empty array. Both must return InvalidResult; the assertions match the typed variant rather than a specific reason string.",
+        "2": "Two finite structural mutations and synchronous pure validation; no subprocess/native Xcode invocation.",
+        "3": "Not applicable: no playback, media position, monotonic clock or timing tolerance.",
+        "4": "Finite pure validation owns no background work, native command, callback, continuation or persistent resource; no async-to-sync adapter or cleanup omission is introduced.",
+        "5": "Fresh serde_json::Value data per method/table iteration and immutable compiled fixture bytes. No account, credentials, server, network, personal files, environment mutation or shared output capture.",
+        "6": "Deterministic schema/legacy compatibility assertion; no actual Xcode 26.6 execution or new platform/live/device evidence claimed.",
+        "7": "Runtime assertions, loader behavior, fixture, code and dependencies are byte-identical to base. Metadata adds no test, retry, timeout, weakened assertion or new coverage. Earlier unsuccessful/superseded executions remain in the retained source evidence.",
+        "8": "Existing typed Result/VerifyError oracles are described exactly; generic is_ok/is_err and wildcard variants are not promoted to stronger reason/count assertions. Test-only loader rejection signals remain intact.",
+        "9": "Retained final-source evidence at 8e49600: all five exact identities passed inside the 154-outcome owning package gate, zero failures/ignored/filtered. Source and fixture hashes match this metadata-only branch. No new runtime execution or focused repetitions of these five are claimed; the report-reader 21 focused executions cover different functions."
+      },
+      "issue369_legacy_summary_entries": {
+        "base_revision": "8e49600401f93dcb0379f1da86a353cf9bbe222a",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369",
+        "source_sha256": "c1422c3ff4e452bd9ad437d6b95750a0bcf67efa308d82f1eed6f5fe568b06cb",
+        "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
+        "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
+      }
+    },
+    {
+      "id": "scripts::legacy_summary_audit::non_object_summary_is_rejected_before_legacy_fallback",
+      "path": "scripts/src/test_results.rs",
+      "line": 1019,
+      "native_identity": "test_results::tests::non_object_summary_is_rejected_before_legacy_fallback",
+      "purpose": "Reject non-object summaries before consulting a legacy loader.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For null,array and numeric summaries,require the exact InvalidResult(\"summary must be an object\"). The supplied loader panics if called,so a call would fail this test rather than supply fallback evidence."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Existing default scripts library unit test under cfg(test); no platform guard, opt-in, skipped/ignored attribute or parameterized native declaration. Internal finite tables remain explicit in the assessment.",
+      "setup_dependencies": "Only the validator and a non-invoked assertion closure are exercised; no owned continuation,worker,process or external configuration.",
+      "action_postconditions": "For null,array and numeric summaries,require the exact InvalidResult(\"summary must be an object\"). The supplied loader panics if called,so a call would fail this test rather than supply fallback evidence.",
+      "synchronization_timeout": "Finite three-value table; the panic is an intentional test-only must-not-call oracle,not a production failure path or asynchronous trap.",
+      "rules": {
+        "1": "For null,array and numeric summaries,require the exact InvalidResult(\"summary must be an object\"). The supplied loader panics if called,so a call would fail this test rather than supply fallback evidence.",
+        "2": "Finite three-value table; the panic is an intentional test-only must-not-call oracle,not a production failure path or asynchronous trap.",
+        "3": "Not applicable: no playback, media position, monotonic clock or timing tolerance.",
+        "4": "Finite pure validation owns no background work, native command, callback, continuation or persistent resource; no async-to-sync adapter or cleanup omission is introduced.",
+        "5": "Fresh serde_json::Value data per method/table iteration and immutable compiled fixture bytes. No account, credentials, server, network, personal files, environment mutation or shared output capture.",
+        "6": "Deterministic schema/legacy compatibility assertion; no actual Xcode 26.6 execution or new platform/live/device evidence claimed.",
+        "7": "Runtime assertions, loader behavior, fixture, code and dependencies are byte-identical to base. Metadata adds no test, retry, timeout, weakened assertion or new coverage. Earlier unsuccessful/superseded executions remain in the retained source evidence.",
+        "8": "Existing typed Result/VerifyError oracles are described exactly; generic is_ok/is_err and wildcard variants are not promoted to stronger reason/count assertions. Test-only loader rejection signals remain intact.",
+        "9": "Retained final-source evidence at 8e49600: all five exact identities passed inside the 154-outcome owning package gate, zero failures/ignored/filtered. Source and fixture hashes match this metadata-only branch. No new runtime execution or focused repetitions of these five are claimed; the report-reader 21 focused executions cover different functions."
+      },
+      "issue369_legacy_summary_entries": {
+        "base_revision": "8e49600401f93dcb0379f1da86a353cf9bbe222a",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369",
+        "source_sha256": "c1422c3ff4e452bd9ad437d6b95750a0bcf67efa308d82f1eed6f5fe568b06cb",
+        "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
+        "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
+      }
+    },
+    {
+      "id": "scripts::legacy_summary_audit::null_modern_warning_field_does_not_use_legacy_fallback",
+      "path": "scripts/src/test_results.rs",
+      "line": 1031,
+      "native_identity": "test_results::tests::null_modern_warning_field_does_not_use_legacy_fallback",
+      "purpose": "Keep present-but-null modern warning metadata distinct from an absent field eligible for fallback.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Set runtimeWarnings to null on a fresh summary and require InvalidResult(\"summary runtimeWarnings array missing\"). The loader would return a different specific error if called; the exact original assertion proves it is not used."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Existing default scripts library unit test under cfg(test); no platform guard, opt-in, skipped/ignored attribute or parameterized native declaration. Internal finite tables remain explicit in the assessment.",
+      "setup_dependencies": "The summary fixture and modern-field presence check are reviewed with validate_summary; null is rejected instead of requesting legacy data.",
+      "action_postconditions": "Set runtimeWarnings to null on a fresh summary and require InvalidResult(\"summary runtimeWarnings array missing\"). The loader would return a different specific error if called; the exact original assertion proves it is not used.",
+      "synchronization_timeout": "Finite synchronous validation with a controlled error-returning loader; no sleeps, polling, retries or concurrent work.",
+      "rules": {
+        "1": "Set runtimeWarnings to null on a fresh summary and require InvalidResult(\"summary runtimeWarnings array missing\"). The loader would return a different specific error if called; the exact original assertion proves it is not used.",
+        "2": "Finite synchronous validation with a controlled error-returning loader; no sleeps, polling, retries or concurrent work.",
+        "3": "Not applicable: no playback, media position, monotonic clock or timing tolerance.",
+        "4": "Finite pure validation owns no background work, native command, callback, continuation or persistent resource; no async-to-sync adapter or cleanup omission is introduced.",
+        "5": "Fresh serde_json::Value data per method/table iteration and immutable compiled fixture bytes. No account, credentials, server, network, personal files, environment mutation or shared output capture.",
+        "6": "Deterministic schema/legacy compatibility assertion; no actual Xcode 26.6 execution or new platform/live/device evidence claimed.",
+        "7": "Runtime assertions, loader behavior, fixture, code and dependencies are byte-identical to base. Metadata adds no test, retry, timeout, weakened assertion or new coverage. Earlier unsuccessful/superseded executions remain in the retained source evidence.",
+        "8": "Existing typed Result/VerifyError oracles are described exactly; generic is_ok/is_err and wildcard variants are not promoted to stronger reason/count assertions. Test-only loader rejection signals remain intact.",
+        "9": "Retained final-source evidence at 8e49600: all five exact identities passed inside the 154-outcome owning package gate, zero failures/ignored/filtered. Source and fixture hashes match this metadata-only branch. No new runtime execution or focused repetitions of these five are claimed; the report-reader 21 focused executions cover different functions."
+      },
+      "issue369_legacy_summary_entries": {
+        "base_revision": "8e49600401f93dcb0379f1da86a353cf9bbe222a",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369",
+        "source_sha256": "c1422c3ff4e452bd9ad437d6b95750a0bcf67efa308d82f1eed6f5fe568b06cb",
+        "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
+        "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

@@ -279,3 +279,35 @@ execution evidence. Other listing, build-settings, discovery, installation and
 test-command owners still require their own bounds/review. Fresh native Xcode
 26.6, broader schema/semantic, opt-in, signed macOS app/auth and physical-device
 acceptance are not established by these host fixtures or retained replays.
+
+## Legacy summary test audit entries (#369)
+
+The five existing inline legacy-summary tests named in the report-reader section
+were absent from both `other.json` and `source-index.json` at
+`8e49600401f93dcb0379f1da86a353cf9bbe222a`. Each now has an individual source
+assessment, all nine reliability rules, enablement, concrete helper/fixture and
+oracle descriptions, and a current source location. All 405 prior other-audit
+records and 1,611 prior index records are preserved exactly. Historical root
+metadata remains revision-bound; these additions are not a broad reconciliation.
+
+The tests cover absent modern warnings with a valid typed empty legacy Array;
+five nonempty legacy warning/error collections; missing action issues and empty
+actions; non-object summaries rejected before a must-not-call loader; and
+present-but-null modern warnings rejected without fallback. Assessments retain
+the actual strength of each assertion: `is_ok`/`is_err` and wildcard variants are
+not relabelled as exact count or reason checks. The test-only panic closure is a
+must-not-call oracle and introduces no production trap.
+
+Runtime code, assertions, fixtures and dependencies are byte-identical to the
+named base. All five exact native identities passed in that source's verified
+154-outcome owning gate, with zero failures, ignored or filtered tests. Source
+and fixture hashes bind the retained evidence; no new executions, focused
+repetitions or five new coverage cases are claimed after metadata edits. The
+report-reader's 21 focused executions cover different functions. This audit-only
+repair does not establish fresh Xcode26.6, app, live, device or whole-epic
+acceptance. Artifacts are `.build/i369-legacy-verification.json` and its linked
+retained execution/scope evidence; raw logs remain private.
+
+Review and exact-head CI remain separate requirements. Other missing or stale
+records need record-by-record source review under #369; this bounded repair does
+not certify name/index parity or invent an outstanding defect count.
