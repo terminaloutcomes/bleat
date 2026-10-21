@@ -43,6 +43,7 @@ final class FrameworkCallbackTests: XCTestCase {
         async
     {
         let coordinator = NowPlayingCoordinator(registersRemoteCommands: false)
+        defer { coordinator.clear() }
         var commands: [PlaybackRemoteCommand] = []
         coordinator.setCommandHandler {
             commands.append($0)
@@ -73,7 +74,17 @@ final class FrameworkCallbackTests: XCTestCase {
         let pause = coordinator.makeRemoteCommandCallback { (_: Void) in
             PlaybackRemoteCommand.pause
         }
+        let pauseCallbackBaseline =
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
         XCTAssertEqual(pause(()), .success)
+        let pauseCallbackProcessed = await waitUntil(timeout: .seconds(30)) {
+            coordinator.remoteCommandCallbackProcessingSequenceForTesting
+                > pauseCallbackBaseline
+        }
+        XCTAssertTrue(
+            pauseCallbackProcessed,
+            "Prepared-playback pause callback did not drain")
+        XCTAssertEqual(commands, [.pause])
     }
 
     func testRemoteCommandAcknowledgesWithoutInlineMainActorDelivery() async {

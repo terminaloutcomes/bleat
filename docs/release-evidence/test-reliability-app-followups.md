@@ -542,3 +542,59 @@ independent review remain required. Broader #362/#369/#374 lifecycle, native
 worker/callback/timeout-observer drainage, live and physical-device/configuration
 acceptance remains open. The separately tracked fourteen missing audit entries
 are not repaired or claimed complete by this startup slice.
+
+## Final prepared-playback pause callback (#374)
+
+`FrameworkCallbackTests/testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
+previously returned immediately after the final pause callback reported admission.
+It now captures a second processing-sequence baseline before invoking pause,
+asserts its bounded completion, then checks the handler received exactly
+`[.pause]`. The retired bootstrap Play callback still drains before the original
+empty-command assertion; every earlier admission and replacement assertion is
+retained. Immediately deferred `coordinator.clear()` invalidates admission and
+clears playback state on every exit; the coordinator retains the handler until
+deallocation.
+
+The existing sequence advances in the callback task's `defer`, after generation
+rejection or synchronous handler delivery. No production code or callback seam
+changed. The two 30-second budgets are failure watchdogs; neither adds a fixed
+settling delay. This test uses a fresh coordinator, local command capture and a
+synthetic snapshot, without network, preferences, storage or native audio.
+`app.json` preserves the historical assessment and adds only this test's
+`finalPauseReview`. Other callback callers, asynchronous task drainage, signed
+macOS, live-server and physical-device evidence remain separate; #374/#362 stay
+open.
+
+Validation on Xcode 27.1, iPhone 17 Pro iOS 26.5 Simulator, based on
+`3deee8a748e0f7acac54f563abd07d5b36933e41`:
+
+- Supported `mise exec -- ./scripts/xctest.sh` with the exact selector,
+  `-c Debug` and a fresh result bundle: **1/1** passed.
+- The same built products with `xcodebuild test-without-building`, the exact
+  selector, parallel testing disabled and `-test-iterations 10`: **10/10**
+  passed. `verify-test-results` checked all repetitions against the retained
+  built discovery; the summary alone reports one unique test.
+- Supported `scripts/xctest.sh -t BleatAppTests` owning gate: **624/624**
+  identities passed, including the changed callback. The runner verified exact
+  discovered identities and outcomes. All three bundles contain zero failures,
+  skips, expected failures and structured runtime warnings.
+- Final strict Swift lint, documentation references and `git diff --check`
+  passed. The initial lint failure caught one new overlong assertion line;
+  wrapping it changed no assertion, budget or behavior. The compiled callback
+  object is newer than the final source, whose SHA-256 is
+  `f87173ec96570116b8842a3c81327dc7efc16b448c2499bfcf28175874bd66f1`.
+
+Retained bundles are `.build/final-pause/focused.xcresult`,
+`repetitions.xcresult` and `owning-app.xcresult`; their built discovery, private
+logs, structured summaries and source hash are retained alongside
+`.build/final-pause/verification.json`. All commands ran from repository root;
+no result-bundle guard correction from a separate PR is included.
+
+Xcode's existing host build-version `invalidDigitCount` diagnostics remain in
+all three logs (nine, three and nine respectively). The owning incremental
+rebuild also emitted **1,610 stale-file warnings** associated with the temporary
+build symlink; no cache or other worktree was deleted. The focused and repetition
+logs contain no compiler warning lines. These build diagnostics are distinct
+from the zero structured runtime warnings. No host, signed macOS application,
+live-server or physical-device run is claimed. Independent final-head review
+and exact-head CI remain required before merge.

@@ -44185,6 +44185,34 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "finalPauseReview": {
+        "date": "2026-10-21",
+        "baseline": "3deee8a748e0f7acac54f563abd07d5b36933e41",
+        "status": "source_fixed_execution_recorded",
+        "scope": "Only the accepted final prepared-playback pause callback and failure-safe coordinator cleanup.",
+        "actionPostconditions": [
+          "Retain retired bootstrap Play rejection and the empty handler capture after its processing sequence advances.",
+          "Capture a second processing-sequence baseline before admitting pause, await its advance, assert completion and exactly [.pause]."
+        ],
+        "synchronization": "Existing callback processing sequence increments in defer after generation rejection or handler delivery; separate bounded 30-second waits establish both callbacks processed. The budget is a failure watchdog, not a settling delay.",
+        "cleanup": "Immediately deferred coordinator.clear() runs on every exit, invalidates admission and clears playback state; the coordinator retains the command handler until deallocation.",
+        "ruleAssessments": {
+          "1": "Final pause admission now has exact delivered-command postcondition; earlier assertions retained.",
+          "2": "Second baseline precedes pause admission; asserted bounded completion precedes command equality.",
+          "3": "Not applicable: synthetic snapshot and command adapter; no advancing player.",
+          "4": "Deferred coordinator cleanup; no new worker, continuation or observer. This is not proof of unrelated native task drainage.",
+          "5": "Fresh coordinator and local capture; no preferences, network, storage or personal fixture state.",
+          "6": "App-hosted Simulator adapter test; no physical MediaPlayer or device claim.",
+          "7": "No assertion removed, retry or timing budget increase.",
+          "8": "Named pause-drain failure at the caller assertion; exact commands report missing or extra delivery.",
+          "9": "One focused pass, ten focused repetitions and all 624 owning BleatAppTests identities passed on the final Swift source; exact outcomes verified against built discovery."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "The bounded final-pause gap is fixed and has focused and owning Simulator evidence. Historical callback assessments and broader lifecycle findings remain separate."
+        },
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#final-prepared-playback-pause-callback-374"
       }
     },
     {
