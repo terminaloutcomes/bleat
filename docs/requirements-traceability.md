@@ -1004,3 +1004,22 @@ The twelve paid-capability settings queries use bounded native ownership and
 decoded typed settings/plist assertions; exact isolated invalid-mode controls
 replace generic launcher-failure acceptance. [Scoped ownership and evidence](release-evidence/test-runner-verification.md#paid-build-mode-orchestration-371)
 keeps signed-host orchestration and independently created groups outstanding.
+
+### Missing audit records and scoped recurrence validation (#369)
+
+Five existing host functions and nine build-helper functions have individual
+source-reviewed decisions, setup/action/postcondition details, synchronization
+and cleanup boundaries, enabling conditions and applicable rule assessments.
+Current source-index locations and moved-path provenance are reconciled; retired
+SDK-override history remains explicit. Three command-driven records preserve
+unproven child-budget follow-ups under #370. No application or existing test
+behavior changes, and no production leak/hang is inferred.
+
+The Rust parity checker and eight audited regressions reject orphaned active
+Rust records after attribute/declaration/file removal as well as missing/stale/
+duplicate/placeholder records and empty required scopes. Its scope is host
+inventory, build-helper source/test declarations and its own regressions;
+semantic review, compiler discovery and broader inventory are not certified by
+name parity. See [repair scope and exact evidence](release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369).
+Broader #362/#369 acceptance remains open; source/record coverage alone is not
+completion of the testing epic.

@@ -11,7 +11,8 @@
     "bleat-api/tests",
     "TestSupport/HostTests",
     "TestSupport/SwiftTestingPrototype",
-    "TestSupport/ServerHarness"
+    "TestSupport/ServerHarness",
+    "build-scripts/tests"
   ],
   "auditStatus": "Reviewed all 387 scoped test declarations; no pending source bodies. Per-suite enablement and individual outcome/synchronization details are recorded. Python and focused Rust validation passed; parent-owned Xcode gate tracked separately; Disposable telemetry live suites subsequently passed twice; see the main audit for exact revisions, identities and outcomes. Other live configurations remain unrun.",
   "profiles": {
@@ -4783,8 +4784,8 @@
     },
     {
       "id": "scripts::generates_metadata_without_mutating_template_or_build_setting_placeholders",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 57,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 58,
       "purpose": "Generates metadata without mutating template or build setting placeholders.",
       "review": {
         "status": "reviewed",
@@ -4795,12 +4796,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the generates metadata without mutating template or build setting placeholders contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 57,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::reads_commit_from_detached_worktree_git_file",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 86,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 87,
       "purpose": "Reads commit from detached worktree git file.",
       "review": {
         "status": "reviewed",
@@ -4811,12 +4817,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the reads commit from detached worktree git file contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 86,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::missing_git_preserves_existing_output_and_reports_git_stage",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 115,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 116,
       "purpose": "Missing git preserves existing output and reports git stage.",
       "review": {
         "status": "reviewed",
@@ -4827,12 +4838,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the missing git preserves existing output and reports git stage contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 115,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::distinguishes_missing_malformed_and_non_dictionary_templates",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 136,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 137,
       "purpose": "Distinguishes missing malformed and non dictionary templates.",
       "review": {
         "status": "reviewed",
@@ -4843,12 +4859,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the distinguishes missing malformed and non dictionary templates contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 136,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::output_failure_is_typed",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 160,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 161,
       "purpose": "Output failure is typed.",
       "review": {
         "status": "reviewed",
@@ -4859,12 +4880,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the output failure is typed contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 160,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::command_works_with_canonical_sandbox_inputs_and_only_derived_output_writable",
-      "path": "scripts/tests/build_metadata.rs",
-      "line": 175,
+      "path": "build-scripts/tests/build_metadata.rs",
+      "line": 176,
       "purpose": "Command works with canonical sandbox inputs and only derived output writable.",
       "review": {
         "status": "reviewed",
@@ -4875,7 +4901,12 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Temporary Git repository, plist template, generated output, and/or real helper process; each test owns its fixture.",
       "action_postconditions": "Exercise the command works with canonical sandbox inputs and only derived output writable contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/build_metadata.rs",
+        "line": 175,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::cli_propagates_validation_and_terminal_gate_failures",
@@ -5279,8 +5310,8 @@
     },
     {
       "id": "scripts::accepts_consistent_metadata_and_effective_build_version",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 14,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 15,
       "purpose": "Accepts consistent metadata and effective build version.",
       "review": {
         "status": "reviewed",
@@ -5291,12 +5322,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the accepts consistent metadata and effective build version contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 14,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_timestamp_or_cli_override_without_source_bump",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 25,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 26,
       "purpose": "Rejects timestamp or cli override without source bump.",
       "review": {
         "status": "reviewed",
@@ -5307,12 +5343,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects timestamp or cli override without source bump contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 25,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_stale_missing_or_wrong_generated_configurations",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 39,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 40,
       "purpose": "Rejects stale missing or wrong generated configurations.",
       "review": {
         "status": "reviewed",
@@ -5323,12 +5364,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects stale missing or wrong generated configurations contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 39,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_wrong_or_missing_built_app_versions_before_installing",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 59,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 60,
       "purpose": "Rejects wrong or missing built app versions before installing.",
       "review": {
         "status": "reviewed",
@@ -5339,12 +5385,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects wrong or missing built app versions before installing contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 59,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::accepts_later_rebuilds_but_rejects_invalid_or_predating_timestamps",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 95,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 96,
       "purpose": "Accepts later rebuilds but rejects invalid or predating timestamps.",
       "review": {
         "status": "reviewed",
@@ -5355,12 +5406,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the accepts later rebuilds but rejects invalid or predating timestamps contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 95,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_stale_fallback_build_numbers",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 112,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 113,
       "purpose": "Rejects stale fallback build numbers.",
       "review": {
         "status": "reviewed",
@@ -5371,12 +5427,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects stale fallback build numbers contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 112,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_missing_duplicate_stale_or_empty_release_notes",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 127,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 128,
       "purpose": "Rejects missing duplicate stale or empty release notes.",
       "review": {
         "status": "reviewed",
@@ -5387,12 +5448,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects missing duplicate stale or empty release notes contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 127,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::rejects_malformed_sources_and_invalid_calendar_dates",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 145,
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 146,
       "purpose": "Rejects malformed sources and invalid calendar dates.",
       "review": {
         "status": "reviewed",
@@ -5403,12 +5469,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the rejects malformed sources and invalid calendar dates contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 145,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::command_rejects_real_pbxproj_version_drift_before_building",
-      "path": "scripts/tests/release_version_check.rs",
-      "line": 169,
+      "path": "build-scripts/tests/release_version_cli.rs",
+      "line": 3,
       "purpose": "Command rejects real pbxproj version drift before building.",
       "review": {
         "status": "reviewed",
@@ -5416,10 +5487,16 @@
         "reason": "Inspected body asserts its concrete parser, API, filesystem, CLI, or workflow contract using deterministic fixtures and awaited local requests where applicable."
       },
       "profile": "rust_deterministic",
-      "enablement": "Compiled and enabled only on macOS by target_os cfg; requires Xcode/xcrun for the host SDK test.",
+      "enablement": "cfg(target_os=macos); compiled validate-release-version executable and scoped synthetic project/changelog/pbxproj fixtures. This case does not invoke Xcode,select an SDK or build the app.",
       "setup_dependencies": "Synthetic project/changelog/generated metadata and temp app fixtures; two process-level scenarios are compiled only on macOS.",
       "action_postconditions": "Exercise the command rejects real pbxproj version drift before building contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_version_check.rs",
+        "line": 169,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
+        "enablement": "Compiled and enabled only on macOS by target_os cfg; requires Xcode/xcrun for the host SDK test."
+      }
     },
     {
       "id": "scripts::device_rebuild_keeps_source_version_and_generates_next_day_timestamp",
@@ -5455,8 +5532,8 @@
     },
     {
       "id": "scripts::generates_and_validates_build_numbers",
-      "path": "scripts/tests/release_versions.rs",
-      "line": 6,
+      "path": "build-scripts/tests/release_versions.rs",
+      "line": 7,
       "purpose": "Generates and validates build numbers.",
       "review": {
         "status": "reviewed",
@@ -5467,12 +5544,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Fixed clock and synthetic build/version strings; CLI case launches the compiled binaries with isolated environment overrides.",
       "action_postconditions": "Exercise the generates and validates build numbers contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 6,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::derives_and_validates_marketing_versions",
-      "path": "scripts/tests/release_versions.rs",
-      "line": 35,
+      "path": "build-scripts/tests/release_versions.rs",
+      "line": 36,
       "purpose": "Derives and validates marketing versions.",
       "review": {
         "status": "reviewed",
@@ -5483,12 +5565,17 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Fixed clock and synthetic build/version strings; CLI case launches the compiled binaries with isolated environment overrides.",
       "action_postconditions": "Exercise the derives and validates marketing versions contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 35,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "scripts::command_line_resolvers_use_environment_without_shells",
-      "path": "scripts/tests/release_versions.rs",
-      "line": 64,
+      "path": "build-scripts/tests/release_versions.rs",
+      "line": 65,
       "purpose": "Command line resolvers use environment without shells.",
       "review": {
         "status": "reviewed",
@@ -5499,23 +5586,12 @@
       "enablement": "Default Rust test target; no opt-in condition.",
       "setup_dependencies": "Fixed clock and synthetic build/version strings; CLI case launches the compiled binaries with isolated environment overrides.",
       "action_postconditions": "Exercise the command line resolvers use environment without shells contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
-    },
-    {
-      "id": "scripts::xcode_cargo_launchers_isolate_host_compiler_environment",
-      "path": "scripts/tests/release_versions/xcode_host_sdk.rs",
-      "line": 17,
-      "purpose": "Xcode cargo launchers isolate host compiler environment.",
-      "review": {
-        "status": "reviewed",
-        "decision": "keep",
-        "reason": "Inspected body asserts its concrete parser, API, filesystem, CLI, or workflow contract using deterministic fixtures and awaited local requests where applicable."
-      },
-      "profile": "rust_deterministic",
-      "enablement": "Compiled and enabled only on macOS by target_os cfg; requires Xcode/xcrun for the host SDK test.",
-      "setup_dependencies": "macOS-only: reads the actual project build script, uses xcrun/Xcode host SDK, and runs actual launch commands against a fake Cargo/compiler probe in a temporary directory.",
-      "action_postconditions": "Exercise the xcode cargo launchers isolate host compiler environment contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
-      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout."
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "historical_source": {
+        "path": "scripts/tests/release_versions.rs",
+        "line": 64,
+        "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c"
+      }
     },
     {
       "id": "swift-testing-prototype::synchronousIdentity",
@@ -8314,6 +8390,588 @@
         "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
         "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
       }
+    },
+    {
+      "id": "build-scripts::validates_common_and_macos_settings_without_requiring_telemetry_values",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 28,
+      "purpose": "Accept valid macOS common settings while explicitly omitting iOS-only telemetry/capability values.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Accept valid macOS common settings while explicitly omitting iOS-only telemetry/capability values. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Owned BTreeMap from settings(macosx), removing four iOS-only variables.",
+      "action_postconditions": "Require successful validation, four messages and final telemetry-checks-skipped message.",
+      "synchronization_timeout": "Pure synchronous validator, local map; no environment mutation, network or child process.",
+      "rules": {
+        "1": "Require successful validation, four messages and final telemetry-checks-skipped message.",
+        "2": "Pure synchronous validator, local map; no environment mutation, network or child process.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Pure synchronous validator, local map; no environment mutation, network or child process. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Owned BTreeMap from settings(macosx), removing four iOS-only variables. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::validates_ios_secure_endpoints_and_debug_loopback",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 45,
+      "purpose": "Accept secure iOS endpoints and the documented Debug Simulator loopback exception.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Accept secure iOS endpoints and the documented Debug Simulator loopback exception. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Fresh iphoneos settings map; independent Debug iphonesimulator map with localhost HTTP auth endpoint.",
+      "action_postconditions": "Require AppAttest/OTLP variable messages for secure settings, and successful Debug-loopback validation.",
+      "synchronization_timeout": "Synchronous in-memory validation; synthetic endpoint strings never contact a server.",
+      "rules": {
+        "1": "Require AppAttest/OTLP variable messages for secure settings, and successful Debug-loopback validation.",
+        "2": "Synchronous in-memory validation; synthetic endpoint strings never contact a server.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Synchronous in-memory validation; synthetic endpoint strings never contact a server. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Fresh iphoneos settings map; independent Debug iphonesimulator map with localhost HTTP auth endpoint. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::reports_typed_missing_and_invalid_common_settings_with_original_exit_codes",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 69,
+      "purpose": "Preserve typed missing-variable versus invalid-allowed-value failures and original CLI exit codes.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Preserve typed missing-variable versus invalid-allowed-value failures and original CLI exit codes. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Separate maps: remove BUILD_WITHOUT_PAID_DEVELOPER, then set unsupported CloudKit mode.",
+      "action_postconditions": "Require MissingEnvironmentVariable with exit 1 and InvalidAllowedValue with exit 2.",
+      "synchronization_timeout": "Pure synchronous validation of owned maps; no real compiler, credentials or environment writes.",
+      "rules": {
+        "1": "Require MissingEnvironmentVariable with exit 1 and InvalidAllowedValue with exit 2.",
+        "2": "Pure synchronous validation of owned maps; no real compiler, credentials or environment writes.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Pure synchronous validation of owned maps; no real compiler, credentials or environment writes. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Separate maps: remove BUILD_WITHOUT_PAID_DEVELOPER, then set unsupported CloudKit mode. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::rejects_insecure_auth_urls_and_non_origin_otlp_endpoints",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 84,
+      "purpose": "Reject insecure auth in paid-device settings and path-bearing OTLP origins even with Debug loopback auth.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Reject insecure auth in paid-device settings and path-bearing OTLP origins even with Debug loopback auth. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Owned iphoneos map, nonloopback HTTP then localhost HTTP; finally Debug config with valid loopback auth but path-bearing HTTPS OTLP.",
+      "action_postconditions": "Require InsecureTelemetryAuthBaseUrl for both paid-device HTTP inputs; then TelemetryUrlMustBeOrigin for OTLP path.",
+      "synchronization_timeout": "Pure synchronous policy validation; no external HTTP or deadline behavior.",
+      "rules": {
+        "1": "Require InsecureTelemetryAuthBaseUrl for both paid-device HTTP inputs; then TelemetryUrlMustBeOrigin for OTLP path.",
+        "2": "Pure synchronous policy validation; no external HTTP or deadline behavior.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Pure synchronous policy validation; no external HTTP or deadline behavior. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Owned iphoneos map, nonloopback HTTP then localhost HTTP; finally Debug config with valid loopback auth but path-bearing HTTPS OTLP. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::rejects_otlp_policy_violations_by_typed_variant",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 116,
+      "purpose": "Distinguish four OTLP policy causes without losing their exit behavior.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Distinguish four OTLP policy causes without losing their exit behavior. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Four explicit synthetic cases: HTTP, fragment, query and URL credentials; fresh Debug Simulator map for each.",
+      "action_postconditions": "Require the corresponding OtlpEndpointMustUseHttps/HasFragment/HasQuery/HasCredentials variant and exit 2 for each.",
+      "synchronization_timeout": "Synchronous loop over four independent maps; no server access or persistent secrets.",
+      "rules": {
+        "1": "Require the corresponding OtlpEndpointMustUseHttps/HasFragment/HasQuery/HasCredentials variant and exit 2 for each.",
+        "2": "Synchronous loop over four independent maps; no server access or persistent secrets.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Synchronous loop over four independent maps; no server access or persistent secrets. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Four explicit synthetic cases: HTTP, fragment, query and URL credentials; fresh Debug Simulator map for each. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::rejects_invalid_telemetry_urls_without_losing_the_variable_identity",
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "line": 153,
+      "purpose": "Preserve which telemetry variable contains an invalid URL.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Preserve which telemetry variable contains an invalid URL. Each named typed/value postcondition is directly asserted on isolated input."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in.",
+      "setup_dependencies": "Owned device settings map with invalid auth endpoint port.",
+      "action_postconditions": "Require InvalidTelemetryUrl carrying exact BLEAT_TELEMETRY_AUTH_BASE_URL variable name.",
+      "synchronization_timeout": "Synchronous parser/validator; malformed URL is synthetic and never used for network I/O.",
+      "rules": {
+        "1": "Require InvalidTelemetryUrl carrying exact BLEAT_TELEMETRY_AUTH_BASE_URL variable name.",
+        "2": "Synchronous parser/validator; malformed URL is synthetic and never used for network I/O.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Synchronous parser/validator; malformed URL is synthetic and never used for network I/O. No tasks, callbacks, continuations or external resource owner are created.",
+        "5": "Owned device settings map with invalid auth endpoint port. Every case owns its map; no process-global environment is changed.",
+        "6": "Deterministic policy/parser unit integration; not live endpoint validation.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "7f99d527f33e379ef99779437e3af5e705c23baf713339344a9d63cdbca3188d",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      }
+    },
+    {
+      "id": "build-scripts::build_dependencies::build_launchers_preserve_the_callers_toolchain_environment",
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "line": 6,
+      "purpose": "Verify both Cargo launch paths preserve caller compiler/wrapper/SDK variables and select the isolated package.",
+      "review": {
+        "status": "reviewed",
+        "decision": "follow_up",
+        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+      "setup_dependencies": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values.",
+      "action_postconditions": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
+      "synchronization_timeout": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+      "rules": {
+        "1": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
+        "2": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "5": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values. TempDir owns the executable probe where used; other cases read checkout state only.",
+        "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      },
+      "remaining_risk": {
+        "owner": "Bleat maintainers / @yaleman",
+        "issue": 370,
+        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+      }
+    },
+    {
+      "id": "build-scripts::build_dependencies::build_dependency_tree_excludes_operational_and_native_tooling",
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "line": 78,
+      "purpose": "Reject operational HTTP/TLS/runtime/native-compiler stacks in build-scripts normal/build dependencies.",
+      "review": {
+        "status": "reviewed",
+        "decision": "follow_up",
+        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+      "setup_dependencies": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph.",
+      "action_postconditions": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
+      "synchronization_timeout": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+      "rules": {
+        "1": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
+        "2": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "5": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph. TempDir owns the executable probe where used; other cases read checkout state only.",
+        "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      },
+      "remaining_risk": {
+        "owner": "Bleat maintainers / @yaleman",
+        "issue": 370,
+        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+      }
+    },
+    {
+      "id": "build-scripts::build_dependencies::xcode_sandbox_can_read_every_cargo_workspace_member",
+      "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+      "line": 127,
+      "purpose": "Ensure Xcode metadata-phase inputs permit Cargo to read every workspace member manifest.",
+      "review": {
+        "status": "reviewed",
+        "decision": "follow_up",
+        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+      "setup_dependencies": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata.",
+      "action_postconditions": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
+      "synchronization_timeout": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+      "rules": {
+        "1": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
+        "2": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+        "3": "N/A: no playback, seek, media position or audible progression.",
+        "4": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "5": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata. TempDir owns the executable probe where used; other cases read checkout state only.",
+        "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+      },
+      "remaining_risk": {
+        "owner": "Bleat maintainers / @yaleman",
+        "issue": 370,
+        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::current_repository_has_scoped_audit_parity",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 64,
+      "purpose": "Validate current scoped host/build-helper and checker-regression declarations against real audit/index data.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Read repository JSON,host inventory and ordinary Rust test declarations; require validation success and nonzero host/Rust counts. Does not certify semantic review or execution."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Read-only current checkout and committed inventory/audit JSON.",
+      "action_postconditions": "Read repository JSON,host inventory and ordinary Rust test declarations; require validation success and nonzero host/Rust counts. Does not certify semantic review or execution.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Read repository JSON,host inventory and ordinary Rust test declarations; require validation success and nonzero host/Rust counts. Does not certify semantic review or execution.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Read-only current checkout and committed inventory/audit JSON.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::missing_host_audit_is_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 74,
+      "purpose": "Prevent recurrence of the five host audit omissions.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Remove the host audit row from a fresh otherwise-valid fixture; require typed Missing(core audit entry) with exact source identity."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Remove the host audit row from a fresh otherwise-valid fixture; require typed Missing(core audit entry) with exact source identity.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Remove the host audit row from a fresh otherwise-valid fixture; require typed Missing(core audit entry) with exact source identity.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::missing_rust_audit_is_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 83,
+      "purpose": "Prevent recurrence of build-helper audit omissions.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Remove one Rust audit row; require typed Missing(Rust audit entry) naming the exact source function."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Remove one Rust audit row; require typed Missing(Rust audit entry) naming the exact source function.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Remove one Rust audit row; require typed Missing(Rust audit entry) naming the exact source function.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::missing_source_index_entries_are_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 95,
+      "purpose": "Reject missing navigation records for both supported source families.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Independently remove host then Rust index rows from fresh fixtures; require typed Missing(source-index entry) in each case."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Independently remove host then Rust index rows from fresh fixtures; require typed Missing(source-index entry) in each case.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Independently remove host then Rust index rows from fresh fixtures; require typed Missing(source-index entry) in each case.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::stale_audit_identity_is_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 113,
+      "purpose": "Reject stale identities, stale Swift source, and orphaned active Rust audit/index records after test removal.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Rename a Rust audit ID and require Missing. Remove its test attribute, declaration, or entire source file while another build test survives; require exact Orphan(Rust audit entry), then remove that audit and require Orphan(source-index entry). Separately rename the Swift function and require exact StaleSource.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::duplicate_audit_entries_are_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 171,
+      "purpose": "Reject ambiguous host and Rust current audit coverage.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Duplicate a host then Rust audit row in separate valid fixtures; require typed Duplicate rather than accepting first matching entry."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Duplicate a host then Rust audit row in separate valid fixtures; require typed Duplicate rather than accepting first matching entry.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Duplicate a host then Rust audit row in separate valid fixtures; require typed Duplicate rather than accepting first matching entry.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::placeholder_reviews_are_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 189,
+      "purpose": "Reject empty-placeholder coverage being substituted for an actual review record.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "For host and Rust fixtures, independently inject TODO purpose,unknown decision and unreviewed status; require the specific typed Review failure instead of treating record presence as reviewed coverage."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "For host and Rust fixtures, independently inject TODO purpose,unknown decision and unreviewed status; require the specific typed Review failure instead of treating record presence as reviewed coverage.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "For host and Rust fixtures, independently inject TODO purpose,unknown decision and unreviewed status; require the specific typed Review failure instead of treating record presence as reviewed coverage.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
+    },
+    {
+      "id": "scripts::test_audit_inventory::empty_required_scopes_are_rejected",
+      "path": "scripts/tests/test_audit_inventory.rs",
+      "line": 224,
+      "purpose": "Reject vacuous success when either required host or build-helper source scope is empty.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Independently empty host inventory and remove all ordinary build-helper test declarations from fresh fixtures; require the precise Shape error for each required scope,even though checker regression source remains present."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts integration-test target on supported Rust hosts; no opt-in or external service.",
+      "setup_dependencies": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+      "action_postconditions": "Independently empty host inventory and remove all ordinary build-helper test declarations from fresh fixtures; require the precise Shape error for each required scope,even though checker regression source remains present.",
+      "synchronization_timeout": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+      "rules": {
+        "1": "Independently empty host inventory and remove all ordinary build-helper test declarations from fresh fixtures; require the precise Shape error for each required scope,even though checker regression source remains present.",
+        "2": "Synchronous local file/JSON validation only; no subprocess,network,task,callback or polling. TempDir RAII removes owned resources; no shared user data.",
+        "3": "N/A: no playback or clock assertion.",
+        "4": "No async work is introduced; validation returns typed data. Fixture failure paths retain TempDir ownership for RAII cleanup.",
+        "5": "Fresh TempDir with tiny owned Swift/Rust source files,host inventory,review/profile JSON and source index; every negative case mutates only its own fixture.",
+        "6": "Deterministic audit-tool regression; source/name parity is distinct from semantic test review and runtime discovery.",
+        "7": "Negative fixtures reproduce missing/stale/duplicate/placeholder conditions directly; no retry-to-green or ignored result.",
+        "8": "Match specific AuditInventoryError variants,kind/identity/field where relevant; malformed records never become generic success.",
+        "9": "Final native regression target8/8,zero failures/ignored/filtered tests;final code includes build-helper unit sources,known review states/decisions and nonempty required scopes. All earlier stale-repository mapping failures retained;no test or assertion removed."
+      },
+      "audit_entry_repair": {
+        "issue": 369,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+        "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
+        "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -8387,5 +9045,70 @@
       "active_rows_after": 395
     },
     "execution": "35/35 owning m2 outcomes and33/33 exact focused executions;no ignored/filtered owning cases. Existing unsuccessful attempts retained;Linux CI remains separate."
+  },
+  "historicalRetiredTests": [
+    {
+      "id": "scripts::xcode_cargo_launchers_isolate_host_compiler_environment",
+      "path": "scripts/tests/release_versions/xcode_host_sdk.rs",
+      "line": 17,
+      "purpose": "Xcode cargo launchers isolate host compiler environment.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected body asserts its concrete parser, API, filesystem, CLI, or workflow contract using deterministic fixtures and awaited local requests where applicable."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Compiled and enabled only on macOS by target_os cfg; requires Xcode/xcrun for the host SDK test.",
+      "setup_dependencies": "macOS-only: reads the actual project build script, uses xcrun/Xcode host SDK, and runs actual launch commands against a fake Cargo/compiler probe in a temporary directory.",
+      "action_postconditions": "Exercise the xcode cargo launchers isolate host compiler environment contract from the body and assert its named success, exact output, or typed failure; helper fixtures are awaited where asynchronous.",
+      "synchronization_timeout": "Synchronous test: no asynchronous observer wait or timeout.",
+      "retirement": {
+        "removed_by": "18e41aadeda3ccdd404c6808e63b0ac69c815667",
+        "reason": "The SDK/compiler override strategy was superseded by isolated build helpers preserving the caller environment. This obsolete test is retained as history, not an active missing declaration.",
+        "replacements": [
+          "build_launchers_preserve_the_callers_toolchain_environment",
+          "build_dependency_tree_excludes_operational_and_native_tooling",
+          "xcode_sandbox_can_read_every_cargo_workspace_member"
+        ],
+        "issue": 370,
+        "evidence": "docs/release-evidence/test-reliability-audit.md#build-helper-dependency-isolation-2026-10-16"
+      }
+    }
+  ],
+  "currentEntryCoverage": {
+    "historical_baseline_records": 387,
+    "current_active_records": 403,
+    "newly_reviewed_missing_entries": [
+      "build-scripts::validates_common_and_macos_settings_without_requiring_telemetry_values",
+      "build-scripts::validates_ios_secure_endpoints_and_debug_loopback",
+      "build-scripts::reports_typed_missing_and_invalid_common_settings_with_original_exit_codes",
+      "build-scripts::rejects_insecure_auth_urls_and_non_origin_otlp_endpoints",
+      "build-scripts::rejects_otlp_policy_violations_by_typed_variant",
+      "build-scripts::rejects_invalid_telemetry_urls_without_losing_the_variable_identity",
+      "build-scripts::build_dependencies::build_launchers_preserve_the_callers_toolchain_environment",
+      "build-scripts::build_dependencies::build_dependency_tree_excludes_operational_and_native_tooling",
+      "build-scripts::build_dependencies::xcode_sandbox_can_read_every_cargo_workspace_member"
+    ],
+    "new_regression_records": [
+      "current_repository_has_scoped_audit_parity",
+      "missing_host_audit_is_rejected",
+      "missing_rust_audit_is_rejected",
+      "missing_source_index_entries_are_rejected",
+      "stale_audit_identity_is_rejected",
+      "duplicate_audit_entries_are_rejected",
+      "placeholder_reviews_are_rejected",
+      "empty_required_scopes_are_rejected"
+    ],
+    "retired_sdk_override_record_preserved": true,
+    "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369"
+  },
+  "auditInventoryValidatorReview": {
+    "source": "scripts/src/test_audit_inventory.rs",
+    "scope": "Host runtime inventory functions;ordinary Rust #[test] declarations in build-scripts source/tests and the checker regression file.",
+    "postconditions": "One current source-linked audit and index row per required identity;review status,valid keep/fix/follow-up decision and non-placeholder applicable rule fields;nonempty required host/build-helper scopes. Active scoped Rust audit/index rows must also match a discovered declaration; orphaned records after attribute/function/file removal are rejected.",
+    "ownership": "Read-only synchronous local JSON/source reads. No subprocess,network,task or callback. Regression fixtures own unique TempDir roots;normal and failing tests use scoped RAII cleanup.",
+    "limits": "Does not certify semantic truth,runtime discovery,argument multiplicity,line freshness,macro-generated tests or whole repository coverage. Rust/Swift function matching is deliberately source-shaped; compiler discovery and exact native outcomes remain separate.",
+    "errors": "Typed read/JSON/shape/missing/duplicate/review/stale/orphan/unsupported-declaration causes retain source identity or field and original IO/parse errors.",
+    "verification": "Review-corrected eight-function regression target includes six orphan variants (attribute/declaration/file removal, each with audit or index orphan). Final checks and exact outcomes are retained in .build/i369-audit-verification.json; compiler discovery and semantic truth remain separate."
   }
 }

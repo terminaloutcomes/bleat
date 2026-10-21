@@ -26,5 +26,6 @@ pub mod paid_build_modes;
 pub mod runner_readiness;
 pub mod site_news;
 pub mod swift_test_results;
+pub mod test_audit_inventory;
 pub mod test_results;
 pub mod xcode_test_runner;

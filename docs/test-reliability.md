@@ -92,3 +92,25 @@ server, signed host and physical-device evidence.
   property-value and nonexistence waits; use APIs supported by the test toolchain.
 - Apple, [Designing for adverse network and temperature conditions](https://developer.apple.com/videos/play/wwdc2019/422/):
   realistic integration conditions complement controlled tests.
+
+## Scoped audit inventory check
+
+Run the read-only name/record check with:
+
+```sh
+mise exec -- cargo run --quiet --locked --package scripts --bin validate-test-audit
+```
+
+It reconciles host inventory functions with current core audit and source-index
+records, and ordinary `#[test]` functions in `build-scripts` source/tests plus
+the checker's own regression file with other-audit/index records. Conditional
+Rust declarations remain in source coverage when another platform does not
+compile them. Missing, duplicate, stale or obvious placeholder entries and
+empty required scopes fail. The regression target is included in normal Cargo
+test discovery; its negative fixtures reproduce those failures directly.
+
+This check does not certify semantic review, runtime discovery, argument
+multiplicities, line-number freshness, macro-generated Rust tests or the whole
+repository inventory. The host opt-in performance case is retained separately
+from default runtime inventory. Keep source review, exact executed outcomes and
+platform prerequisites explicit; passing this check cannot replace them.
