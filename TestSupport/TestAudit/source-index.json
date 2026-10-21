@@ -9574,6 +9574,12 @@
       "name": "reportsDefaultCleanupFailureAtTheTestCaller",
       "line": 58,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
+      "name": "testObservationCleanupRetiresOnlyOwnedSubscription",
+      "line": 298,
+      "language": "swift"
     }
   ]
 }

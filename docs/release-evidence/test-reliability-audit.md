@@ -861,3 +861,23 @@ The baseline build also retained an upstream OpenTelemetry watchOS-minimum
 deprecation and an existing optional-`#require` ambiguity in
 `AuthenticatedOtlpSpanExporterTests.swift`. Neither is hidden or claimed fixed
 by this caller-location change. Broader #372/#362 acceptance remains open.
+
+## Statistics observer retirement (#372)
+
+Four `StatisticsExplorationTests` observers now use an awaited cleanup scope:
+`observedPresentationIsCoherentAcrossLiveSamplesAndSliceCommit`,
+`boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples`,
+`observationHistoryAndPresentationAreAccountScoped`, and
+`unchangedPausedSamplesDoNotPublishOrFetchAndProgressSurvivesCoalescing`.
+Their original actions and assertions remain intact. Early returns and throws
+now stop the exact subscription, verify removal and consume at most one buffered
+update before requiring bounded stream termination. Typed cleanup errors retain
+the caller location while an originating operation error remains primary.
+
+`testObservationCleanupRetiresOnlyOwnedSubscription(exit:)` covers return and
+throw before and after the initial read, preserves the injected typed failure,
+and verifies a peer subscription remains registered until its own cleanup.
+This proves subscription retirement, not drainage of the full production task
+graph. Native XML counts this parameterized declaration once; native logs retain
+all four scenarios. Focused repetitions, owning-suite and signed-host outcomes
+are retained separately with the delivery evidence.

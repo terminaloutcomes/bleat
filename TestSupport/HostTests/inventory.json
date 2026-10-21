@@ -568,7 +568,8 @@
     "dailyBucketsAndCachedRangesUseUTCReportingCalendar()",
     "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot()",
     "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync()",
-    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()"
+    "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount()",
+    "testObservationCleanupRetiresOnlyOwnedSubscription(exit:)"
   ],
   "BleatCoreTests.StatisticsTests": [
     "testUncertaintyDisplayRequiresAtLeastFifteenMinutes()",
