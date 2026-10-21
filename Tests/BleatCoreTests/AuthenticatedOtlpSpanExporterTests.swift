@@ -797,10 +797,11 @@ final class AuthenticatedOtlpSpanExporterTests {
             await provider.releaseToken()
             for (index, caller) in callers.enumerated() {
                 let success = try #require(
-                    await requireAuthTelemetryCompletion(
+                    (await requireAuthTelemetryCompletion(
                         caller.1,
                         stage:
                             "concurrent OTLP export caller \(index) returning"))
+                        as Bool?)
                 #expect(success)
                 await caller.0.value
             }

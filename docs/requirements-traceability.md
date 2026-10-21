@@ -852,3 +852,13 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Typed optional completion assertion (#372)
+
+The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
+and retains its separate true-result assertion. Missing completion,failed
+export,all eight success-path caller joins,request counts and exact metadata
+remain covered. Error-exit task drainage remains a separate #372 concern.
+See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
+This does not change provider/transport lifecycle contracts or establish
+broader epic/configuration acceptance.

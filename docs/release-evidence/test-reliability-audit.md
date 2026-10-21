@@ -826,3 +826,30 @@ iOS smoke passes and zero skips in [Validate Bleat run 39021211739](https://gith
 Subsequent branch updates require their own normal CI; the PR records its final
 head and checks. This batch does not close issue #362 or claim new physical-device,
 full app-live, signed macOS authentication or release archive evidence.
+
+## Optional completion assertion (#372)
+
+The eight-caller concurrent OTLP export test unwraps a bounded `Bool?`
+completion and then separately asserts that its value is true. Swift Testing
+emitted an ambiguity warning for the unannotated optional `#require` argument.
+The compiler recommends an explicit `as Bool?` cast for this contract. The
+retained baseline test passed; this is a compiler-diagnostic correction,not a
+reproduction of a runtime failure.
+
+The explicit optional cast preserves the nil-completion failure and the
+following `#expect(success)` assertion. All eight caller awaits,one-refresh and
+eight-export counts,exact bearer metadata equality,admission conditions and
+cleanup order remain. No tolerance,timeout,inventory identity,fixture or
+production behavior changes. Eight following navigation entries move one line
+with their previous positions retained;this is not eight semantic findings.
+
+The final compiled owning exporter suite passed24/24 native identities with
+the optional-require warning absent. The affected identity passed three
+focused executions. The required-signing host gate verified606/606 unique
+native outcomes with zero failures/skips,including synchronizable-Keychain
+coverage. Three intentional cleanup issues remained matched known issues.
+The optional-require ambiguity was absent in the fresh owner and signed builds.
+Independent review and exact-head CI remain separate gates,retained in
+`.build/i372-optional-verification.json`. The unrelated upstream OpenTelemetry
+watchOS-minimum deprecation remains visible. Broader #372/#362 acceptance
+remains open.

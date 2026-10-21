@@ -3513,6 +3513,13 @@
         },
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372",
         "remaining_limits": "Whole underlying production task drainage remains unproven; shared gate/helper redesign and unrelated acceptance are outside this slice."
+      },
+      "issue_372_optional_completion_assertion": {
+        "decision": "fixed",
+        "owner": "Bleat maintainers / @yaleman",
+        "source_review": "Explicit Bool? cast selects optional unwrapping in #require. Existing #expect(success),eight caller values,one refresh,eight client exports,metadata equality and cleanup order remain. No wait,budget,scope or production change.",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#optional-completion-assertion-372",
+        "source_sha256": "9b747702625b487c552c7d9187c82122b10c339c5393ea74bbe72bcec02429ca"
       }
     },
     {
