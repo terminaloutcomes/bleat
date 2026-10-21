@@ -483,3 +483,36 @@ Likewise, native group retirement does not own shared CoreSimulator, Xcode build
 or signing services, nor Simulator-hosted application processes. Those remaining
 ownership and configuration boundaries stay open; this slice does not certify
 all runners or the broader #362/#369 audit.
+
+Final-source local verification passed the four exact new functions in three
+serial focused runs (12 executions), then 171 exact owning outcomes across
+11 nonempty targets, with zero failures, ignored or filtered tests. Sixteen empty
+CLI targets are compilation only. Strict Clippy, formatting, documentation and
+diff checks passed. Independent review cleared source commit `656c3a3`; final
+metadata review and exact-head CI remain separate.
+
+A fresh actual app-hosted Xcode selection through the changed runner passed
+`BleatAppTests/FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor`.
+Its compiler discovery and one individual result reconcile, with zero failures,
+skips, expected failures and runtime warnings. A new disposable Simulator was
+created for this invocation, then shut down/deleted with its absence verified;
+no shared device or service was reset. This is Simulator/framework evidence,
+not physical playback, signed-Keychain, release or whole-epic acceptance.
+
+The native build retained one `Package.swift: BleatTranscriptiondynamic-product`
+compiler warning about a macOS 27.0 sysroot targeting an iOS 26 Simulator triple.
+The app, generated transcription framework and app-test bundle were inspected
+with vtool: all three are IOSSIMULATOR with minimum OS 26.0. No explicit SDKROOT,
+DEVELOPER_DIR or deployment-target override appeared in the mise child, and no
+compiler/SDK settings were changed. The diagnostic's underlying cause remains
+unresolved; successful execution and correct product platforms do not erase it.
+Native artifacts and warning/platform checks are linked from
+`.build/i371-xcode-verification.json`.
+
+Adjacent audit found a separate existing result-preservation guard defect:
+`result_bundle.exists()` checks process cwd instead of the repository root.
+A private synthetic probe rejected an existing bundle from root cwd but invoked
+the stub native tool from nested cwd; both retained sentinels stayed unchanged.
+Independent review corroborated the guard bypass. No real overwrite is claimed.
+The guard is unchanged in this ownership slice and requires its own bounded
+#371 correction; it is not hidden by the fresh successful result path.
