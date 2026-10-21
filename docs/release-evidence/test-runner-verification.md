@@ -590,6 +590,23 @@ ending in `carplay-enabled` took the iOS-enabled branch. Decoding now distinguis
 syntax/incomplete input from typed root/row/field shape failures without retaining
 payload-bearing Serde errors. Regressions check the entire error chain. macOS
 exclusion runs before suffix handling, including the reported filename fixture.
-Earlier executions remain intermediate evidence; corrected-source validation
-and independent re-review remain pending. No signed-host, Simulator,
-device, live-server or full-epic acceptance is claimed by this slice.
+Earlier executions remain intermediate evidence. Independent re-review cleared
+corrected source `4e55716` with no findings. No signed-host, Simulator, device,
+live-server or full-epic acceptance is claimed by this slice.
+
+Corrected-source verification passed six exact functions in three serial runs
+(18 executions), then 178 exact owning outcomes across 11 nonempty targets,
+with zero failures, ignored or filtered tests. Sixteen empty CLI targets are
+compilation only. One owning result line is separated from its terminal `ok`
+by the inherited compiler-stderr control; all 178 native identities reconcile.
+Strict Clippy, formatting, documentation and diff checks passed. The actual
+supported launcher passed all twelve Xcode settings queries, plist checks and
+four pure invalid-mode controls, with no warning/error lines in its log. This
+proves launcher wiring separately from the pure validator checks. No SDK or
+compiler workaround was used. Original build configuration and entitlement
+files, shared owner algorithms and prior tests/audit rows remain unchanged.
+
+Two earlier six-pass focused runs had source edits during compilation; neither
+is attributed to final corrected-source acceptance. Raw results, source hashes,
+setup exit 0 and scope checks are linked from `.build/i371-paid-verification.json`.
+Final metadata review and exact-head CI remain separate gates.
