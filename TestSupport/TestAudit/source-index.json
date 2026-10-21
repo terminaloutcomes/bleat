@@ -10013,6 +10013,12 @@
       "name": "testConcurrentExportCleanupJoinsCallersAfterOperationFailure",
       "line": 1258,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
+      "name": "testObservationCleanupRetiresOnlyOwnedSubscription",
+      "line": 298,
+      "language": "swift"
     }
   ]
 }

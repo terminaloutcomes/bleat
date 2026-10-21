@@ -19503,6 +19503,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19549,6 +19553,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19634,6 +19642,10 @@
         "status": "source_updated_execution_recorded_separately",
         "evidence": "docs/release-evidence/test-reliability-audit.md#timing-and-synchronization-batch-2026-10-16",
         "note": "Selected synchronization follow-up changed; historical review remains above. Other findings and configuration evidence remain open."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
       }
     },
     {
@@ -19673,7 +19685,11 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372",
+        "scope": "Await exact subscription retirement and bounded stream termination on return and throw; preserve original semantic assertions. Does not certify internal production task-graph drainage."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
@@ -23745,6 +23761,38 @@
       "shared_helper_review": "AuthTelemetryTestCompletion has a latched Bool and one observer at a time; normal operation observation has finished or expired before cleanup starts. AuthTelemetryTestSignal retains early release. SingleFlightTokenProvider releases and removes registered continuations synchronously and caches release for late entry. Private retirement continues after any missing caller observation and never awaits an unconfirmed task value. No production helper changes.",
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372",
       "execution": "Final source:25/25 owning function identities;three focused native runs verify6/6 function executions and9/9 scenarios,including beforeEntry and afterAllEntries each run;required-signing host607/607 unique identities,zero failures/errors/skips,including synchronizable-Keychain coverage. Strict Swift lint and documentation checks pass. Three expected cleanup known issues and eight intentional read-only SwiftData diagnostics in three passing negative tests are retained. Extracted legacy cleanup baseline:one function,two failed argument cases/two expected count issues;initial private-visibility compile failed before tests. Independent review and exact-head CI remain separate."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::testObservationCleanupRetiresOnlyOwnedSubscription",
+      "source": {
+        "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
+        "line": 298
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retire only the owned statistics subscription across return/throw before/after consuming its initial buffered update.",
+      "dependencies_and_setup": "Fresh in-memory StatisticsRepository, two UUID subscriptions and two bounded readers per scenario; no persisted personal state.",
+      "action_postconditions": "Assert owned registration, optionally read initial update, return or throw injected typed failure; await removal and terminal stream; assert peer remains registered until its own awaited cleanup.",
+      "synchronization": "Await repository calls and withTestCleanup; BoundedAsyncStreamReader joins its reader/timeout task-group children.",
+      "timeout_tolerance": "Default reader deadline bounds cancellation-cooperative AsyncStream next; at most one buffered update is allowed by bufferingNewest(1).",
+      "classification": "Deterministic host Swift Testing subscription lifecycle regression with in-memory SwiftData.",
+      "compiler_skip": "Four enum cases; default host lane, no opt-in or skips.",
+      "decision": "keep",
+      "reason": "Protect failure-exit retirement without replacing operation failures or stopping peer subscriptions.",
+      "rules": {
+        "1": "Assert registration, typed original throw, removal, repeat terminal read and unaffected peer.",
+        "2": "Registration precedes reads; condition waits use bounded native reader.",
+        "3": "N/A: no playing media or position clock.",
+        "4": "Both owners use awaited cleanup on every exit; reader children join before return. Internal production graph drainage is outside this assertion.",
+        "5": "Fresh repository, in-memory container and IDs; no personal state or shared preferences.",
+        "6": "Host subscription lifecycle only; no live server/device evidence claimed.",
+        "7": "No retries or relaxed waits; preserve all original semantic assertions.",
+        "8": "Helper forwards caller SourceLocation; timeout cause retains UUID, elapsed and limit.",
+        "9": "Retain clean focused repeats, owning suite and signed host gate separately."
+      },
+      "issue_372_subscription_retirement": {
+        "evidence": "docs/release-evidence/test-reliability-audit.md#statistics-observer-retirement-372"
+      }
     }
   ],
   "issue_382": {

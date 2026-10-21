@@ -20,76 +20,83 @@ struct StatisticsExplorationTests {
         let stream = await repository.updates(
             id: id, query: query, accountIDs: [account])
         let reader = BoundedAsyncStreamReader(stream)
-        guard
-            let initial = await requireStatisticsUpdate(
-                from: reader, stage: "initial observation")
-        else { return }
-        if case .unprepared = initial.presentation {
-        } else {
-            Issue.record("Expected unprepared observation")
-        }
-        _ = try await repository.presentation(query: query)
-        guard
-            let prepared = await requireStatisticsUpdate(
-                from: reader, stage: "prepared presentation")
-        else { return }
-        await repository.acknowledgeUpdate(
-            id: id, revision: prepared.presentationRevision)
-        for second in 0...16 {
-            try await repository.record(
-                StatisticsPlaybackSample(
-                    accountID: account, itemID: item,
-                    sessionID: PlaybackSessionID(rawValue: "observed"),
-                    observedAt: date.addingTimeInterval(Double(second)),
-                    monotonicTime: Double(second),
-                    wholeBookPosition: Double(second), playbackRate: 1,
-                    playbackGeneration: 1,
-                    isAudibleAndAdvancing: true, chapter: nil, title: "Book",
-                    author: "Author", duration: 100))
-            if second == 0 { continue }
+        try await withStatisticsObservationCleanup(
+            repository: repository, id: id, reader: reader
+        ) {
             guard
-                let update = await requireStatisticsUpdate(
-                    from: reader, stage: "live sample revision \(second)")
+                let initial = await requireStatisticsUpdate(
+                    from: reader, stage: "initial observation")
             else { return }
-            let value: StatisticsPresentation
-            switch update.presentation {
-            case .live(let presentation), .committed(let presentation):
-                value = presentation
-            case .invalidated, .unprepared:
-                Issue.record("Prepared playback must not become invalidated")
+            if case .unprepared = initial.presentation {
+            } else {
+                Issue.record("Expected unprepared observation")
+            }
+            _ = try await repository.presentation(query: query)
+            guard
+                let prepared = await requireStatisticsUpdate(
+                    from: reader, stage: "prepared presentation")
+            else { return }
+            await repository.acknowledgeUpdate(
+                id: id, revision: prepared.presentationRevision)
+            for second in 0...16 {
+                try await repository.record(
+                    StatisticsPlaybackSample(
+                        accountID: account, itemID: item,
+                        sessionID: PlaybackSessionID(rawValue: "observed"),
+                        observedAt: date.addingTimeInterval(Double(second)),
+                        monotonicTime: Double(second),
+                        wholeBookPosition: Double(second), playbackRate: 1,
+                        playbackGeneration: 1,
+                        isAudibleAndAdvancing: true, chapter: nil,
+                        title: "Book",
+                        author: "Author", duration: 100))
+                if second == 0 { continue }
+                guard
+                    let update = await requireStatisticsUpdate(
+                        from: reader, stage: "live sample revision \(second)")
+                else { return }
+                let value: StatisticsPresentation
+                switch update.presentation {
+                case .live(let presentation), .committed(let presentation):
+                    value = presentation
+                case .invalidated, .unprepared:
+                    Issue.record(
+                        "Prepared playback must not become invalidated")
+                    return
+                }
+                #expect(
+                    value.snapshot.summary.localRealSeconds
+                        + (value.liveSlice?.realSeconds ?? 0) == Double(second))
+                await repository.acknowledgeUpdate(
+                    id: id, revision: update.presentationRevision)
+            }
+            try await repository.finish(
+                sessionID: PlaybackSessionID(rawValue: "observed"))
+            guard
+                let finished = await requireStatisticsUpdate(
+                    from: reader, stage: "finished slice commit")
+            else { return }
+            guard case .committed(let presentation) = finished.presentation
+            else {
+                Issue.record("Finish must deliver committed data")
                 return
             }
-            #expect(
-                value.snapshot.summary.localRealSeconds
-                    + (value.liveSlice?.realSeconds ?? 0) == Double(second))
-            await repository.acknowledgeUpdate(
-                id: id, revision: update.presentationRevision)
+            #expect(presentation.liveSlice == nil)
+            #expect(presentation.snapshot.summary.localRealSeconds == 16)
+            await repository.stopUpdates(id: id)
+            switch await reader.next() {
+            case .finished:
+                break
+            case .element:
+                Issue.record(
+                    "Statistics stream yielded an update after stopUpdates")
+            case .timedOut(let timeout, let elapsed):
+                Issue.record(
+                    "Statistics stream did not terminate after stopUpdates; elapsed \(elapsed), limit \(timeout)"
+                )
+            }
+            #expect(await repository.currentUpdate(id: id) == nil)
         }
-        try await repository.finish(
-            sessionID: PlaybackSessionID(rawValue: "observed"))
-        guard
-            let finished = await requireStatisticsUpdate(
-                from: reader, stage: "finished slice commit")
-        else { return }
-        guard case .committed(let presentation) = finished.presentation else {
-            Issue.record("Finish must deliver committed data")
-            return
-        }
-        #expect(presentation.liveSlice == nil)
-        #expect(presentation.snapshot.summary.localRealSeconds == 16)
-        await repository.stopUpdates(id: id)
-        switch await reader.next() {
-        case .finished:
-            break
-        case .element:
-            Issue.record(
-                "Statistics stream yielded an update after stopUpdates")
-        case .timedOut(let timeout, let elapsed):
-            Issue.record(
-                "Statistics stream did not terminate after stopUpdates; elapsed \(elapsed), limit \(timeout)"
-            )
-        }
-        #expect(await repository.currentUpdate(id: id) == nil)
     }
 
     @Test
@@ -101,39 +108,45 @@ struct StatisticsExplorationTests {
         let stream = await repository.updates(
             id: id, query: StatisticsQuery(), accountIDs: [account])
         let reader = BoundedAsyncStreamReader(stream)
-        _ = try await repository.presentation(query: StatisticsQuery())
-        try await repository.updateHistoryProgress(
-            accountID: account, completedPages: 1, totalPages: 3,
-            completed: false, at: date)
-        try await repository.reset(query: StatisticsQuery(accountID: account))
-        try await repository.record(
-            StatisticsPlaybackSample(
-                accountID: account, itemID: item,
-                sessionID: PlaybackSessionID(rawValue: "after-reset"),
-                observedAt: date, monotonicTime: 0, wholeBookPosition: 0,
-                playbackRate: 1, playbackGeneration: 1,
-                isAudibleAndAdvancing: true,
-                chapter: nil, title: "Book", author: "Author", duration: 100))
-        guard
-            let latest = await requireStatisticsUpdate(
-                from: reader, stage: "invalidation and history update")
-        else { return }
-        if case .invalidated = latest.presentation {
-        } else {
-            Issue.record("Live sample erased invalidation")
+        try await withStatisticsObservationCleanup(
+            repository: repository, id: id, reader: reader
+        ) {
+            _ = try await repository.presentation(query: StatisticsQuery())
+            try await repository.updateHistoryProgress(
+                accountID: account, completedPages: 1, totalPages: 3,
+                completed: false, at: date)
+            try await repository.reset(
+                query: StatisticsQuery(accountID: account))
+            try await repository.record(
+                StatisticsPlaybackSample(
+                    accountID: account, itemID: item,
+                    sessionID: PlaybackSessionID(rawValue: "after-reset"),
+                    observedAt: date, monotonicTime: 0, wholeBookPosition: 0,
+                    playbackRate: 1, playbackGeneration: 1,
+                    isAudibleAndAdvancing: true,
+                    chapter: nil, title: "Book", author: "Author", duration: 100
+                ))
+            guard
+                let latest = await requireStatisticsUpdate(
+                    from: reader, stage: "invalidation and history update")
+            else { return }
+            if case .invalidated = latest.presentation {
+            } else {
+                Issue.record("Live sample erased invalidation")
+            }
+            let history = try #require(latest.history[account]).get()
+            #expect(history.completedPages == 0)
+            _ = try await repository.presentation(query: StatisticsQuery())
+            guard
+                let rebuilt = await requireStatisticsUpdate(
+                    from: reader, stage: "explicitly prepared presentation")
+            else { return }
+            if case .committed = rebuilt.presentation {
+            } else {
+                Issue.record("Explicit load must prepare observation")
+            }
+            await repository.stopUpdates(id: id)
         }
-        let history = try #require(latest.history[account]).get()
-        #expect(history.completedPages == 0)
-        _ = try await repository.presentation(query: StatisticsQuery())
-        guard
-            let rebuilt = await requireStatisticsUpdate(
-                from: reader, stage: "explicitly prepared presentation")
-        else { return }
-        if case .committed = rebuilt.presentation {
-        } else {
-            Issue.record("Explicit load must prepare observation")
-        }
-        await repository.stopUpdates(id: id)
     }
 
     @Test
@@ -180,26 +193,32 @@ struct StatisticsExplorationTests {
             id: id, query: StatisticsQuery(accountID: other),
             accountIDs: [other])
         let reader = BoundedAsyncStreamReader(stream)
-        _ = try await repository.presentation(
-            query: StatisticsQuery(accountID: other))
-        try await repository.upsertRemoteSessions([session(realSeconds: 90)])
-        try await repository.updateHistoryProgress(
-            accountID: account, completedPages: 1, totalPages: 1,
-            completed: true)
-        guard
-            let update = await requireStatisticsUpdate(
-                from: reader, stage: "account-scoped committed snapshot")
-        else { return }
-        guard case .committed(let value) = update.presentation else {
-            Issue.record("Expected prepared scoped snapshot")
-            return
+        try await withStatisticsObservationCleanup(
+            repository: repository, id: id, reader: reader
+        ) {
+            _ = try await repository.presentation(
+                query: StatisticsQuery(accountID: other))
+            try await repository.upsertRemoteSessions([session(realSeconds: 90)]
+            )
+            try await repository.updateHistoryProgress(
+                accountID: account, completedPages: 1, totalPages: 1,
+                completed: true)
+            guard
+                let update = await requireStatisticsUpdate(
+                    from: reader, stage: "account-scoped committed snapshot")
+            else { return }
+            guard case .committed(let value) = update.presentation else {
+                Issue.record("Expected prepared scoped snapshot")
+                return
+            }
+            #expect(value.snapshot.summary.realSeconds == 0)
+            #expect(value.liveSlice == nil)
+            #expect(update.history[account] == nil)
+            #expect(
+                try #require(update.history[other]).get().lastCompletedAt == nil
+            )
+            await repository.stopUpdates(id: id)
         }
-        #expect(value.snapshot.summary.realSeconds == 0)
-        #expect(value.liveSlice == nil)
-        #expect(update.history[account] == nil)
-        #expect(
-            try #require(update.history[other]).get().lastCompletedAt == nil)
-        await repository.stopUpdates(id: id)
     }
 
     @Test
@@ -214,57 +233,130 @@ struct StatisticsExplorationTests {
         let stream = await repository.updates(
             id: id, query: query, accountIDs: [account])
         let reader = BoundedAsyncStreamReader(stream)
-        _ = try await repository.presentation(query: query)
-        let prepared = try #require(await repository.currentUpdate(id: id))
-        await repository.acknowledgeUpdate(
-            id: id, revision: prepared.presentationRevision)
-        let context = ModelContext(container)
-        for record in try context.fetch(
-            FetchDescriptor<StatisticsSnapshotRecord>())
-        { context.delete(record) }
-        try context.save()
-        for second in 0...2 {
-            try await repository.record(
-                StatisticsPlaybackSample(
-                    accountID: account, itemID: item,
-                    sessionID: PlaybackSessionID(rawValue: "paused"),
-                    observedAt: date.addingTimeInterval(Double(second)),
-                    monotonicTime: Double(second),
-                    wholeBookPosition: 0, playbackRate: 1,
-                    playbackGeneration: 1,
-                    isAudibleAndAdvancing: false, chapter: nil, title: "Book",
-                    author: "Author", duration: 100))
+        try await withStatisticsObservationCleanup(
+            repository: repository, id: id, reader: reader
+        ) {
+            _ = try await repository.presentation(query: query)
+            let prepared = try #require(await repository.currentUpdate(id: id))
+            await repository.acknowledgeUpdate(
+                id: id, revision: prepared.presentationRevision)
+            let context = ModelContext(container)
+            for record in try context.fetch(
+                FetchDescriptor<StatisticsSnapshotRecord>())
+            { context.delete(record) }
+            try context.save()
+            for second in 0...2 {
+                try await repository.record(
+                    StatisticsPlaybackSample(
+                        accountID: account, itemID: item,
+                        sessionID: PlaybackSessionID(rawValue: "paused"),
+                        observedAt: date.addingTimeInterval(Double(second)),
+                        monotonicTime: Double(second),
+                        wholeBookPosition: 0, playbackRate: 1,
+                        playbackGeneration: 1,
+                        isAudibleAndAdvancing: false, chapter: nil,
+                        title: "Book",
+                        author: "Author", duration: 100))
+            }
+            #expect(
+                await repository.currentUpdate(id: id)?.presentationRevision
+                    == prepared.presentationRevision)
+            try await repository.updateHistoryProgress(
+                accountID: account, completedPages: 1, totalPages: 2,
+                completed: false, at: date)
+            for second in 3...4 {
+                try await repository.record(
+                    StatisticsPlaybackSample(
+                        accountID: account, itemID: item,
+                        sessionID: PlaybackSessionID(rawValue: "paused"),
+                        observedAt: date.addingTimeInterval(Double(second)),
+                        monotonicTime: Double(second),
+                        wholeBookPosition: Double(second), playbackRate: 1,
+                        playbackGeneration: 1,
+                        isAudibleAndAdvancing: true, chapter: nil,
+                        title: "Book",
+                        author: "Author", duration: 100))
+            }
+            guard
+                let latest = await requireStatisticsUpdate(
+                    from: reader,
+                    stage: "coalesced live sample and history update")
+            else { return }
+            guard case .live(let value) = latest.presentation else {
+                Issue.record("Live update read an absent persisted cache")
+                return
+            }
+            #expect(value.snapshot.summary.localRealSeconds == 0)
+            #expect(value.liveSlice?.realSeconds == 1)
+            #expect(
+                try #require(latest.history[account]).get().completedPages == 1)
+            await repository.stopUpdates(id: id)
         }
-        #expect(
-            await repository.currentUpdate(id: id)?.presentationRevision
-                == prepared.presentationRevision)
-        try await repository.updateHistoryProgress(
-            accountID: account, completedPages: 1, totalPages: 2,
-            completed: false, at: date)
-        for second in 3...4 {
-            try await repository.record(
-                StatisticsPlaybackSample(
-                    accountID: account, itemID: item,
-                    sessionID: PlaybackSessionID(rawValue: "paused"),
-                    observedAt: date.addingTimeInterval(Double(second)),
-                    monotonicTime: Double(second),
-                    wholeBookPosition: Double(second), playbackRate: 1,
-                    playbackGeneration: 1,
-                    isAudibleAndAdvancing: true, chapter: nil, title: "Book",
-                    author: "Author", duration: 100))
+    }
+
+    @Test(arguments: StatisticsObservationExit.allCases)
+    private func testObservationCleanupRetiresOnlyOwnedSubscription(
+        exit: StatisticsObservationExit
+    ) async throws {
+        let repository = try repository()
+        let peerID = UUID()
+        let peerStream = await repository.updates(
+            id: peerID, query: StatisticsQuery(), accountIDs: [account])
+        let peerReader = BoundedAsyncStreamReader(peerStream)
+        try await withStatisticsObservationCleanup(
+            repository: repository, id: peerID, reader: peerReader
+        ) {
+            let id = UUID()
+            let stream = await repository.updates(
+                id: id, query: StatisticsQuery(), accountIDs: [account])
+            let reader = BoundedAsyncStreamReader(stream)
+            let operation: () async throws -> Void = {
+                #expect(await repository.currentUpdate(id: id) != nil)
+                if exit.readsInitialUpdate {
+                    guard
+                        let initial = await requireStatisticsUpdate(
+                            from: reader,
+                            stage: "cleanup fixture initial update")
+                    else { return }
+                    if case .unprepared = initial.presentation {
+                    } else {
+                        Issue.record("Fresh cleanup fixture must be unprepared")
+                    }
+                }
+                if exit.throwsOperation {
+                    throw StatisticsObservationOperationFailure.injected
+                }
+                return
+            }
+            if exit.throwsOperation {
+                await #expect(
+                    throws: StatisticsObservationOperationFailure.injected
+                ) {
+                    try await withStatisticsObservationCleanup(
+                        repository: repository, id: id, reader: reader,
+                        operation: operation)
+                }
+            } else {
+                try await withStatisticsObservationCleanup(
+                    repository: repository, id: id, reader: reader,
+                    operation: operation)
+            }
+            #expect(await repository.currentUpdate(id: id) == nil)
+            #expect(await repository.currentUpdate(id: peerID) != nil)
+            // Repeated terminal reads prove retirement is stable; the peer
+            // remains registered until the outer owner's awaited cleanup.
+            switch await reader.next() {
+            case .finished:
+                break
+            case .element:
+                Issue.record("Retired cleanup fixture yielded another update")
+            case .timedOut(let timeout, let elapsed):
+                Issue.record(
+                    "Retired cleanup fixture did not stay terminal; elapsed \(elapsed), limit \(timeout)"
+                )
+            }
         }
-        guard
-            let latest = await requireStatisticsUpdate(
-                from: reader, stage: "coalesced live sample and history update")
-        else { return }
-        guard case .live(let value) = latest.presentation else {
-            Issue.record("Live update read an absent persisted cache")
-            return
-        }
-        #expect(value.snapshot.summary.localRealSeconds == 0)
-        #expect(value.liveSlice?.realSeconds == 1)
-        #expect(try #require(latest.history[account]).get().completedPages == 1)
-        await repository.stopUpdates(id: id)
+        #expect(await repository.currentUpdate(id: peerID) == nil)
     }
 
     @Test
@@ -850,4 +942,68 @@ private func requireStatisticsUpdate(
         )
     }
     return nil
+}
+
+private enum StatisticsObservationExit: CaseIterable, Sendable {
+    case returnBeforeRead, returnAfterRead, throwBeforeRead, throwAfterRead
+
+    var readsInitialUpdate: Bool {
+        switch self {
+        case .returnAfterRead, .throwAfterRead: true
+        case .returnBeforeRead, .throwBeforeRead: false
+        }
+    }
+    var throwsOperation: Bool {
+        switch self {
+        case .throwBeforeRead, .throwAfterRead: true
+        case .returnBeforeRead, .returnAfterRead: false
+        }
+    }
+}
+
+private enum StatisticsObservationOperationFailure: Error { case injected }
+private enum StatisticsObservationCleanupFailure: Error {
+    case subscriptionRetained(UUID)
+    case unexpectedBufferedUpdates(UUID)
+    case terminationTimedOut(id: UUID, timeout: Duration, elapsed: Duration)
+}
+
+/// Retire this exact subscription on every operation exit, preserving an
+/// originating throw and the caller's diagnostic location. The repository's
+/// bufferingNewest(1) policy permits at most one unread update before finish.
+private func withStatisticsObservationCleanup<T>(
+    repository: StatisticsRepository, id: UUID,
+    reader: BoundedAsyncStreamReader<StatisticsUpdate>,
+    sourceLocation: SourceLocation = #_sourceLocation,
+    isolation: isolated (any Actor)? = #isolation,
+    operation: () async throws -> T
+) async throws -> T {
+    try await withTestCleanup(
+        {
+            await repository.stopUpdates(id: id)
+            guard await repository.currentUpdate(id: id) == nil else {
+                throw StatisticsObservationCleanupFailure.subscriptionRetained(
+                    id)
+            }
+            for read in 0..<2 {
+                switch await reader.next() {
+                case .finished:
+                    return
+                case .element:
+                    guard read == 0 else {
+                        throw
+                            StatisticsObservationCleanupFailure
+                            .unexpectedBufferedUpdates(id)
+                    }
+                case .timedOut(let timeout, let elapsed):
+                    throw
+                        StatisticsObservationCleanupFailure.terminationTimedOut(
+                            id: id, timeout: timeout, elapsed: elapsed)
+                }
+            }
+            throw StatisticsObservationCleanupFailure.unexpectedBufferedUpdates(
+                id)
+        },
+        sourceLocation: sourceLocation, isolation: isolation,
+        operation: operation)
 }
