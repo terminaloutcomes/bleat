@@ -708,3 +708,40 @@ This repairs the demonstrated active command-group boundary. It does not prove
 retirement of detached groups, shared Xcode/CoreSimulator services, the three
 Swift nested-child owners, or Release cleanup. Deferred macOS app-isolation work
 remains deferred. No physical-device evidence is inferred.
+
+## Release secret-scan Simulator build admission (#362)
+
+The owning Simulator gate at `adc7ac4` passed 627 application tests and 119 UI
+tests, with six explicitly allowed UI skips. This ordinary suite does not
+substitute for the native-authentication Release secret scan.
+
+The first `mise run test:release-secrets` attempt exited 65 during Release
+build-for-testing: the paid-settings validator rejected the harness's HTTPS
+loopback telemetry origin. Its seven scanner Python regressions had passed; no
+native application/UI cases, surface scan or archive completed. The original
+compressed build activity and failed-stage receipt remain retained privately.
+Independent cleanup verification found no remaining owned Simulator, Docker
+container/volume or private secret-broker process. No production secret leak
+was observed or claimed.
+
+A focused regression failed against the unchanged validator with the typed
+insecure-origin error. The repair admits HTTPS loopback only for the exact
+Release, iphonesimulator and `BLEAT_RELEASE_SECRET_SCAN` combination. Device,
+uninstrumented, wrong-configuration, HTTP and malformed OTLP cases retain typed
+rejection; TLS validation is unchanged. Three new regression functions cover
+14 table inputs. Each passed individually, and the owning build-scripts package
+passed all 38 tests with no failures or ignored cases; strict Clippy and format
+checks passed.
+
+The next Release compile advanced past that rejection and exposed a separate
+compiler failure: `UITestPlaybackFixturesTests` referenced fixture types absent
+from native-authentication Release builds. The test class now uses the same
+`DEBUG || BLEAT_UI_TESTING` condition as those types, retaining all five test
+bodies and assertions. Release build-for-testing then passed; the five exact
+Debug fixture tests passed with no skips, failures or runtime warnings. This
+compile-only result is not a completed secret-leakage gate.
+
+The full repaired gate and final exact-head CI remain pending. Local receipts
+are retained in `.build/i362-release-scan-final-checks.json`,
+`.build/i362-release-scan-debug-fixtures-verified.json` and the original
+`.build/i362-important-release-failed-baseline/` directory.

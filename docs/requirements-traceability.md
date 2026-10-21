@@ -1036,3 +1036,10 @@ identity, reports and coverage contracts. [Scope, original failure and evidence]
 keep detached/nested owners, Release cleanup and deferred macOS app work separate.
 Final focused/signed owning execution, independent review and exact-head CI are
 recorded at the tested revision; this is not whole-epic completion.
+
+## Release secret-scan build admission (#362)
+
+The [scoped Release build evidence](release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362)
+records the two reproduced gate build failures, typed settings regression,
+fixture compiler-condition repair and exact focused outcomes. The full repaired
+secret scan and final CI remain pending; ordinary Simulator success is separate.

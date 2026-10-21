@@ -3713,31 +3713,31 @@
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testSeparateJourneysDoNotShareDownloadStorage",
-      "line": 13,
+      "line": 15,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testBundledMediaIsPlayableAndMatchesTrackDurations",
-      "line": 24,
+      "line": 26,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testPlaybackServiceUsesBundledMedia",
-      "line": 39,
+      "line": 42,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testMissingBundleResourceKeepsTypedFailureThroughPlayback",
-      "line": 69,
+      "line": 74,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
       "name": "testMissingHalfHourResourceHasDistinctPresentationAndDiagnostic",
-      "line": 98,
+      "line": 103,
       "language": "swift"
     },
     {
@@ -10300,6 +10300,24 @@
       "path": "scripts/src/host_test_driver/tests.rs",
       "name": "signed_entitlements_require_exact_team_application_and_keychain_group",
       "line": 10,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "accepts_https_loopback_for_instrumented_release_simulator",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "keeps_release_device_and_uninstrumented_loopback_rejected",
+      "line": 190,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/paid_build_settings.rs",
+      "name": "release_scan_simulator_preserves_https_and_otlp_origin_policy",
+      "line": 228,
       "language": "rust"
     }
   ],

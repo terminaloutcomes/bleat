@@ -454,12 +454,17 @@ mise run test:release-secrets
 
 The gate uses disposable Audiobookshelf, telemetry, and Simulator resources;
 exercises login, token refresh, authenticated browsing, download, offline
-playback, diagnostics, telemetry, and logout; creates a normal unsigned Release
-archive; and scans the collected production-relevant surfaces for private
+playback, diagnostics, telemetry, and logout; creates a normal Release
+archive using the configured signing mode; and scans the collected production-relevant surfaces for private
 sentinels. Collected unified logs are decoded to NDJSON before their messages
 are scanned. Private manifests, the raw log archive, and raw server artifacts
 are deleted during cleanup. The retained non-secret result is
 `.build/release-secret-scan/report.json`.
+
+The instrumented Release Simulator build permits HTTPS loopback telemetry only
+with the exact `BLEAT_RELEASE_SECRET_SCAN` compilation condition. Device builds
+and ordinary Release builds retain their production-origin validation. The
+disposable Simulator installs its own test CA; TLS trust checks remain enabled.
 
 ## Release packaging
 

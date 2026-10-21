@@ -49358,10 +49358,12 @@
       "identifier": "UITestPlaybackFixturesTests/testSeparateJourneysDoNotShareDownloadStorage",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 13,
-        "endLineBeforeNextTest": 23
+        "line": 15,
+        "endLineBeforeNextTest": 25
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "TestAppService"
       ],
@@ -49407,16 +49409,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testBundledMediaIsPlayableAndMatchesTrackDurations",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 24,
-        "endLineBeforeNextTest": 38
+        "line": 26,
+        "endLineBeforeNextTest": 41
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "AVURLAsset"
       ],
@@ -49467,16 +49480,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testPlaybackServiceUsesBundledMedia",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 39,
-        "endLineBeforeNextTest": 68
+        "line": 42,
+        "endLineBeforeNextTest": 73
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "AVURLAsset",
         "TestAppService"
@@ -49548,16 +49572,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testMissingBundleResourceKeepsTypedFailureThroughPlayback",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 69,
-        "endLineBeforeNextTest": 97
+        "line": 74,
+        "endLineBeforeNextTest": 102
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "TestAppService"
       ],
@@ -49628,16 +49663,27 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
       "identifier": "UITestPlaybackFixturesTests/testMissingHalfHourResourceHasDistinctPresentationAndDiagnostic",
       "source": {
         "path": "Tests/BleatAppTests/UITestPlaybackFixturesTests.swift",
-        "line": 98,
-        "endLineBeforeNextTest": 135
+        "line": 103,
+        "endLineBeforeNextTest": 144
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "#if DEBUG || BLEAT_UI_TESTING"
+      ],
       "setupAndDependencies": [
         "temporaryDirectory"
       ],
@@ -49716,6 +49762,15 @@
           "outcome": "keep",
           "reason": "The helper/adapter contract is checked with isolated fixtures and exact outputs."
         }
+      },
+      "releaseFixtureBuildScope": {
+        "issue": 362,
+        "previousCompilerConditions": [],
+        "currentCompilerCondition": "DEBUG || BLEAT_UI_TESTING",
+        "reason": "Match the existing UITestPlaybackFixtures/UITestAppService subject condition. Ordinary Release and native-authentication secret-scan builds do not contain that fake UI subject. Test bodies and assertions are retained.",
+        "source_sha256": "38f637961ad6230e31074d4c98f75c5ea145fc6bde24dbdad71a5dd48599f5ea",
+        "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
+        "execution": "All five exact Debug fixture identities passed after this guard, zero failures/skips/expected failures/runtime warnings; Release compile-only probe also passed. The real Release security journey remains separate pending validation."
       }
     },
     {
