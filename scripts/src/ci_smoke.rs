@@ -19,7 +19,7 @@ use smoke_commands::{SmokeCommand, finish_tests, run_command};
 
 #[cfg(test)]
 #[path = "ci_smoke/lifecycle_tests.rs"]
-mod lifecycle_tests;
+pub(crate) mod lifecycle_tests;
 
 #[derive(Clone, Copy)]
 struct Budgets {

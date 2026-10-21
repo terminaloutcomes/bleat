@@ -9799,6 +9799,30 @@
       "name": "swiftpm_execution_always_audits_reports_and_keeps_both_typed_causes",
       "line": 293,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_roles_preserve_policy_status_and_original_spawn_causes",
+      "line": 62,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_deadlines_reap_all_admitted_roles",
+      "line": 114,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_native_status_never_hides_unconfirmed_cleanup",
+      "line": 161,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "name": "direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures",
+      "line": 187,
+      "language": "rust"
     }
   ]
 }

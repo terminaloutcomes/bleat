@@ -443,3 +443,43 @@ execution (zero tests); the supported invocation above ran subsequently without
 changing the implementation. Neither attempt is counted as acceptance coverage.
 Artifacts are `.build/i371-swiftpm-verification.json`, its native selections and
 linked logs/manifests. No observed production hang or disclosure is claimed.
+
+## Direct Xcode runner command bounds (#371)
+
+At base `1f59c442d5066cabc9b5a5e08fd4c6f62a5da313`, the general Xcode runner
+had six direct native call sites plus an aggregate-script caller sharing an
+unbounded status helper. The six direct sites now use seven typed roles: Swift
+Release build, Cargo release-version tests, package resolution, Release Simulator
+build, build-for-testing, enumeration and test execution. Version tests and
+resolution have 1,200-second policies; builds 2,400; enumeration 300; execution
+3,600. Cleanup retains the existing three-second policy and bounded fallback.
+These batch commands inherit live console output and receive null stdin.
+
+The adapter preserves status() semantics for observed nonzero exits only after
+the existing owner confirms retirement. Other native failures retain exact role,
+stage, original cause and context label. Unconfirmed cleanup is never converted
+to an accepted status. Result verification remains unconditional after attempted
+test execution; both native and verification failures survive. The combined
+message describes native failure accurately for spawn and deadline cases.
+
+Existing builders, selectors, discovery/result paths, verification flow and all
+four existing runner assertions are preserved. The package-resolution test's
+single action argument becomes a typed enum. Test-only fixture visibility allows
+reuse of the existing lifecycle guards; their bodies and existing tests are
+unchanged. The existing cleanup predicate is visible within the crate so status
+translation uses the same retirement contract; its behavior is unchanged.
+
+Four new functions cover all seven policies and native status/spawn cases,
+positively admitted held commands with observed cleanup, rejection of fabricated
+unconfirmed retirement, and the six full-gate exit/spawn/deadline-versus-result
+combinations. Four individual nine-rule assessments append while preserving all
+423 prior other records and 1,629 index records. These native fixtures do not
+constitute actual Xcode/app execution or full verifier-schema acceptance.
+
+The two aggregate scripts (`test-host.sh` and paid-developer build modes) remain
+explicitly separate. Killing an outer shell would bypass EXIT cleanup and does
+not prove nested Foundation/SwiftPM or tool-created process groups drained.
+Likewise, native group retirement does not own shared CoreSimulator, Xcode build
+or signing services, nor Simulator-hosted application processes. Those remaining
+ownership and configuration boundaries stay open; this slice does not certify
+all runners or the broader #362/#369 audit.

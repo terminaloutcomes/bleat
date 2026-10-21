@@ -7635,6 +7635,142 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#swiftpm-command-bounds-371",
         "source_sha256": "928ddc2d7e9e2770f74f269c41ff74c4ced585e199c619e357188fc4b644bcfb"
       }
+    },
+    {
+      "id": "scripts::xcode_runner_commands::direct_native_roles_preserve_policy_status_and_original_spawn_causes",
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "line": 62,
+      "native_identity": "xcode_test_runner::lifecycle_tests::direct_native_roles_preserve_policy_status_and_original_spawn_causes",
+      "purpose": "Preserve seven direct native roles, finite policies, wire actions and native status semantics.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For every role, assert exact Stage and policy, run native exit0/23 and retain each status, require ensure_success to reject23 as CommandFailed, and preserve missing-tool Spawn(NotFound), original label/stage and absent cleanup handle. Typed Xcode actions retain exact -resolvePackageDependencies/build arguments."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts unit tests on supported Unix macOS/Linux. No opt-in, skip, server, signing or actual Apple tool installation required for controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and native commands. Existing test-only FixtureWorker/Fixture support is visible within crate tests; helper bodies and existing assertions are preserved. No production feature or credential seam changes.",
+      "action_postconditions": "For every role, assert exact Stage and policy, run native exit0/23 and retain each status, require ensure_success to reject23 as CommandFailed, and preserve missing-tool Spawn(NotFound), original label/stage and absent cleanup handle. Typed Xcode actions retain exact -resolvePackageDependencies/build arguments.",
+      "synchronization_timeout": "Finite private native commands use two-second execution and one-second cleanup. Static policy checks do not wait for production-length budgets. No actual Xcode, Swift compiler or Cargo test is launched.",
+      "rules": {
+        "1": "For every role, assert exact Stage and policy, run native exit0/23 and retain each status, require ensure_success to reject23 as CommandFailed, and preserve missing-tool Spawn(NotFound), original label/stage and absent cleanup handle. Typed Xcode actions retain exact -resolvePackageDependencies/build arguments.",
+        "2": "Finite private native commands use two-second execution and one-second cleanup. Static policy checks do not wait for production-length budgets. No actual Xcode, Swift compiler or Cargo test is launched.",
+        "3": "No playback position or performance assertion. Budgets bound failure; production policy values are not timing tolerances.",
+        "4": "Finite private native commands use two-second execution and one-second cleanup. Static policy checks do not wait for production-length budgets. No actual Xcode, Swift compiler or Cargo test is launched.",
+        "5": "Private test inputs, exact recorded children and typed synthetic errors. No process-global output/environment mutation, unrelated process signal or shared service reset.",
+        "6": "Controlled native Unix lifecycle plus real pure JSON verification, or pure typed policy/translation. Fresh actual Xcode and CI remain distinct gates.",
+        "7": "Keep unsuccessful attempts separately. Preserve all four existing Xcode runner tests/assertions; one action argument becomes a typed enum. Do not infer production hangs or nested-owner drainage from fixture success.",
+        "8": "Typed role/stage, original cause, context label, status and paired verification failure stay inspectable. Native tools inherit live console output; no captured report payload is copied into new error formatting.",
+        "9": "Focused repetitions, owning outcomes, strict Clippy, representative Xcode, independent review and exact-head CI must be recorded separately."
+      },
+      "issue371_xcode_commands": {
+        "base_revision": "1f59c442d5066cabc9b5a5e08fd4c6f62a5da313",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371",
+        "source_sha256": "2d8007345829528f42af6b1275e6e20c44afb35fa2d5b9490959e8ce0d723b00"
+      }
+    },
+    {
+      "id": "scripts::xcode_runner_commands::direct_native_deadlines_reap_all_admitted_roles",
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "line": 114,
+      "native_identity": "xcode_test_runner::lifecycle_tests::direct_native_deadlines_reap_all_admitted_roles",
+      "purpose": "Bound and retire every positively admitted direct native role.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Admit the fixture PID before independent five-second observation of a two-second execution and one-second cleanup policy. Release and join before assertions; require exact stage, typed deadline with elapsed>=budget, signal attempt, native status, group disappearance and absent PID."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts unit tests on supported Unix macOS/Linux. No opt-in, skip, server, signing or actual Apple tool installation required for controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and native commands. Existing test-only FixtureWorker/Fixture support is visible within crate tests; helper bodies and existing assertions are preserved. No production feature or credential seam changes.",
+      "action_postconditions": "Admit the fixture PID before independent five-second observation of a two-second execution and one-second cleanup policy. Release and join before assertions; require exact stage, typed deadline with elapsed>=budget, signal attempt, native status, group disappearance and absent PID.",
+      "synchronization_timeout": "Reuse existing bounded PID/release polling, FixtureWorker release/join on unwind and recorded-child drainage. No guessed timing delay, detached worker, shared service or Simulator cleanup.",
+      "rules": {
+        "1": "Admit the fixture PID before independent five-second observation of a two-second execution and one-second cleanup policy. Release and join before assertions; require exact stage, typed deadline with elapsed>=budget, signal attempt, native status, group disappearance and absent PID.",
+        "2": "Reuse existing bounded PID/release polling, FixtureWorker release/join on unwind and recorded-child drainage. No guessed timing delay, detached worker, shared service or Simulator cleanup.",
+        "3": "No playback position or performance assertion. Budgets bound failure; production policy values are not timing tolerances.",
+        "4": "Reuse existing bounded PID/release polling, FixtureWorker release/join on unwind and recorded-child drainage. No guessed timing delay, detached worker, shared service or Simulator cleanup.",
+        "5": "Private test inputs, exact recorded children and typed synthetic errors. No process-global output/environment mutation, unrelated process signal or shared service reset.",
+        "6": "Controlled native Unix lifecycle plus real pure JSON verification, or pure typed policy/translation. Fresh actual Xcode and CI remain distinct gates.",
+        "7": "Keep unsuccessful attempts separately. Preserve all four existing Xcode runner tests/assertions; one action argument becomes a typed enum. Do not infer production hangs or nested-owner drainage from fixture success.",
+        "8": "Typed role/stage, original cause, context label, status and paired verification failure stay inspectable. Native tools inherit live console output; no captured report payload is copied into new error formatting.",
+        "9": "Focused repetitions, owning outcomes, strict Clippy, representative Xcode, independent review and exact-head CI must be recorded separately."
+      },
+      "issue371_xcode_commands": {
+        "base_revision": "1f59c442d5066cabc9b5a5e08fd4c6f62a5da313",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371",
+        "source_sha256": "2d8007345829528f42af6b1275e6e20c44afb35fa2d5b9490959e8ce0d723b00"
+      }
+    },
+    {
+      "id": "scripts::xcode_runner_commands::direct_native_status_never_hides_unconfirmed_cleanup",
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "line": 161,
+      "native_identity": "xcode_test_runner::lifecycle_tests::direct_native_status_never_hides_unconfirmed_cleanup",
+      "purpose": "Reject an exit-shaped failure without confirmed native retirement instead of accepting a successful-looking status.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Feed a fabricated exit0 without cleanup evidence and a separate typed Cleanup failure through status translation. Require NativeCommand with exact XcodeTestExecution stage, original cause and absent cleanup handle. Real observed nonzero status is tested separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts unit tests on supported Unix macOS/Linux. No opt-in, skip, server, signing or actual Apple tool installation required for controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and native commands. Existing test-only FixtureWorker/Fixture support is visible within crate tests; helper bodies and existing assertions are preserved. No production feature or credential seam changes.",
+      "action_postconditions": "Feed a fabricated exit0 without cleanup evidence and a separate typed Cleanup failure through status translation. Require NativeCommand with exact XcodeTestExecution stage, original cause and absent cleanup handle. Real observed nonzero status is tested separately.",
+      "synchronization_timeout": "Pure typed failure translation; no process or teardown. This defensive negative does not claim an observed production cleanup failure.",
+      "rules": {
+        "1": "Feed a fabricated exit0 without cleanup evidence and a separate typed Cleanup failure through status translation. Require NativeCommand with exact XcodeTestExecution stage, original cause and absent cleanup handle. Real observed nonzero status is tested separately.",
+        "2": "Pure typed failure translation; no process or teardown. This defensive negative does not claim an observed production cleanup failure.",
+        "3": "No playback position or performance assertion. Budgets bound failure; production policy values are not timing tolerances.",
+        "4": "Pure typed failure translation; no process or teardown. This defensive negative does not claim an observed production cleanup failure.",
+        "5": "Private test inputs, exact recorded children and typed synthetic errors. No process-global output/environment mutation, unrelated process signal or shared service reset.",
+        "6": "Controlled native Unix lifecycle plus real pure JSON verification, or pure typed policy/translation. Fresh actual Xcode and CI remain distinct gates.",
+        "7": "Keep unsuccessful attempts separately. Preserve all four existing Xcode runner tests/assertions; one action argument becomes a typed enum. Do not infer production hangs or nested-owner drainage from fixture success.",
+        "8": "Typed role/stage, original cause, context label, status and paired verification failure stay inspectable. Native tools inherit live console output; no captured report payload is copied into new error formatting.",
+        "9": "Focused repetitions, owning outcomes, strict Clippy, representative Xcode, independent review and exact-head CI must be recorded separately."
+      },
+      "issue371_xcode_commands": {
+        "base_revision": "1f59c442d5066cabc9b5a5e08fd4c6f62a5da313",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371",
+        "source_sha256": "2d8007345829528f42af6b1275e6e20c44afb35fa2d5b9490959e8ce0d723b00"
+      }
+    },
+    {
+      "id": "scripts::xcode_runner_commands::direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures",
+      "path": "scripts/src/xcode_test_runner/lifecycle_tests.rs",
+      "line": 187,
+      "native_identity": "xcode_test_runner::lifecycle_tests::direct_xcode_gate_audits_after_exit_spawn_and_deadline_failures",
+      "purpose": "Always verify the exact built selection after native execution failure and preserve both independent outcomes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Exercise six combinations: native exit23, absent executable or positively admitted deadline, each paired with exact-result success or missing-result rejection. The real gate builds/enumerates the private fixture, invokes the verifier every time, and never accepts failed execution. Assert exact nonzero status or original spawn/deadline stage/cause; rejected verification remains typed MissingTest in the combined error."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts unit tests on supported Unix macOS/Linux. No opt-in, skip, server, signing or actual Apple tool installation required for controlled fixtures.",
+      "setup_dependencies": "Fresh private Fixture and native commands. Existing test-only FixtureWorker/Fixture support is visible within crate tests; helper bodies and existing assertions are preserved. No production feature or credential seam changes.",
+      "action_postconditions": "Exercise six combinations: native exit23, absent executable or positively admitted deadline, each paired with exact-result success or missing-result rejection. The real gate builds/enumerates the private fixture, invokes the verifier every time, and never accepts failed execution. Assert exact nonzero status or original spawn/deadline stage/cause; rejected verification remains typed MissingTest in the combined error.",
+      "synchronization_timeout": "Private native fake-Xcode commands produce minimal discovery. Held execution is positively admitted before five-second supervision; release and join precede assertions, and the owned PID is absent after return. Injected verifier calls the real JSON identity verifier. No real .xcresult, Simulator, Xcode build or application execution is claimed.",
+      "rules": {
+        "1": "Exercise six combinations: native exit23, absent executable or positively admitted deadline, each paired with exact-result success or missing-result rejection. The real gate builds/enumerates the private fixture, invokes the verifier every time, and never accepts failed execution. Assert exact nonzero status or original spawn/deadline stage/cause; rejected verification remains typed MissingTest in the combined error.",
+        "2": "Private native fake-Xcode commands produce minimal discovery. Held execution is positively admitted before five-second supervision; release and join precede assertions, and the owned PID is absent after return. Injected verifier calls the real JSON identity verifier. No real .xcresult, Simulator, Xcode build or application execution is claimed.",
+        "3": "No playback position or performance assertion. Budgets bound failure; production policy values are not timing tolerances.",
+        "4": "Private native fake-Xcode commands produce minimal discovery. Held execution is positively admitted before five-second supervision; release and join precede assertions, and the owned PID is absent after return. Injected verifier calls the real JSON identity verifier. No real .xcresult, Simulator, Xcode build or application execution is claimed.",
+        "5": "Private test inputs, exact recorded children and typed synthetic errors. No process-global output/environment mutation, unrelated process signal or shared service reset.",
+        "6": "Controlled native Unix lifecycle plus real pure JSON verification, or pure typed policy/translation. Fresh actual Xcode and CI remain distinct gates.",
+        "7": "Keep unsuccessful attempts separately. Preserve all four existing Xcode runner tests/assertions; one action argument becomes a typed enum. Do not infer production hangs or nested-owner drainage from fixture success.",
+        "8": "Typed role/stage, original cause, context label, status and paired verification failure stay inspectable. Native tools inherit live console output; no captured report payload is copied into new error formatting.",
+        "9": "Focused repetitions, owning outcomes, strict Clippy, representative Xcode, independent review and exact-head CI must be recorded separately."
+      },
+      "issue371_xcode_commands": {
+        "base_revision": "1f59c442d5066cabc9b5a5e08fd4c6f62a5da313",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371",
+        "source_sha256": "2d8007345829528f42af6b1275e6e20c44afb35fa2d5b9490959e8ce0d723b00"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

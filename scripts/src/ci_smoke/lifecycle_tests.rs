@@ -8,12 +8,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-struct FixtureWorker {
-    worker: Option<thread::JoinHandle<()>>,
-    release: std::path::PathBuf,
+pub(crate) struct FixtureWorker {
+    pub(crate) worker: Option<thread::JoinHandle<()>>,
+    pub(crate) release: std::path::PathBuf,
 }
 impl FixtureWorker {
-    fn join(mut self) -> thread::Result<()> {
+    pub(crate) fn join(mut self) -> thread::Result<()> {
         match self.worker.take() {
             Some(worker) => worker.join(),
             None => Ok(()),
@@ -32,16 +32,16 @@ impl Drop for FixtureWorker {
     }
 }
 
-struct Fixture {
-    root: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) root: tempfile::TempDir,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             root: tempfile::tempdir().expect("isolated runner fixture"),
         }
     }
-    fn command(&self, role: &str, script: &str) -> Command {
+    pub(crate) fn command(&self, role: &str, script: &str) -> Command {
         let mut command = Command::new("/bin/sh");
         command
             .args(["-c", &format!("printf '%s' \"$$\" > {role}.pending; /bin/mv {role}.pending {role}.pid; {script}")])
@@ -49,7 +49,7 @@ impl Fixture {
             .process_group(0);
         command
     }
-    fn ready(&self, role: &str) -> i32 {
+    pub(crate) fn ready(&self, role: &str) -> i32 {
         let path = self.root.path().join(format!("{role}.pid"));
         let deadline = Instant::now() + Duration::from_secs(3);
         loop {
@@ -66,10 +66,10 @@ impl Fixture {
             thread::sleep(Duration::from_millis(10));
         }
     }
-    fn release(&self) {
+    pub(crate) fn release(&self) {
         fs::write(self.root.path().join("release"), b"release").expect("release owned fixtures");
     }
-    fn drain_pid(&self, pid: i32) {
+    pub(crate) fn drain_pid(&self, pid: i32) {
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut status = 0;
         loop {
@@ -125,11 +125,11 @@ impl Drop for Fixture {
         }
     }
 }
-fn alive(pid: i32) -> bool {
+pub(crate) fn alive(pid: i32) -> bool {
     // SAFETY: signal0 probes only; no signal is delivered.
     unsafe { libc::kill(pid, 0) == 0 }
 }
-fn held() -> &'static str {
+pub(crate) fn held() -> &'static str {
     "while [ ! -f release ]; do /bin/sleep 0.01; done"
 }
 fn budgets() -> Budgets {

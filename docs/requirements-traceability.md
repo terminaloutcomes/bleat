@@ -915,3 +915,12 @@ while retaining live compiler stderr; observer environment, selection and report
 contracts remain explicit. Failed execution still audits artifacts and preserves
 both typed causes. [Scoped source, regression and acceptance evidence](release-evidence/test-runner-verification.md#swiftpm-command-bounds-371)
 keeps actual execution and broader #362 acceptance separate.
+
+### Direct Xcode runner native ownership (#371)
+
+Six direct tool call sites use finite typed roles and the existing native group
+owner. Observed nonzero exit status remains distinct from spawn, deadline and
+cleanup failure; unconfirmed retirement cannot pass as a status. Exact result
+verification still runs after execution failure and retains both typed causes.
+[Scoped regression and acceptance evidence](release-evidence/test-runner-verification.md#direct-xcode-runner-command-bounds-371)
+keeps the two aggregate-script and shared-service boundaries explicitly open.

@@ -28,6 +28,13 @@ pub enum Stage {
     SwiftPMXCTestDiscovery,
     SwiftTestingDiscovery,
     SwiftPMExecution,
+    SwiftReleaseBuild,
+    ReleaseVersionTests,
+    PackageResolution,
+    SimulatorReleaseBuild,
+    XcodeBuildForTesting,
+    XcodeTestEnumeration,
+    XcodeTestExecution,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Cause {
@@ -101,7 +108,7 @@ pub struct Cleanup {
     pub poll_error: Option<io::Error>,
 }
 impl Cleanup {
-    fn succeeded(&self) -> bool {
+    pub(crate) fn succeeded(&self) -> bool {
         self.signal_attempted
             && self.child_status.is_some()
             && self.group_gone
