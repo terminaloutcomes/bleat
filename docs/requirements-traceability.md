@@ -643,7 +643,11 @@ Its startup-completion gate also verifies that discarding a selection cancels
 an already-claimed resume task before bootstrap returns, so repeated Play cannot
 report acceptance of the discarded selection.
 `FrameworkCallbackTests.testRetiringBootstrapAdmissionRejectsQueuedCommandsAfterReplacement`
-covers retirement followed by replacement playback. Deleted-book cold resume
+covers retirement followed by replacement playback. Its final prepared-playback
+pause now awaits its own callback-processing sequence advance before asserting
+exactly one delivered pause, with deferred coordinator cleanup; scoped evidence
+is recorded in [the final-pause review](release-evidence/test-reliability-app-followups.md#final-prepared-playback-pause-callback-374).
+Deleted-book cold resume
 also clears its paused native snapshot and retained retry identity;
 `AppModelTests.testDeletedColdResumeBookRetiresNativeCallbacksAndRetryIdentity`
 covers fresh and previously failed selections while retaining canonical positions.
