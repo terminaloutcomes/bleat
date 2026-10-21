@@ -124,3 +124,62 @@ A fresh independent complete-change review reported no findings and confirmed
 the original P2 resolved (two independent reviews in total). Partial-write/flush
 fault injection is still untested, and the documented owner-abortion/runtime/
 process termination exclusions remain.
+
+## Test-only build-helper child ownership (#370)
+
+Three macOS build-helper tests retained unbounded `Command::output` calls:
+`build_launchers_preserve_the_callers_toolchain_environment`,
+`build_dependency_tree_excludes_operational_and_native_tooling` and
+`xcode_sandbox_can_read_every_cargo_workspace_member`. They now use a shared
+test-only Unix owner with a 30-second execution budget per external command.
+All six original assertion macros, package arguments, caller environment probes,
+dependency exclusions and sandbox-input checks remain unchanged.
+
+Each invocation has its own process group and anonymous regular output files.
+Native `waitid` with `WNOWAIT` observes exit without releasing the leader's id
+before the group signal. Ownership is checked again before signalling; an
+unexpected external reaper produces a typed failure without signalling a
+reusable id. Cleanup requires the direct child to be reaped and its group to
+disappear within three seconds. One additional bounded Drop attempt covers
+unwinding or an unsuccessful cleanup; it cannot turn the earlier failure into
+success. No reader thread or descendant-held pipe EOF is awaited. Output above
+1 MiB per stream fails explicitly after cleanup. `libc` is added only as a test
+dependency using its already-locked version; normal/build dependencies and
+application code are unchanged.
+
+Eight native regressions cover exact output and zero/nonzero status, missing
+executable, held-child timeout, descendants after parent exit and timeout,
+exited-but-unreaped identity and unexpected reaping, intentional observer
+unwinding, and capture failure after retirement. Readiness markers and real
+native states are asserted. The two-second fixture execution budgets and
+three-second cleanup budgets are failure bounds; polling does not manufacture
+completion.
+
+Native boundary corrections retain their original unsuccessful evidence. The
+initial five-case prototype passed but reaped the leader too early. The
+non-reaping version passed six of eight: macOS returned `EPERM` for an
+exited-only group even though the child was subsequently reaped and the group
+was gone. A later owning run caught an immediate failure on the same transient
+group-probe boundary. The correction preserves separate signal/probe errors and
+waits for actual disappearance within the original budget; `EPERM` is accepted
+only after reaping and disappearance are independently verified. Strict Clippy
+also rejected the large structured error; boxing retained all failure data
+without suppression. The intermediate boxing parse error is retained. No test,
+assertion or timeout was removed or widened to obtain a pass.
+
+Final-source m2 evidence is **35/35** exact owning build-helper identities and
+**33/33** individual focused executions: all eight new and three original cases,
+three repetitions each. Strict all-target package Clippy passes. Individual
+logs, source hashes, preservation proof and commands are retained in
+`.build/i370-command-verification.json`. Linux CI, independent review and
+publication are separate gates until explicitly recorded for the final commit.
+
+This resolves only these three command lifecycles. Descendants deliberately
+escaping their invocation group, native spawn/local-file stalls, sudden process
+or runtime destruction and unreapable kernel states are not certified. Failed
+native cleanup remains an explicit error. The historical audit is preserved;
+current dispositions and eight new source/index records supplement it. Draft
+PR #417's missing-entry repair remains independent and unmerged. Broader
+#362/#369 semantic reconciliation, other subprocess owners and configuration
+acceptance remain open; the earlier local navigation snapshot at `002fc39`
+recorded725 moved references, not725 semantic defects. Owner: Bleat maintainers / @yaleman under #370/#369.

@@ -7805,6 +7805,254 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371",
         "source_sha256": "ebd72d4ca2a1dee3c9fea75a728a2fb27c94cc6ea9d1df098453e1ab834026a9"
       }
+    },
+    {
+      "id": "build-scripts::bounded_command::captures_success_and_nonzero_exit_after_cleanup",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 16,
+      "purpose": "Preserve actual stdout, stderr and both successful and nonzero command status after owned cleanup.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Run two isolated shells returning0 and17; require exact stdout-marker/stderr-marker bytes and exact exit codes. A nonzero child status is data for the original caller assertion, not a helper success claim."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Run two isolated shells returning0 and17; require exact stdout-marker/stderr-marker bytes and exact exit codes. A nonzero child status is data for the original caller assertion, not a helper success claim.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Run two isolated shells returning0 and17; require exact stdout-marker/stderr-marker bytes and exact exit codes. A nonzero child status is data for the original caller assertion, not a helper success claim.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::spawn_failure_retains_io_cause_without_a_child",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 33,
+      "purpose": "Keep executable-not-found as a typed spawn failure without inventing a child cleanup result.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Use a missing executable inside an owned TempDir; require Cause::Spawn with ErrorKind::NotFound, no cleanup report and empty output."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Use a missing executable inside an owned TempDir; require Cause::Spawn with ErrorKind::NotFound, no cleanup report and empty output.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Use a missing executable inside an owned TempDir; require Cause::Spawn with ErrorKind::NotFound, no cleanup report and empty output.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::deadline_reaps_child_and_preserves_ready_diagnostics",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 48,
+      "purpose": "Bound a genuinely held child and retain its diagnostics while checking native retirement.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Shell writes its readiness file and both output markers, then execs sleep60 as an intentionally non-completing fixture. Require the real2second Deadline cause, readiness bytes, SIGKILL exit status, child reaping and group disappearance, with original output retained and no signal/poll errors. Overall assertion uses10seconds for the2second execution,3second cleanup,possible3second unwind attempt and scheduler margin."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Shell writes its readiness file and both output markers, then execs sleep60 as an intentionally non-completing fixture. Require the real2second Deadline cause, readiness bytes, SIGKILL exit status, child reaping and group disappearance, with original output retained and no signal/poll errors. Overall assertion uses10seconds for the2second execution,3second cleanup,possible3second unwind attempt and scheduler margin.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Shell writes its readiness file and both output markers, then execs sleep60 as an intentionally non-completing fixture. Require the real2second Deadline cause, readiness bytes, SIGKILL exit status, child reaping and group disappearance, with original output retained and no signal/poll errors. Overall assertion uses10seconds for the2second execution,3second cleanup,possible3second unwind attempt and scheduler margin.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::descendant_output_holder_is_retired_after_parent_exit",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 75,
+      "purpose": "Do not let a descendant retaining output outlive an otherwise completed command.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Shell starts sleep60, records its pid and exits after printing parent-complete. Require successful parent status, exact output, positive recorded descendant pid. Successful helper return requires direct-child reaping and actual process-group disappearance, not merely regular-file EOF."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Shell starts sleep60, records its pid and exits after printing parent-complete. Require successful parent status, exact output, positive recorded descendant pid. Successful helper return requires direct-child reaping and actual process-group disappearance, not merely regular-file EOF.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Shell starts sleep60, records its pid and exits after printing parent-complete. Require successful parent status, exact output, positive recorded descendant pid. Successful helper return requires direct-child reaping and actual process-group disappearance, not merely regular-file EOF.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::deadline_retires_descendants_with_the_parent",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 96,
+      "purpose": "Apply command failure cleanup to the entire owned process group.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Shell ignores TERM, starts a held descendant, records its pid, prints group-ready and waits. Require typed Deadline, descendant admission, direct-child status, group disappearance and exact retained marker without signal/poll errors. The helper uses KILL, so TERM refusal cannot manufacture completion."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Shell ignores TERM, starts a held descendant, records its pid, prints group-ready and waits. Require typed Deadline, descendant admission, direct-child status, group disappearance and exact retained marker without signal/poll errors. The helper uses KILL, so TERM refusal cannot manufacture completion.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Shell ignores TERM, starts a held descendant, records its pid, prints group-ready and waits. Require typed Deadline, descendant admission, direct-child status, group disappearance and exact retained marker without signal/poll errors. The helper uses KILL, so TERM refusal cannot manufacture completion.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::normal_exit_is_observed_before_reaping_group_leader",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 114,
+      "purpose": "Pin the exited leader until signalling and reject loss of child ownership safely.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "At the actual exited-before-reap seam, native signal0 must still observe the owned child; an exited-only group probe may report EPERM. After helper completion require ESRCH for the direct child. Separately consume the exited child through waitpid in the seam; require typed Cleanup, native ECHILD and signal_attempted=false rather than signalling a reusable identity."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "At the actual exited-before-reap seam, native signal0 must still observe the owned child; an exited-only group probe may report EPERM. After helper completion require ESRCH for the direct child. Separately consume the exited child through waitpid in the seam; require typed Cleanup, native ECHILD and signal_attempted=false rather than signalling a reusable identity.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "At the actual exited-before-reap seam, native signal0 must still observe the owned child; an exited-only group probe may report EPERM. After helper completion require ESRCH for the direct child. Separately consume the exited child through waitpid in the seam; require typed Cleanup, native ECHILD and signal_attempted=false rather than signalling a reusable identity.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::unwinding_after_exit_observation_retires_the_owned_group",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 169,
+      "purpose": "Clean owned native processes when the observation seam unwinds.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Start a descendant and let its parent exit; the observer records the real group id and intentionally panics. catch_unwind must return an error. Afterwards native signal0 probes must report ESRCH for both recorded group and direct child, proving bounded Drop cleanup ran. No unrelated group is signalled."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Start a descendant and let its parent exit; the observer records the real group id and intentionally panics. catch_unwind must return an error. Afterwards native signal0 probes must report ESRCH for both recorded group and direct child, proving bounded Drop cleanup ran. No unrelated group is signalled.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Start a descendant and let its parent exit; the observer records the real group id and intentionally panics. catch_unwind must return an error. Afterwards native signal0 probes must report ESRCH for both recorded group and direct child, proving bounded Drop cleanup ran. No unrelated group is signalled.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
+    },
+    {
+      "id": "build-scripts::bounded_command::oversized_capture_reports_failure_after_group_cleanup",
+      "path": "build-scripts/tests/bounded_command.rs",
+      "line": 192,
+      "purpose": "Reject oversized output without skipping native cleanup.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Shell starts a held descendant and writes1048577 bytes from head/dev-zero. Require Cause::Capture, exactly one stdout FileTooLarge capture error, direct-child status and group disappearance. Output capture is capped at1MiB and cannot return a truncated successful Output."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "#[cfg(unix)] integration target; native macOS/Linux shell/process-group integration,not a fake OS model. No network,server,signing or opt-in.",
+      "setup_dependencies": "Invocation-owned process group,anonymous local capture files and per-case TempDir where required. Native waitid/kill/waitpid via dev-only libc;no global env mutation or shared process cleanup.",
+      "action_postconditions": "Shell starts a held descendant and writes1048577 bytes from head/dev-zero. Require Cause::Capture, exactly one stdout FileTooLarge capture error, direct-child status and group disappearance. Output capture is capped at1MiB and cannot return a truncated successful Output.",
+      "synchronization_timeout": "Observe real child exit using WNOHANG|WNOWAIT before cleanup;2second execution budget for fixtures,3second cleanup budget,10ms bounded state polling,at most one additional bounded Drop attempt after failure. Readiness markers are asserted;no guessed sleep proves completion.",
+      "rules": {
+        "1": "Shell starts a held descendant and writes1048577 bytes from head/dev-zero. Require Cause::Capture, exactly one stdout FileTooLarge capture error, direct-child status and group disappearance. Output capture is capped at1MiB and cannot return a truncated successful Output.",
+        "2": "Real waitid/try_wait/group-existence observations;2second fixture budget and3second cleanup remain failure bounds. No deadline was widened to resolve EPERM.",
+        "3": "N/A:no media or playback clock assertion.",
+        "4": "Synchronous native CLI boundary;no async-to-sync adapter. OwnedGroup Drop covers unwinding with a bounded attempt;successful return requires reaped child and absent group. Unresolved kernel/native failures remain errors.",
+        "5": "Only the invocation process group and owned anonymous files/TempDirs are retired;child identity is pinned until signal and unexpected reaping prevents signalling.",
+        "6": "Real Unix process integration. Descendants deliberately escaping their group,sudden test-process death,native spawn and local filesystem stalls are not certified.",
+        "7": "Retain both6/8 native EPERM/probe failures,large-error Clippy failure and corrected boxing parse attempt. The fix changes state classification/observation,not budgets or assertions.",
+        "8": "Cause variants preserve spawn/poll/deadline/cleanup/capture stage,original native errno,signal-attempt state,reap/group observations,stdout/stderr and capture failures;caller expect/assert locations remain in the tests.",
+        "9": "Final source:35/35 owning identities and33/33 exact focused executions (8new+3original,three each),zero failures/ignored. Strict Clippy passes;see .build/i370-command-verification.json for individual logs and source hashes."
+      },
+      "issue370_child_command_ownership": {
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "5afaf15fefc0ed8725cb1401832403709653d0da26fdffcaa3d38514fa5cfbfb"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -7825,5 +8073,58 @@
     "dependency": "Only scripts adds the existing locked libc normal edge;build-scripts normal dependency boundary and application code unchanged.",
     "remaining": "Other report/list/settings/discovery/install/test-command wrappers are unchanged and still require separate lifecycle disposition. No Linux,real Apple tools,cold boot,uninterruptible OS spawn/filesystem,daemon retirement,deliberate group escape or process-death cleanup claim.",
     "status": "local implementation and fixture validation only;independent review/publication/CI paused;fe76 and draft417 untouched."
+  },
+  "issue370_child_command_ownership": {
+    "base": "3deee8a748e0f7acac54f563abd07d5b36933e41",
+    "helper": "build-scripts/tests/support/bounded_command.rs",
+    "normal_dependencies": "Unchanged. Only dev-only libc edge added to an already-locked package;no version change.",
+    "current_dispositions": [
+      {
+        "identifier": "build-scripts::build_launchers_preserve_the_callers_toolchain_environment",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
+      },
+      {
+        "identifier": "build-scripts::build_dependency_tree_excludes_operational_and_native_tooling",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
+      },
+      {
+        "identifier": "build-scripts::xcode_sandbox_can_read_every_cargo_workspace_member",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
+      }
+    ],
+    "review": {
+      "deadline": "30seconds per original external command;observed child state,not a completion delay.",
+      "cleanup": "Group signal before direct-child reap;WNOWAIT pins id.3second actual-reap/group-disappearance budget and one bounded Drop fallback. EPERM accepted only with verified cleanup;probe EPERM is polled within the unchanged budget.",
+      "output": "Anonymous regular files avoid descendant-held pipe EOF. At most1MiB per stream;oversize is typed failure after cleanup.",
+      "error_ownership": "Unknown/lost child ownership fails before signalling. Original native errors,deadline and separate capture/cleanup results remain available.",
+      "scope": "These three current dispositions supplement the historical audit and the missing-entry records in draftPR417;that PR remains unmerged and is not a prerequisite for running this slice. No unrelated audit record reclassified."
+    },
+    "coverage": {
+      "original_active_rows_preserved": 387,
+      "new_native_regression_rows": 8,
+      "active_rows_after": 395
+    },
+    "execution": "35/35 owning m2 outcomes and33/33 exact focused executions;no ignored/filtered owning cases. Existing unsuccessful attempts retained;Linux CI remains separate."
   }
 }

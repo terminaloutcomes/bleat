@@ -932,3 +932,17 @@ native result arguments. Typed rejection protects absolute and relative result
 paths before any native command or verifier runs. [Source proof, retained probe
 and scoped regression evidence](release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371)
 preserve the distinction between reproduced guard bypass and unobserved data loss.
+
+### Bounded build-helper test commands (#370)
+
+Three environment/dependency/sandbox tests now retain their original assertions
+while owning each external process group through a 30-second command budget,
+three-second cleanup bound and typed native outcomes. Non-reaping exit
+observation prevents releasing the leader identity before signalling; successful
+cleanup requires child reaping and group disappearance. Anonymous output files
+avoid descendant-held pipe EOF. Eight native lifecycle regressions and all
+original semantic assertions are retained. Exact m2 evidence is35/35 owning and
+33/33 individual repeated outcomes; normal build dependencies are unchanged.
+See [scope, native corrections and limits](release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370).
+This is a bounded #370 slice, not full subprocess or epic acceptance. Independent
+review, final-head CI, other lifecycle owners and platform gates remain separate.
