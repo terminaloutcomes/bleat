@@ -4379,50 +4379,90 @@
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationUnblocksTokenWaitAndShutsTransportOnce",
-      "line": 818,
-      "language": "swift"
+      "line": 819,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 818,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncTransportShutdownWaitsForClosureCompletion",
-      "line": 886,
-      "language": "swift"
+      "line": 887,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 886,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterTokenCompletionPreventsRPCAndAllowsLaterExport",
-      "line": 923,
-      "language": "swift"
+      "line": 924,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 923,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
-      "line": 983,
-      "language": "swift"
+      "line": 984,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 983,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
-      "line": 1044,
-      "language": "swift"
+      "line": 1045,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1044,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
-      "line": 1083,
-      "language": "swift"
+      "line": 1084,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1083,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInExporterOrFailureDescriptions",
-      "line": 1146,
-      "language": "swift"
+      "line": 1147,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1146,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
       "name": "testBearerNeverAppearsInCapturedProcessLogs",
-      "line": 1200,
-      "language": "swift"
+      "line": 1201,
+      "language": "swift",
+      "historical_source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1200,
+        "baseline": "3be50d03ade4bc6ca9c8539422038b459408c483"
+      }
     },
     {
       "path": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift",

@@ -853,6 +853,7 @@ explicitly; final full-app verification is repeated after that syntax correction
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
 
+<<<<<<< HEAD
 ### Local smoke runner lifecycle correction (#371)
 
 Controlled baseline regressions demonstrated a live child after stdin-write
@@ -966,3 +967,14 @@ cleanup cause and caller context; all success and single-failure assertions
 remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
 Signed-host, independent-review and exact-head CI evidence are recorded
 separately; broader epic acceptance is not established by this helper change.
+=======
+### Typed optional completion assertion (#372)
+
+The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
+and retains its separate true-result assertion. Missing completion,failed
+export,all eight success-path caller joins,request counts and exact metadata
+remain covered. Error-exit task drainage remains a separate #372 concern.
+See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
+This does not change provider/transport lifecycle contracts or establish
+broader epic/configuration acceptance.
+>>>>>>> f8237eedd5d023d292d71bc8a3c947d2f7119c95
