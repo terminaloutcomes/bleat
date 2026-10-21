@@ -749,8 +749,21 @@ and final private-capture absence. It then exited 1 at the archive stage, before
 the final surface scan. The exact first archive preflight independently
 reproduced the blocker: generated version `2026.10.21` differs from the checked-in
 `2026.10.14`. No version override, metadata bump, upload or deployment was made.
-Archive/full-scan acceptance requires an authorized release-version update;
-these nine passing cases do not certify secret nondisclosure across all surfaces.
+The initial interpretation that a source-version bump was required was too
+strong: the existing documented `BLEAT_MARKETING_VERSION=2026.10.14` setting
+supports a later-day rebuild with a fresh UTC build number. Its exact resolver
+and metadata preflight passed without source changes. A separate full gate
+passed with that supported configuration at clean `4542700bc9c9f6e84017403630aa18afbcb904b7`: seven
+scanner Python regressions and all nine exact native cases passed, and the normal
+Release archive was built and inspected as version `2026.10.14`, fresh build
+`20261021.1653.50`. The final scanner covered all nine declared surfaces, 667
+files and 1,677,234,199 bytes, with zero prohibited findings. Two expected
+refresh-token redactions were confined to the disposable server's `compose.log`;
+no raw values or digests appear in the retained report. All gate inputs match
+reviewed #440; only evidence documentation differs. Independent cleanup again
+found no owned Simulator, container, volume or secret-broker process. The complete
+receipt is `.build/i362-release-scan-explicit-version-verified.json`. This is
+Simulator/disposable-server/archive evidence, not physical-device validation.
 Independent checks again found no remaining owned Simulator, container, volume
 or private broker. The original baseline and later failed gate are both retained.
 

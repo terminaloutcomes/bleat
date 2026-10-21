@@ -1044,8 +1044,13 @@ records the two reproduced gate build failures, typed settings regression,
 fixture compiler-condition repair and exact focused outcomes. The repaired
 Release gate at `cdd7a38` passed seven Python and nine native cases, then stopped
 at the release-version preflight (`2026.10.21` versus checked-in `2026.10.14`).
-Archive and final surface-scan acceptance remain blocked on the authorized
-release metadata update. Ordinary Simulator success and exact-head CI are separate.
+The documented explicit marketing-version setting supports rebuilding that
+checked-in version with a fresh UTC build number; its preflight passed without
+metadata changes. Full acceptance at clean `4542700` passed: seven Python regressions, nine native
+cases, the inspected Release archive and nine-surface scan (667 files,
+1,677,234,199 bytes, zero prohibited findings; two expected disposable-server
+redactions). Owned resources were verified retired. Original failures remain
+retained; no metadata bump, validation bypass or deployment was made. Ordinary Simulator success and exact-head CI are separate.
 
 ### Current testing-epic dispositions (#362)
 

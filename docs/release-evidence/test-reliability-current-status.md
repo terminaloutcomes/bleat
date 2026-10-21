@@ -20,14 +20,14 @@ Count different units separately:
 
 | Category | Count / current disposition |
 | --- | --- |
-| Proven unresolved implementation bugs | 0 currently confirmed after #438/#439/#440. Two demonstrated Release gate build blockers are repaired; the release-version acceptance boundary below remains. This is not a claim the app is bug-free. |
+| Proven unresolved implementation bugs | 0 currently confirmed after #438/#439/#440. Two demonstrated Release gate build blockers are repaired, and the full gate passed with the documented explicit-version setting. This is not a claim the app is bug-free. |
 | Unresolved observed validation failures | 1: iPad Increase Contrast mini-player geometry; see below. |
-| Important implementation remainder | 0 confirmed code fixes after #440. This receipt reconciles the delivered work; full archive/surface-scan acceptance remains separately blocked. |
+| Important implementation remainder | 0 confirmed code fixes after #440. This receipt reconciles the delivered work; full Release archive/surface-scan acceptance passed with the documented explicit release version. |
 | Missing structured audit/index records | 87 source-confirmed declarations: 25 app, 8 UI, 54 Rust. These are record omissions, not reproduced defects. |
 | Existing-record review queue | 71 app semantic rechecks and 241 core helper-context rechecks retained from the bounded prior reconciliation. These overlap source concerns and are not implementation-task counts. |
 | Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
 | Optional/unproven hardening groups | 22, listed below; no implementation is authorized merely by a source concern. |
-| Broader configuration/device acceptance | 8 groups, separately itemized below; not eight new code defects. |
+| Broader configuration/device acceptance | 8 tracked groups: G4 completed; 7 remain separate configuration/device dispositions, not seven new code defects. |
 
 The previous 19-PR backlog (#417–#429, #432–#437) is merged, as are #438/#439/#440.
 Do not report those PRs, the old 140 follow-up labels, or navigation line drift as
@@ -93,8 +93,18 @@ refresh, offline restoration, logout and credential/capture removal. It then
 failed before archive building at the release-version preflight: generated
 `2026.10.21` differs from checked-in `2026.10.14`. No release metadata was changed
 and no version override, upload or deployment was requested. The archive and
-final surface scan remain unexecuted; these passing journeys are not a complete
-secret-nondisclosure result. Both attempts and their individual outcomes remain
+final surface scan did not execute in that attempt; these passing journeys are
+not a complete secret-nondisclosure result. The existing documented
+`BLEAT_MARKETING_VERSION=2026.10.14` setting supports a later-day rebuild with a
+fresh UTC build number. Its resolver/metadata preflight passed without source
+changes. The separate full gate using that setting passed at clean `4542700`:
+seven Python regressions and nine native cases, inspected Release archive
+(version `2026.10.14`, fresh build `20261021.1653.50`), and all nine scan surfaces
+covering 667 files / 1,677,234,199 bytes with zero prohibited findings. Two expected
+refresh-token redactions occurred only in disposable server logs. The final
+report contains no secret values/digests. Cleanup again verified no owned
+resources remain. This corrects the earlier overly strong conclusion that a
+version bump was necessarily required; no project metadata changed. All three attempts and their individual outcomes remain
 retained. Independent checks after each attempt found no owned Simulator,
 container, volume or private secret-broker process.
 
@@ -106,8 +116,13 @@ skip, 629 iOS passes with zero skips/expected failures/runtime warnings, and
 332 Rust passes across 22 nonempty targets; 26 targets were compile-only.
 All five guarded fixture cases were present and passed in CI. Existing
 coverage-threshold, Xcode destination/AppIntents metadata and uploader deprecation
-warnings remain retained; they are not runtime test warnings. The complete
-failed-gate receipt is `.build/i362-release-scan-fixed-verified.json`.
+warnings remain retained; they are not runtime test warnings. The failed-gate receipt remains `.build/i362-release-scan-fixed-verified.json`;
+the passing complete gate is `.build/i362-release-scan-explicit-version-verified.json`.
+The [native-authentication revalidation](secret-leakage.md#revalidation-2026-10-21-362)
+retains the complete exact identity list and gate scope.
+The gate's `4542700` differs from reviewed #440 only in evidence documentation;
+all build/test inputs are unchanged. No deployment or physical-device validation
+is inferred.
 
 ## Configuration and device groups
 
@@ -116,7 +131,7 @@ failed-gate receipt is `.build/i362-release-scan-fixed-verified.json`.
 | G1 Configured accessibility/layout/VoiceOver | Standard UI is distinct from configured matrices. Retain the partial Bold Text/Increase Contrast result and unresolved observation below. Dynamic Type, VoiceOver, landscape and spoken/gesture manual evidence must retain their actual configurations. |
 | G2 Opt-in performance/large library | App 10k and local cache workloads have revision-specific evidence. The opt-in 250k statistics benchmark has historical Release measurements in [Statistics Validation](../statistics-validation.md); default host/CI does not execute it. Disposable-server large-library acceptance still needs its owned dataset and exact selection. |
 | G3 Signed macOS app/authentication | Explicitly deferred by the maintainer; host tests and compilation do not substitute for app/authentication/relaunch execution. Five preserved implementation groups remain in #369. |
-| G4 Release-secret/archive | Nine native cases and seven scanner regressions pass at `cdd7a38`; archive preflight rejects generated `2026.10.21` against checked-in `2026.10.14`. Authorized release metadata update is needed before full archive/surface-scan acceptance. No version override or deployment was performed. |
+| G4 Release-secret/archive | Completed at clean `4542700` using the documented checked-in marketing version and fresh UTC build: seven Python/nine native passes, inspected archive, nine surfaces / 667 files / 1,677,234,199 bytes, zero prohibited findings and two expected server redactions. Cleanup verified. Original failures retained; no source metadata bump, validation bypass or deployment. |
 | G5 Release screenshots | Release fixture/configuration prerequisite and screenshot review; a normal UI pass is not screenshot acceptance. |
 | G6 Physical CarPlay | Applicable connected hardware and scenario observations required. #377's artwork acceptance does not establish this gate. |
 | G7 Physical audio routes | Applicable Bluetooth/AirPlay/headphone/interruption hardware and scenario observations required. Simulator playback does not establish routing. |
