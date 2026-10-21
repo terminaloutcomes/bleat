@@ -8146,6 +8146,174 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#structured-result-children-schema-371",
         "source_sha256": "89655fb515ec0e43d360fc19bd0ac511c463e0f66ea8bf3b8edea50bf852dfa8"
       }
+    },
+    {
+      "id": "scripts::paid_build_modes::matrix_preserves_all_twelve_queries_and_exact_original_contracts",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 24,
+      "native_identity": "paid_build_modes::tests::matrix_preserves_all_twelve_queries_and_exact_original_contracts",
+      "purpose": "Preserve all twelve original settings queries and exact target/SDK/override contracts.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Check the nine explicit override vectors and three default vectors, plus Personal Team and macOS effective expectations."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Pure structural argument/expectation comparisons; no asynchronous work.",
+      "action_postconditions": "Check the nine explicit override vectors and three default vectors, plus Personal Team and macOS effective expectations.",
+      "synchronization_timeout": "Pure structural argument/expectation comparisons; no asynchronous work.",
+      "rules": {
+        "1": "Check the nine explicit override vectors and three default vectors, plus Personal Team and macOS effective expectations.",
+        "2": "Pure structural argument/expectation comparisons; no asynchronous work.",
+        "3": "No playback or media-position assertion.",
+        "4": "Pure structural argument/expectation comparisons; no asynchronous work. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
+    },
+    {
+      "id": "scripts::paid_build_modes::settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 100,
+      "native_identity": "paid_build_modes::tests::settings_reject_wrong_target_missing_fields_wrong_types_and_malformed_output",
+      "purpose": "Reject malformed settings, absent targets, missing/non-string fields and wrong values without payload disclosure.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Accept the valid settings shape, then match typed parser/target/field failures; a private mismatch marker must stay out of Display and Debug."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Synchronous decoded JSON fixtures; no native process.",
+      "action_postconditions": "Accept the valid settings shape, then match typed parser/target/field failures; a private mismatch marker must stay out of Display and Debug.",
+      "synchronization_timeout": "Synchronous decoded JSON fixtures; no native process.",
+      "rules": {
+        "1": "Accept the valid settings shape, then match typed parser/target/field failures; a private mismatch marker must stay out of Display and Debug.",
+        "2": "Synchronous decoded JSON fixtures; no native process.",
+        "3": "No playback or media-position assertion.",
+        "4": "Synchronous decoded JSON fixtures; no native process. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
+    },
+    {
+      "id": "scripts::paid_build_modes::native_query_retains_exit_spawn_capture_causes_and_private_output",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 168,
+      "native_identity": "paid_build_modes::tests::native_query_retains_exit_spawn_capture_causes_and_private_output",
+      "purpose": "Retain native exit/spawn/capture causes and retire native output ownership.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Run actual private cat/exit fixtures; require exact native exit23, missing-tool cause, oversized-capture rejection and confirmed cleanup. Captured marker stays out of errors."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Two-second command and one-second cleanup bounds; fresh isolated fixture; no shared service.",
+      "action_postconditions": "Run actual private cat/exit fixtures; require exact native exit23, missing-tool cause, oversized-capture rejection and confirmed cleanup. Captured marker stays out of errors.",
+      "synchronization_timeout": "Two-second command and one-second cleanup bounds; fresh isolated fixture; no shared service.",
+      "rules": {
+        "1": "Run actual private cat/exit fixtures; require exact native exit23, missing-tool cause, oversized-capture rejection and confirmed cleanup. Captured marker stays out of errors.",
+        "2": "Two-second command and one-second cleanup bounds; fresh isolated fixture; no shared service.",
+        "3": "No playback or media-position assertion.",
+        "4": "Two-second command and one-second cleanup bounds; fresh isolated fixture; no shared service. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
+    },
+    {
+      "id": "scripts::paid_build_modes::admitted_query_deadline_retires_child_before_returning",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 223,
+      "native_identity": "paid_build_modes::tests::admitted_query_deadline_retires_child_before_returning",
+      "purpose": "Retire a positively admitted held query within its command/cleanup budgets.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Observe PID before waiting; independently bound completion, release and join before assertions, then require typed deadline, cleanup proof and absent owned PID."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Two-second execution, one-second cleanup, five-second independent return observation. Existing FixtureWorker releases/joins during unwinding.",
+      "action_postconditions": "Observe PID before waiting; independently bound completion, release and join before assertions, then require typed deadline, cleanup proof and absent owned PID.",
+      "synchronization_timeout": "Two-second execution, one-second cleanup, five-second independent return observation. Existing FixtureWorker releases/joins during unwinding.",
+      "rules": {
+        "1": "Observe PID before waiting; independently bound completion, release and join before assertions, then require typed deadline, cleanup proof and absent owned PID.",
+        "2": "Two-second execution, one-second cleanup, five-second independent return observation. Existing FixtureWorker releases/joins during unwinding.",
+        "3": "No playback or media-position assertion.",
+        "4": "Two-second execution, one-second cleanup, five-second independent return observation. Existing FixtureWorker releases/joins during unwinding. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
+    },
+    {
+      "id": "scripts::paid_build_modes::plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 303,
+      "native_identity": "paid_build_modes::tests::plist_contracts_fail_closed_for_each_security_and_substitution_assertion",
+      "purpose": "Preserve every entitlement exclusion, Keychain presence and Info.plist substitution.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Positive fresh plist control precedes each security/substitution mutation. Match exact path/key and typed root/parser failures."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Synchronous private filesystem fixtures; no actual signing, personal state, process or broad cleanup.",
+      "action_postconditions": "Positive fresh plist control precedes each security/substitution mutation. Match exact path/key and typed root/parser failures.",
+      "synchronization_timeout": "Synchronous private filesystem fixtures; no actual signing, personal state, process or broad cleanup.",
+      "rules": {
+        "1": "Positive fresh plist control precedes each security/substitution mutation. Match exact path/key and typed root/parser failures.",
+        "2": "Synchronous private filesystem fixtures; no actual signing, personal state, process or broad cleanup.",
+        "3": "No playback or media-position assertion.",
+        "4": "Synchronous private filesystem fixtures; no actual signing, personal state, process or broad cleanup. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
+    },
+    {
+      "id": "scripts::paid_build_modes::negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
+      "path": "scripts/src/paid_build_modes/tests.rs",
+      "line": 411,
+      "native_identity": "paid_build_modes::tests::negative_controls_require_exact_typed_invalid_mode_without_ambient_configuration",
+      "purpose": "Require all four invalid variables to fail through their exact originating validator kind.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "An isolated valid control succeeds before each invalid overlay; require InvalidAllowedValue for that variable, preventing ambient or launcher errors from passing."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on Unix; no opt-in, signing, server or Xcode required.",
+      "setup_dependencies": "Pure existing validator boundary, not four CLI executions; no process/environment mutation.",
+      "action_postconditions": "An isolated valid control succeeds before each invalid overlay; require InvalidAllowedValue for that variable, preventing ambient or launcher errors from passing.",
+      "synchronization_timeout": "Pure existing validator boundary, not four CLI executions; no process/environment mutation.",
+      "rules": {
+        "1": "An isolated valid control succeeds before each invalid overlay; require InvalidAllowedValue for that variable, preventing ambient or launcher errors from passing.",
+        "2": "Pure existing validator boundary, not four CLI executions; no process/environment mutation.",
+        "3": "No playback or media-position assertion.",
+        "4": "Pure existing validator boundary, not four CLI executions; no process/environment mutation. Anonymous capture files have no named directory/EXIT trap; native failure retains cleanup report.",
+        "5": "Fresh private inputs; no global chdir, user preferences, Keychain or shared resource mutation.",
+        "6": "Controlled native shell/filesystem or pure Rust boundary; actual Xcode settings execution is separate.",
+        "7": "No retry or widened budget; prior generic-failure negative weakness is recorded, not counted as exact validation.",
+        "8": "Match typed variants and decoded structural values. Exact payload bytes only establish native transport or opaque fixture retention as documented in the relevant existing helper.",
+        "9": "Corrected source 4e55716 passed six exact functions in three serial runs (18 executions), plus 178 exact owning outcomes across 11 nonempty targets with zero failures, ignored or filtered tests; 16 empty CLI targets are compilation only. Strict Clippy/static checks passed. The supported launcher passed all 12 actual settings queries and plist contracts; four invalid controls are pure validator evidence. Independent re-review found no findings after two P2 corrections. Earlier two six-pass runs were edited during compilation and are intermediate, not final acceptance. Exact-head CI remains separate."
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

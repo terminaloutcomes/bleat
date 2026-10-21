@@ -29,6 +29,8 @@ pub enum XcodeRunnerError {
     #[error("{0}")]
     Message(String),
     #[error(transparent)]
+    PaidBuildModes(#[from] crate::paid_build_modes::Error),
+    #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Verification(#[from] VerifyError),
@@ -90,6 +92,8 @@ pub struct Cli {
 enum RunnerCommand {
     /// The full local core, Release build, and Simulator gate.
     Core,
+    /// Verify paid capability build modes with bounded native queries.
+    PaidBuildModes,
     /// The signed macOS build and test gate.
     Macos,
     /// Run a selected Xcode scheme using the legacy xctest.sh arguments.
@@ -122,6 +126,9 @@ pub fn run() -> Result<()> {
     let root = repository_root()?;
     match cli.command {
         RunnerCommand::Core => run_core(&root),
+        RunnerCommand::PaidBuildModes => {
+            crate::paid_build_modes::run(&root).map_err(XcodeRunnerError::PaidBuildModes)
+        }
         RunnerCommand::Macos => run_macos(&root),
         RunnerCommand::Xctest(arguments) => run_xctest(&root, arguments),
     }
@@ -231,11 +238,7 @@ fn run_core(root: &Path) -> Result<()> {
         )?;
         run_script(root, "test-host.sh", "signed host tests")?;
         run_swift_release_build()?;
-        run_script(
-            root,
-            "test-paid-developer-build-modes.sh",
-            "paid developer build modes",
-        )?;
+        crate::paid_build_modes::run(root)?;
     }
     if skip_simulator {
         return Ok(());

@@ -590,3 +590,59 @@ typed schema error. Commands,identities,exits and source hashes are retained in
 remain required before reporting this bounded slice reviewable. The original
 accepting CLI probe and two failing native regressions remain retained. Broader
 verifier acceptance and epic configuration reconciliation remain open.
+
+## Paid build-mode orchestration (#371)
+
+The paid-capability matrix now runs in `scripts/src/paid_build_modes.rs`. Its
+existing shell entry point only selects the repository and execs the Rust CLI;
+the core Xcode gate calls the Rust implementation directly. Signed-host
+`test-host.sh` ownership remains outstanding.
+
+All twelve original Release build-settings queries retain their SDK, target and
+explicit settings: eight paid combinations, the Personal Team override, and the
+paid, personal and macOS defaults. Each query has a 300-second execution budget
+and the existing three-second native cleanup policy. Complete stdout has a
+64 MiB accepted-read ceiling in an anonymous file; compiler stderr stays live.
+This ceiling is not a disk quota. No named scratch directory or shell EXIT trap
+is needed. Original command, exit/deadline and cleanup causes remain typed, with
+the exact query retained. Native process-group retirement does not prove shared
+Xcode services or independently created descendant groups have drained.
+
+Decoded plist checks preserve paid-capability exclusions in keys/string values,
+CarPlay enabled/disabled and macOS exclusions, Keychain-key presence, and all
+three Info.plist substitutions. Invalid documents, missing targets/settings,
+non-string settings and mismatches have distinct typed outcomes. The old negative
+launcher checks accepted any failure, including missing ambient configuration or
+a failed Cargo launch. Four isolated controls now require the original validator's
+exact `InvalidAllowedValue` and variable, after a valid control succeeds. These
+are pure validator checks, not four native CLI executions. Existing launcher
+wiring tests remain separate; the actual supported paid-build entry point must
+be executed and recorded independently. No application settings, trust, signing,
+manifest dependency or user configuration changes.
+
+Independent source review of preliminary `5887f33` found two P2 issues: Serde
+shape errors could embed rejected JSON strings, and a macOS entitlement filename
+ending in `carplay-enabled` took the iOS-enabled branch. Decoding now distinguishes
+syntax/incomplete input from typed root/row/field shape failures without retaining
+payload-bearing Serde errors. Regressions check the entire error chain. macOS
+exclusion runs before suffix handling, including the reported filename fixture.
+Earlier executions remain intermediate evidence. Independent re-review cleared
+corrected source `4e55716` with no findings. No signed-host, Simulator, device,
+live-server or full-epic acceptance is claimed by this slice.
+
+Corrected-source verification passed six exact functions in three serial runs
+(18 executions), then 178 exact owning outcomes across 11 nonempty targets,
+with zero failures, ignored or filtered tests. Sixteen empty CLI targets are
+compilation only. One owning result line is separated from its terminal `ok`
+by the inherited compiler-stderr control; all 178 native identities reconcile.
+Strict Clippy, formatting, documentation and diff checks passed. The actual
+supported launcher passed all twelve Xcode settings queries, plist checks and
+four pure invalid-mode controls, with no warning/error lines in its log. This
+proves launcher wiring separately from the pure validator checks. No SDK or
+compiler workaround was used. Original build configuration and entitlement
+files, shared owner algorithms and prior tests/audit rows remain unchanged.
+
+Two earlier six-pass focused runs had source edits during compilation; neither
+is attributed to final corrected-source acceptance. Raw results, source hashes,
+setup exit 0 and scope checks are linked from `.build/i371-paid-verification.json`.
+Final metadata review and exact-head CI remain separate gates.

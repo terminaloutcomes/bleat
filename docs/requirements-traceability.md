@@ -997,3 +997,10 @@ three runs (9 scenarios), and 607 signed-host identities passed with zero failur
 or skips. Synchronizable-Keychain coverage and both new failure arguments are
 verified. Independent review and exact-head CI are separate requirements;
 retained warnings and intentional failure diagnostics remain linked above.
+
+### Paid build-mode orchestration (#371)
+
+The twelve paid-capability settings queries use bounded native ownership and
+decoded typed settings/plist assertions; exact isolated invalid-mode controls
+replace generic launcher-failure acceptance. [Scoped ownership and evidence](release-evidence/test-runner-verification.md#paid-build-mode-orchestration-371)
+keeps signed-host orchestration and independently created groups outstanding.
