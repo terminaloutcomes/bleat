@@ -956,3 +956,13 @@ contracts. Three focused regressions preserve all existing assertions and
 exercise synthetic invalid schemas independently of Xcode execution. See the
 [bounded schema fix and retained failures](release-evidence/test-runner-verification.md#structured-result-children-schema-371).
 Broader #371/#362 acceptance and platform evidence remain separate.
+
+### Cleanup helper caller diagnostics (#372)
+
+The test cleanup helper records secondary cleanup failures at the calling
+test's default or explicitly supplied source location while preserving the
+originating typed operation error. Narrow native issue matchers verify both
+cleanup cause and caller context; all success and single-failure assertions
+remain. See [the bounded helper fix and retained baseline](release-evidence/test-reliability-audit.md#cleanup-helper-caller-diagnostics-372).
+Signed-host, independent-review and exact-head CI evidence are recorded
+separately; broader epic acceptance is not established by this helper change.

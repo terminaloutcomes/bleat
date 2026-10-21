@@ -9913,6 +9913,12 @@
       "name": "omitted_and_empty_children_preserve_valid_native_shapes",
       "line": 370,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatCoreTests/TestCleanupTests.swift",
+      "name": "reportsDefaultCleanupFailureAtTheTestCaller",
+      "line": 58,
+      "language": "swift"
     }
   ]
 }

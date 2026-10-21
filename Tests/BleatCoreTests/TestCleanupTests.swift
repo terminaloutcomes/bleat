@@ -35,17 +35,42 @@ struct TestCleanupTests {
     }
 
     @Test func retainsOperationFailureWhenCleanupAlsoFails() async {
+        let caller = #_sourceLocation
         var observed: Failure?
         await withKnownIssue("Cleanup failure is recorded separately") {
             do {
                 try await withTestCleanup(
                     { throw Failure.cleanup },
+                    sourceLocation: caller,
                     operation: {
                         throw Failure.operation
                     })
             } catch {
                 observed = error as? Failure
             }
+        } matching: { issue in
+            issue.sourceLocation == caller
+                && (issue.error as? Failure) == .cleanup
+        }
+        #expect(observed == .operation)
+    }
+
+    @Test func reportsDefaultCleanupFailureAtTheTestCaller() async {
+        let caller = #_sourceLocation
+        var observed: Failure?
+        await withKnownIssue(
+            "Typed cleanup diagnostic uses the calling test file"
+        ) {
+            do {
+                try await withTestCleanup(
+                    { throw Failure.cleanup },
+                    operation: { throw Failure.operation })
+            } catch {
+                observed = error as? Failure
+            }
+        } matching: { issue in
+            issue.sourceLocation?.fileID == caller.fileID
+                && (issue.error as? Failure) == .cleanup
         }
         #expect(observed == .operation)
     }
