@@ -3,7 +3,7 @@
 use crate::test_results::{discover_expected, verify_result_bundle};
 use std::error::Error;
 use std::path::Path;
-use std::process::{Command, ExitStatus};
+use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -12,6 +12,10 @@ pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 #[path = "ci_smoke/owned_command.rs"]
 pub(crate) mod owned_command;
 use owned_command::{Cause, Failure as CommandFailure, Running, Stage};
+
+#[path = "ci_smoke/smoke_commands.rs"]
+mod smoke_commands;
+use smoke_commands::{SmokeCommand, finish_tests, run_command};
 
 #[cfg(test)]
 #[path = "ci_smoke/lifecycle_tests.rs"]
@@ -209,22 +213,6 @@ fn xcodebuild() -> Command {
     command
 }
 
-fn ensure_success(status: ExitStatus, stage: &str) -> Result<()> {
-    if !status.success() {
-        return Err(format!("{stage} exited with {status}").into());
-    }
-    Ok(())
-}
-
-fn checked_output(command: &mut Command, stage: &str) -> Result<Vec<u8>> {
-    let output = command.output()?;
-    if !output.status.success() {
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
-        ensure_success(output.status, stage)?;
-    }
-    Ok(output.stdout)
-}
-
 fn jq(input: &[u8], arguments: &[&str]) -> Result<String> {
     jq_command(input, Command::new("jq").args(arguments))
 }
@@ -262,15 +250,15 @@ pub fn run() -> Result<()> {
         .map_or(0, |duration| duration.as_millis());
     let result = format!(".build/ci-smoke/{}-{run_id}.xcresult", std::process::id());
 
-    ensure_success(
-        Command::new("xcodebuild").arg("-version").status()?,
-        "Report Xcode",
+    run_command(
+        Command::new("xcodebuild").arg("-version"),
+        SmokeCommand::Version,
     )?;
     // Initialize CoreSimulator and resolve an installed device before asking Xcode
     // for settings. A name-only destination implicitly asks for OS:latest.
-    let devices = checked_output(
+    let devices = run_command(
         Command::new("xcrun").args(["simctl", "list", "devices", "available", "--json"]),
-        "List available Simulators",
+        SmokeCommand::Inventory,
     )?;
     println!(
         "Available Simulators: {}",
@@ -284,9 +272,9 @@ pub fn run() -> Result<()> {
     println!("Selected destination: {destination}");
 
     // Ask Xcode for the same target, product and device used by both test phases.
-    let settings = checked_output(
+    let settings = run_command(
         xcodebuild().args(["-destination", &destination, "-showBuildSettings", "-json"]),
-        "Resolve Xcode build settings",
+        SmokeCommand::Settings,
     )?;
     let app_settings = jq(
         &settings,
@@ -360,7 +348,7 @@ pub fn run() -> Result<()> {
     // Derive the expected case set from the exact products and test selection
     // just built. This catches disabled, missing, and unexpectedly added tests.
     let discovery_path = Path::new(&result).with_extension("discovery.json");
-    ensure_success(
+    run_command(
         xcodebuild()
             .args([
                 "-destination",
@@ -373,9 +361,8 @@ pub fn run() -> Result<()> {
                 "-test-enumeration-output-path",
             ])
             .arg(&discovery_path)
-            .arg("test-without-building")
-            .status()?,
-        "Enumerate smoke tests",
+            .arg("test-without-building"),
+        SmokeCommand::Enumeration,
     )?;
     let discovery_text = std::fs::read_to_string(&discovery_path)?;
     let only = [
@@ -387,47 +374,37 @@ pub fn run() -> Result<()> {
 
     // Resolve the app path from the build settings used above, then verify
     // both test targets from the result bundle even if xcodebuild fails.
-    ensure_success(
-        Command::new("xcrun")
-            .args(["simctl", "install", &simulator_id, &app_path])
-            .status()?,
-        "Install smoke app",
+    run_command(
+        Command::new("xcrun").args(["simctl", "install", &simulator_id, &app_path]),
+        SmokeCommand::Install,
     )?;
-    let test_status = xcodebuild()
-        .args([
-            "-enableCodeCoverage",
-            "YES",
-            "-parallel-testing-enabled",
-            "NO",
-            "-destination",
-            &resolved_destination,
-            "-resultBundlePath",
-            &result,
-            "test-without-building",
-        ])
-        .args(&test_selectors)
-        .status();
-    let result_verification =
-        verify_result_bundle(Path::new(&result), &expected, &[]).map(|report| {
-            println!(
-                "Smoke results: {} passed, {} skipped",
-                report.passed, report.skipped
-            )
-        });
-    match (test_status, result_verification) {
-        (Ok(status), Ok(())) => ensure_success(status, "iOS tests"),
-        (Ok(status), Err(error)) => Err(format!(
-            "iOS tests exited with {status}; result verification failed: {error}"
-        )
-        .into()),
-        (Err(error), Ok(())) => {
-            Err(format!("iOS tests could not start: {error}; result verification passed").into())
-        }
-        (Err(error), Err(verification)) => Err(format!(
-            "iOS tests could not start: {error}; result verification failed: {verification}"
-        )
-        .into()),
-    }
+    let execution = run_command(
+        xcodebuild()
+            .args([
+                "-enableCodeCoverage",
+                "YES",
+                "-parallel-testing-enabled",
+                "NO",
+                "-destination",
+                &resolved_destination,
+                "-resultBundlePath",
+                &result,
+                "test-without-building",
+            ])
+            .args(&test_selectors),
+        SmokeCommand::Execution,
+    )
+    .map(|_| ());
+    finish_tests(execution, || {
+        verify_result_bundle(Path::new(&result), &expected, &[])
+            .map(|report| {
+                println!(
+                    "Smoke results: {} passed, {} skipped",
+                    report.passed, report.skipped
+                )
+            })
+            .map_err(|error| -> Box<dyn Error + Send + Sync> { Box::new(error) })
+    })
 }
 
 #[cfg(test)]

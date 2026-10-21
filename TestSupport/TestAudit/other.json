@@ -7193,6 +7193,210 @@
         "fixture_sha256": "aa0a90975bc2fda6a4d4fe3926e60d38cf33352cadef62e8732b50368e05e5de",
         "source_review": "Previously absent inventory rows; existing implementation and runtime coverage are unchanged."
       }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_phase_policies_keep_distinct_stages_and_finite_budgets",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 20,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_phase_policies_keep_distinct_stages_and_finite_budgets",
+      "purpose": "Preserve six distinct native processing stages and explicit finite production budgets.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Match every phase to its exact Stage and120/300/2400-second policy. Pure enum construction; no native process or timeout wait."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "Match every phase to its exact Stage and120/300/2400-second policy. Pure enum construction; no native process or timeout wait.",
+      "synchronization_timeout": "Pure synchronous policy table; cleanup, playback and elapsed-time tolerances do not apply.",
+      "rules": {
+        "1": "Match every phase to its exact Stage and120/300/2400-second policy. Pure enum construction; no native process or timeout wait.",
+        "2": "Pure synchronous policy table; cleanup, playback and elapsed-time tolerances do not apply.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "Pure synchronous policy table; cleanup, playback and elapsed-time tolerances do not apply.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_phase_deadlines_reap_each_admitted_command",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 28,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_phase_deadlines_reap_each_admitted_command",
+      "purpose": "Retire each positively admitted held native smoke command before returning a typed deadline.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For six phases, admit the exact fixture pid, observe the two-second deadline within an independent five-second channel bound, release then join before assertions, and require exact stage, elapsed>=budget, attempted signal, child status, group gone and absent pid."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "For six phases, admit the exact fixture pid, observe the two-second deadline within an independent five-second channel bound, release then join before assertions, and require exact stage, elapsed>=budget, attempted signal, child status, group gone and absent pid.",
+      "synchronization_timeout": "PID/release polling observes actual conditions. Two-second execution and one-second cleanup test budgets; five-second independent observation plus explicit release recovery prevent legacy unbounded behavior from being accepted. FixtureWorker releases and joins on unwind; Fixture drains only recorded owned pids.",
+      "rules": {
+        "1": "For six phases, admit the exact fixture pid, observe the two-second deadline within an independent five-second channel bound, release then join before assertions, and require exact stage, elapsed>=budget, attempted signal, child status, group gone and absent pid.",
+        "2": "PID/release polling observes actual conditions. Two-second execution and one-second cleanup test budgets; five-second independent observation plus explicit release recovery prevent legacy unbounded behavior from being accepted. FixtureWorker releases and joins on unwind; Fixture drains only recorded owned pids.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "PID/release polling observes actual conditions. Two-second execution and one-second cleanup test budgets; five-second independent observation plus explicit release recovery prevent legacy unbounded behavior from being accepted. FixtureWorker releases and joins on unwind; Fixture drains only recorded owned pids.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_phase_native_exits_and_missing_tools_keep_exact_causes",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 76,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_phase_native_exits_and_missing_tools_keep_exact_causes",
+      "purpose": "Keep nonzero native status separate from a missing executable at each smoke stage.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For all six phases, run exit23 and require exact Stage, Cause::Exit(code23) and completed group cleanup; an absent owned executable must return Spawn(NotFound) with the same stage and no allocated cleanup handle."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "For all six phases, run exit23 and require exact Stage, Cause::Exit(code23) and completed group cleanup; an absent owned executable must return Spawn(NotFound) with the same stage and no allocated cleanup handle.",
+      "synchronization_timeout": "Finite native shell and before-spawn rejection. Two-second execution/one-second cleanup, no timing sleep as an oracle; private Fixture owns all files and recorded pids.",
+      "rules": {
+        "1": "For all six phases, run exit23 and require exact Stage, Cause::Exit(code23) and completed group cleanup; an absent owned executable must return Spawn(NotFound) with the same stage and no allocated cleanup handle.",
+        "2": "Finite native shell and before-spawn rejection. Two-second execution/one-second cleanup, no timing sleep as an oracle; private Fixture owns all files and recorded pids.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "Finite native shell and before-spawn rejection. Two-second execution/one-second cleanup, no timing sleep as an oracle; private Fixture owns all files and recorded pids.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_structured_output_failure_redacts_capture_and_retains_cause",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 113,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_structured_output_failure_redacts_capture_and_retains_cause",
+      "purpose": "Keep synthetic structured-command stderr out of diagnostic formatting while retaining typed native failure.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Inventory and Settings each exit23 with child-only synthetic marker; Display/Debug must exclude it, exact stage/status remain typed, and raw capture retains intentionally byte-exact stderr."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "Inventory and Settings each exit23 with child-only synthetic marker; Display/Debug must exclude it, exact stage/status remain typed, and raw capture retains intentionally byte-exact stderr.",
+      "synchronization_timeout": "Finite native process; private environment supplied on Command only. No process-global output redirection. Native owner reaps group before returning; Fixture owns private files. This is not evidence of an observed production leak.",
+      "rules": {
+        "1": "Inventory and Settings each exit23 with child-only synthetic marker; Display/Debug must exclude it, exact stage/status remain typed, and raw capture retains intentionally byte-exact stderr.",
+        "2": "Finite native process; private environment supplied on Command only. No process-global output redirection. Native owner reaps group before returning; Fixture owns private files. This is not evidence of an observed production leak.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "Finite native process; private environment supplied on Command only. No process-global output redirection. Native owner reaps group before returning; Fixture owns private files. This is not evidence of an observed production leak.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_phase_success_keeps_structured_bytes_and_streaming_modes",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 138,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_phase_success_keeps_structured_bytes_and_streaming_modes",
+      "purpose": "Accept complete structured output larger than the old smoke capture default and preserve unbuffered status modes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For Inventory and Settings, read two MiB whitespace plus JSON through native cat and compare parsed Value structurally; the four inherited-console phases return an empty buffer after successful native exit."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "For Inventory and Settings, read two MiB whitespace plus JSON through native cat and compare parsed Value structurally; the four inherited-console phases return an empty buffer after successful native exit.",
+      "synchronization_timeout": "Finite per-case private output; two-second execution/one-second cleanup. No elapsed-time performance claim. These controlled native commands do not execute Xcode or simctl.",
+      "rules": {
+        "1": "For Inventory and Settings, read two MiB whitespace plus JSON through native cat and compare parsed Value structurally; the four inherited-console phases return an empty buffer after successful native exit.",
+        "2": "Finite per-case private output; two-second execution/one-second cleanup. No elapsed-time performance claim. These controlled native commands do not execute Xcode or simctl.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "Finite per-case private output; two-second execution/one-second cleanup. No elapsed-time performance claim. These controlled native commands do not execute Xcode or simctl.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
+    },
+    {
+      "id": "scripts::smoke_commands::smoke_result_verification_runs_after_every_execution_outcome",
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "line": 176,
+      "native_identity": "ci_smoke::lifecycle_tests::smoke_command_tests::smoke_result_verification_runs_after_every_execution_outcome",
+      "purpose": "Always audit result artifacts even if execution fails and retain both independent typed causes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Exercise all four execution/verification success/failure combinations; require verifier invocation in each, accept only dual success, downcast paired error and assert exact present/absent causes, TestExecution deadline and original verification error type. Error::source preserves execution as primary when present, otherwise the original verification cause; both fields remain independently inspectable."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported Unix macOS/Linux; no skip, opt-in, Xcode, signing, server or device required.",
+      "setup_dependencies": "Fresh private TempDir per native command, existing Fixture/FixtureWorker, typed synthetic errors where pure control flow suffices. No shared service or Simulator reset.",
+      "action_postconditions": "Exercise all four execution/verification success/failure combinations; require verifier invocation in each, accept only dual success, downcast paired error and assert exact present/absent causes, TestExecution deadline and original verification error type. Error::source preserves execution as primary when present, otherwise the original verification cause; both fields remain independently inspectable.",
+      "synchronization_timeout": "Synchronous injected verifier and typed pre-spawn synthetic failure; no process, asynchronous worker or teardown. This tests control flow and cause retention, not native bundle-schema acceptance.",
+      "rules": {
+        "1": "Exercise all four execution/verification success/failure combinations; require verifier invocation in each, accept only dual success, downcast paired error and assert exact present/absent causes, TestExecution deadline and original verification error type. Error::source preserves execution as primary when present, otherwise the original verification cause; both fields remain independently inspectable.",
+        "2": "Synchronous injected verifier and typed pre-spawn synthetic failure; no process, asynchronous worker or teardown. This tests control flow and cause retention, not native bundle-schema acceptance.",
+        "3": "No playback position or performance assertion. Process policies bound failure rather than establish a tolerance.",
+        "4": "Synchronous injected verifier and typed pre-spawn synthetic failure; no process, asynchronous worker or teardown. This tests control flow and cause retention, not native bundle-schema acceptance.",
+        "5": "Each native case owns its inputs and recorded command; pure cases allocate no mutable global state. Personal credentials and other worktrees remain untouched.",
+        "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
+        "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
+        "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
+        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+      },
+      "issue371_smoke_commands": {
+        "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371",
+        "source_sha256": "8fbe9b03c10ebd04e91fff6a9c51084e04f50e863d2e7abb1e8b4feda0155979"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

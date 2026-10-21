@@ -497,3 +497,6 @@ fn fixture_supervisor_releases_and_joins_on_assertion_unwind() {
 
 #[path = "report_tests.rs"]
 mod report_tests;
+
+#[path = "smoke_command_tests.rs"]
+mod smoke_command_tests;

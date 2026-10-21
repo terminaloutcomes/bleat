@@ -19,6 +19,12 @@ pub enum Stage {
     TestResults,
     TestSummary,
     LegacyTestSummary,
+    XcodeVersion,
+    SimulatorInventory,
+    BuildSettings,
+    TestEnumeration,
+    SimulatorInstall,
+    TestExecution,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Cause {

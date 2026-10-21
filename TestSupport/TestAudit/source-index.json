@@ -9721,6 +9721,42 @@
       "name": "null_modern_warning_field_does_not_use_legacy_fallback",
       "line": 1031,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_policies_keep_distinct_stages_and_finite_budgets",
+      "line": 20,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_deadlines_reap_each_admitted_command",
+      "line": 28,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_native_exits_and_missing_tools_keep_exact_causes",
+      "line": 76,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_structured_output_failure_redacts_capture_and_retains_cause",
+      "line": 113,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_phase_success_keeps_structured_bytes_and_streaming_modes",
+      "line": 138,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/smoke_command_tests.rs",
+      "name": "smoke_result_verification_runs_after_every_execution_outcome",
+      "line": 176,
+      "language": "rust"
     }
   ]
 }

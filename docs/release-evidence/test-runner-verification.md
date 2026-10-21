@@ -311,3 +311,45 @@ retained execution/scope evidence; raw logs remain private.
 Review and exact-head CI remain separate requirements. Other missing or stale
 records need record-by-record source review under #369; this bounded repair does
 not certify name/index parity or invent an outstanding defect count.
+
+## Remaining smoke command bounds (#371)
+
+At base `0084df83851373294e882734bb193a91b0fffd39`, six smoke command
+invocations still used unbounded native `status`/`output` calls: Xcode version,
+Simulator inventory, build settings, enumeration, installation and test execution.
+They now use the existing invocation-owned process-group boundary. Version and
+inventory have 120-second execution policies; settings, enumeration and install
+have 300 seconds; test execution has 2,400 seconds. Cleanup has its existing
+three-second policy and bounded Drop fallback. Only invocation-owned commands
+are retired; this does not certify completion/cancellation of operations already
+submitted to shared CoreSimulator services.
+
+Inventory and settings retain complete structured output up to the same 64 MiB
+per-stream accepted-read ceiling as result reports. Anonymous capture files may
+grow until the deadline; this is not a disk quota. Failed captured commands no
+longer print raw stderr. Their exact stage, native cause, bounded raw capture and
+cleanup outcome remain available while ordinary error formatting omits captured
+bytes. The four status phases keep inherited live console output. No global
+redirection, service reset or private configuration change is introduced.
+
+Native argument vectors, environment selection, selected identities, discovery
+and result paths, build/boot concurrency and all parser/verification assertions
+remain unchanged. Test-result verification still runs after execution failure,
+including deadline or spawn failure. A dedicated error retains execution and
+verification failures separately; dual success alone establishes acceptance.
+
+Six new native test functions review exact policy mapping, all six admitted held
+commands and their retirement, native exit versus missing-tool causes, captured
+synthetic marker non-disclosure, complete structured positive output beyond 1 MiB,
+and all four execution/verification outcome combinations. Their individual
+nine-rule assessments append to `other.json` and `source-index.json`, preserving
+all 410 and 1,616 prior rows. Existing test bodies and process ownership algorithms
+are unchanged. Local repetitions, owning outcomes, review and exact-head CI must
+be inspected separately; a successful fixture is not fresh Xcode execution.
+
+Remaining confirmed native command sites at this base are SwiftPM discovery and
+execution plus the general Xcode runner status helper. Their distinct selection,
+observation and result-audit contracts require separate review. Full record-level
+schema, current source-audit dispositions, opt-in/configuration and physical-device
+acceptance remain under #369/#362. Historical follow-up totals are not remaining
+defect counts.

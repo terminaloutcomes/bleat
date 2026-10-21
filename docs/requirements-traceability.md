@@ -896,3 +896,13 @@ source, including all five exact identities. No new runtime test or execution is
 claimed. See [individual scope and revision-bound evidence](release-evidence/test-runner-verification.md#legacy-summary-test-audit-entries-369).
 Broader audit, native Xcode/configuration/device evidence and integration remain
 open; independent review and exact-head CI are separate requirements.
+
+### Remaining smoke native command bounds (#371)
+
+The six smoke version/inventory/settings/enumeration/install/test invocations
+use finite typed stage policies and the existing invocation-owned native cleanup
+boundary. Captured structured output is retained without copying raw failures
+into diagnostics; status phases preserve live inherited console output. Result
+verification runs even after execution failure and both typed causes remain
+available. [Scope, native regressions and separate acceptance gates](release-evidence/test-runner-verification.md#remaining-smoke-command-bounds-371)
+retain remaining SwiftPM/general-Xcode ownership and broader #362 acceptance.
