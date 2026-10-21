@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Prepare CI environment file
         run: touch .envrc
-      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           install: false
       - name: Install zsh
@@ -183,7 +183,7 @@ jobs:
         with:
           components: rustfmt,clippy
           rust-src-dir: bleat-api/
-      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # c2a87611a18de5b3828c5652fe268e992400cb5c
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install zsh for coverage scripts
         run: sudo apt-get install -y zsh
