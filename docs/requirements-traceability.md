@@ -1011,9 +1011,12 @@ Five existing host functions and nine build-helper functions have individual
 source-reviewed decisions, setup/action/postcondition details, synchronization
 and cleanup boundaries, enabling conditions and applicable rule assessments.
 Current source-index locations and moved-path provenance are reconciled; retired
-SDK-override history remains explicit. Three command-driven records preserve
-unproven child-budget follow-ups under #370. No application or existing test
-behavior changes, and no production leak/hang is inferred.
+SDK-override history remains explicit. Three command-driven records retain their
+historical unbounded-source assessments; the integrated #418 source uses the
+bounded owner and its current dispositions. See the [historical/current review
+reconciliation](release-evidence/test-reliability-audit.md#integration-of-historical-and-current-child-reviews-369370).
+The audit repair changes no application or existing test behavior, and no
+production leak/hang is inferred.
 
 The Rust parity checker and eight audited regressions reject orphaned active
 Rust records after attribute/declaration/file removal as well as missing/stale/
