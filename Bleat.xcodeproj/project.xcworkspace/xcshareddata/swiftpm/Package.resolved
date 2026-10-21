@@ -1,5 +1,5 @@
 {
-  "originHash" : "c62d4e48d540c1cdfc96931123aba4a307fc0f7a0cd3e51e5543130d7d6a1f35",
+  "originHash" : "66254895a3712f51d5b614a0657c091a2c1ae682371fccf2e3998d863f6f2010",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-protobuf.git",
       "state" : {
-        "revision" : "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
-        "version" : "1.38.1"
+        "revision" : "3d537cb81aef272a03cb3be815439e9bf0eb3bd3",
+        "version" : "1.39.0"
       }
     },
     {
