@@ -10319,6 +10319,18 @@
       "name": "release_scan_simulator_preserves_https_and_otlp_origin_policy",
       "line": 228,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testBookDetailDownloadStatusWrapsAtLargestDynamicType",
+      "line": 1041,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testBookDetailDownloadStatusFitsAtDefaultDynamicType",
+      "line": 1048,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

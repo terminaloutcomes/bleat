@@ -388,7 +388,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTAssertTrue(container.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            container.waitForExistence(timeout: 5),
+            "Missing scroll container \(container)", file: file, line: line)
         for _ in 0..<30 {
             if element.exists, app.frame.contains(element.frame),
                 element.isHittable
@@ -419,7 +421,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
         _ element: XCUIElement,
         in container: XCUIElement,
         app: XCUIApplication,
-        clearance: CGFloat = 24
+        clearance: CGFloat = 24,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         let bottomTabs = ["Home", "Library", "Downloads", "Settings", "Search"]
             .map { tabButton($0, in: app) }
@@ -434,7 +438,7 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
                     bottomTabs.allSatisfy {
                         !$0.frame.intersects(element.frame)
                     },
-                    "Element overlaps a floating tab"
+                    "Element overlaps a floating tab", file: file, line: line
                 )
                 return
             }
@@ -446,7 +450,9 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
             )
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTFail("Could not scroll element above the floating tabs")
+        XCTFail(
+            "Could not scroll \(element) above floating tabs with \(clearance) points of clearance",
+            file: file, line: line)
     }
 
     @MainActor

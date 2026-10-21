@@ -435,7 +435,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
     ) {
         XCTAssertTrue(
             container.waitForExistence(timeout: 5),
-            "Missing scroll container \(container)"
+            "Missing scroll container \(container)", file: file, line: line
         )
         for _ in 0..<20 {
             let elementExists = element.exists

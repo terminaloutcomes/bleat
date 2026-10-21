@@ -183,3 +183,36 @@ PR #417's missing-entry repair remains independent and unmerged. Broader
 #362/#369 semantic reconciliation, other subprocess owners and configuration
 acceptance remain open; the earlier local navigation snapshot at `002fc39`
 recorded725 moved references, not725 semantic defects. Owner: Bleat maintainers / @yaleman under #370/#369.
+
+## UI fixture caller failures (#375)
+
+The original fixture state controls remain delivered by #367/#436/#437: context
+download and transcript-cache gates own pending/release/completed state, and the
+edit fixture exposes observed progress and explicit completion. No production
+fixture behavior, test body, wait budget or playback-menu assertion changes here.
+
+The remaining caller-diagnostic corrections cover nine existing helpers. Five
+scroll helpers now forward their existing caller parameters for the bounded
+missing-container assertion. The accessibility floating-tab helper forwards
+caller parameters for overlap and exhaustion. Download-status and edit-progress
+wrappers forward all 12 and 19 existing assertions respectively. The live scroll
+helper retains twenty half-second existence checks/directional gestures and
+asserts final existence/hittability at its caller instead of silently returning
+after exhaustion. It accepts success reached by the twentieth gesture without
+adding a wait or gesture. All five other gesture loops and their predicates
+remain unchanged. The larger previous six-suite patch is preserved separately.
+
+The two download-status callers receive substantive records/index entries; the
+two edit callers receive current decisions while preserving historical reviews.
+Source review checks each caller's semantic postcondition rather than treating
+hittability or a completed gesture as download/playback completion.
+
+Run each of the two download-status and two edit-progress identities individually
+and repeatedly, then the supported owning standard UI lane. The existing
+`TestAsyncGateTests` lifecycle cases must pass in their owning app selection.
+Record exact source revisions, discovery/results, failures and expected skips
+in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375). The Release
+secret gate exercises the live helper's relevant compile-gated journey. Retained
+configured accessibility evidence remains tied to its actual source; no
+accessibility matrix, screenshot or device acceptance is inferred from a standard
+UI pass. The unrelated unreproduced iPad geometry observation stays under #369.

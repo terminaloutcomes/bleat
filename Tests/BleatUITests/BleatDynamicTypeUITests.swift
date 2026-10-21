@@ -268,7 +268,7 @@ final class BleatDynamicTypeUITests: XCTestCase {
     ) {
         XCTAssertTrue(
             container.waitForExistence(timeout: 5),
-            "Missing scroll container \(container)"
+            "Missing scroll container \(container)", file: file, line: line
         )
         for _ in 0..<30 {
             if element.exists,
