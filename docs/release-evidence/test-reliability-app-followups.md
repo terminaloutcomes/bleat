@@ -598,3 +598,77 @@ logs contain no compiler warning lines. These build diagnostics are distinct
 from the zero structured runtime warnings. No host, signed macOS application,
 live-server or physical-device run is claimed. Independent final-head review
 and exact-head CI remain required before merge.
+
+
+## Primary fallback recovery completion (#374)
+
+[Validate Bleat run 39562779417](https://github.com/terminaloutcomes/bleat/actions/runs/39562779417),
+at `1f7ee5bdea23415178d7dc81dc942b8d4458ac4a`, recorded one failure
+among 626 outcomes: `AppModelTests/testTransportFailureUsesChangedPrimaryFallbackExactlyOnce`
+observed two fallback tasks before asserting empty pending recovery. The other
+625 tests passed, with zero skips, expected failures or structured runtime
+warnings. The failing test body is unchanged on baseline `58223214`. An
+unchanged-source focused local execution passed once; that pass does not erase
+the CI failure.
+
+A private experiment used the existing `replacementTaskStartCheckpoint` to hold
+recovery after replacement task registration. It retained the old readiness
+predicate and every original transfer assertion. The test failed only at the
+intentionally retained pending-empty assertion in **0.94 seconds**: two
+replacement tasks were visible while the original callback-completion sequence
+remained unchanged. The checkpoint entry assertion proves at least one entry,
+not both. Xcode separately timed out after **600 seconds** collecting failure
+diagnostics; the raw log and result bundle retain that infrastructure failure.
+It is not the test duration or evidence of a cleanup deadlock.
+
+The final test contains no checkpoint instrumentation or production changes.
+Its original two-second deadline now waits for both replacement registration
+and cleared pending recovery. Exact two-task, primary URL, `Range`, `If-Range`,
+descriptor count and track-index assertions remain. Failure diagnostics include
+elapsed time, budget, request count, pending recovery, callback sequence and
+record state. The sequence is diagnostic, not a completion proxy. Deferred
+synthetic-session invalidation and reverse-ordered XCTest teardown ensure
+awaited model cleanup precedes checked storage deletion, including thrown waits.
+No full framework-callback drainage is claimed.
+
+Retained local artifacts are `.build/primary-fallback-baseline.xcresult`,
+`.build/primary-fallback-private-witness.xcresult`, the private witness patch,
+source hashes, native summaries and verification records. The baseline has one
+compiler sysroot warning for the transcription dynamic product and nine Xcode
+host build-version parsing diagnostics. The private witness rebuild emitted
+1,610 stale-file warnings plus the same sysroot warning, nine host metadata
+diagnostics and the separate 600-second diagnostic timeout. These diagnostics
+are distinct from zero structured runtime warnings; no cache was deleted or
+warning suppressed.
+
+Final Swift source SHA-256 is
+`0427dfe8b9a16b676bd5d63df3fbe15b3a64bb24d6196ba3116a04cd3c40b0c5`.
+On Xcode 27.1 / iOS 26.5 Simulator:
+
+- Supported focused `scripts/xctest.sh -c Debug` execution: **1/1** passed.
+- Existing built products, exact selector, parallel testing disabled and ten
+  unconditional native iterations: **10/10** passed. The summary reports one
+  unique test; the canonical verifier checked all ten outcomes.
+- Supported `scripts/xctest.sh -c Debug -t BleatAppTests` owning execution:
+  **627/627 distinct identities** passed, including the changed test. Native
+  outcomes and canonical verification against built discovery with the actual
+  `BleatAppTests` selection passed.
+- All final bundles have zero failures, skips, expected failures and structured
+  runtime warnings. Final focused, repetition and owning logs have zero compiler
+  warnings, with respectively nine, three and nine host metadata diagnostics.
+- Strict changed-file Swift lint, documentation, audit consistency and diff
+  checks passed. The initial lint failure caught one new overlong assertion;
+  its wrap-only correction preceded all final test executions. The first
+  standalone baseline verification lacked the not-yet-built verifier binary;
+  building it completed verification without rerunning the test. An initial
+  owning verification used unfiltered discovery and expected unselected UI
+  tests; applying the actual app-only selector verified the same bundle without
+  a test rerun. Both verification corrections are retained in local evidence.
+
+Final bundles are `.build/primary-fallback-final-focused.xcresult`,
+`.build/primary-fallback-final-repetitions.xcresult` and
+`.build/primary-fallback-final-owning.xcresult`, with discovery, native summaries,
+source hashes, command exits and verification records alongside them. Independent
+four-file source review found no actionable issues. Exact-head publication/CI
+and final merge remain the coordinator's responsibility. No signed macOS,
+live-server or physical-device evidence is added; #374/#362 remain open.

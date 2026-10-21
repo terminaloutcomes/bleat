@@ -7406,7 +7406,11 @@ final class AppModelTests: XCTestCase {
                 "BleatPrimaryFallback-\(UUID().uuidString)",
                 isDirectory: true
             )
-        defer { try? FileManager.default.removeItem(at: root) }
+        addTeardownBlock {
+            if FileManager.default.fileExists(atPath: root.path) {
+                try FileManager.default.removeItem(at: root)
+            }
+        }
         let account = try fixtureAccount()
         let detail = fixtureBookDetail(
             item: fixtureBook(
@@ -7449,6 +7453,7 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.primary-fallback.\(UUID().uuidString)"
         )
+        addTeardownBlock { @MainActor in await model.removeAll() }
         await model.start(accounts: [account])
         let identities = try plan.tracks.map { track in
             try DownloadTaskIdentity(
@@ -7475,6 +7480,7 @@ final class AppModelTests: XCTestCase {
             ),
         ]
         let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
         let tasks = try zip(identities, ranges).enumerated().map {
             index, pair in
             let task = session.downloadTask(with: failedRequests[index])
@@ -7494,17 +7500,26 @@ final class AppModelTests: XCTestCase {
         }
         var fallbackRequests: [URLRequest] = []
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
+        let startedAt = clock.now
+        let deadline = startedAt.advanced(by: .seconds(2))
         repeat {
             fallbackRequests =
                 await model.scheduledTransferRequestsForTesting()
-            if fallbackRequests.count >= 2 {
+            if fallbackRequests.count >= 2,
+                model.pendingRecoveryDownloadIDsForTesting.isEmpty
+            {
                 break
             }
             try await Task.sleep(for: .milliseconds(10))
         } while clock.now < deadline
 
-        XCTAssertEqual(fallbackRequests.count, 2)
+        let recoveryDiagnostic =
+            "Primary fallback recovery after \(startedAt.duration(to: clock.now)); "
+            + "budget=2s; requests=\(fallbackRequests.count); "
+            + "pending=\(model.pendingRecoveryDownloadIDsForTesting); "
+            + "completion sequence=\(model.taskCompletionProcessingSequenceForTesting); "
+            + "record states=\(model.records.map { $0.manifest.state })"
+        XCTAssertEqual(fallbackRequests.count, 2, recoveryDiagnostic)
         XCTAssertTrue(fallbackRequests.allSatisfy { $0.url == primaryURL })
         XCTAssertEqual(
             Set(
@@ -7519,7 +7534,10 @@ final class AppModelTests: XCTestCase {
                     == "\"validator\""
             }
         )
-        XCTAssertTrue(model.pendingRecoveryDownloadIDsForTesting.isEmpty)
+        XCTAssertTrue(
+            model.pendingRecoveryDownloadIDsForTesting.isEmpty,
+            recoveryDiagnostic
+        )
         let descriptors =
             await model.scheduledTransferDescriptorsForTesting()
         XCTAssertEqual(descriptors.count, 2)
@@ -7527,8 +7545,6 @@ final class AppModelTests: XCTestCase {
             descriptors.map(\.identity.trackIndex).sorted(),
             [0, 1]
         )
-        session.invalidateAndCancel()
-        await model.removeAll()
     }
 
     func testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff()
