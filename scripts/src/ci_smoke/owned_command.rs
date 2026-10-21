@@ -28,6 +28,7 @@ pub enum Stage {
     SwiftPMXCTestDiscovery,
     SwiftTestingDiscovery,
     SwiftPMExecution,
+    PaidBuildSettings,
     SwiftReleaseBuild,
     ReleaseVersionTests,
     PackageResolution,

@@ -932,3 +932,10 @@ native result arguments. Typed rejection protects absolute and relative result
 paths before any native command or verifier runs. [Source proof, retained probe
 and scoped regression evidence](release-evidence/test-runner-verification.md#repository-root-result-preservation-guard-371)
 preserve the distinction between reproduced guard bypass and unobserved data loss.
+
+### Paid build-mode orchestration (#371)
+
+The twelve paid-capability settings queries use bounded native ownership and
+decoded typed settings/plist assertions; exact isolated invalid-mode controls
+replace generic launcher-failure acceptance. [Scoped ownership and evidence](release-evidence/test-runner-verification.md#paid-build-mode-orchestration-371)
+keeps signed-host orchestration and independently created groups outstanding.

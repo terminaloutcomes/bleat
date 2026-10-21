@@ -554,3 +554,35 @@ Artifacts are `.build/i371-result-guard-verification.json`, its exact native
 outcomes and before/after probe references. Parent native Xcode evidence remains
 revision-bound; no expensive real Xcode run was duplicated for this guard-only
 change. Independent review and exact-head CI remain separate gates.
+
+## Paid build-mode orchestration (#371)
+
+The paid-capability matrix now runs in `scripts/src/paid_build_modes.rs`. Its
+existing shell entry point only selects the repository and execs the Rust CLI;
+the core Xcode gate calls the Rust implementation directly. Signed-host
+`test-host.sh` ownership remains outstanding.
+
+All twelve original Release build-settings queries retain their SDK, target and
+explicit settings: eight paid combinations, the Personal Team override, and the
+paid, personal and macOS defaults. Each query has a 300-second execution budget
+and the existing three-second native cleanup policy. Complete stdout has a
+64 MiB accepted-read ceiling in an anonymous file; compiler stderr stays live.
+This ceiling is not a disk quota. No named scratch directory or shell EXIT trap
+is needed. Original command, exit/deadline and cleanup causes remain typed, with
+the exact query retained. Native process-group retirement does not prove shared
+Xcode services or independently created descendant groups have drained.
+
+Decoded plist checks preserve paid-capability exclusions in keys/string values,
+CarPlay enabled/disabled and macOS exclusions, Keychain-key presence, and all
+three Info.plist substitutions. Invalid documents, missing targets/settings,
+non-string settings and mismatches have distinct typed outcomes. The old negative
+launcher checks accepted any failure, including missing ambient configuration or
+a failed Cargo launch. Four isolated controls now require the original validator's
+exact `InvalidAllowedValue` and variable, after a valid control succeeds. These
+are pure validator checks, not four native CLI executions. Existing launcher
+wiring tests remain separate; the actual supported paid-build entry point must
+be executed and recorded independently. No application settings, trust, signing,
+manifest dependency or user configuration changes.
+
+Validation and independent review remain pending. No signed-host, Simulator,
+device, live-server or full-epic acceptance is claimed by this slice.
