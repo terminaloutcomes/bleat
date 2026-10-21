@@ -1026,3 +1026,13 @@ semantic review, compiler discovery and broader inventory are not certified by
 name parity. See [repair scope and exact evidence](release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369).
 Broader #362/#369 acceptance remains open; source/record coverage alone is not
 completion of the testing epic.
+
+### Host driver cancellation (#362)
+
+A controlled native-command probe demonstrated that driver-only SIGTERM left its
+active Swift phase and descendant alive. Rust orchestration now owns the native
+phase group through interruption and observed retirement while preserving signed
+identity, reports and coverage contracts. [Scope, original failure and evidence](release-evidence/test-runner-verification.md#host-driver-cancellation-362)
+keep detached/nested owners, Release cleanup and deferred macOS app work separate.
+Final focused/signed owning execution, independent review and exact-head CI are
+recorded at the tested revision; this is not whole-epic completion.

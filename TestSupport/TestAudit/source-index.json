@@ -10271,6 +10271,36 @@
       "name": "empty_required_scopes_are_rejected",
       "line": 224,
       "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "sigterm_retires_admitted_native_phase_and_descendant",
+      "line": 357,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "native_nonzero_exit_preserves_status_and_stops_before_later_phases",
+      "line": 431,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "missing_native_tool_reports_spawn_failure_without_real_tool_fallback",
+      "line": 441,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/host_test_driver.rs",
+      "name": "unsigned_product_reports_and_profiles_survive_full_synthetic_workflow",
+      "line": 451,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/host_test_driver/tests.rs",
+      "name": "signed_entitlements_require_exact_team_application_and_keychain_group",
+      "line": 10,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

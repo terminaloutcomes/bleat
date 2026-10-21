@@ -646,3 +646,47 @@ Two earlier six-pass focused runs had source edits during compilation; neither
 is attributed to final corrected-source acceptance. Raw results, source hashes,
 setup exit 0 and scope checks are linked from `.build/i371-paid-verification.json`.
 Final metadata review and exact-head CI remain separate gates.
+
+## Host driver cancellation (#362)
+
+The unchanged host shell driver at `58223214` was run once in an exclusively
+owned synthetic repository. A fake Swift build and its child positively recorded
+entry before SIGTERM was sent only to the driver PID. The driver exited after
+about one millisecond; both controlled native processes remained alive through
+the independent 5.001-second observation window, with the phase reparented to
+PID 1. This demonstrates missing driver-to-phase cancellation propagation in a
+controlled command fixture; it is not an observed compiler or signing failure.
+
+The first independent cleanup guard mistook an unavailable group lookup for the
+exited driver as absence of the whole group. Its failed result is retained.
+Recovery checked every remaining original-group member against the recorded
+fixture identities, retired that group, and verified both recorded PIDs and the
+group absent. Original probe, failed cleanup and recovery records remain under
+`.build/i362-host1-baseline/`; no repetition of that old probe is counted.
+
+The shell now execs Rust orchestration while retaining signed/unsigned selection,
+product discovery, signature/profile/entitlement checks, exact report verification
+and coverage handling. Signal interruption uses the existing native owner:
+non-reaping exit observation retains leader identity, then group signalling,
+child reaping and group-disappearance checks complete under its existing cleanup
+policy. Execution has no new deadline policy. Native status, interruption and
+cleanup outcomes remain distinct typed data; signing checks retain exact team,
+application and Keychain-group requirements without emitting those values.
+
+The native regression exercises the public launcher and real Cargo exec behavior
+in a separate dependency-free fixture workspace. It verifies the original
+launcher PID owns the admitted native phase, records actual process groups and
+requires both native PIDs and groups absent before independent release. Other
+regressions cover missing tools, native nonzero status, decoded entitlements and
+full synthetic unsigned reports/profiles, successful-query stderr and unrelated
+sentinels. The local native target passed four exact identities, entitlement
+validation passed one exact identity, and 34 existing shared native-owner
+identities passed, all with zero failures or skips. Strict all-target/all-feature
+Clippy passed. Two intermediate compile failures executed no tests and remain
+retained. Actual signed owning execution, independent final review and exact-head
+CI remain separate gates before release.
+
+This repairs the demonstrated active command-group boundary. It does not prove
+retirement of detached groups, shared Xcode/CoreSimulator services, the three
+Swift nested-child owners, or Release cleanup. Deferred macOS app-isolation work
+remains deferred. No physical-device evidence is inferred.
