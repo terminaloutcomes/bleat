@@ -6775,6 +6775,244 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#smoke-runner-command-ownership-371",
         "source_sha256": "ab55becd19f28f737a8a09fb6adc711d48dbe2e7c01218836754ecfb70cfd209"
       }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_arguments_preserve_all_native_report_modes",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 16,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_arguments_preserve_all_native_report_modes",
+      "purpose": "Preserve all three xcresulttool argv contracts, including a single bundle path containing spaces.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Build commands for Tests, Summary and LegacySummary without spawning; compare program and structural OsStr argument vectors to each exact native CLI contract."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Build commands for Tests, Summary and LegacySummary without spawning; compare program and structural OsStr argument vectors to each exact native CLI contract.",
+      "synchronization_timeout": "Pure command construction with a fixed project-relative path; no process, asynchronous wait, clock or external tool execution.",
+      "rules": {
+        "1": "Build commands for Tests, Summary and LegacySummary without spawning; compare program and structural OsStr argument vectors to each exact native CLI contract.",
+        "2": "Pure command construction with a fixed project-relative path; no process, asynchronous wait, clock or external tool execution.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "No child/file is allocated; no teardown needed.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Pure argument-vector table; xcrun availability is not required. This is not native Xcode execution.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Structured argv equality preserves the exact command wire contract; no serialized JSON comparison or user value appears.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_failures_keep_stage_status_and_redact_payload",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 45,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_failures_keep_stage_status_and_redact_payload",
+      "purpose": "Retain each report stage and native exit23 while excluding synthetic stderr from ordinary error formatting.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Run an owned shell with child-only synthetic MARKER environment and exit23 in each report mode; assert exact stage, typed native status, retained raw capture, completed group cleanup and original Error source; Display and Debug must omit the marker."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Run an owned shell with child-only synthetic MARKER environment and exit23 in each report mode; assert exact stage, typed native status, retained raw capture, completed group cleanup and original Error source; Display and Debug must omit the marker.",
+      "synchronization_timeout": "Native process exit/ownership observation; two-second test process and one-second cleanup budgets, not a readiness delay.",
+      "rules": {
+        "1": "Run an owned shell with child-only synthetic MARKER environment and exit23 in each report mode; assert exact stage, typed native status, retained raw capture, completed group cleanup and original Error source; Display and Debug must omit the marker.",
+        "2": "Native process exit/ownership observation; two-second test process and one-second cleanup budgets, not a readiness delay.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "The native owner reaps the child/group; FixtureDrop checks only its own recorded pid on normal/unwind paths.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Native Unix command adapter with a controlled shell, not real xcresulttool or a production disclosure observation.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Typed CommandCause::Exit and stage remain available. Exact raw stderr bytes are intentionally checked as the capture wire contract while diagnostic formatting redacts them.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_deadlines_reap_each_admitted_native_report",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 75,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_deadlines_reap_each_admitted_native_report",
+      "purpose": "Bound and reap all three positively admitted held report commands, with independent recovery if an adapter loses its deadline.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Admit the exact fixture pid before observing return; require a typed two-second deadline, elapsed>=budget, attempted signal, native status, group disappearance and absent pid for each mode. Release and join the fixture worker before asserting failures."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Admit the exact fixture pid before observing return; require a typed two-second deadline, elapsed>=budget, attempted signal, native status, group disappearance and absent pid for each mode. Release and join the fixture worker before asserting failures.",
+      "synchronization_timeout": "Existing bounded PID/release polling checks real conditions. A five-second independent channel observation supervises the two-second execution plus one-second cleanup policy; explicit release drains legacy behavior within its separate bound.",
+      "rules": {
+        "1": "Admit the exact fixture pid before observing return; require a typed two-second deadline, elapsed>=budget, attempted signal, native status, group disappearance and absent pid for each mode. Release and join the fixture worker before asserting failures.",
+        "2": "Existing bounded PID/release polling checks real conditions. A five-second independent channel observation supervises the two-second execution plus one-second cleanup policy; explicit release drains legacy behavior within its separate bound.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "FixtureWorker releases then joins on normal/unwind exits; FixtureDrop drains only recorded owned children. No unknown worker is detached or shared Simulator/service signalled.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Real native Unix lifecycle under controlled process-group ownership; no wall-clock success threshold or observed production Simulator hang.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Match exact report stage and CommandCause::Deadline fields plus typed cleanup state. Do not replace missing completion with a successful release/retry.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_capture_limit_rejects_output_without_partial_success",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 123,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_capture_limit_rejects_output_without_partial_success",
+      "purpose": "Reject an oversized stream instead of returning truncated or partially accepted report text.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Use a child cat command and65 synthetic bytes with a64-byte test read ceiling in each report mode; assert typed Capture, stdout FileTooLarge, empty accepted stdout and complete group cleanup."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Use a child cat command and65 synthetic bytes with a64-byte test read ceiling in each report mode; assert typed Capture, stdout FileTooLarge, empty accepted stdout and complete group cleanup.",
+      "synchronization_timeout": "Finite native output with two-second process/one-second cleanup budgets; no polling delay is used as proof.",
+      "rules": {
+        "1": "Use a child cat command and65 synthetic bytes with a64-byte test read ceiling in each report mode; assert typed Capture, stdout FileTooLarge, empty accepted stdout and complete group cleanup.",
+        "2": "Finite native output with two-second process/one-second cleanup budgets; no polling delay is used as proof.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "Native owner and per-case Fixture retire the command and private files on both exits.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Native capture adapter test with a deliberately tiny test ceiling; real report acceptance is64MiB per stream and existing smoke acceptance remains1MiB.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Exact stage, CommandCause::Capture and FileTooLarge remain machine-readable; no oversized payload is printed or silently returned.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_invalid_utf8_keeps_encoding_stage_without_payload",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 157,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_invalid_utf8_keeps_encoding_stage_without_payload",
+      "purpose": "Keep invalid UTF8 output distinct from JSON/schema failure and preserve its exact report stage without disclosing bytes.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Write a synthetic marker followed by0xff, run native cat for each mode, and assert OutputEncoding with exact stage, valid_up_to marker length, error_len1 and original Utf8Error source; Display/Debug exclude the marker."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Write a synthetic marker followed by0xff, run native cat for each mode, and assert OutputEncoding with exact stage, valid_up_to marker length, error_len1 and original Utf8Error source; Display/Debug exclude the marker.",
+      "synchronization_timeout": "Finite controlled file output; ordinary two-second process and one-second cleanup bounds, with no asynchronous readiness guess.",
+      "rules": {
+        "1": "Write a synthetic marker followed by0xff, run native cat for each mode, and assert OutputEncoding with exact stage, valid_up_to marker length, error_len1 and original Utf8Error source; Display/Debug exclude the marker.",
+        "2": "Finite controlled file output; ordinary two-second process and one-second cleanup bounds, with no asynchronous readiness guess.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "The owned command retires before decoding and Fixture removes only its private payload/pid files.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Native Unix output plus standard-library UTF8 validation; no malformed real Xcode report or production leak claimed.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "OutputEncoding retains validation offsets/type through Error::source; diagnostic strings never include the invalid byte buffer.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_accepts_bounded_large_valid_utf8_json",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 190,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_accepts_bounded_large_valid_utf8_json",
+      "purpose": "Accept a complete valid report larger than the existing smoke capture ceiling.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "Run native cat on four MiB of leading whitespace plus a small JSON object in each report mode; decode and compare parsed serde_json::Value structurally to the expected object."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "Run native cat on four MiB of leading whitespace plus a small JSON object in each report mode; decode and compare parsed serde_json::Value structurally to the expected object.",
+      "synchronization_timeout": "Finite controlled output within the report ceiling; no elapsed-time success assertion or sleep.",
+      "rules": {
+        "1": "Run native cat on four MiB of leading whitespace plus a small JSON object in each report mode; decode and compare parsed serde_json::Value structurally to the expected object.",
+        "2": "Finite controlled output within the report ceiling; no elapsed-time success assertion or sleep.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "Invocation-owned command handles/group retire before parsing; Fixture owns every generated file.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Native large-output/encoding positive control, not proof of test-result schema validity or real app execution.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Structural JSON equality checks successful transport/decoding without conflating serialized whitespace identity with semantics. The4MiB case prevents accidental reuse of the1MiB smoke ceiling.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
+    },
+    {
+      "id": "scripts::test_result_reports::report_command_spawn_and_invalid_limit_keep_exact_typed_causes",
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "line": 209,
+      "native_identity": "ci_smoke::lifecycle_tests::report_tests::report_command_spawn_and_invalid_limit_keep_exact_typed_causes",
+      "purpose": "Distinguish missing-tool spawn failure from invalid capture policy and preserve the inherited smoke acceptance ceiling.",
+      "review": {
+        "status": "source_reviewed",
+        "decision": "keep",
+        "reason": "For each mode, use an absent owned executable and assert Spawn(NotFound), stage and no cleanup handle; then reject zero capture ceiling before spawn as InvalidCaptureLimit. Independently run the default smoke adapter with1MiB+1 bytes and require Capture/FileTooLarge."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library tests on supported macOS/Linux Unix hosts;parent lifecycle module is cfg(test). Three explicit report modes;no skip,opt-in,server,signing or actual Apple tool required.",
+      "setup_dependencies": "Reuse the existing Fixture/FixtureWorker only where native work is required;fresh TempDir and per-case command/environment. The argument-only table allocates no fixture/process. No process-global output redirection or environment mutation.",
+      "action_postconditions": "For each mode, use an absent owned executable and assert Spawn(NotFound), stage and no cleanup handle; then reject zero capture ceiling before spawn as InvalidCaptureLimit. Independently run the default smoke adapter with1MiB+1 bytes and require Capture/FileTooLarge.",
+      "synchronization_timeout": "Before-spawn typed failures need no wait; the default smoke control uses ordinary bounded native execution.",
+      "rules": {
+        "1": "For each mode, use an absent owned executable and assert Spawn(NotFound), stage and no cleanup handle; then reject zero capture ceiling before spawn as InvalidCaptureLimit. Independently run the default smoke adapter with1MiB+1 bytes and require Capture/FileTooLarge.",
+        "2": "Before-spawn typed failures need no wait; the default smoke control uses ordinary bounded native execution.",
+        "3": "No playback/media position assertion. Execution/cleanup policies bound failure;they are not performance tolerances.",
+        "4": "Spawn/policy rejection owns no child; any prepared files are dropped. Fixture and default native owner retire their exact command/files.",
+        "5": "Each case owns its private inputs and recorded native children;no personal credentials,shared service resets or unrelated worktree changes.",
+        "6": "Unix filesystem/spawn boundary and inherited-default control; no host PATH mutation or dependency/tool installation.",
+        "7": "Retain the extracted six-prototype baseline(2pass/4fail),test-only import compile failure and unconfirmed/interleaved attempt separately. Final clean serial repetitions and owning outcomes remain source/hash bound. Existing147 test bodies and default smoke budgets/assertions remain.",
+        "8": "Retain structured original io::Error, InvalidCaptureLimit and default Capture causes; do not stringify operationally different failures into one message.",
+        "9": "Final m2 source: 154/154 exact native owning identities across 11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All 147 existing identities preserved. Three clean final-source focused runs verify 21/21 function executions and all three admitted deadline modes reaped. Local M2 Linux ARM64/Rust 1.97.1 verifies 7/7 exact new functions; owned labelled container removed. Strict Clippy/fmt/docs pass. Changed native report readers replay actual retained PR #424 CI bundle: 626 outcomes with discovery agreement; not fresh app or Xcode 26.6 execution. Prototype baseline, import-only compile, interleaved/unconfirmed log, pre-style passes/Clippy corrections and Linux launcher failure remain separate. Independent review/exact-head CI pending."
+      },
+      "issue371_result_reports": {
+        "base_revision": "706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf",
+        "date": "2026-10-21",
+        "evidence": "docs/release-evidence/test-runner-verification.md#bounded-result-report-commands-371",
+        "source_sha256": "12e27926b0d8f588db9fb26b676ac264469ab909d1e1bc81af4fd81fd0ebad71"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 #[path = "ci_smoke/owned_command.rs"]
-mod owned_command;
+pub(crate) mod owned_command;
 use owned_command::{Cause, Failure as CommandFailure, Running, Stage};
 
 #[cfg(test)]

@@ -170,3 +170,112 @@ contacted, no publication or tracker write occurred,and `fe76c69` plus draft
 PR #417 remain unchanged. Linux and real Xcode/Simulator execution,independent
 review and eventual integration remain separate requirements. Owner: Bleat
 maintainers / @yaleman under #371/#369; broader epic acceptance stays open.
+
+## Bounded result report commands (#371)
+
+At runner base `706c0a5c6c74cf5d3a5a21ff87233da57ca21bdf`, the three
+`xcresulttool` bundle reads still used unbounded `Command::output`: modern test
+nodes, modern summary, and the legacy action-result fallback. They now use the
+same invocation-owned process group and reaping boundary as the smoke runner.
+Each report process has a 120-second execution budget and three-second cleanup
+budget. The existing bounded Drop fallback may attempt cleanup again after an
+unsuccessful retirement; failed cleanup remains an error. Native argv, fallback
+selection, schema validation, exact identities,
+repetition accounting and skip policy remain unchanged.
+
+Report errors preserve the exact `TestResults`, `TestSummary` or
+`LegacyTestSummary` stage, native exit or original IO cause, and separate cleanup
+and capture data. Ordinary Display/Debug formatting excludes captured payloads;
+raw capture remains available for programmatic inspection. Invalid UTF8 has its
+own output-encoding variant, with the original byte-free validation cause and
+stage rather than an ambiguous JSON error.
+
+Structured reports have a 64 MiB per-stream **read acceptance** ceiling. The
+existing smoke consumers retain their 1 MiB ceiling and unchanged budgets.
+A four-MiB valid JSON positive control prevents accidental reuse of the smaller
+smoke ceiling. Oversized streams fail explicitly instead of returning truncated
+success. Capture uses anonymous regular files; this read ceiling bounds accepted
+memory, not disk growth while a process is still running. The execution budget
+retires that process group. No shared Simulator/service or daemon is killed.
+
+Seven native regression functions cover all three report modes:
+
+- exact argv, including a bundle path with spaces;
+- nonzero native exit, stage, retained capture and diagnostic non-disclosure;
+- positively admitted held processes, typed deadline and actual reaping;
+- a tiny injected read ceiling and rejection of partial success;
+- invalid UTF8 offsets/type/stage without payload formatting;
+- valid four-MiB JSON, compared by decoded structural equality;
+- missing-tool and invalid-limit causes, plus the inherited smoke ceiling.
+
+The deadline case reuses the existing independent fixture supervisor. It
+observes the exact child's admission, checks return within the separate
+observation bound, and releases/joins the worker before asserting a failure.
+The existing PID/release polling checks state; no readiness delay is substituted
+for completion. Normal and assertion-unwind cleanup affect only recorded
+invocation-owned children and private files. These synchronous CLI boundaries
+introduce no async-to-sync fallback or process-global environment/output change.
+
+The retained six-prototype baseline extracts the old output/exit/encoding
+adapter. It passed the argv and valid-output controls and failed four tests:
+missing capture acceptance bound, held command outliving observation, synthetic
+stderr copied into diagnostics, and lost encoding stage/type. The fixture was
+released and joined before the deadline assertion failed. This is controlled
+native evidence, not an untouched-base run or an observed production Xcode hang
+or application disclosure.
+
+A test-only helper import was missing in the first corrected compile; no tests
+ran. I then reused its log before the prior writer exited, producing interleaved
+output, and the interim command's final exit was unconfirmed after its handle
+expired. That raw log is preserved and excluded from acceptance. Process state
+was checked before recovery. Three clean serial focused runs use independent
+logs and recorded exit files: **21/21 exact function executions passed**, with
+all three admitted deadline stages reaped each run.
+
+Final Mac source validation verified **154/154** exact owning outcomes across
+11 nonempty targets; 16 zero-test CLI targets are compilation checks only. All
+147 existing identities are preserved and only the seven new identities are
+added. Three fresh final-source focused runs verified **21/21** executions,
+zero failures or ignored tests. Strict all-target Clippy, formatting and docs
+checks passed. The first Clippy run rejected six test-only error-extraction
+expressions; an error-only helper now avoids formatting unexpected successful
+payloads. Earlier pre-style 154/21 passes are retained as a separate epoch.
+
+The changed native report readers accepted 626 exact outcomes from the retained
+actual PR #424 CI bundle with compiler-discovery agreement. Its modern warning
+field is present, so this real replay exercises test-tree and modern-summary
+commands;the legacy mode is exercised by controlled native fixtures and existing
+pure compatibility tests. This is not fresh app or Xcode26.6 execution.
+
+Local M2 Linux ARM64 validation on Rust 1.97.1 passed **7/7** exact new native
+functions, including all three admitted deadline/reaping modes. One labelled
+owned container ran the exact final-source archive without host secret mounts
+or volumes and was removed afterward. Its configuration was synthetic and
+container-only. The first login-shell launch replaced the Rust image PATH and
+failed exit 127 before tests; that log and verified container cleanup are retained.
+The successful retry preserves the image environment without toolchain overrides.
+All required local gates are finished; independent review and CI remain. Artifacts use the `.build/i371-report-` prefix and the
+summary is `.build/i371-report-verification.json`. A retained-result replay is
+reported separately from fresh application execution. Independent review and
+exact-head CI remain separate gates.
+
+This slice adds seven substantive other-audit and source-index records while
+preserving all 398 prior other records and 1,604 prior index records. It does not
+claim complete audit parity: five existing inline legacy-summary unit functions
+in `scripts/src/test_results.rs` are absent from both inventories at this base.
+They already run as tests and need a separate bounded source-audit repair under
+#369; this is an inventory gap, not five new runtime tests:
+
+- `missing_modern_warning_field_uses_real_legacy_empty_array_shape`
+- `legacy_warning_and_error_summaries_fail_closed`
+- `legacy_record_requires_nonempty_actions_and_action_issues`
+- `non_object_summary_is_rejected_before_legacy_fallback`
+- `null_modern_warning_field_does_not_use_legacy_fallback`
+
+Owner: Bleat maintainers / @yaleman, coordinated under #369/#362. The next action
+is to reconcile current PRs/issues, review each existing body/helpers, and add
+individual dispositions and current source locations with revision-bound
+execution evidence. Other listing, build-settings, discovery, installation and
+test-command owners still require their own bounds/review. Fresh native Xcode
+26.6, broader schema/semantic, opt-in, signed macOS app/auth and physical-device
+acceptance are not established by these host fixtures or retained replays.

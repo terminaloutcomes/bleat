@@ -9649,6 +9649,48 @@
       "name": "fixture_supervisor_releases_and_joins_on_assertion_unwind",
       "line": 467,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_arguments_preserve_all_native_report_modes",
+      "line": 16,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_failures_keep_stage_status_and_redact_payload",
+      "line": 45,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_deadlines_reap_each_admitted_native_report",
+      "line": 75,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_capture_limit_rejects_output_without_partial_success",
+      "line": 123,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_invalid_utf8_keeps_encoding_stage_without_payload",
+      "line": 157,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_accepts_bounded_large_valid_utf8_json",
+      "line": 190,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/ci_smoke/report_tests.rs",
+      "name": "report_command_spawn_and_invalid_limit_keep_exact_typed_causes",
+      "line": 209,
+      "language": "rust"
     }
   ]
 }

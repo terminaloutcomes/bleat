@@ -8,6 +8,11 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
+
+pub use crate::ci_smoke::owned_command::{
+    Cause as CommandCause, Failure as CommandFailure, Stage as CommandStage,
+};
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TestId {
@@ -85,6 +90,11 @@ pub enum VerifyError {
         expected: usize,
         actual: usize,
     },
+    Command(Box<CommandFailure>),
+    OutputEncoding {
+        stage: CommandStage,
+        source: std::str::Utf8Error,
+    },
     ProcessStart(std::io::Error),
     ProcessFailed(String),
     FileRead(std::io::Error),
@@ -125,6 +135,13 @@ impl fmt::Display for VerifyError {
                 f,
                 "wrong_repetition_count: {id} expected {expected}, got {actual}"
             ),
+            Self::Command(error) => write!(f, "xcresulttool_command_failed: {error}"),
+            Self::OutputEncoding { stage, source } => {
+                write!(
+                    f,
+                    "xcresulttool_output_encoding_failed: {stage:?}: {source}"
+                )
+            }
             Self::ProcessStart(error) => write!(f, "xcresulttool_start_failed: {error}"),
             Self::ProcessFailed(error) => write!(f, "xcresulttool_failed: {error}"),
             Self::FileRead(error) => write!(f, "results_file_read_failed: {error}"),
@@ -132,7 +149,16 @@ impl fmt::Display for VerifyError {
     }
 }
 
-impl Error for VerifyError {}
+impl Error for VerifyError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Command(error) => Some(error.as_ref()),
+            Self::OutputEncoding { source, .. } => Some(source),
+            Self::ProcessStart(error) | Self::FileRead(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 pub type Result<T> = std::result::Result<T, VerifyError>;
 
@@ -614,49 +640,99 @@ struct SummaryCounts {
     skipped: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BundleReport {
+    Tests,
+    Summary,
+    LegacySummary,
+}
+
+impl BundleReport {
+    pub(crate) fn stage(self) -> CommandStage {
+        match self {
+            Self::Tests => CommandStage::TestResults,
+            Self::Summary => CommandStage::TestSummary,
+            Self::LegacySummary => CommandStage::LegacyTestSummary,
+        }
+    }
+
+    pub(crate) fn command(self, path: &Path) -> Command {
+        let mut command = Command::new("xcrun");
+        match self {
+            Self::Tests | Self::Summary => {
+                let kind = if self == Self::Tests {
+                    "tests"
+                } else {
+                    "summary"
+                };
+                command
+                    .args(["xcresulttool", "get", "test-results", kind, "--path"])
+                    .arg(path);
+            }
+            Self::LegacySummary => {
+                command
+                    .args(["xcresulttool", "get", "object", "--legacy", "--path"])
+                    .arg(path)
+                    .args(["--format", "json"]);
+            }
+        }
+        command
+    }
+}
+
+pub(crate) fn read_report_command(
+    command: &mut Command,
+    report: BundleReport,
+    budget: Duration,
+    cleanup: Duration,
+) -> Result<String> {
+    read_report_command_with_limit(command, report, budget, cleanup, 64 * 1024 * 1024)
+}
+
+pub(crate) fn read_report_command_with_limit(
+    command: &mut Command,
+    report: BundleReport,
+    budget: Duration,
+    cleanup: Duration,
+    capture_limit: u64,
+) -> Result<String> {
+    let stage = report.stage();
+    let output = crate::ci_smoke::owned_command::run_with_capture_limit(
+        command,
+        stage,
+        budget,
+        cleanup,
+        None,
+        capture_limit,
+    )
+    .map_err(VerifyError::Command)?;
+    String::from_utf8(output.stdout).map_err(|error| VerifyError::OutputEncoding {
+        stage,
+        source: error.utf8_error(),
+    })
+}
+
+fn read_bundle_report(path: &Path, report: BundleReport) -> Result<String> {
+    read_report_command(
+        &mut report.command(path),
+        report,
+        Duration::from_secs(120),
+        Duration::from_secs(3),
+    )
+}
+
 fn read_bundle_tests(path: &Path) -> Result<(String, SummaryCounts)> {
-    let output = Command::new("xcrun")
-        .args(["xcresulttool", "get", "test-results", "tests", "--path"])
-        .arg(path)
-        .output()
-        .map_err(VerifyError::ProcessStart)?;
-    if !output.status.success() {
-        return Err(VerifyError::ProcessFailed(
-            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-        ));
-    }
-    let json = String::from_utf8(output.stdout)
-        .map_err(|error| VerifyError::InvalidJson(error.to_string()))?;
-    let summary = Command::new("xcrun")
-        .args(["xcresulttool", "get", "test-results", "summary", "--path"])
-        .arg(path)
-        .output()
-        .map_err(VerifyError::ProcessStart)?;
-    if !summary.status.success() {
-        return Err(VerifyError::ProcessFailed(
-            String::from_utf8_lossy(&summary.stderr).trim().to_owned(),
-        ));
-    }
-    let summary: Value = serde_json::from_slice(&summary.stdout)
+    let json = read_bundle_report(path, BundleReport::Tests)?;
+    let summary = read_bundle_report(path, BundleReport::Summary)?;
+    let summary: Value = serde_json::from_str(&summary)
         .map_err(|error| VerifyError::InvalidJson(error.to_string()))?;
     let counts = validate_summary_with_legacy_fallback(&summary, || read_legacy_summary(path))?;
     Ok((json, counts))
 }
 
 fn read_legacy_summary(path: &Path) -> Result<Value> {
-    let output = Command::new("xcrun")
-        .args(["xcresulttool", "get", "object", "--legacy", "--path"])
-        .arg(path)
-        .args(["--format", "json"])
-        .output()
-        .map_err(VerifyError::ProcessStart)?;
-    if !output.status.success() {
-        return Err(VerifyError::ProcessFailed(
-            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-        ));
-    }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|error| VerifyError::InvalidJson(error.to_string()))
+    let output = read_bundle_report(path, BundleReport::LegacySummary)?;
+    serde_json::from_str(&output).map_err(|error| VerifyError::InvalidJson(error.to_string()))
 }
 
 fn validate_summary_with_legacy_fallback<F>(

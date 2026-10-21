@@ -1,4 +1,4 @@
-//! Invocation-owned Unix command boundaries for the smoke runner.
+//! Invocation-owned Unix command boundaries for smoke and result-report tooling.
 use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
@@ -11,14 +11,17 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const MAX_CAPTURE: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Stage {
+pub enum Stage {
     JsonInspection,
     Build,
     SimulatorBoot,
     SimulatorReadiness,
+    TestResults,
+    TestSummary,
+    LegacyTestSummary,
 }
 #[derive(Debug, thiserror::Error)]
-pub(super) enum Cause {
+pub enum Cause {
     #[error("input preparation failed: {0}")]
     Input(#[source] io::Error),
     #[error("capture preparation failed: {0}")]
@@ -27,6 +30,8 @@ pub(super) enum Cause {
     Spawn(#[source] io::Error),
     #[error("invalid execution budget")]
     InvalidBudget,
+    #[error("invalid output capture limit")]
+    InvalidCaptureLimit,
     #[error("deadline after {elapsed:?}, budget {budget:?}")]
     Deadline { elapsed: Duration, budget: Duration },
     #[error("exit observation failed: {0}")]
@@ -41,7 +46,7 @@ pub(super) enum Cause {
     Capture,
 }
 #[derive(Default)]
-pub(super) struct Captured {
+pub struct Captured {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
 }
@@ -57,7 +62,7 @@ impl std::fmt::Debug for Captured {
 #[error(
     "{stage:?}: {cause}; cleanup={cleanup:?}; capture={capture:?}; capture_errors={capture_errors:?}"
 )]
-pub(super) struct Failure {
+pub struct Failure {
     pub stage: Stage,
     #[source]
     pub cause: Cause,
@@ -234,14 +239,18 @@ fn pause_until(deadline: Instant) -> bool {
     true
 }
 
-fn capture(file: &mut File) -> io::Result<Vec<u8>> {
+fn capture(file: &mut File, limit: u64) -> io::Result<Vec<u8>> {
     file.seek(SeekFrom::Start(0))?;
     let mut bytes = Vec::new();
-    file.take(MAX_CAPTURE + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_CAPTURE {
+    file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
         return Err(io::Error::new(
             io::ErrorKind::FileTooLarge,
-            "test command exceeded 1 MiB capture limit",
+            if limit == MAX_CAPTURE {
+                "test command exceeded 1 MiB capture limit".to_owned()
+            } else {
+                format!("test command exceeded {limit} byte capture limit")
+            },
         ));
     }
     Ok(bytes)
@@ -257,6 +266,7 @@ pub(super) struct Running {
     budget: Duration,
     cleanup_budget: Duration,
     captures: Option<(File, File)>,
+    capture_limit: u64,
 }
 impl Running {
     pub fn start(
@@ -267,6 +277,29 @@ impl Running {
         input: Option<&[u8]>,
         capture_output: bool,
     ) -> Result<Self, Box<Failure>> {
+        Self::start_with_capture_limit(
+            command,
+            stage,
+            budget,
+            cleanup_budget,
+            input,
+            capture_output,
+            MAX_CAPTURE,
+        )
+    }
+
+    fn start_with_capture_limit(
+        command: &mut Command,
+        stage: Stage,
+        budget: Duration,
+        cleanup_budget: Duration,
+        input: Option<&[u8]>,
+        capture_output: bool,
+        capture_limit: u64,
+    ) -> Result<Self, Box<Failure>> {
+        if capture_limit == 0 || capture_limit.checked_add(1).is_none() {
+            return Err(Failure::before_spawn(stage, Cause::InvalidCaptureLimit));
+        }
         if budget.is_zero() {
             return Err(Failure::before_spawn(
                 stage,
@@ -329,6 +362,7 @@ impl Running {
             budget,
             cleanup_budget,
             captures,
+            capture_limit,
         })
     }
     pub fn poll(&mut self) -> Option<Result<Output, Box<Failure>>> {
@@ -361,11 +395,11 @@ impl Running {
         let mut captured = Captured::default();
         let mut capture_errors = Vec::new();
         if let Some((out, err)) = &mut self.captures {
-            match capture(out) {
+            match capture(out, self.capture_limit) {
                 Ok(bytes) => captured.stdout = bytes,
                 Err(e) => capture_errors.push(("stdout", e)),
             }
-            match capture(err) {
+            match capture(err, self.capture_limit) {
                 Ok(bytes) => captured.stderr = bytes,
                 Err(e) => capture_errors.push(("stderr", e)),
             }
@@ -404,14 +438,33 @@ impl Running {
         }
     }
 }
-pub(super) fn run(
+pub(crate) fn run(
     command: &mut Command,
     stage: Stage,
     budget: Duration,
     cleanup: Duration,
     input: Option<&[u8]>,
 ) -> Result<Output, Box<Failure>> {
-    let mut running = Running::start(command, stage, budget, cleanup, input, true)?;
+    run_with_capture_limit(command, stage, budget, cleanup, input, MAX_CAPTURE)
+}
+
+pub(crate) fn run_with_capture_limit(
+    command: &mut Command,
+    stage: Stage,
+    budget: Duration,
+    cleanup: Duration,
+    input: Option<&[u8]>,
+    capture_limit: u64,
+) -> Result<Output, Box<Failure>> {
+    let mut running = Running::start_with_capture_limit(
+        command,
+        stage,
+        budget,
+        cleanup,
+        input,
+        true,
+        capture_limit,
+    )?;
     loop {
         if let Some(result) = running.poll() {
             return result;

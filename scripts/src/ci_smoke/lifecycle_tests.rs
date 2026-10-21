@@ -494,3 +494,6 @@ fn fixture_supervisor_releases_and_joins_on_assertion_unwind() {
     assert!(!alive(boot));
     assert!(!alive(build));
 }
+
+#[path = "report_tests.rs"]
+mod report_tests;

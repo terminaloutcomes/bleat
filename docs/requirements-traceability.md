@@ -867,3 +867,22 @@ See [demonstration, policies and remaining boundaries](release-evidence/test-run
 This is local fixture evidence only. Independent review, publication, Linux and
 real Xcode/Simulator gates remain pending;other runner command owners,platform
 requirements and broader #362/#369 reconciliation remain open.
+
+### Owned result report commands (#371)
+
+The modern test-tree, summary and legacy-fallback reads own their command groups,
+execution budgets and cleanup. Typed stage/cause, native status and capture
+errors remain inspectable while diagnostics omit payloads. Report read limits
+accept larger structured data without widening the existing smoke ceiling.
+Seven native regressions preserve argv and test deadlines, reaping, failure and
+encoding diagnostics, size rejection and large valid JSON. See [bounded report
+commands, retained baseline and exact evidence](release-evidence/test-runner-verification.md#bounded-result-report-commands-371).
+Other command owners, five specifically named missing legacy-test audit entries,
+full schema/source reconciliation and configuration/device gates remain open.
+
+Final-source evidence: 154 owning native outcomes, 21 focused executions and 7
+local Linux ARM64/Rust 1.97.1 functions passed; the owned container was removed.
+Strict checks pass. The changed reader accepts 626 outcomes from a retained real
+CI bundle with discovery agreement; this replay is separate from fresh app
+execution. Failed and superseded attempts remain documented. Independent
+review and exact-head CI are separate requirements.
