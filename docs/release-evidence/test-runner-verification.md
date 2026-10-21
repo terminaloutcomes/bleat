@@ -353,3 +353,22 @@ observation and result-audit contracts require separate review. Full record-leve
 schema, current source-audit dispositions, opt-in/configuration and physical-device
 acceptance remain under #369/#362. Historical follow-up totals are not remaining
 defect counts.
+
+Local verification on the final runtime/test source: all six exact new native
+function identities passed three serial focused runs (18 function executions).
+The complete scripts owning gate passed 160 exact outcomes across 11 nonempty
+targets, with zero failures, ignored or filtered tests; 16 zero-test CLI targets
+are compile checks only. Strict Clippy, formatting, documentation and diff
+checks passed. Independent review cleared source commit `4dc27a2`; final metadata
+review and fresh exact-head CI remain separate. Evidence is retained in
+`.build/i371-smoke-verification.json` and its linked native logs/manifests.
+
+The initial six-function run preceded the additional Error::source assertions
+and is retained separately. A later evidence-parser assertion saw only five
+single-line outcomes because `--nocapture` interleaved one function's output;
+that orchestration stopped before launching final tests. The native log still
+shows all six passed. The corrected final sequence above used ordinary native
+captured output and does not count that parser failure as test coverage. An
+unavailable Python TOML import also stopped before setup execution; the exact
+checked-in setup script subsequently ran successfully. No observed production
+hang or payload disclosure is claimed.

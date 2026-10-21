@@ -7219,7 +7219,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
@@ -7253,7 +7253,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
@@ -7287,7 +7287,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
@@ -7321,7 +7321,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
@@ -7355,7 +7355,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
@@ -7389,7 +7389,7 @@
         "6": "Controlled native Unix lifecycle or pure policy/control-flow test, as described; real smoke execution is a separate gate.",
         "7": "Preserve all unsuccessful attempts and inspect exact native identities. Do not retry to hide failures or infer production hangs from controlled fixtures.",
         "8": "Typed stage/cause and paired execution/verification errors remain available; synthetic output markers are excluded from diagnostic formatting for captured phases. Streaming phases deliberately preserve inherited console output.",
-        "9": "Focused repetitions and owning outcomes must be recorded against exact final source;CI/native Apple execution remain separate gates."
+        "9": "Final unchanged runtime/test source:all6 exact native function identities passed3 serial focused runs(18 executions), then160 exact owning outcomes across11 nonempty targets;0 failures,ignored orfiltered tests. Sixteen zero-test CLI targets are compile checks only. Strict Clippy,formatting,documentation anddiff checks passed;review andfresh exact-head CI remain separate."
       },
       "issue371_smoke_commands": {
         "base_revision": "0084df83851373294e882734bb193a91b0fffd39",
