@@ -3513,6 +3513,31 @@
         },
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-otlp-caller-completion-bounds-issue-372",
         "remaining_limits": "Whole underlying production task drainage remains unproven; shared gate/helper redesign and unrelated acceptance are outside this slice."
+      },
+      "issue_372_optional_completion_assertion": {
+        "decision": "fixed",
+        "owner": "Bleat maintainers / @yaleman",
+        "source_review": "Explicit Bool? cast selects optional unwrapping in #require. Existing #expect(success),eight caller values,one refresh,eight client exports,metadata equality and cleanup order remain. No wait,budget,scope or production change.",
+        "evidence": "docs/release-evidence/test-reliability-audit.md#optional-completion-assertion-372",
+        "source_sha256": "9b747702625b487c552c7d9187c82122b10c339c5393ea74bbe72bcec02429ca"
+      },
+      "concurrent_export_cleanup_review": {
+        "base_revision": "f8237eedd5d023d292d71bc8a3c947d2f7119c95",
+        "decision": "fix",
+        "scope": "Observe the eight owned callers on normal and throwing cleanup exits; full production task graph drainage remains separate.",
+        "rules": {
+          "1": "Retain all eight actual success Bools, one refresh, eight client exports and exact shared bearer metadata in the original scenario. Inject the typed fixture operation error in two additional argument cases and assert the original error survives cleanup, all eight actual caller results are consumed, no pending provider waits remain, no RPC starts and repeated cleanup preserves the same results.",
+          "2": "Keep the existing eight-waiter admission signal and release order. The new failure fixture holds caller entry explicitly; beforeEntry throws with that gate closed, afterAllEntries positively observes eight registered provider continuations before throwing. No scheduler turn or readiness delay is used.",
+          "3": "No playback or position tolerance. Existing completion observations retain ten-second per-caller bounds. Only the new failure fixture uses a thirty-second production timeout to avoid its ordinary deadline supplying the cancellation stimulus; the original success fixture timeout is unchanged.",
+          "4": "Cancel all eight callers, request exporter cancellation, release provider and optional entry gates, then observe each own actual-export-return completion before consuming that task value. A missing completion records an indexed source-located issue and skips that unknown join while continuing with remaining callers. This proves owned caller consumption, not complete drainage of internal production/provider observer task graphs.",
+          "5": "Fresh in-memory provider, recording client, exporter, span, entry signal and eight separate completion actors for each method/argument. No shared preferences, credentials, files, server, simulator or process-global output interception.",
+          "6": "Deterministic host Swift Testing coverage of the real exporter with existing local fakes. All prior success semantics remain; this is test ownership repair, not evidence of a production leak or live/device behavior.",
+          "7": "No retry, guessed sleep, deadline widening in the original scenario or dropped assertion. Retain the initial compile failure separately from the extracted legacy-cleanup failing baseline and final corrected executions.",
+          "8": "Reuse the existing completion helper with exact caller index and source location; only synthetic stage names are emitted. Preserve typed operation failure rather than replacing it with cleanup results.",
+          "9": "Verify both failure arguments and the original success identity through repeated focused runs, owning suite and required-signing host inventory. Independent review and exact-head CI remain separate requirements; artifacts retain exact source hashes and outcomes."
+        },
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372",
+        "execution": "Final source:25/25 owning function identities;three focused native runs verify6/6 function executions and9/9 scenarios,including beforeEntry and afterAllEntries each run;required-signing host607/607 unique identities,zero failures/errors/skips,including synchronizable-Keychain coverage. Strict Swift lint and documentation checks pass. Three expected cleanup known issues and eight intentional read-only SwiftData diagnostics in three passing negative tests are retained. Extracted legacy cleanup baseline:one function,two failed argument cases/two expected count issues;initial private-visibility compile failed before tests. Independent review and exact-head CI remain separate."
       }
     },
     {
@@ -23647,6 +23672,42 @@
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-join-admission-and-late-arrival-provenance",
         "execution": "Local source commit 9ae4087a8a381ed07840475f4ed537b3a1158b43: three independent focused repetitions each passed both identities and all three argument cases; owning 26/26; unsigned host 603 passed and one expected Keychain skip; signed host 604/604 with zero skips. Strict Swift lint and docs passed. Aggregate failed before app test execution on isolated Simulator launch Busy/preflight rejection; dependency registry audit timed out; core/app live stages not reached. No publication or CI acceptance claim."
       }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportCleanupJoinsCallersAfterOperationFailure",
+      "source": {
+        "path": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift",
+        "line": 1258
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prove before-entry and after-all-entry operation failures settle and consume all eight owned export callers while preserving the original typed error.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh existing SingleFlightTokenProvider and recording client; eight caller tasks held behind a latched entry signal; thirty-second exporter timeout only for these injected failure cases.",
+        "action_postconditions": "Throw typed fixture error before entry or after eight registered provider waits. Await cleanup, assert eight false caller results, zero pending provider waits, zero RPCs, same original error, and equal results/empty state after repeated retirement."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Positive controlled entry/arrival signals and per-caller terminal completion actors, with the existing ten-second observation budgets. Release gates before observing completion; only confirmed callers are joined.",
+        "timeout_tolerance": "No elapsed-time success threshold, sleep or playback tolerance; original success fixture remains unchanged."
+      },
+      "compiler_skip_conditions": "Two arguments: beforeEntry and afterAllEntries; no test-level platform guard, skip or opt-in. SwiftPM BleatCoreTests, serialized owning suite. Signed host evidence includes the separate synchronizable-Keychain case.",
+      "rules": {
+        "1": "Retain all eight actual success Bools, one refresh, eight client exports and exact shared bearer metadata in the original scenario. Inject the typed fixture operation error in two additional argument cases and assert the original error survives cleanup, all eight actual caller results are consumed, no pending provider waits remain, no RPC starts and repeated cleanup preserves the same results.",
+        "2": "Keep the existing eight-waiter admission signal and release order. The new failure fixture holds caller entry explicitly; beforeEntry throws with that gate closed, afterAllEntries positively observes eight registered provider continuations before throwing. No scheduler turn or readiness delay is used.",
+        "3": "No playback or position tolerance. Existing completion observations retain ten-second per-caller bounds. Only the new failure fixture uses a thirty-second production timeout to avoid its ordinary deadline supplying the cancellation stimulus; the original success fixture timeout is unchanged.",
+        "4": "Cancel all eight callers, request exporter cancellation, release provider and optional entry gates, then observe each own actual-export-return completion before consuming that task value. A missing completion records an indexed source-located issue and skips that unknown join while continuing with remaining callers. This proves owned caller consumption, not complete drainage of internal production/provider observer task graphs.",
+        "5": "Fresh in-memory provider, recording client, exporter, span, entry signal and eight separate completion actors for each method/argument. No shared preferences, credentials, files, server, simulator or process-global output interception.",
+        "6": "Deterministic host Swift Testing coverage of the real exporter with existing local fakes. All prior success semantics remain; this is test ownership repair, not evidence of a production leak or live/device behavior.",
+        "7": "No retry, guessed sleep, deadline widening in the original scenario or dropped assertion. Retain the initial compile failure separately from the extracted legacy-cleanup failing baseline and final corrected executions.",
+        "8": "Reuse the existing completion helper with exact caller index and source location; only synthetic stage names are emitted. Preserve typed operation failure rather than replacing it with cleanup results.",
+        "9": "Verify both failure arguments and the original success identity through repeated focused runs, owning suite and required-signing host inventory. Independent review and exact-head CI remain separate requirements; artifacts retain exact source hashes and outcomes."
+      },
+      "decision": "keep",
+      "classification": "Deterministic test-only failure-path ownership regression.",
+      "reason": "The two controlled scenarios cover a throwing exit before release/admission and after all provider waits register. Cleanup actively cancels/releases all owners and observes their actual return before task-value consumption; repeated cleanup and exact typed failure remain asserted.",
+      "shared_helper_review": "AuthTelemetryTestCompletion has a latched Bool and one observer at a time; normal operation observation has finished or expired before cleanup starts. AuthTelemetryTestSignal retains early release. SingleFlightTokenProvider releases and removes registered continuations synchronously and caches release for late entry. Private retirement continues after any missing caller observation and never awaits an unconfirmed task value. No production helper changes.",
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372",
+      "execution": "Final source:25/25 owning function identities;three focused native runs verify6/6 function executions and9/9 scenarios,including beforeEntry and afterAllEntries each run;required-signing host607/607 unique identities,zero failures/errors/skips,including synchronizable-Keychain coverage. Strict Swift lint and documentation checks pass. Three expected cleanup known issues and eight intentional read-only SwiftData diagnostics in three passing negative tests are retained. Extracted legacy cleanup baseline:one function,two failed argument cases/two expected count issues;initial private-visibility compile failed before tests. Independent review and exact-head CI remain separate."
     }
   ],
   "issue_382": {

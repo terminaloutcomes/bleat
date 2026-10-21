@@ -852,3 +852,30 @@ verified. The final lint-only change names the same condition closure argument
 explicitly; final full-app verification is repeated after that syntax correction. See [implementation, retained attempts and configuration limits](release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374).
 Exact-head CI and independent review remain separate requirements. Broader #362
 acceptance and #369's fourteen missing audit-entry repairs remain open.
+
+### Typed optional completion assertion (#372)
+
+The concurrent OTLP export test explicitly selects optional `Bool?` unwrapping
+and retains its separate true-result assertion. Missing completion,failed
+export,all eight success-path caller joins,request counts and exact metadata
+remain covered. Error-exit task drainage remains a separate #372 concern.
+See the [compiler warning correction and preserved baseline](release-evidence/test-reliability-audit.md#optional-completion-assertion-372).
+This does not change provider/transport lifecycle contracts or establish
+broader epic/configuration acceptance.
+
+### Concurrent export callers after operation failure (#372)
+
+The concurrent OTLP test observes each owned caller before consuming its task
+value on both success and throwing cleanup exits. Controlled failures before
+entry and after all eight provider registrations retain the original typed
+error and assert caller completion, empty fake waiters, zero RPCs and repeated
+cleanup. Existing success, coalescing and bearer assertions remain unchanged.
+See [scope, retained failing baseline and exact validation](release-evidence/test-reliability-core-followups.md#concurrent-export-caller-cleanup-on-failure-issue-372).
+This establishes these callers' ownership; internal worker/observer drainage,
+other owners and platform/configuration acceptance remain separate open work.
+
+Final source evidence: 25 owning identities, 6 focused function executions across
+three runs (9 scenarios), and 607 signed-host identities passed with zero failures
+or skips. Synchronizable-Keychain coverage and both new failure arguments are
+verified. Independent review and exact-head CI are separate requirements;
+retained warnings and intentional failure diagnostics remain linked above.
