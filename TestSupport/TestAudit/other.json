@@ -8592,28 +8592,28 @@
     {
       "id": "build-scripts::build_dependencies::build_launchers_preserve_the_callers_toolchain_environment",
       "path": "build-scripts/tests/release_versions/build_dependencies.rs",
-      "line": 6,
+      "line": 11,
       "purpose": "Verify both Cargo launch paths preserve caller compiler/wrapper/SDK variables and select the isolated package.",
       "review": {
         "status": "reviewed",
-        "decision": "follow_up",
-        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        "decision": "keep",
+        "reason": "Original toolchain, dependency and sandbox assertions remain. PR #418 replaces each external command with the shared bounded process-group owner; the prior unbounded-source assessment is retained below."
       },
       "profile": "rust_deterministic",
       "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
       "setup_dependencies": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values.",
       "action_postconditions": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
-      "synchronization_timeout": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+      "synchronization_timeout": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
       "rules": {
         "1": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
-        "2": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+        "2": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
         "3": "N/A: no playback, seek, media position or audible progression.",
-        "4": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "4": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback. This synchronous test boundary adds no async fallback; process-group escape, OS spawn/local-file stalls and unreapable kernel states remain outside the guarantee.",
         "5": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values. TempDir owns the executable probe where used; other cases read checkout state only.",
         "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
-        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "7": "All six original semantic assertion macros are preserved by the child-owner replacement; no retry, threshold relaxation or ignored failure is introduced.",
         "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
-        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        "9": "Historical audit-entry execution remains revision-bound in audit_entry_repair. The #418 child-owner evidence records 35/35 owning outcomes and 33/33 focused executions; these are retained evidence, not new integration executions."
       },
       "audit_entry_repair": {
         "issue": 369,
@@ -8624,36 +8624,87 @@
       "remaining_risk": {
         "owner": "Bleat maintainers / @yaleman",
         "issue": 370,
-        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
-        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
-        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        "risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "next_action": "Retain scoped child-owner regression coverage and complete broader subprocess/platform evidence separately.",
+        "verification_gap": "No claim of repository-wide subprocess compliance or actual Xcode execution from these package tests."
+      },
+      "historical_review_before_child_ownership": {
+        "id": "build-scripts::build_dependencies::build_launchers_preserve_the_callers_toolchain_environment",
+        "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "line": 6,
+        "purpose": "Verify both Cargo launch paths preserve caller compiler/wrapper/SDK variables and select the isolated package.",
+        "review": {
+          "status": "reviewed",
+          "decision": "follow_up",
+          "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        },
+        "profile": "rust_deterministic",
+        "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+        "setup_dependencies": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values.",
+        "action_postconditions": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
+        "synchronization_timeout": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+        "rules": {
+          "1": "Run both launch commands; fake probe must see all five variables unchanged; require successful output naming build-scripts package/manifest.",
+          "2": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test.",
+          "3": "N/A: no playback, seek, media position or audible progression.",
+          "4": "Real synchronous shell child via Command.output; temp probe uses checked permissions and scoped TempDir. There is no individual child deadline in this test. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+          "5": "Read project YAML and paid-settings launcher; unique temporary executable fake Cargo probe and child-only caller-* environment values. TempDir owns the executable probe where used; other cases read checkout state only.",
+          "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+          "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+          "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+          "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        },
+        "audit_entry_repair": {
+          "issue": 369,
+          "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+          "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+          "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+        },
+        "remaining_risk": {
+          "owner": "Bleat maintainers / @yaleman",
+          "issue": 370,
+          "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+          "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+          "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        }
+      },
+      "current_disposition": {
+        "identifier": "build-scripts::build_launchers_preserve_the_callers_toolchain_environment",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
       }
     },
     {
       "id": "build-scripts::build_dependencies::build_dependency_tree_excludes_operational_and_native_tooling",
       "path": "build-scripts/tests/release_versions/build_dependencies.rs",
-      "line": 78,
+      "line": 85,
       "purpose": "Reject operational HTTP/TLS/runtime/native-compiler stacks in build-scripts normal/build dependencies.",
       "review": {
         "status": "reviewed",
-        "decision": "follow_up",
-        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        "decision": "keep",
+        "reason": "Original toolchain, dependency and sandbox assertions remain. PR #418 replaces each external command with the shared bounded process-group owner; the prior unbounded-source assessment is retained below."
       },
       "profile": "rust_deterministic",
       "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
       "setup_dependencies": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph.",
       "action_postconditions": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
-      "synchronization_timeout": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+      "synchronization_timeout": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
       "rules": {
         "1": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
-        "2": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+        "2": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
         "3": "N/A: no playback, seek, media position or audible progression.",
-        "4": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "4": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback. This synchronous test boundary adds no async fallback; process-group escape, OS spawn/local-file stalls and unreapable kernel states remain outside the guarantee.",
         "5": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph. TempDir owns the executable probe where used; other cases read checkout state only.",
         "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
-        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "7": "All six original semantic assertion macros are preserved by the child-owner replacement; no retry, threshold relaxation or ignored failure is introduced.",
         "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
-        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        "9": "Historical audit-entry execution remains revision-bound in audit_entry_repair. The #418 child-owner evidence records 35/35 owning outcomes and 33/33 focused executions; these are retained evidence, not new integration executions."
       },
       "audit_entry_repair": {
         "issue": 369,
@@ -8664,36 +8715,87 @@
       "remaining_risk": {
         "owner": "Bleat maintainers / @yaleman",
         "issue": 370,
-        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
-        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
-        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        "risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "next_action": "Retain scoped child-owner regression coverage and complete broader subprocess/platform evidence separately.",
+        "verification_gap": "No claim of repository-wide subprocess compliance or actual Xcode execution from these package tests."
+      },
+      "historical_review_before_child_ownership": {
+        "id": "build-scripts::build_dependencies::build_dependency_tree_excludes_operational_and_native_tooling",
+        "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "line": 78,
+        "purpose": "Reject operational HTTP/TLS/runtime/native-compiler stacks in build-scripts normal/build dependencies.",
+        "review": {
+          "status": "reviewed",
+          "decision": "follow_up",
+          "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        },
+        "profile": "rust_deterministic",
+        "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+        "setup_dependencies": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph.",
+        "action_postconditions": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
+        "synchronization_timeout": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+        "rules": {
+          "1": "Require command success; inspect every dependency name and reject scripts,API,reqwest,hyper,tokio,rustls,ring,aws-lc,openssl,cc,cmake variants.",
+          "2": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline.",
+          "3": "N/A: no playback, seek, media position or audible progression.",
+          "4": "Synchronous Cargo child via Command.output; no network by offline flag, but no per-child process deadline. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+          "5": "Run actual Cargo tree with locked/offline package selection and normal,build edges; use the real locked workspace graph. TempDir owns the executable probe where used; other cases read checkout state only.",
+          "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+          "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+          "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+          "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        },
+        "audit_entry_repair": {
+          "issue": 369,
+          "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+          "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+          "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+        },
+        "remaining_risk": {
+          "owner": "Bleat maintainers / @yaleman",
+          "issue": 370,
+          "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+          "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+          "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        }
+      },
+      "current_disposition": {
+        "identifier": "build-scripts::build_dependency_tree_excludes_operational_and_native_tooling",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
       }
     },
     {
       "id": "build-scripts::build_dependencies::xcode_sandbox_can_read_every_cargo_workspace_member",
       "path": "build-scripts/tests/release_versions/build_dependencies.rs",
-      "line": 127,
+      "line": 136,
       "purpose": "Ensure Xcode metadata-phase inputs permit Cargo to read every workspace member manifest.",
       "review": {
         "status": "reviewed",
-        "decision": "follow_up",
-        "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        "decision": "keep",
+        "reason": "Original toolchain, dependency and sandbox assertions remain. PR #418 replaces each external command with the shared bounded process-group owner; the prior unbounded-source assessment is retained below."
       },
       "profile": "rust_deterministic",
       "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
       "setup_dependencies": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata.",
       "action_postconditions": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
-      "synchronization_timeout": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+      "synchronization_timeout": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
       "rules": {
         "1": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
-        "2": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+        "2": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback.",
         "3": "N/A: no playback, seek, media position or audible progression.",
-        "4": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+        "4": "Each native command uses bounded_command::run with a 30-second execution budget and three-second cleanup budget. Non-reaping exit observation retains group identity until retirement and direct-child reaping; anonymous captures avoid descendant-held pipe EOF. Failed cleanup is explicit, with one bounded Drop fallback. This synchronous test boundary adds no async fallback; process-group escape, OS spawn/local-file stalls and unreapable kernel states remain outside the guarantee.",
         "5": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata. TempDir owns the executable probe where used; other cases read checkout state only.",
         "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
-        "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+        "7": "All six original semantic assertion macros are preserved by the child-owner replacement; no retry, threshold relaxation or ignored failure is introduced.",
         "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
-        "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        "9": "Historical audit-entry execution remains revision-bound in audit_entry_repair. The #418 child-owner evidence records 35/35 owning outcomes and 33/33 focused executions; these are retained evidence, not new integration executions."
       },
       "audit_entry_repair": {
         "issue": 369,
@@ -8704,9 +8806,60 @@
       "remaining_risk": {
         "owner": "Bleat maintainers / @yaleman",
         "issue": 370,
-        "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
-        "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
-        "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        "risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "next_action": "Retain scoped child-owner regression coverage and complete broader subprocess/platform evidence separately.",
+        "verification_gap": "No claim of repository-wide subprocess compliance or actual Xcode execution from these package tests."
+      },
+      "historical_review_before_child_ownership": {
+        "id": "build-scripts::build_dependencies::xcode_sandbox_can_read_every_cargo_workspace_member",
+        "path": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "line": 127,
+        "purpose": "Ensure Xcode metadata-phase inputs permit Cargo to read every workspace member manifest.",
+        "review": {
+          "status": "reviewed",
+          "decision": "follow_up",
+          "reason": "The named assertions directly establish the build boundary, but existing spawned commands lack an individual termination budget; do not claim bounded child lifecycle from a passing run."
+        },
+        "profile": "rust_deterministic",
+        "enablement": "Default build-scripts integration-test target; no opt-in. File-level cfg(target_os=macos); included in source audit even when another platform does not compile these cases. Cargo/shell and repository checkout prerequisites apply.",
+        "setup_dependencies": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata.",
+        "action_postconditions": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
+        "synchronization_timeout": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+        "rules": {
+          "1": "Require metadata success and each workspace manifest to fall under a declared Xcode input path. This is source-setting validation, not generated-project or actual sandbox build execution.",
+          "2": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten.",
+          "3": "N/A: no playback, seek, media position or audible progression.",
+          "4": "Synchronous Cargo child and local YAML/JSON parsing; no per-child process deadline. No project or toolchain configuration is rewritten. Existing command calls have no explicit kill/reap timeout contract; that remains linked follow-up, not a new async fallback.",
+          "5": "Read real project YAML, locate Prepare Build Metadata phase inputs and obtain actual locked/offline no-deps Cargo metadata. TempDir owns the executable probe where used; other cases read checkout state only.",
+          "6": "Real local build-tool boundary integration; no Xcode build/runtime claim.",
+          "7": "No source/test change, retry, threshold relaxation or ignored failure is introduced by this audit entry.",
+          "8": "Typed error variants and exit codes distinguish causes in policy tests; command failures retain status/stderr and dependency/manifest names identify offending values. Synthetic data only.",
+          "9": "Fresh build-scripts all-target run 27/27; exact module-qualified native names verified from retained log. This is package evidence, not app/host/device evidence; no additional execution is inferred from adding records."
+        },
+        "audit_entry_repair": {
+          "issue": 369,
+          "source_sha256": "1870b2441f82dba9c95e1a7e8e68d3e0702fb64d02c575acb0fc94b8ba873106",
+          "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369",
+          "execution": "Retained fresh 27/27 package run; .build/i369-build-scripts-tests-verification.json; module-qualified names retained, no tests rerun for verifier correction."
+        },
+        "remaining_risk": {
+          "owner": "Bleat maintainers / @yaleman",
+          "issue": 370,
+          "risk": "A stuck Cargo/shell child is not independently bounded by this synchronous test. No such hang is claimed observed.",
+          "next_action": "Add an evidenced per-child deadline with actual termination/reaping and preserved normal results,using supported process supervision; retain real dependency/toolchain/sandbox-input coverage.",
+          "verification_gap": "No per-child timeout/kill/reap fault injection in these three tests."
+        }
+      },
+      "current_disposition": {
+        "identifier": "build-scripts::xcode_sandbox_can_read_every_cargo_workspace_member",
+        "source": "build-scripts/tests/release_versions/build_dependencies.rs",
+        "decision": "remediated_child_command_deadline",
+        "owner": "Bleat maintainers / @yaleman",
+        "purpose": "Retain the original environment/dependency/sandbox semantic assertions and bound each owned command.",
+        "change": "Replace only Command::output with the shared30second execution/3second cleanup owner. All six original assertion macros preserved exactly after whitespace normalization.",
+        "remaining_risk": "No claim for deliberate process-group escape,OS spawn/local-file stalls,process kill,unreapable kernel state or repository-wide subprocess compliance.",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#test-only-build-helper-child-ownership-370",
+        "source_sha256": "22e7b1145d05af28e65ee843624fa84be57f65d3bf6db88abf4e1078f8e072c5"
       }
     },
     {

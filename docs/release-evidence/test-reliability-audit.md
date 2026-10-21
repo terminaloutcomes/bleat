@@ -1021,3 +1021,15 @@ audit is removed. A surviving build test prevents empty-scope rejection from
 masking these assertions. Historical arrays remain outside active comparison.
 The original eight-pass evidence is retained separately from review-corrected
 validation; exact-head re-review and CI are still required before clearance.
+
+## Integration of historical and current child reviews (#369/#370)
+
+The missing-entry repair above describes its reviewed source revision. The
+assembled #417/#418 changes retain that full assessment on each of the three
+build-helper command records and apply #418's current child-owner disposition
+to the active fields. The original toolchain, dependency and sandbox assertions
+remain unchanged. The current commands use the 30-second execution and
+three-second cleanup owner; prior unbounded-command findings remain historical.
+The 35-function parity snapshot above is also revision-bound: the checker derives
+current source counts rather than enforcing that historical count. Broader
+subprocess/platform evidence and integration CI remain separate.
