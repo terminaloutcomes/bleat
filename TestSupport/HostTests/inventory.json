@@ -98,7 +98,8 @@
     "testHTTPResponseStatusPreservesAuthenticationAndTransportFailures()",
     "testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry()",
     "testBearerNeverAppearsInExporterOrFailureDescriptions()",
-    "testBearerNeverAppearsInCapturedProcessLogs()"
+    "testBearerNeverAppearsInCapturedProcessLogs()",
+    "testConcurrentExportCleanupJoinsCallersAfterOperationFailure(stage:)"
   ],
   "BleatCoreTests.AuthenticatedRequestTests": [
     "testCoalescingTransportReleasesRegisteredAndLateCallersOnce(kind:)",

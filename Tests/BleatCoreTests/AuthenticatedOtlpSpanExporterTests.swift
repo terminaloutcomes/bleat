@@ -777,18 +777,11 @@ final class AuthenticatedOtlpSpanExporterTests {
             results: Array(repeating: .success, count: 8))
         let exporter = exporter(provider: provider, client: client)
         let span = span()
-        let callers = (0..<8).map { _ in
-            let returned = AuthTelemetryTestCompletion<Bool>()
-            let task = Task {
-                let success = await exporter.export(spans: [span]) == .success
-                await returned.complete(success)
-            }
-            return (task, returned)
-        }
+        let callers = concurrentExportCallers(exporter: exporter, span: span)
         try await withTestCleanup {
-            for (task, _) in callers { task.cancel() }
-            exporter.cancelActiveExports()
-            await provider.releaseToken()
+            let completed = await retireConcurrentExportCallers(
+                callers, exporter: exporter, provider: provider)
+            #expect(completed.count == callers.count)
         } operation: {
             try #require(
                 await requireAuthTelemetrySignal(
@@ -1251,6 +1244,113 @@ final class AuthenticatedOtlpSpanExporterTests {
         #expect(result.privacyFailure == nil)
     }
 
+    private enum ConcurrentExportFailureStage: Sendable {
+        case beforeEntry, afterAllEntries
+    }
+
+    private enum ConcurrentExportFixtureFailure: Error {
+        case operation
+    }
+
+    @Test(arguments: [
+        ConcurrentExportFailureStage.beforeEntry, .afterAllEntries,
+    ])
+    private func testConcurrentExportCleanupJoinsCallersAfterOperationFailure(
+        stage: ConcurrentExportFailureStage
+    ) async throws {
+        let provider = SingleFlightTokenProvider(
+            token: "cleanup-shared", expectedWaiters: 8)
+        let client = RecordingOtlpClient(
+            results: Array(repeating: .success, count: 8))
+        let exporter = exporter(provider: provider, client: client, timeout: 30)
+        let enter = AuthTelemetryTestSignal()
+        let callers = concurrentExportCallers(
+            exporter: exporter, span: span(), enter: enter)
+        var completed: [Bool] = []
+        var observedFailure: ConcurrentExportFixtureFailure?
+        do {
+            try await withTestCleanup {
+                completed = await retireConcurrentExportCallers(
+                    callers, exporter: exporter, provider: provider,
+                    enter: enter)
+            } operation: {
+                if case .afterAllEntries = stage {
+                    await enter.signal()
+                    try #require(
+                        await requireAuthTelemetrySignal(
+                            provider.allTokenWaitersArrived,
+                            stage: "eight token waiters before injected failure"
+                        ))
+                    #expect(await provider.pendingWaiterCount == 8)
+                }
+                throw ConcurrentExportFixtureFailure.operation
+            }
+        } catch let failure as ConcurrentExportFixtureFailure {
+            observedFailure = failure
+        }
+        #expect(observedFailure == .operation)
+        #expect(completed.count == 8)
+        #expect(completed.allSatisfy { !$0 })
+        #expect(await provider.pendingWaiterCount == 0)
+        #expect(client.exportCount == 0)
+        // Repeated cleanup must preserve the same completed callers and empty
+        // fixture state, including callers admitted after the release latch.
+        let repeated = await retireConcurrentExportCallers(
+            callers, exporter: exporter, provider: provider, enter: enter)
+        #expect(repeated == completed)
+        #expect(await provider.pendingWaiterCount == 0)
+    }
+
+    private typealias ConcurrentExportCaller = (
+        Task<Void, Never>, AuthTelemetryTestCompletion<Bool>
+    )
+
+    private func concurrentExportCallers(
+        exporter: AuthenticatedOtlpSpanExporter,
+        span: SpanData,
+        enter: AuthTelemetryTestSignal? = nil
+    ) -> [ConcurrentExportCaller] {
+        (0..<8).map { _ in
+            let returned = AuthTelemetryTestCompletion<Bool>()
+            let task = Task {
+                if let enter {
+                    await requireAuthTelemetrySignal(
+                        enter, stage: "controlled concurrent export entry")
+                }
+                let success = await exporter.export(spans: [span]) == .success
+                await returned.complete(success)
+            }
+            return (task, returned)
+        }
+    }
+
+    private func retireConcurrentExportCallers(
+        _ callers: [ConcurrentExportCaller],
+        exporter: AuthenticatedOtlpSpanExporter,
+        provider: SingleFlightTokenProvider,
+        enter: AuthTelemetryTestSignal? = nil,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> [Bool] {
+        for (task, _) in callers { task.cancel() }
+        exporter.cancelActiveExports()
+        await provider.releaseToken()
+        await enter?.signal()
+        var completed: [Bool] = []
+        for (index, caller) in callers.enumerated() {
+            guard
+                let result = await requireAuthTelemetryCompletion(
+                    caller.1,
+                    stage: "retired concurrent OTLP export caller \(index)",
+                    sourceLocation: sourceLocation)
+            else { continue }
+            // The completion is signalled immediately before the caller returns;
+            // no further fixture or production work follows that signal.
+            await caller.0.value
+            completed.append(result)
+        }
+        return completed
+    }
+
     private func exporter(
         provider: any TelemetryTokenProviding,
         client: any RemoteTelemetryOtlpClient,
@@ -1343,6 +1443,8 @@ private actor SingleFlightTokenProvider: TelemetryTokenProviding {
             }
         }
     }
+
+    var pendingWaiterCount: Int { waiters.count }
 
     func releaseToken() {
         guard !released else { return }

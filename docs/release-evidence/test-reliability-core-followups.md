@@ -2210,3 +2210,77 @@ artifacts use `.build/i415-transcript-position-mutation`, and verification is
 `.build/i415-integrated-signed-results`. The owned Simulator is separate from the
 existing cover/auth-join/user devices; no global reset or process termination is
 used. Final-head CI and independent review are still required before any merge.
+
+## Concurrent export caller cleanup on failure (issue #372)
+
+At `f8237eedd5d023d292d71bc8a3c947d2f7119c95`, the eight-caller OTLP test
+observed and joined every caller on success. Its throwing exit cancelled those
+callers, requested exporter cancellation and released the token provider, but
+returned without observing their completion. This is a test ownership gap;
+no production leak was observed.
+
+A private retirement helper keeps that cancellation/release order, then uses
+each caller's existing ten-second completion observation before consuming its
+task value. The completion is the caller's actual export result, signalled
+immediately before that task returns. Missing completion records the caller
+index and source location, skips the unconfirmed join, and continues observing
+the other callers. The original success operation block is byte-identical:
+eight positive admission/return observations, all eight success assertions,
+one refresh, eight client exports and exact bearer metadata remain. The
+original exporter timeout and all 23 neighboring test bodies remain unchanged.
+
+One new parameterized test covers two controlled operation failures:
+
+- `beforeEntry` holds all caller entry behind a latched signal, throws the typed
+  fixture error, and lets cleanup cancel and release even late arrivals.
+- `afterAllEntries` first positively observes all eight registered provider
+  continuations, asserts that pending count, then throws the same error.
+
+Both cases require the original typed error, eight false caller results,
+zero pending provider continuations and zero RPCs after cleanup. Repeating
+retirement must preserve those results and empty provider state. Only the new
+failure fixture uses a thirty-second exporter timeout, longer than the existing
+ten-second admission observation; the original success fixture is unchanged.
+There is no readiness sleep, retry, process-global capture or production change.
+Observing these eight caller tasks does not establish complete drainage of the
+exporter's internal workers, timer observers or unrelated #372 owners.
+
+The retained baseline extracts the old cancel/release actions into the new
+private helper without completion consumption. Both controlled arguments fail
+`completed.count == 8`, reporting zero consumed callers: one native function,
+two failed argument cases, two issues. This is not an untouched-base execution.
+The initial compile failed before tests because the new test method needed
+private visibility for its private argument type; that log remains separate.
+
+Final source validation on m2 verified 25/25 owning function identities and
+three focused runs with 6/6 function executions and 9/9 scenarios. Both failure
+arguments and the original success identity passed each repetition. The complete
+required-signing host gate verified 607/607 unique identities, zero failures or
+skips, including the synchronizable-Keychain case. XML aliases are not added.
+Three declared cleanup known issues remain matched. Eight intentional read-only
+SwiftData save diagnostics occurred in the same three passing negative tests:
+transcript/checkpoint rollback, pending-state retry preservation, and failed
+history save. The upstream OpenTelemetry watchOS-minimum deprecation remains;
+the optional-require ambiguity is absent. Strict Swift lint, documentation and
+diff checks passed. Source hashes bind these executions to the committed source;
+no fresh post-commit local executions are implied.
+
+Commands and private artifacts:
+
+- Owning suite: `mise exec -- env BLEAT_HOST_SIGNING=unsigned swift test --disable-xctest --no-parallel --filter AuthenticatedOtlpSpanExporterTests --xunit-output .build/i372-caller-owning.xml`.
+- Three focused executions use the same native runner with
+  `--filter AuthenticatedOtlpSpanExporterTests.testConcurrentExport` and distinct
+  `.build/i372-caller-focused-1.xml` through `-3.xml` reports. Both parameter
+  values must appear and the original success identity must pass each time.
+- Required-signing host: `mise exec -- ./scripts/test-host.sh`, with the log
+  `.build/i372-caller-signed-host.log` and canonical inventory/XML verification.
+- Baseline, source reconstruction, scoped audit changes and final outcomes are
+  retained in `.build/i372-caller-verification.json` and its linked artifacts.
+  Raw machine/signing logs remain private. Exact-head independent review and
+  CI are separate gates. Broader #362/#369/#372 acceptance remains open.
+
+Only the relevant existing core disposition receives a current annotation;
+the new test has an individual nine-rule audit and host inventory entry. Eight
+following navigation entries move seven lines and retain both prior histories;
+they are not eight semantic findings. All unrelated audit/index rows and the
+historical declared baseline counts are preserved.
