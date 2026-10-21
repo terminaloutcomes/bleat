@@ -36,6 +36,7 @@ pub enum Stage {
     XcodeBuildForTesting,
     XcodeTestEnumeration,
     XcodeTestExecution,
+    HostDriver,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Cause {
@@ -57,6 +58,8 @@ pub enum Cause {
     Exit(ExitStatus),
     #[error("interrupted after peer failure")]
     PeerFailed,
+    #[error("interrupted by signal {signal}")]
+    Interrupted { signal: i32 },
     #[error("native cleanup failed")]
     Cleanup,
     #[error("output capture failed")]
@@ -274,20 +277,21 @@ fn capture(file: &mut File, limit: u64) -> io::Result<Vec<u8>> {
 }
 
 #[derive(Clone, Copy)]
-enum OutputMode {
+pub(crate) enum OutputMode {
     Both,
     Stdout,
     Inherit,
+    Configured,
 }
 
 /// No pipe is written after spawn. Input/capture preparation finishes first.
 /// Error formatting exposes byte counts, never captured JSON or stderr payloads.
-pub(super) struct Running {
+pub(crate) struct Running {
     owner: OwnedGroup,
     stage: Stage,
     started: Instant,
-    deadline: Instant,
-    budget: Duration,
+    deadline: Option<Instant>,
+    budget: Option<Duration>,
     cleanup_budget: Duration,
     captures: Option<(File, Option<File>)>,
     capture_limit: u64,
@@ -304,7 +308,7 @@ impl Running {
         Self::start_with_capture_limit(
             command,
             stage,
-            budget,
+            Some(budget),
             cleanup_budget,
             input,
             if capture_output {
@@ -319,7 +323,7 @@ impl Running {
     fn start_with_capture_limit(
         command: &mut Command,
         stage: Stage,
-        budget: Duration,
+        budget: Option<Duration>,
         cleanup_budget: Duration,
         input: Option<&[u8]>,
         mode: OutputMode,
@@ -328,7 +332,9 @@ impl Running {
         if capture_limit == 0 || capture_limit.checked_add(1).is_none() {
             return Err(Failure::before_spawn(stage, Cause::InvalidCaptureLimit));
         }
-        if budget.is_zero() {
+        if let Some(budget) = budget
+            && budget.is_zero()
+        {
             return Err(Failure::before_spawn(
                 stage,
                 Cause::Deadline {
@@ -347,7 +353,7 @@ impl Running {
         } else {
             Stdio::null()
         };
-        let captures = if !matches!(mode, OutputMode::Inherit) {
+        let captures = if matches!(mode, OutputMode::Both | OutputMode::Stdout) {
             let out = tempfile::tempfile()
                 .map_err(|e| Failure::before_spawn(stage, Cause::CaptureSetup(e)))?;
             let err = if matches!(mode, OutputMode::Both) {
@@ -372,13 +378,19 @@ impl Running {
             }
             Some((out, err))
         } else {
-            command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            if matches!(mode, OutputMode::Inherit) {
+                command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            }
             None
         };
         let started = Instant::now();
-        let deadline = started
-            .checked_add(budget)
-            .ok_or_else(|| Failure::before_spawn(stage, Cause::InvalidBudget))?;
+        let deadline = budget
+            .map(|budget| {
+                started
+                    .checked_add(budget)
+                    .ok_or_else(|| Failure::before_spawn(stage, Cause::InvalidBudget))
+            })
+            .transpose()?;
         let child = command
             .stdin(stdin)
             .process_group(0)
@@ -408,10 +420,12 @@ impl Running {
             Ok(false) => {}
             Err(error) => return Some(self.finish(Some(Cause::Poll(error)))),
         }
-        if Instant::now() >= self.deadline {
+        if let (Some(deadline), Some(budget)) = (self.deadline, self.budget)
+            && Instant::now() >= deadline
+        {
             Some(self.finish(Some(Cause::Deadline {
                 elapsed: self.started.elapsed(),
-                budget: self.budget,
+                budget,
             })))
         } else {
             None
@@ -423,6 +437,28 @@ impl Running {
             Ok(false) => self.finish(Some(Cause::PeerFailed)),
             Err(error) => self.finish(Some(Cause::Poll(error))),
         }
+    }
+    /// Host command execution has no new timeout policy. Its owning driver
+    /// explicitly handles signals and finishes the same native cleanup boundary.
+    pub(crate) fn start_interruptible(
+        command: &mut Command,
+        stage: Stage,
+        cleanup_budget: Duration,
+        mode: OutputMode,
+    ) -> Result<Self, Box<Failure>> {
+        Self::start_with_capture_limit(
+            command,
+            stage,
+            None,
+            cleanup_budget,
+            None,
+            mode,
+            MAX_CAPTURE,
+        )
+    }
+
+    pub(crate) fn interrupt(&mut self, signal: i32) -> Result<Output, Box<Failure>> {
+        self.finish(Some(Cause::Interrupted { signal }))
     }
     fn finish(&mut self, mut cause: Option<Cause>) -> Result<Output, Box<Failure>> {
         let cleanup = self.owner.cleanup(self.cleanup_budget);
@@ -555,7 +591,7 @@ fn run_with_mode(
     let mut running = Running::start_with_capture_limit(
         command,
         stage,
-        budget,
+        Some(budget),
         cleanup,
         input,
         mode,

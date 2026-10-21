@@ -9125,6 +9125,161 @@
         "execution": "Review-corrected8/8 in .build/i369-audit-review-final-regressions.log; source hashes and parity606/35 in .build/i369-audit-verification.json.",
         "source_sha256": "af3007d7a46cd91f217fb206ef9e64be2b4ee740e5c5b53879d5eaeb01a886c6"
       }
+    },
+    {
+      "id": "scripts::host_test_driver::sigterm_retires_admitted_native_phase_and_descendant",
+      "path": "scripts/tests/host_test_driver.rs",
+      "line": 378,
+      "purpose": "Drive the unchanged public launcher with actual Cargo exec semantics; after two controlled native processes enter, SIGTERM only its original driver PID and require observed retirement before independent release.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Scoped regression for demonstrated HOST-1 cancellation propagation or preservation of the unchanged host workflow; final execution evidence is recorded separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts Cargo test target on supported Unix hosts; public-launcher case requires supported Rust toolchain and zsh, report case native Python. Synthetic fixtures only.",
+      "setup_dependencies": "A synthetic standalone dependency-free Cargo workspace execs the exact Cargo-built host driver. Fake Swift and child poll one owned release marker; independent watchdog and checked fixture cleanup never touch signing or real builds.",
+      "action_postconditions": "Assert launcher/native-parent PID identity, actual admitted process groups, both recorded PIDs absent, actual groups absent, exit143 and typed interruption diagnostics before the independent rescue may release the fixture.",
+      "synchronization_timeout": "Positive file/PID admission and native state observation; bounded independent fixture watchdog. Failure budgets observe missing transitions, not readiness delays or new production command deadlines.",
+      "rules": {
+        "1": "Assert launcher/native-parent PID identity, actual admitted process groups, both recorded PIDs absent, actual groups absent, exit143 and typed interruption diagnostics before the independent rescue may release the fixture.",
+        "2": "Observe actual native entry and retirement; PID/group absence and exact statuses are asserted, with no guessed scheduling turns.",
+        "3": "N/A: no playback position or real media timing.",
+        "4": "Controlled native fixture owner releases and joins its independent watchdog on success/unwind, observes the direct driver and recorded native PIDs/groups, and retains resources on unconfirmed retirement. No shared process/service/device is signalled.",
+        "5": "A synthetic standalone dependency-free Cargo workspace execs the exact Cargo-built host driver. Fake Swift and child poll one owned release marker; independent watchdog and checked fixture cleanup never touch signing or real builds. All fixtures are unique and independent; personal configuration is unchanged.",
+        "6": "Controlled native CLI/filesystem fixtures, not actual Swift/Xcode/signing or device evidence. The signed owning suite is separate.",
+        "7": "Original failing private probe and cleanup guard/recovery are retained; no retries, semantic assertion removal or execution-budget relaxation.",
+        "8": "Typed stage/native spawn/exit/interruption and entitlement-field causes are retained without payload diagnostics.",
+        "9": "Source reviewed with fixture owner, watchdog and actual command owner; focused native and signed owning execution, independent review and exact-head CI evidence remain separately recorded."
+      },
+      "issue362_host_driver_cancellation": {
+        "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+      }
+    },
+    {
+      "id": "scripts::host_test_driver::native_nonzero_exit_preserves_status_and_stops_before_later_phases",
+      "path": "scripts/tests/host_test_driver.rs",
+      "line": 452,
+      "purpose": "Preserve the first failing native command status through the public host-driver CLI.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Scoped regression for demonstrated HOST-1 cancellation propagation or preservation of the unchanged host workflow; final execution evidence is recorded separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts Cargo test target on supported Unix hosts; public-launcher case requires supported Rust toolchain and zsh, report case native Python. Synthetic fixtures only.",
+      "setup_dependencies": "Unique synthetic repository and a PATH containing only a fake Swift that returns47; actual host tools are inaccessible.",
+      "action_postconditions": "Require exact native47 exit and BuildTests/native-exit diagnostic; no watchdog rescue and no later phase success.",
+      "synchronization_timeout": "Positive file/PID admission and native state observation; bounded independent fixture watchdog. Failure budgets observe missing transitions, not readiness delays or new production command deadlines.",
+      "rules": {
+        "1": "Require exact native47 exit and BuildTests/native-exit diagnostic; no watchdog rescue and no later phase success.",
+        "2": "Observe actual native entry and retirement; PID/group absence and exact statuses are asserted, with no guessed scheduling turns.",
+        "3": "N/A: no playback position or real media timing.",
+        "4": "Controlled native fixture owner releases and joins its independent watchdog on success/unwind, observes the direct driver and recorded native PIDs/groups, and retains resources on unconfirmed retirement. No shared process/service/device is signalled.",
+        "5": "Unique synthetic repository and a PATH containing only a fake Swift that returns47; actual host tools are inaccessible. All fixtures are unique and independent; personal configuration is unchanged.",
+        "6": "Controlled native CLI/filesystem fixtures, not actual Swift/Xcode/signing or device evidence. The signed owning suite is separate.",
+        "7": "Original failing private probe and cleanup guard/recovery are retained; no retries, semantic assertion removal or execution-budget relaxation.",
+        "8": "Typed stage/native spawn/exit/interruption and entitlement-field causes are retained without payload diagnostics.",
+        "9": "Source reviewed with fixture owner, watchdog and actual command owner; focused native and signed owning execution, independent review and exact-head CI evidence remain separately recorded."
+      },
+      "issue362_host_driver_cancellation": {
+        "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+      }
+    },
+    {
+      "id": "scripts::host_test_driver::missing_native_tool_reports_spawn_failure_without_real_tool_fallback",
+      "path": "scripts/tests/host_test_driver.rs",
+      "line": 462,
+      "purpose": "Distinguish missing native command from observed nonzero exit.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Scoped regression for demonstrated HOST-1 cancellation propagation or preservation of the unchanged host workflow; final execution evidence is recorded separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts Cargo test target on supported Unix hosts; public-launcher case requires supported Rust toolchain and zsh, report case native Python. Synthetic fixtures only.",
+      "setup_dependencies": "Unique synthetic repository with empty isolated command PATH; direct Cargo-built host driver only.",
+      "action_postconditions": "Require exit1 with native_spawn_failed and BuildTests stage; no fallback to installed Swift and no watchdog rescue.",
+      "synchronization_timeout": "Positive file/PID admission and native state observation; bounded independent fixture watchdog. Failure budgets observe missing transitions, not readiness delays or new production command deadlines.",
+      "rules": {
+        "1": "Require exit1 with native_spawn_failed and BuildTests stage; no fallback to installed Swift and no watchdog rescue.",
+        "2": "Observe actual native entry and retirement; PID/group absence and exact statuses are asserted, with no guessed scheduling turns.",
+        "3": "N/A: no playback position or real media timing.",
+        "4": "Controlled native fixture owner releases and joins its independent watchdog on success/unwind, observes the direct driver and recorded native PIDs/groups, and retains resources on unconfirmed retirement. No shared process/service/device is signalled.",
+        "5": "Unique synthetic repository with empty isolated command PATH; direct Cargo-built host driver only. All fixtures are unique and independent; personal configuration is unchanged.",
+        "6": "Controlled native CLI/filesystem fixtures, not actual Swift/Xcode/signing or device evidence. The signed owning suite is separate.",
+        "7": "Original failing private probe and cleanup guard/recovery are retained; no retries, semantic assertion removal or execution-budget relaxation.",
+        "8": "Typed stage/native spawn/exit/interruption and entitlement-field causes are retained without payload diagnostics.",
+        "9": "Source reviewed with fixture owner, watchdog and actual command owner; focused native and signed owning execution, independent review and exact-head CI evidence remain separately recorded."
+      },
+      "issue362_host_driver_cancellation": {
+        "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+      }
+    },
+    {
+      "id": "scripts::host_test_driver::unsigned_product_reports_and_profiles_survive_full_synthetic_workflow",
+      "path": "scripts/tests/host_test_driver.rs",
+      "line": 472,
+      "purpose": "Preserve product-specific unsigned reports, coverage copies, successful native stderr and unrelated artifacts through the complete synthetic driver workflow.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Scoped regression for demonstrated HOST-1 cancellation propagation or preservation of the unchanged host workflow; final execution evidence is recorded separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts Cargo test target on supported Unix hosts; public-launcher case requires supported Rust toolchain and zsh, report case native Python. Synthetic fixtures only.",
+      "setup_dependencies": "Two synthetic package test products; fake Swift/xcrun commands, real unchanged Python report verifier, exact two-identity inventory and isolated profile/LCOV files.",
+      "action_postconditions": "Require success; parsed combined XML contains exactly both identities; copied opaque product-profile bytes remain distinct; normalized LCOV has both project-relative libraries; unrelated sentinel and successful path-query stderr survive.",
+      "synchronization_timeout": "Positive file/PID admission and native state observation; bounded independent fixture watchdog. Failure budgets observe missing transitions, not readiness delays or new production command deadlines.",
+      "rules": {
+        "1": "Require success; parsed combined XML contains exactly both identities; copied opaque product-profile bytes remain distinct; normalized LCOV has both project-relative libraries; unrelated sentinel and successful path-query stderr survive.",
+        "2": "Observe actual native entry and retirement; PID/group absence and exact statuses are asserted, with no guessed scheduling turns.",
+        "3": "N/A: no playback position or real media timing.",
+        "4": "Controlled native fixture owner releases and joins its independent watchdog on success/unwind, observes the direct driver and recorded native PIDs/groups, and retains resources on unconfirmed retirement. No shared process/service/device is signalled.",
+        "5": "Two synthetic package test products; fake Swift/xcrun commands, real unchanged Python report verifier, exact two-identity inventory and isolated profile/LCOV files. All fixtures are unique and independent; personal configuration is unchanged.",
+        "6": "Controlled native CLI/filesystem fixtures, not actual Swift/Xcode/signing or device evidence. The signed owning suite is separate.",
+        "7": "Original failing private probe and cleanup guard/recovery are retained; no retries, semantic assertion removal or execution-budget relaxation.",
+        "8": "Typed stage/native spawn/exit/interruption and entitlement-field causes are retained without payload diagnostics.",
+        "9": "Source reviewed with fixture owner, watchdog and actual command owner; focused native and signed owning execution, independent review and exact-head CI evidence remain separately recorded."
+      },
+      "issue362_host_driver_cancellation": {
+        "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+      }
+    },
+    {
+      "id": "scripts::host_test_driver::tests::signed_entitlements_require_exact_team_application_and_keychain_group",
+      "path": "scripts/src/host_test_driver/tests.rs",
+      "line": 10,
+      "purpose": "Preserve exact signed runner identity and Keychain-group validation with typed payload-free failures.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Scoped regression for demonstrated HOST-1 cancellation propagation or preservation of the unchanged host workflow; final execution evidence is recorded separately."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts Cargo test target on supported Unix hosts; public-launcher case requires supported Rust toolchain and zsh, report case native Python. Synthetic fixtures only.",
+      "setup_dependencies": "In-memory synthetic plist with fixture team/application and one exact group; individually change team, application, add extra group and provide malformed plist.",
+      "action_postconditions": "Valid identity succeeds; each structural mismatch returns its exact SigningIdentityField variant and malformed input returns EntitlementsFormat. No real signing identity or personal Keychain is used.",
+      "synchronization_timeout": "Positive file/PID admission and native state observation; bounded independent fixture watchdog. Failure budgets observe missing transitions, not readiness delays or new production command deadlines.",
+      "rules": {
+        "1": "Valid identity succeeds; each structural mismatch returns its exact SigningIdentityField variant and malformed input returns EntitlementsFormat. No real signing identity or personal Keychain is used.",
+        "2": "Observe actual native entry and retirement; PID/group absence and exact statuses are asserted, with no guessed scheduling turns.",
+        "3": "N/A: no playback position or real media timing.",
+        "4": "Memory-only decoded plist values; no task, process, filesystem or secret ownership.",
+        "5": "In-memory synthetic plist with fixture team/application and one exact group; individually change team, application, add extra group and provide malformed plist. All fixtures are unique and independent; personal configuration is unchanged.",
+        "6": "Controlled native CLI/filesystem fixtures, not actual Swift/Xcode/signing or device evidence. The signed owning suite is separate.",
+        "7": "Original failing private probe and cleanup guard/recovery are retained; no retries, semantic assertion removal or execution-budget relaxation.",
+        "8": "Typed stage/native spawn/exit/interruption and entitlement-field causes are retained without payload diagnostics.",
+        "9": "Source reviewed with fixture owner, watchdog and actual command owner; focused native and signed owning execution, independent review and exact-head CI evidence remain separately recorded."
+      },
+      "issue362_host_driver_cancellation": {
+        "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+        "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -9263,5 +9418,11 @@
     "limits": "Does not certify semantic truth,runtime discovery,argument multiplicity,line freshness,macro-generated tests or whole repository coverage. Rust/Swift function matching is deliberately source-shaped; compiler discovery and exact native outcomes remain separate.",
     "errors": "Typed read/JSON/shape/missing/duplicate/review/stale/orphan/unsupported-declaration causes retain source identity or field and original IO/parse errors.",
     "verification": "Review-corrected eight-function regression target includes six orphan variants (attribute/declaration/file removal, each with audit or index orphan). Final checks and exact outcomes are retained in .build/i369-audit-verification.json; compiler discovery and semantic truth remain separate."
+  },
+  "issue362_host_driver_cancellation": {
+    "base": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+    "scope": "Active native phase process group under direct host-driver SIGTERM; not detached group ownership, deferred macOS app changes or Release cleanup.",
+    "execution": "Required-signing owning host at e9835ae:609 exact identities passed,zero skips/failures;604core+5transcription products equal canonical inventory;configuration hash unchanged. Final harness correction changes no driver/host inputs:corrected CLI owning target4/4 and all5affected identities individually passed;entitlement owning1/1 and shared native-owner34/34 results remain tied to unchanged source. Strict Clippy,formatting and docs pass. Original individual workflow observation failure and every compile/parser attempt remain retained. Final delta review and exact-head CI pending.",
+    "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
   }
 }
