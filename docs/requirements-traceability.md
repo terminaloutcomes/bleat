@@ -477,6 +477,23 @@ carries the fix and closes the issue on merge. Simulator results do not establis
 physical-device accessibility behavior; manual spoken-output and gesture work
 remains tracked separately by #39.
 
+## Release screenshot workflow ownership
+
+The #369 screenshot workflow is implemented by the Rust
+`capture-release-screenshots` command and `release_screenshots` modules. The
+capture/check shell entrypoints are removed; the command reads the pinned live
+profile directly and retains the fixture, trusted local CA, HTTP range probe,
+Release build, exact native test and image/manifest contracts. Native tools
+remain invocation-owned with deadlines, signal retirement, a 3 GiB disk guard,
+and verified cleanup of only the generated project/containers/Simulators.
+The supplied fixture CA is the HTTPS client's only root; redirects are disabled.
+
+The Rust contract/lifecycle suite has 24 cases. The complete scripts library
+suite passed 132 cases before the final capture-path review. This is unit and
+native-child evidence, not a ten-screen Simulator result. Native capture and
+visual-review evidence must be recorded separately before claiming G5 acceptance;
+this migration does not close #369 or the other device/manual gates.
+
 ## Bold Text, Increase Contrast, and interaction-target audit
 
 The Now Playing close toolbar control exposes `player.close` while retaining

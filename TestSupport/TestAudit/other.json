@@ -9477,6 +9477,390 @@
       },
       "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6",
       "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
+    },
+    {
+      "id": "scripts::release_screenshot_fixture_preserves_hero_and_ordered_ten_scenes",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 25,
+      "purpose": "Validate the checked-in five-book fixture, exact ordered ten filenames, hero duration/progress and chapter/series contract.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Validate the checked-in five-book fixture, exact ordered ten filenames, hero duration/progress and chapter/series contract. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Validate the checked-in five-book fixture, exact ordered ten filenames, hero duration/progress and chapter/series contract.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_fixture_rejects_invalid_duration_progress_chapters_and_duplicate_names",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 29,
+      "purpose": "Mutate duration, out-of-range progress, chapter boundary, duplicate screen name and duplicate title independently; require rejection of every mutated fixture.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Mutate duration, out-of-range progress, chapter boundary, duplicate screen name and duplicate title independently; require rejection of every mutated fixture. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Mutate duration, out-of-range progress, chapter boundary, duplicate screen name and duplicate title independently; require rejection of every mutated fixture.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_fixture_rejects_paths_outside_owned_assets",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 43,
+      "purpose": "Replace each cover/folder/media path with parent traversal and require fixture rejection.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Replace each cover/folder/media path with parent traversal and require fixture rejection. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Replace each cover/folder/media path with parent traversal and require fixture rejection.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_options_normalize_and_deduplicate_selections",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 51,
+      "purpose": "Normalize whitespace and repeated orientations while preserving requested order and default appearances.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Normalize whitespace and repeated orientations while preserving requested order and default appearances. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Normalize whitespace and repeated orientations while preserving requested order and default appearances.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_options_reject_empty_invalid_modes_locale_port_and_video",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 61,
+      "purpose": "Require explicit errors for empty/unsupported selections, bad locale/port/video and missing iPhone selection.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Require explicit errors for empty/unsupported selections, bad locale/port/video and missing iPhone selection. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Require explicit errors for empty/unsupported selections, bad locale/port/video and missing iPhone selection.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_options_allow_phone_only_but_reject_duplicate_devices",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 79,
+      "purpose": "Accept the supported one-iPhone slice and reject two iPhone selections.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Accept the supported one-iPhone slice and reject two iPhone selections. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Accept the supported one-iPhone slice and reject two iPhone selections.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_attachment_manifest_requires_exact_complete_light_and_dark_sets",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 114,
+      "purpose": "Resolve ten required attachments independently for both appearances using native-export naming conventions.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Resolve ten required attachments independently for both appearances using native-export naming conventions. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Resolve ten required attachments independently for both appearances using native-export naming conventions.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_attachment_manifest_rejects_missing_duplicate_and_aliased_images",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 126,
+      "purpose": "Reject a missing dark attachment, duplicate light name and two names pointing to the same exported file.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Reject a missing dark attachment, duplicate light name and two names pointing to the same exported file. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Reject a missing dark attachment, duplicate light name and two names pointing to the same exported file.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_attachment_manifest_rejects_export_path_traversal",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 146,
+      "purpose": "Reject an otherwise named screenshot whose exported path escapes the owned attachment directory.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Reject an otherwise named screenshot whose exported path escapes the owned attachment directory. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Reject an otherwise named screenshot whose exported path escapes the owned attachment directory.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_dimensions_reject_wrong_device_or_orientation",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 152,
+      "purpose": "Accept matching portrait/landscape dimensions and reject a different device, reversed orientation and zero width.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Accept matching portrait/landscape dimensions and reject a different device, reversed orientation and zero width. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Accept matching portrait/landscape dimensions and reject a different device, reversed orientation and zero width.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_public_manifest_rejects_sensitive_nested_keys_and_values",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 160,
+      "purpose": "Accept a minimal public manifest and reject nested token keys, bearer values, URLs, private paths and token-name strings.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Accept a minimal public manifest and reject nested token keys, bearer values, URLs, private paths and token-name strings. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Accept a minimal public manifest and reject nested token keys, bearer values, URLs, private paths and token-name strings.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_profile_requires_matching_version_and_pinned_digest",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 173,
+      "purpose": "Validate the checked-in pinned current-stable image/version and reject a mismatched seed version.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Validate the checked-in pinned current-stable image/version and reject a mismatched seed version. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Validate the checked-in pinned current-stable image/version and reject a mismatched seed version.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_runtime_checks_availability_and_device_support",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 181,
+      "purpose": "Select an available supported runtime and reject a missing runtime or unsupported device.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Select an available supported runtime and reject a missing runtime or unsupported device. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Select an available supported runtime and reject a missing runtime or unsupported device.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_summary_rejects_zero_tests_skip_failure_and_runtime_warning",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 191,
+      "purpose": "Accept one passing unskipped journey and reject zero counts, skips, failures, expected failures and runtime warnings.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Accept one passing unskipped journey and reject zero counts, skips, failures, expected failures and runtime warnings. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Accept one passing unskipped journey and reject zero counts, skips, failures, expected failures and runtime warnings.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_xctestrun_environment_targets_only_ui_tests",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 208,
+      "purpose": "Modify only the UI-test environment in a synthetic plist, preserving existing variables and the app-test target.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Modify only the UI-test environment in a synthetic plist, preserving existing variables and the app-test target. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Modify only the UI-test environment in a synthetic plist, preserving existing variables and the app-test target.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_redaction_removes_credentials_without_erasing_useful_failure",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 232,
+      "purpose": "Remove synthetic password, bearer and refresh markers while retaining the useful upstream-failure description.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Remove synthetic password, bearer and refresh markers while retaining the useful upstream-failure description. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Remove synthetic password, bearer and refresh markers while retaining the useful upstream-failure description.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_source_launch_contract_is_explicit_not_runtime_evidence",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 241,
+      "purpose": "Inspect the checked-in test/app launch-mode boundary for the existing deterministic discovery flag; this is source-contract evidence only.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Inspect the checked-in test/app launch-mode boundary for the existing deterministic discovery flag; this is source-contract evidence only. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Inspect the checked-in test/app launch-mode boundary for the existing deterministic discovery flag; this is source-contract evidence only.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_disk_guard_rejects_before_spawning_a_command",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 255,
+      "purpose": "Inject a zero-capacity probe and require the disk error before a deliberately nonexistent command could spawn.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Inject a zero-capacity probe and require the disk error before a deliberately nonexistent command could spawn. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Inject a zero-capacity probe and require the disk error before a deliberately nonexistent command could spawn.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_native_deadline_preserves_owned_retirement",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 272,
+      "purpose": "Launch an isolated copy of the Rust test binary as a deliberate noncompleting child; require typed deadline and successful owned-group retirement.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Launch an isolated copy of the Rust test binary as a deliberate noncompleting child; require typed deadline and successful owned-group retirement. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Launch an isolated copy of the Rust test binary as a deliberate noncompleting child; require typed deadline and successful owned-group retirement.",
+      "synchronization_timeout": "Isolated native child has a one-second command deadline and five-second retirement budget. Child output is captured; no ignored helper test or extra CI pass count."
+    },
+    {
+      "id": "scripts::release_screenshot_recording_flushes_after_graceful_interrupt_before_retirement",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 297,
+      "purpose": "Launch an isolated child that signals readiness, flushes bytes on SIGINT and exits; require the flushed file and successful recording retirement.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Launch an isolated child that signals readiness, flushes bytes on SIGINT and exits; require the flushed file and successful recording retirement. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Launch an isolated child that signals readiness, flushes bytes on SIGINT and exits; require the flushed file and successful recording retirement.",
+      "synchronization_timeout": "Bounded five-second readiness condition, then SIGINT and a fifteen-second flush deadline; existing native owner verifies retirement. Child output is captured."
+    },
+    {
+      "id": "scripts::release_screenshot_fixture_missing_cover_is_rejected_before_native_image_inspection",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 325,
+      "purpose": "Write a mutated fixture with a missing first cover and require rejection before invoking native image decoding.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Write a mutated fixture with a missing first cover and require rejection before invoking native image decoding. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Write a mutated fixture with a missing first cover and require rejection before invoking native image decoding.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_image_metadata_requires_positive_decoded_dimensions",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 335,
+      "purpose": "Parse valid native image dimensions and reject missing, zero and nonnumeric metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Parse valid native image dimensions and reject missing, zero and nonnumeric metadata. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Parse valid native image dimensions and reject missing, zero and nonnumeric metadata.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_output_admission_preserves_previous_evidence",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 350,
+      "purpose": "Claim a fresh output directory, place a retained sentinel, reject a second claim and prove the sentinel bytes survive.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Claim a fresh output directory, place a retained sentinel, reject a second claim and prove the sentinel bytes survive. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Claim a fresh output directory, place a retained sentinel, reject a second claim and prove the sentinel bytes survive.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_cleanup_does_not_certify_malformed_or_owned_simulator_inventory",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 362,
+      "purpose": "Accept inventory containing only unrelated devices, and reject missing/malformed rows or a remaining owned Simulator.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Accept inventory containing only unrelated devices, and reject missing/malformed rows or a remaining owned Simulator. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Accept inventory containing only unrelated devices, and reject missing/malformed rows or a remaining owned Simulator.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -9703,5 +10087,11 @@
     "preservation": "The full prior six-suite patch is preserved separately; its gesture-loop changes are not included. Historical per-test decisions remain in historicalReviewBefore375.",
     "execution": "Clean implementing revision 65a889c8d978a4701ce0b40fb89f5306b7a2b2c3: all four affected download-status/edit identities individually passed twice (8 executions); owning standard Simulator lane passed 627 app and 119 UI cases with six explicitly allowed opt-in skips and zero failures/runtime warnings. All ten original fixture UI identities and four app lifecycle identities passed. The interrupted outer tool wrapper has no exit receipt; the unchanged original native core owner continued without restart and its exit0 was observed through macOS kqueue; both native bundles independently passed canonical discovery/result verification. Separate accessibility attempt and Release secret gate stopped at build exit65 with zero native tests: internal CodeSign error and host LLVM missing Z3 library respectively. Seven scanner regressions passed; no new archive/final scan pass claimed. Owned resources retired. Earlier configuration results retain their actual revisions; final exact-head CI remains separately recorded in issue #375.",
     "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
+  },
+  "releaseScreenshotRustMigration": {
+    "baseRevision": "c9a142bc28a5864d3f7bd718d2aebc5ca9555fdf",
+    "scope": "scripts/src/release_screenshots/tests.rs",
+    "newReviewedCases": 24,
+    "boundary": "Only newly introduced workflow regressions are recorded. This does not repair the separate 85 known omissions or certify the retained semantic-review queues."
   }
 }

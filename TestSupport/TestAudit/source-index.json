@@ -10331,6 +10331,150 @@
       "name": "testBookDetailDownloadStatusFitsAtDefaultDynamicType",
       "line": 1048,
       "language": "swift"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_fixture_preserves_hero_and_ordered_ten_scenes",
+      "line": 25,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_fixture_rejects_invalid_duration_progress_chapters_and_duplicate_names",
+      "line": 29,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_fixture_rejects_paths_outside_owned_assets",
+      "line": 43,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_options_normalize_and_deduplicate_selections",
+      "line": 51,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_options_reject_empty_invalid_modes_locale_port_and_video",
+      "line": 61,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_options_allow_phone_only_but_reject_duplicate_devices",
+      "line": 79,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_attachment_manifest_requires_exact_complete_light_and_dark_sets",
+      "line": 114,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_attachment_manifest_rejects_missing_duplicate_and_aliased_images",
+      "line": 126,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_attachment_manifest_rejects_export_path_traversal",
+      "line": 146,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_dimensions_reject_wrong_device_or_orientation",
+      "line": 152,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_public_manifest_rejects_sensitive_nested_keys_and_values",
+      "line": 160,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_profile_requires_matching_version_and_pinned_digest",
+      "line": 173,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_runtime_checks_availability_and_device_support",
+      "line": 181,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_summary_rejects_zero_tests_skip_failure_and_runtime_warning",
+      "line": 191,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_xctestrun_environment_targets_only_ui_tests",
+      "line": 208,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_redaction_removes_credentials_without_erasing_useful_failure",
+      "line": 232,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_source_launch_contract_is_explicit_not_runtime_evidence",
+      "line": 241,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_disk_guard_rejects_before_spawning_a_command",
+      "line": 255,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_native_deadline_preserves_owned_retirement",
+      "line": 272,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_recording_flushes_after_graceful_interrupt_before_retirement",
+      "line": 297,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_fixture_missing_cover_is_rejected_before_native_image_inspection",
+      "line": 325,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_image_metadata_requires_positive_decoded_dimensions",
+      "line": 335,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_output_admission_preserves_previous_evidence",
+      "line": 350,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_cleanup_does_not_certify_malformed_or_owned_simulator_inventory",
+      "line": 362,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [
