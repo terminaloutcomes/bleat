@@ -668,6 +668,72 @@ struct DownloadHTTPTransaction: Sendable {
     let responseEnd: Date?
 }
 
+/// Tracks only work admitted by delivered delegate callbacks. A finish-events
+/// fence excludes callbacks admitted later by future transfers.
+private final class DownloadBackgroundEventDrain: Sendable {
+    private struct Waiter: Sendable {
+        let ids: Set<Int>
+        let continuation: CheckedContinuation<Void, Never>
+    }
+    private struct State: Sendable {
+        var nextID = 0
+        var pending: Set<Int> = []
+        var waiters: [Waiter] = []
+    }
+    private let state = Mutex(State())
+
+    func admit() -> DownloadBackgroundEventWork {
+        let id = state.withLock { state in
+            state.nextID += 1
+            state.pending.insert(state.nextID)
+            return state.nextID
+        }
+        return DownloadBackgroundEventWork(drain: self, id: id)
+    }
+
+    func pendingIDs() -> Set<Int> { state.withLock { $0.pending } }
+
+    func wait(for ids: Set<Int>) async {
+        await withCheckedContinuation { continuation in
+            let completed = state.withLock { state in
+                guard !state.pending.isDisjoint(with: ids) else { return true }
+                state.waiters.append(
+                    Waiter(ids: ids, continuation: continuation))
+                return false
+            }
+            if completed { continuation.resume() }
+        }
+    }
+
+    fileprivate func finish(_ id: Int) {
+        let ready = state.withLock {
+            state -> [CheckedContinuation<Void, Never>] in
+            guard state.pending.remove(id) != nil else { return [] }
+            let pending = state.pending
+            var ready: [CheckedContinuation<Void, Never>] = []
+            state.waiters.removeAll { waiter in
+                guard pending.isDisjoint(with: waiter.ids) else { return false }
+                ready.append(waiter.continuation)
+                return true
+            }
+            return ready
+        }
+        for continuation in ready { continuation.resume() }
+    }
+}
+
+private final class DownloadBackgroundEventWork: Sendable {
+    private let drain: DownloadBackgroundEventDrain
+    private let id: Int
+    init(drain: DownloadBackgroundEventDrain, id: Int) {
+        self.drain = drain
+        self.id = id
+    }
+    // Idempotent: durable deferred retry state may release work before its
+    // future backoff finishes; the callback's defer remains safe.
+    func finish() { drain.finish(id) }
+}
+
 private final class DownloadSessionDelegateProxy: NSObject,
     URLSessionDownloadDelegate,
     @unchecked Sendable
@@ -759,6 +825,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         #endif
     }
 
+    private nonisolated let backgroundEventDrain =
+        DownloadBackgroundEventDrain()
     private let service: any AppServicing
     @ObservationIgnored
     private(set) var taskCompletionProcessingSequenceForTesting = 0
@@ -4277,7 +4345,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private func reconcileTransfer(
         identity: DownloadTaskIdentity,
         taskDescription: String,
-        outcome: DownloadTransferOutcome
+        outcome: DownloadTransferOutcome,
+        eventWork: DownloadBackgroundEventWork? = nil
     ) async {
         let descriptor = try? DownloadChunkTaskDescription.decode(
             taskDescription
@@ -4575,7 +4644,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     identity: identity,
                     terminalFailure: .transferFailed,
                     category: .invalidResponse,
-                    storage: storage
+                    storage: storage,
+                    eventWork: eventWork
                 )
                 return
             }
@@ -4618,7 +4688,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 identity: identity,
                 terminalFailure: .transportUnavailable,
                 category: .transport,
-                storage: storage
+                storage: storage,
+                eventWork: eventWork
             )
         case .unauthorized(let rejectedRequest):
             guard !context.isPaused, !context.isCancelled else {
@@ -4731,7 +4802,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     ),
                     category: category,
                     storage: storage,
-                    retryAfterSeconds: retryAfterSeconds
+                    retryAfterSeconds: retryAfterSeconds,
+                    eventWork: eventWork
                 )
                 return
             }
@@ -4816,7 +4888,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         terminalFailure: DownloadModelFailure,
         category: RemoteTelemetryFailureCategory,
         storage: DownloadStorage,
-        retryAfterSeconds: TimeInterval? = nil
+        retryAfterSeconds: TimeInterval? = nil,
+        eventWork: DownloadBackgroundEventWork? = nil
     ) async {
         let key = AutomaticDownloadTaskKey(identity)
         guard let rejectedRequest,
@@ -4919,6 +4992,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
             retryDelaySource: retryAfterSeconds == nil
                 ? .exponentialBackoff : .serverRetryAfter
         )
+        // The retry deadline/count is durable and presentation refreshed. The
+        // timer is future work, not processing of the delivered session event.
+        eventWork?.finish()
         do {
             try await transferRetrySleep(
                 .seconds(
@@ -5078,7 +5154,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
 
     private func recordCompletionOutcome(
         task: URLSessionTask,
-        error: (any Error)?
+        error: (any Error)?,
+        eventWork: DownloadBackgroundEventWork
     ) async {
         defer { taskCompletionProcessingSequenceForTesting += 1 }
         guard let description = task.taskDescription,
@@ -5099,7 +5176,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         task.currentRequest ?? task.originalRequest,
                     cause: transportFailure.cause,
                     errorCode: transportFailure.code
-                )
+                ),
+                eventWork: eventWork
             )
             return
         }
@@ -5112,7 +5190,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         task.currentRequest ?? task.originalRequest,
                     cause: .missingResponse,
                     errorCode: nil
-                )
+                ),
+                eventWork: eventWork
             )
             return
         }
@@ -5128,7 +5207,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                     retryAfterSeconds: Self.retryAfterDelaySeconds(
                         response: response
                     )
-                )
+                ),
+                eventWork: eventWork
             )
             return
         case .success:
@@ -5150,14 +5230,16 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                         statusCode: response.statusCode,
                         rejectedRequest: task.currentRequest,
                         retryAfterSeconds: nil
-                    )
+                    ),
+                    eventWork: eventWork
                 )
                 return
             }
             await reconcileTransfer(
                 identity: identity,
                 taskDescription: description,
-                outcome: .unauthorized(rejectedRequest: request)
+                outcome: .unauthorized(rejectedRequest: request),
+                eventWork: eventWork
             )
             return
         }
@@ -5861,6 +5943,20 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         )
     }
 
+    private nonisolated func processBackgroundEvent(
+        _ operation:
+            @escaping @MainActor @Sendable (
+                DownloadModel, DownloadBackgroundEventWork
+            ) async -> Void
+    ) {
+        let work = backgroundEventDrain.admit()
+        Task { @MainActor in
+            defer { work.finish() }
+            await self.callbackProcessingCheckpoint()
+            await operation(self, work)
+        }
+    }
+
     nonisolated func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
@@ -5944,42 +6040,42 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 }
             }
         guard let result else {
-            Task { @MainActor [weak self] in
-                guard let self, let storage = self.storage else { return }
-                await self.resumeAfterInvalidatedTransfer(
+            processBackgroundEvent { owner, _ in
+                guard let storage = owner.storage else { return }
+                await owner.resumeAfterInvalidatedTransfer(
                     identity,
                     storage: storage
                 )
             }
             return
         }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await self.callbackProcessingCheckpoint()
+        processBackgroundEvent { owner, eventWork in
             switch result {
             case .placed(
                 let committedByteLength,
                 let validator,
                 let finalized
             ):
-                await self.reconcileTransfer(
+                await owner.reconcileTransfer(
                     identity: identity,
                     taskDescription: description,
                     outcome: .chunkStored(
                         committedByteLength: committedByteLength,
                         validator: validator,
                         finalized: finalized
-                    )
+                    ),
+                    eventWork: eventWork
                 )
             case .rejected(let stage, let cause, let rejectedRequest):
-                await self.reconcileTransfer(
+                await owner.reconcileTransfer(
                     identity: identity,
                     taskDescription: description,
                     outcome: .placementRejected(
                         stage: stage,
                         cause: cause,
                         rejectedRequest: rejectedRequest
-                    )
+                    ),
+                    eventWork: eventWork
                 )
             }
         }
@@ -6103,10 +6199,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await self.callbackProcessingCheckpoint()
-            await self.recordCompletionOutcome(task: task, error: error)
+        processBackgroundEvent { owner, eventWork in
+            await owner.recordCompletionOutcome(
+                task: task, error: error, eventWork: eventWork)
         }
     }
 
@@ -6152,9 +6247,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         forBackgroundURLSession session: URLSession
     ) {
         #if os(iOS)
-            Task { @MainActor [weak self] in
-                guard let self else { return }
+            let pending = backgroundEventDrain.pendingIDs()
+            Task { @MainActor in
                 self.backgroundEventProcessingSequenceForTesting += 1
+                await self.backgroundEventDrain.wait(for: pending)
                 self.backgroundEventsFinished()
             }
         #endif

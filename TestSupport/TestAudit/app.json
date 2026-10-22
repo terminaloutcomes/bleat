@@ -11302,6 +11302,11 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "backgroundCompletionFollowup": {
+        "status": "source_reviewed",
+        "oracle": "While existing retry gate holds future sleep, require OS completion after durable retry state; retain network-loss/no-retry/pause-reset assertions.",
+        "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
       }
     },
     {
@@ -49902,6 +49907,68 @@
       "compilerAndSkipConditions": [
         "#if DEBUG || BLEAT_UI_TESTING"
       ]
+    },
+    {
+      "identifier": "AppModelTests/testBackgroundEventsCompletionWaitsForDurableChunkReconciliation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 9143
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A delivered native range chunk must be durably reconciled before OS completion is invoked.",
+        "purpose": "Controlled background delegate-processing boundary; no physical background-daemon claim.",
+        "ruleAssessments": {
+          "1": "Native URLProtocol206 suffix, completed first track, held reconciliation gate, non-mutating JSON snapshot before and inside completion; require no early call, one final call, complete manifest and8byte final file.",
+          "2": "Gate admission and explicit processing sequence establish ordering; five-second assertion budgets, no sleeps or guessed yields.",
+          "3": "N/A: download durability and callback ordering, no playback clock.",
+          "4": "Register teardown before callbacks; release all held gates, invalidate owned session, remove model/defaults/storage.",
+          "5": "Unique temporary root, defaults suite and session identifier; synthetic account/request/media only.",
+          "6": "App-hosted native URLSession callback for chunk test; explicit finish-events delivery and controlled terminal callbacks. No live-server or physical wake claim.",
+          "7": "Retain original and fixture-invalid attempts separately; corrected original-ordering control fails, fixed regression passes; no retry-to-green.",
+          "8": "Stage-specific bounded wait observations and exact state, callback count and byte assertions.",
+          "9": "Exact identities passed in owning app suite629/629 with zero skips/failures/expected failures/runtime warnings. Durability identity also passed isolated; corrected original-ordering control failed on premature completion and persisted-state oracle. See linked receipt."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "A delivered native range chunk must be durably reconciled before OS completion is invoked."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
+    },
+    {
+      "identifier": "AppModelTests/testBackgroundEventFenceDoesNotWaitForLaterCallbacks",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 9267
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An OS finish-events handoff waits only for callbacks admitted before its snapshot.",
+        "purpose": "Controlled background delegate-processing boundary; no physical background-daemon claim.",
+        "ruleAssessments": {
+          "1": "Hold first terminal callback, capture finish-events fence, admit and hold later callback; release first and require one handoff while later remains held, then release later and require both processing acknowledgements.",
+          "2": "Gate admission and explicit processing sequence establish ordering; five-second assertion budgets, no sleeps or guessed yields.",
+          "3": "N/A: download durability and callback ordering, no playback clock.",
+          "4": "Register teardown before callbacks; release all held gates, invalidate owned session, remove model/defaults/storage.",
+          "5": "Unique temporary root, defaults suite and session identifier; synthetic account/request/media only.",
+          "6": "App-hosted native URLSession callback for chunk test; explicit finish-events delivery and controlled terminal callbacks. No live-server or physical wake claim.",
+          "7": "Retain original and fixture-invalid attempts separately; corrected original-ordering control fails, fixed regression passes; no retry-to-green.",
+          "8": "Stage-specific bounded wait observations and exact state, callback count and byte assertions.",
+          "9": "Exact identities passed in owning app suite629/629 with zero skips/failures/expected failures/runtime warnings. Durability identity also passed isolated; corrected original-ordering control failed on premature completion and persisted-state oracle. See linked receipt."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "An OS finish-events handoff waits only for callbacks admitted before its snapshot."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
     }
   ],
   "decisionCounts": {
@@ -49967,5 +50034,11 @@
     "scope_limits": "A completed native play request is not proof of audible progression, physical-device behavior or whole worker/native-callback/timeout-observer drainage. Existing typed source/persistence/account/request/navigation assertions and awaited final stops remain.",
     "decision": "keep;final exact-textapp608/608;focused21/21,AppModel505/505 and eight mutation kills before verified syntax-only closure-label correction;application bytes restored exactly",
     "evidence": "docs/release-evidence/test-reliability-app-followups.md#independent-native-startup-position-oracles-374"
+  },
+  "backgroundCompletionReview": {
+    "baseline": "d8670295ef69c0d0f8ccdf58dc6f4869c6ed8283",
+    "scope": "Two new iOS-only declarations and one extended backoff case. Historical methodCount and decisionCounts above retain their original audit scope.",
+    "evidence": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22",
+    "execution": "629 owning app identities passed, including both new cases and extended retry case; isolated durability regression passed. Original-ordering corrected control failed as expected."
   }
 }

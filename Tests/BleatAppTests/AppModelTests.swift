@@ -7581,6 +7581,10 @@ final class AppModelTests: XCTestCase {
             authorizedDownloadRequest: .success(request)
         )
         let retryGate = AsyncGate()
+        #if os(iOS)
+            let backgroundCompletion = expectation(
+                description: "durable retry handed back to OS")
+        #endif
         let model = DownloadModel(
             service: service,
             storageRootURL: root,
@@ -7588,6 +7592,11 @@ final class AppModelTests: XCTestCase {
                 "bleat.tests.retry-network-drop.\(UUID().uuidString)",
             transferRetrySleep: { _ in
                 await retryGate.enterAndWait()
+            },
+            backgroundEventsFinished: {
+                #if os(iOS)
+                    backgroundCompletion.fulfill()
+                #endif
             }
         )
         await model.start(accounts: [account])
@@ -7625,6 +7634,14 @@ final class AppModelTests: XCTestCase {
             didCompleteWithError: URLError(.networkConnectionLost)
         )
         await retryGate.waitUntilEntered()
+        #if os(iOS)
+            // Retry state is already durable; the OS must not wait for its timer.
+            await Task.detached {
+                model.urlSessionDidFinishEvents(
+                    forBackgroundURLSession: session)
+            }.value
+            await fulfillment(of: [backgroundCompletion], timeout: 5)
+        #endif
         XCTAssertEqual(model.transferRetryCountForTesting(identity), 1)
         model.updateNetworkPathState(
             AppNetworkPathState(
@@ -9140,6 +9157,16 @@ final class AppModelTests: XCTestCase {
             let (plan, storage) = try await prepareInterruptedDownload(
                 root: root, account: account, detail: detail,
                 downloadID: "background-drain", committedByteCount: 5)
+            let firstIdentity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "background-drain"),
+                accountID: account.id, itemID: detail.id, track: plan.tracks[0])
+            let firstTrack = root.appendingPathComponent(
+                "completed-first-track")
+            try Data(repeating: 0xAB, count: 4).write(to: firstTrack)
+            _ = try await storage.commitChunk(
+                firstIdentity, temporaryURL: firstTrack,
+                range: try DownloadByteRange(start: 0, endInclusive: 3),
+                validator: nil)
             let identity = try DownloadTaskIdentity(
                 downloadID: DownloadID(rawValue: "background-drain"),
                 accountID: account.id,
@@ -9150,6 +9177,9 @@ final class AppModelTests: XCTestCase {
             let completion = expectation(
                 description: "background events completed")
             let completionCount = Mutex(0)
+            let durableCompletionStates = Mutex([Bool]())
+            let recordURL = try DownloadStorageLayout(rootURL: root).recordURL(
+                accountID: account.id, itemID: detail.id)
             let model = DownloadModel(
                 service: TestAppService(
                     activeAccount: .success(account),
@@ -9161,6 +9191,12 @@ final class AppModelTests: XCTestCase {
                 startDownloadTask: { _ in },
                 callbackProcessingCheckpoint: { await gate.enterAndWait() },
                 backgroundEventsFinished: {
+                    let persisted = try? JSONDecoder().decode(
+                        DownloadedBookRecord.self,
+                        from: Data(contentsOf: recordURL))
+                    durableCompletionStates.withLock {
+                        $0.append(persisted?.manifest.state == .complete)
+                    }
                     completionCount.withLock { $0 += 1 }
                     completion.fulfill()
                 })
@@ -9190,8 +9226,10 @@ final class AppModelTests: XCTestCase {
             XCTAssertTrue(
                 entered,
                 "native chunk callback reached reconciliation checkpoint")
-            let before = try await storage.records()
-            XCTAssertNotEqual(before.first?.manifest.state, .complete)
+            // Read without storage.records(), which itself reconciles files.
+            let before = try JSONDecoder().decode(
+                DownloadedBookRecord.self, from: Data(contentsOf: recordURL))
+            XCTAssertNotEqual(before.manifest.state, .complete)
             await Task.detached {
                 model.urlSessionDidFinishEvents(
                     forBackgroundURLSession: session)
@@ -9217,12 +9255,106 @@ final class AppModelTests: XCTestCase {
                 },
                 condition: { model.records.first?.manifest.state == .complete })
             XCTAssertEqual(completionCount.withLock { $0 }, 1)
+            XCTAssertEqual(durableCompletionStates.withLock { $0 }, [true])
             let after = try await storage.records()
             XCTAssertEqual(after.first?.manifest.state, .complete)
             let layout = try DownloadStorageLayout(rootURL: root)
             XCTAssertEqual(
                 try Data(contentsOf: layout.destinationURL(for: identity))
                     .count, 8)
+        }
+
+        func testBackgroundEventFenceDoesNotWaitForLaterCallbacks() async throws
+        {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatBackgroundFence-\(UUID().uuidString)",
+                    isDirectory: true)
+            let defaultsSuite = "BackgroundFence.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+            let first = AsyncGate()
+            let later = AsyncGate()
+            let admissionOrder = Mutex(0)
+            let completionCount = Mutex(0)
+            let completion = expectation(
+                description: "only captured event work drained")
+            let model = DownloadModel(
+                service: TestAppService(
+                    activeAccount: .success(try fixtureAccount())),
+                defaults: defaults, storageRootURL: root,
+                backgroundSessionIdentifier: backgroundSessionIdentifier(
+                    "event-fence"),
+                callbackProcessingCheckpoint: {
+                    let order = admissionOrder.withLock { value in
+                        value += 1
+                        return value
+                    }
+                    if order == 1 {
+                        await first.enterAndWait()
+                    } else {
+                        await later.enterAndWait()
+                    }
+                },
+                backgroundEventsFinished: {
+                    completionCount.withLock { $0 += 1 }
+                    completion.fulfill()
+                })
+            let session = URLSession(configuration: .ephemeral)
+            let url = try XCTUnwrap(URL(string: "https://192.0.2.1/unused"))
+            let firstTask = session.downloadTask(with: url)
+            let laterTask = session.downloadTask(with: url)
+            addTeardownBlock { @MainActor in
+                await first.release()
+                await later.release()
+                session.invalidateAndCancel()
+                await model.removeAll()
+                defaults.removePersistentDomain(forName: defaultsSuite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            await Task.detached {
+                model.urlSession(
+                    session, task: firstTask,
+                    didCompleteWithError: URLError(.cancelled))
+            }.value
+            let firstEntered = await first.waitUntilEntered(
+                timeout: .seconds(5))
+            XCTAssertTrue(firstEntered)
+            await Task.detached {
+                model.urlSessionDidFinishEvents(
+                    forBackgroundURLSession: session)
+            }.value
+            await assertEventually(
+                "first batch fence captured", timeout: .seconds(5),
+                observed: {
+                    "handoff sequence=\(model.backgroundEventProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.backgroundEventProcessingSequenceForTesting == 1
+                })
+            await Task.detached {
+                model.urlSession(
+                    session, task: laterTask,
+                    didCompleteWithError: URLError(.cancelled))
+            }.value
+            let laterEntered = await later.waitUntilEntered(
+                timeout: .seconds(5))
+            XCTAssertTrue(laterEntered)
+            await first.release()
+            await fulfillment(of: [completion], timeout: 5)
+            XCTAssertEqual(
+                model.taskCompletionProcessingSequenceForTesting, 1,
+                "a future callback remains gated and must not hold the earlier OS handoff"
+            )
+            await later.release()
+            await assertEventually(
+                "future callback drained", timeout: .seconds(5),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting == 2
+                })
+            XCTAssertEqual(completionCount.withLock { $0 }, 1)
         }
     #endif
 
