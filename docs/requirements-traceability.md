@@ -1111,3 +1111,12 @@ the already delivered explicit fixture signals and lifecycle tests. The four
 original acceptance criteria and revision-specific execution records are tracked
 in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375); separate
 accessibility/device observations do not redefine this fixture-state scope.
+
+## Large-library fixture scan readiness
+
+The current-stable 10k setup allowance is calculated by the existing Rust
+fixture generator's read-only budget mode. Its CLI regression verifies count
+validation and unchanged fixture files; [the performance receipt](release-evidence/performance-baseline.md#current-stable-setup-readiness-correction-2026-10-22)
+preserves the original setup failure separately from native test outcomes.
+Exact 10k readiness and native load/cache-fallback performance assertions remain
+unchanged. This does not establish physical-device energy acceptance.

@@ -10499,6 +10499,12 @@
       "name": "release_screenshot_png_normalization_rejects_incomplete_or_ambiguous_containers",
       "line": 464,
       "language": "rust"
+    },
+    {
+      "path": "scripts/tests/large_library_cli.rs",
+      "name": "scan_budget_mode_is_read_only_and_rejects_invalid_counts",
+      "line": 117,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

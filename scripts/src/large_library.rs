@@ -46,6 +46,19 @@ enum PublicationState {
     Publishing,
 }
 
+/// Bounded one-second polling attempts for the live fixture scan.
+///
+/// A 10,000-item current-stable scan outlasted the former 620-attempt
+/// allowance while still making progress. Allow ten items per attempt plus
+/// startup overhead. Each HTTP request retains its separate timeout; this is
+/// an attempt budget, not an elapsed-time guarantee.
+pub fn scan_attempts(count: usize) -> Result<usize, GenerationError> {
+    if !(1..=100_000).contains(&count) {
+        return Err(GenerationError::InvalidCount);
+    }
+    Ok(count / 10 + 120)
+}
+
 fn write_manifest(file: &mut File, manifest: &Manifest) -> Result<(), GenerationError> {
     file.seek(SeekFrom::Start(0))?;
     file.set_len(0)?;

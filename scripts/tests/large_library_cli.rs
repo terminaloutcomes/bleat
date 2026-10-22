@@ -112,3 +112,34 @@ fn large_library_cli_rejects_invalid_counts_without_creating_output() {
         assert!(!output.exists());
     }
 }
+
+#[test]
+fn scan_budget_mode_is_read_only_and_rejects_invalid_counts() {
+    let root = tempfile::tempdir().expect("fixture");
+    let sentinel = root.path().join("keep");
+    fs::write(&sentinel, b"existing fixture").expect("sentinel");
+    for (count, expected) in [("1", "120\n"), ("10000", "1120\n"), ("100000", "10120\n")] {
+        let result = Command::new(env!("CARGO_BIN_EXE_generate-large-library"))
+            .current_dir(root.path())
+            .args(["--count", count, "--print-scan-attempts"])
+            .output()
+            .expect("budget CLI");
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(result.stdout, expected.as_bytes());
+    }
+    for count in ["0", "100001", "18446744073709551615"] {
+        let result = Command::new(env!("CARGO_BIN_EXE_generate-large-library"))
+            .current_dir(root.path())
+            .args(["--count", count, "--print-scan-attempts"])
+            .output()
+            .expect("invalid budget CLI");
+        assert!(!result.status.success());
+        assert!(result.stdout.is_empty());
+    }
+    assert_eq!(fs::read(&sentinel).expect("sentinel"), b"existing fixture");
+    assert_eq!(fs::read_dir(root.path()).expect("entries").count(), 1);
+}

@@ -336,7 +336,11 @@ bleat_seed_large_library() {
     local items_payload
     local item_count
     local attempt
-    local max_attempts=$(( expected_count / 20 + 120 ))
+    local max_attempts
+    max_attempts="$(cargo run --quiet --locked \
+        --manifest-path "${bleat_repository_root}/Cargo.toml" \
+        --package scripts --bin generate-large-library -- \
+        --count "${expected_count}" --print-scan-attempts)"
 
     access_token="$(bleat_login_access_token "${base_url}")"
     library_id="$(
