@@ -488,13 +488,14 @@ remain invocation-owned with deadlines, signal retirement, a 3 GiB disk guard,
 and verified cleanup of only the generated project/containers/Simulators.
 The supplied fixture CA is the HTTPS client's only root; redirects are disabled.
 
-The Rust contract/lifecycle suite has 25 cases, including interrupted Simulator
-creation recovery by an exact pre-registered run name. The complete scripts library
+The Rust contract/lifecycle suite has 28 cases, including interrupted Simulator
+creation recovery and lossless removal of stale landscape orientation metadata. The complete scripts library
 suite passed 132 cases before the final capture-path review. This is unit and
 native-child evidence. The [retained native receipt](release-evidence/release-screenshots-rust.md)
-separately verifies one iPhone portrait/light Release journey, its ten PNGs,
-visual review and owned cleanup. The other seven default combinations remain
-unverified; this migration does not close #369 or the other device/manual gates.
+separately records the first iPhone slice and the eight-context default Release
+matrix: 80 PNGs, visual/file review and verified owned cleanup. Native capture
+at `3af98f7` and pixel-preserving export correction at `756431d` retain separate
+provenance. G5 is evidenced; this does not close #369 or other device/manual gates.
 
 ## Bold Text, Increase Contrast, and interaction-target audit
 

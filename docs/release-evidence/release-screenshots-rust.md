@@ -72,3 +72,69 @@ This verifies one of eight default device/orientation/appearance combinations.
 The other seven, any optional video capture and the separate #369 acceptance
 groups are not certified by this result. macOS application work stays deferred;
 the earlier inconclusive iPad interaction observation is not resolved here.
+
+## Full matrix and orientation correction
+
+The subsequent clean-source run at
+`3af98f7334e48ef841153c15dff6d62de9176992` completed the default matrix:
+
+| Device | Portrait light/dark | Landscape-left light/dark | PNG dimensions |
+| --- | --- | --- | --- |
+| iPhone 17 Pro Max | 2 passed | 2 passed | 1320×2868 / 2868×1320 |
+| 13-inch iPad Pro M5 | 2 passed | 2 passed | 2064×2752 / 2752×2064 |
+
+All **eight exact native journeys passed**, with zero failures, skips, expected
+failures or runtime warnings, and all **80 PNGs** exported. The iPad Release
+build completed within its 40-minute budget. Independent checks verified
+absence of both owned Simulators and every owned Compose/media resource and
+private workspace; free space afterward was **19.31 GiB**. Native summaries,
+test trees and cleanup receipts remain under
+`.build/release-screenshot-receipts/c28f5f28cef0a9a80e78eb0fa57ee2d3/`.
+
+File QA then found a real export defect missed by dimensions-only checks:
+landscape pixels were correctly rotated, but retained generated EXIF and Adobe
+XMP orientation 8 and portrait dimension metadata. A metadata-aware viewer
+therefore displayed a sideways image. The port had retained the previous shell
+workflow's `sips` rotation behavior. This was a file-export defect; no app or
+layout change was made.
+
+Correction `756431d1daa94d893aa96af4c8497368b7382c6b` removes only generated
+EXIF and Adobe XMP chunks after landscape pixel rotation. All pixel, color/profile
+and unrelated text chunks remain byte-identical. Independent review approved
+the correction and its validation boundary. The final **28 focused Rust cases**
+and strict all-target Clippy passed; the initial module-declaration-order compile
+error is retained separately from the successful corrected run.
+
+A private validation driver imported that exact committed production helper and
+created a separate corrected artifact set. Every PNG passed native decoding and
+expected dimensions; all **40 landscape PNGs** report canonical viewer
+orientation. Independent chunk comparison verified pixel/profile byte identity
+for all 80 files; a decoded representative comparison reported zero pixel
+differences. Contact-sheet review covered all eight contexts, and the corrected
+representative displayed correctly in the metadata-aware viewer. This verifies
+scene/theme/orientation and file integrity, not that all scrollable content must
+fit a single viewport or that G1 accessibility/manual acceptance is complete.
+
+Corrected files are in
+`.build/release-screenshots-20261022-matrix-canonical/` (80 PNGs plus the public
+manifest). Original matrix files remain unchanged in
+`.build/release-screenshots-20261022-matrix/`; the earlier ten-screen slice is
+also retained. The public schema, filenames and layout are unchanged. Its git
+revision identifies the export correction; `canonical-export.json` beside the
+native receipts separately records the native capture revision, exporter source
+hash and per-file source/output hashes. The corrected manifest SHA-256 is
+`e69f75a90acad5dc7937105f0720ab75daf3dc882e7fc5d83e426aa2517f1fe7`.
+
+The native capture is not relabelled as execution at the correction revision.
+The app, native test journey, fixtures, service setup and build/selection inputs
+are unchanged between the two revisions; only post-capture metadata processing,
+its Rust regressions and audit entries changed. This input equivalence and direct
+production-helper replay avoid repeating the long native builds.
+
+G5's agreed default screenshot matrix is now evidenced. Optional video capture
+was not run. G1/G2/G6/G7/G8 remain separate active acceptance groups, signed macOS
+remains deferred, and the inconclusive iPad interaction observation is unchanged.
+#369 and #362 remain open. The earlier `3af98f7` CI completed successfully,
+including 608 host passes plus the named unsigned-Keychain skip and 629 iOS
+passes with no skips/runtime warnings; final correction-head CI is a separate
+publication gate.
