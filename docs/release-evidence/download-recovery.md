@@ -125,3 +125,51 @@ complete environment metadata was not retained for those runs.
 If a non-user termination cannot be induced reliably on the selected device,
 record the row as blocked with that limitation; do not substitute a force-quit
 result or mark the row complete.
+
+## Background-event completion ordering (2026-10-22)
+
+A controlled native delegate regression against baseline `d8670295` demonstrated
+that the OS completion could run while delivered chunk reconciliation remained
+held. This violates the [background-session completion contract](https://developer.apple.com/documentation/uikit/uiapplicationdelegate/application(_:handleeventsforbackgroundurlsession:completionhandler:)).
+It is a processing-order defect; no physical transfer loss or stall was observed.
+The four accepted scenarios above and their user-approved evidence waivers remain
+unchanged.
+
+The fix synchronously admits durable callback work before returning from each
+delegate method. Finish-events captures that admitted set and awaits its durable
+processing. Later callbacks are excluded. A retry releases its admission after
+its retry deadline/state is saved, before waiting for future backoff.
+
+The corrected regression completes the fixture's first track, delivers the last
+three bytes of its second track through native URLSession/URLProtocol, and holds
+manifest reconciliation. Both the pre-handoff and completion-time observations
+read saved JSON directly; `storage.records()` is deliberately excluded because
+it reconciles files itself. The original-ordering control failed with premature
+completion and `[false]` versus `[true]` for the delivery-time durable snapshot; the fixed run passed one exact test with zero skips, expected failures
+or runtime warnings. The final assertion requires the saved manifest to be
+complete inside the completion closure, exactly one completion and an 8-byte file.
+
+Retained local bundles: `.build/background-completion-corrected-red.xcresult` and
+`.build/background-completion-corrected-green.xcresult`. Earlier attempts remain
+retained: the rejected repeated selector and missing fixture argument executed
+zero tests; two fixture-invalid post-fix attempts each failed one test (a queued
+first track, then a mutating precondition read). The initial red result is
+superseded as causal proof by the corrected original-ordering control.
+
+Owning validation: `.build/background-completion-owner.xcresult` executed all
+629 app tests with zero failures, skips, expected failures or runtime warnings.
+The exact result tree includes both new tests and the extended retry case.
+The durability identity also passed in the isolated corrected-green bundle.
+Strict Swift formatting and `mise run docs:check` passed. Xcode emitted its
+existing operating-system-build parsing (`invalidDigitCount`) diagnostic; the
+native result reported no runtime warnings. Final PR checks are recorded on the
+delivery PR, separately from these local runs.
+
+The companion fence test holds a later callback while requiring the earlier
+handoff to complete. The existing retry/network-loss case now requires handoff
+while its retry sleeper remains gated and retains its recovery/pause assertions.
+These are controlled app-hosted callback tests with explicit finish-events
+delivery; they do not establish physical daemon wake, suspension or relaunch.
+Both paired iPhones were unavailable during this investigation. A new physical
+OS-wake receipt would require an available controlled signed iPhone and a
+multi-range download, without using the App Switcher force-quit gesture.

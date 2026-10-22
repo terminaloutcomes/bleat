@@ -1362,6 +1362,10 @@ be retired before cancellation during startup and network recovery. Late or
 repeated callbacks from those retired transfers must not re-arm recovery or
 change their replacements.
 
+The OS background-events completion handler must wait for durable reconciliation
+of callbacks already delivered. Future callbacks and an already-persisted retry’s
+backoff must not extend that handoff.
+
 All restored accounts must be registered with the download model before the
 background session is created or restoration can suspend and deliver callbacks.
 Restore downloads once with the complete account set, rather than resuming

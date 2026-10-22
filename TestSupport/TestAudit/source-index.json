@@ -10505,6 +10505,18 @@
       "name": "scan_budget_mode_is_read_only_and_rejects_invalid_counts",
       "line": 117,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testBackgroundEventsCompletionWaitsForDurableChunkReconciliation",
+      "line": 9143,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testBackgroundEventFenceDoesNotWaitForLaterCallbacks",
+      "line": 9267,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [
