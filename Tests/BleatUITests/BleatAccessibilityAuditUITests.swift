@@ -343,15 +343,18 @@ final class BleatAccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(
             element.waitForExistence(timeout: 10), "Missing \(element)")
         XCTAssertTrue(element.isHittable, "Not hittable \(element)")
+        let appFrame = app.frame
+        // Bounds and target dimensions must describe the same AX observation.
+        let frame = element.frame
         XCTAssertTrue(
-            app.frame.contains(element.frame), "Out-of-bounds \(element)")
+            appFrame.contains(frame), "Out-of-bounds \(element): \(frame)")
         XCTAssertGreaterThanOrEqual(
-            element.frame.width, 43.5,
-            "Target is narrower than 44 points: \(element)"
+            frame.width, 43.5,
+            "Target is narrower than 44 points: \(element): \(frame)"
         )
         XCTAssertGreaterThanOrEqual(
-            element.frame.height, 43.5,
-            "Target is shorter than 44 points: \(element)"
+            frame.height, 43.5,
+            "Target is shorter than 44 points: \(element): \(frame)"
         )
         return element
     }

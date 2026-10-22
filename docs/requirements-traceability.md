@@ -518,6 +518,28 @@ font-weight-only distinction was found in the audited journeys.
 | iPad Pro 13-inch (M5) Simulator | Increase Contrast | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
 | iPad Pro 13-inch (M5) Simulator | Bold Text | iOS 26.5 (23F77) | Xcode 26.6 (17F113) | Passed 3 of 3 `BleatAccessibilityAuditUITests` journeys |
 
+
+### 22 October geometry-query correction and remaining iPad failure
+
+At main `dd63da4`, the previously unrun iPad Bold Text configuration passed
+login and primary journeys, then failed playback's 43.5-point mini-player width
+assertion. A separate instrumented reproduction retained successive frames of
+852 × 44, `CGRect.null` (`inf, inf, 0, 0`), and 852 × 44, with existence and
+hittability true and one matching button. Its tree and screenshot show the wide
+control. This demonstrates inconsistent successive accessibility frame queries;
+it does not identify the underlying framework/publication cause.
+
+`assertMinimumTarget` now samples one rectangle for bounds, width and height.
+Null and undersized sampled rectangles still fail; both 43.5-point thresholds,
+existence/hittability checks and original waits remain. There is no retry or
+production change. At code head `72226c1`, the original three-case iPad Bold Text
+sequence passed with zero skips/runtime warnings and all 12 named screenshots
+retained and visually reviewed without obvious blocking clipping or overlap.
+The selected Increase Contrast playback case passed mini-player geometry but
+failed later waiting for `player.screen` after a tap at the correct button
+centre. That failure is retained without retry and remains unresolved; neither
+this result nor the historical matrix certifies current full-matrix acceptance.
+
 ## VoiceOver semantic audit
 
 The 2026-08-31 automated audit exercised login, Home, Library, Search, Book
