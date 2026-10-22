@@ -216,3 +216,40 @@ secret gate exercises the live helper's relevant compile-gated journey. Retained
 configured accessibility evidence remains tied to its actual source; no
 accessibility matrix, screenshot or device acceptance is inferred from a standard
 UI pass. The unrelated unreproduced iPad geometry observation stays under #369.
+
+
+### Implementing-revision outcomes and acceptance boundary
+
+At clean `65a889c8d978a4701ce0b40fb89f5306b7a2b2c3`, each of the two
+download-status and two edit-progress identities passed individually twice
+(eight executions). The owning standard Simulator selection passed 627 app
+cases and 119 UI cases; six named opt-in cases were expected skips. No failures,
+expected failures or runtime warnings were reported. All ten original fixture
+UI identities and all four app gate lifecycle identities executed and passed.
+The six skips are external-URL host confirmation, live online/offline journeys,
+release screenshots, and Release-secret refresh/logout; they are not passing
+coverage. The dedicated accessibility class is excluded from this owning lane.
+
+The outer execution wrapper was interrupted and has no final exit receipt.
+The original native core owner continued without restart or signalling; macOS
+process-exit observation recorded its exit 0. Both original result bundles were
+independently checked against their recorded discovery and exact test outcomes.
+No replacement owning run was started. Private receipts retain that distinction.
+
+Additional configured attempts are retained as unsuccessful validation, with
+zero native tests: the accessibility primary journey stopped at build exit 65
+with an internal CodeSign error for the Debug dylib; the Release secret gate
+stopped at build exit 65 because the host LLVM installation could not load its
+Z3 library through `sccache rustc -vV`. The latter passed seven scanner
+regressions, but did not run native Release journeys, archive or final scanning.
+Owned Simulators, containers, volumes and broker processes were verified retired.
+No signing/trust configuration, system installation or retry was used to hide
+these failures. Earlier successful configuration evidence retains its revision.
+
+These separate configuration limitations do not change the four original #375
+fixture-state criteria. Delivered state controls and lifecycle coverage plus the
+repeated affected journeys, owning lane and caller-diagnostic source review
+provide the scoped evidence; they do not establish whole-epic, accessibility
+matrix, live-server, Release scan or physical-device acceptance. The unrelated
+iPad observation remains unresolved under #369. Final review, published head,
+CI and merge receipts are recorded in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375).
