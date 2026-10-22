@@ -183,3 +183,73 @@ PR #417's missing-entry repair remains independent and unmerged. Broader
 #362/#369 semantic reconciliation, other subprocess owners and configuration
 acceptance remain open; the earlier local navigation snapshot at `002fc39`
 recorded725 moved references, not725 semantic defects. Owner: Bleat maintainers / @yaleman under #370/#369.
+
+## UI fixture caller failures (#375)
+
+The original fixture state controls remain delivered by #367/#436/#437: context
+download and transcript-cache gates own pending/release/completed state, and the
+edit fixture exposes observed progress and explicit completion. No production
+fixture behavior, test body, wait budget or playback-menu assertion changes here.
+
+The remaining caller-diagnostic corrections cover nine existing helpers. Five
+scroll helpers now forward their existing caller parameters for the bounded
+missing-container assertion. The accessibility floating-tab helper forwards
+caller parameters for overlap and exhaustion. Download-status and edit-progress
+wrappers forward all 12 and 19 existing assertions respectively. The live scroll
+helper retains twenty half-second existence checks/directional gestures and
+asserts final existence/hittability at its caller instead of silently returning
+after exhaustion. It accepts success reached by the twentieth gesture without
+adding a wait or gesture. All five other gesture loops and their predicates
+remain unchanged. The larger previous six-suite patch is preserved separately.
+
+The two download-status callers receive substantive records/index entries; the
+two edit callers receive current decisions while preserving historical reviews.
+Source review checks each caller's semantic postcondition rather than treating
+hittability or a completed gesture as download/playback completion.
+
+Run each of the two download-status and two edit-progress identities individually
+and repeatedly, then the supported owning standard UI lane. The existing
+`TestAsyncGateTests` lifecycle cases must pass in their owning app selection.
+Record exact source revisions, discovery/results, failures and expected skips
+in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375). The Release
+secret gate exercises the live helper's relevant compile-gated journey. Retained
+configured accessibility evidence remains tied to its actual source; no
+accessibility matrix, screenshot or device acceptance is inferred from a standard
+UI pass. The unrelated unreproduced iPad geometry observation stays under #369.
+
+
+### Implementing-revision outcomes and acceptance boundary
+
+At clean `65a889c8d978a4701ce0b40fb89f5306b7a2b2c3`, each of the two
+download-status and two edit-progress identities passed individually twice
+(eight executions). The owning standard Simulator selection passed 627 app
+cases and 119 UI cases; six named opt-in cases were expected skips. No failures,
+expected failures or runtime warnings were reported. All ten original fixture
+UI identities and all four app gate lifecycle identities executed and passed.
+The six skips are external-URL host confirmation, live online/offline journeys,
+release screenshots, and Release-secret refresh/logout; they are not passing
+coverage. The dedicated accessibility class is excluded from this owning lane.
+
+The outer execution wrapper was interrupted and has no final exit receipt.
+The original native core owner continued without restart or signalling; macOS
+process-exit observation recorded its exit 0. Both original result bundles were
+independently checked against their recorded discovery and exact test outcomes.
+No replacement owning run was started. Private receipts retain that distinction.
+
+Additional configured attempts are retained as unsuccessful validation, with
+zero native tests: the accessibility primary journey stopped at build exit 65
+with an internal CodeSign error for the Debug dylib; the Release secret gate
+stopped at build exit 65 because the host LLVM installation could not load its
+Z3 library through `sccache rustc -vV`. The latter passed seven scanner
+regressions, but did not run native Release journeys, archive or final scanning.
+Owned Simulators, containers, volumes and broker processes were verified retired.
+No signing/trust configuration, system installation or retry was used to hide
+these failures. Earlier successful configuration evidence retains its revision.
+
+These separate configuration limitations do not change the four original #375
+fixture-state criteria. Delivered state controls and lifecycle coverage plus the
+repeated affected journeys, owning lane and caller-diagnostic source review
+provide the scoped evidence; they do not establish whole-epic, accessibility
+matrix, live-server, Release scan or physical-device acceptance. The unrelated
+iPad observation remains unresolved under #369. Final review, published head,
+CI and merge receipts are recorded in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375).

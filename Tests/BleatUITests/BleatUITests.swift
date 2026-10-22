@@ -1051,7 +1051,9 @@ final class BleatUITests: XCTestCase {
 
     @MainActor
     private func assertBookDetailDownloadStatusFits(
-        contentSize: UIContentSizeCategory
+        contentSize: UIContentSizeCategory,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         let app = launch(
             scenario: "--ui-testing-context-download-removal",
@@ -1062,7 +1064,8 @@ final class BleatUITests: XCTestCase {
             ]
         )
         let book = app.descendants(matching: .any)["home.book.ui-book"]
-        XCTAssertTrue(book.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            book.waitForExistence(timeout: 10), file: file, line: line)
         book.tap()
         let detail = app.descendants(matching: .any)["book.detail"]
         let status = app.descendants(matching: .any)[
@@ -1077,19 +1080,25 @@ final class BleatUITests: XCTestCase {
             }
             detail.swipeUp()
         }
-        XCTAssertTrue(status.exists)
-        XCTAssertTrue(status.label.contains("Paused"))
-        XCTAssertTrue(status.label.contains("80/160 KB"))
-        XCTAssertTrue(app.frame.contains(status.frame))
-        XCTAssertTrue(stop.isHittable)
-        XCTAssertTrue(app.frame.contains(stop.frame))
-        XCTAssertLessThanOrEqual(status.frame.maxX, stop.frame.minX)
+        XCTAssertTrue(status.exists, file: file, line: line)
+        XCTAssertTrue(status.label.contains("Paused"), file: file, line: line)
+        XCTAssertTrue(
+            status.label.contains("80/160 KB"), file: file, line: line)
+        XCTAssertTrue(app.frame.contains(status.frame), file: file, line: line)
+        XCTAssertTrue(stop.isHittable, file: file, line: line)
+        XCTAssertTrue(app.frame.contains(stop.frame), file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            status.frame.maxX, stop.frame.minX, file: file, line: line)
         let progress = app.progressIndicators["book.detail.downloadProgress"]
-        XCTAssertTrue(progress.exists)
+        XCTAssertTrue(progress.exists, file: file, line: line)
         XCTAssertGreaterThanOrEqual(
-            status.frame.minX, progress.frame.minX - 0.5)
-        XCTAssertLessThanOrEqual(status.frame.maxX, progress.frame.maxX + 0.5)
-        XCTAssertLessThanOrEqual(status.frame.maxY, progress.frame.minY)
+            status.frame.minX, progress.frame.minX - 0.5, file: file, line: line
+        )
+        XCTAssertLessThanOrEqual(
+            status.frame.maxX, progress.frame.maxX + 0.5, file: file, line: line
+        )
+        XCTAssertLessThanOrEqual(
+            status.frame.maxY, progress.frame.minY, file: file, line: line)
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Book detail download - \(contentSize.rawValue)"
@@ -1839,46 +1848,58 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    private func checkEditDuringDownload(scenario: String) {
+    private func checkEditDuringDownload(
+        scenario: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         let app = launch(
             scenario: scenario,
             additionalArguments: ["--ui-testing-edit-download-progress"])
         let book = app.descendants(matching: .any)["home.book.ui-book"]
-        XCTAssertTrue(book.waitForExistence(timeout: 5))
+        XCTAssertTrue(book.waitForExistence(timeout: 5), file: file, line: line)
         book.tap()
         let actions = app.buttons["book.detail.actions"]
-        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            actions.waitForExistence(timeout: 5), file: file, line: line)
         let menuStarted = Date()
         actions.tap()
         XCTAssertLessThan(
             Date().timeIntervalSince(menuStarted), 10,
-            "Progress kept the actions menu busy until the download finished")
+            "Progress kept the actions menu busy until the download finished",
+            file: file, line: line)
         let edit = app.buttons["Edit"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 3))
+        XCTAssertTrue(edit.waitForExistence(timeout: 3), file: file, line: line)
         // Native menu actions expose their title, not a custom accessibility value.
         let advance = app.buttons["Advance Download (0)"]
-        XCTAssertTrue(advance.waitForExistence(timeout: 3))
-        XCTAssertTrue(advance.isHittable)
+        XCTAssertTrue(
+            advance.waitForExistence(timeout: 3), file: file, line: line)
+        XCTAssertTrue(advance.isHittable, file: file, line: line)
         advance.tap()
         XCTAssertTrue(
             app.buttons["Advance Download (2)"].waitForExistence(timeout: 10),
-            "Expected two download progress callbacks while Edit remained open")
+            "Expected two download progress callbacks while Edit remained open",
+            file: file, line: line)
         XCTAssertTrue(
-            edit.exists, "Download progress dismissed the actions menu")
+            edit.exists, "Download progress dismissed the actions menu",
+            file: file, line: line)
         guard edit.exists else { return }
         edit.tap()
         let title = app.textFields["metadata.title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            title.waitForExistence(timeout: 3), file: file, line: line)
         guard title.exists else { return }
         title.tap()
         title.typeText(" draft")
         let draft = title.value as? String
         let completion = app.buttons["testing.download.complete"]
-        XCTAssertTrue(completion.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            completion.waitForExistence(timeout: 5), file: file, line: line)
         XCTAssertEqual(
             completion.label, "Download: running",
-            "Enter the draft while the download is active")
-        XCTAssertTrue(completion.isHittable)
+            "Enter the draft while the download is active", file: file,
+            line: line)
+        XCTAssertTrue(completion.isHittable, file: file, line: line)
         completion.tap()
         let completed = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in
@@ -1886,21 +1907,28 @@ final class BleatUITests: XCTestCase {
             }, object: nil)
         XCTAssertEqual(
             XCTWaiter.wait(for: [completed], timeout: 10), .completed,
-            "The completed fixture must restore its downloaded record before the draft assertion"
+            "The completed fixture must restore its downloaded record before the draft assertion",
+            file: file, line: line
         )
-        XCTAssertTrue(title.exists, "Download progress dismissed the editor")
-        XCTAssertEqual(title.value as? String, draft)
+        XCTAssertTrue(
+            title.exists, "Download progress dismissed the editor", file: file,
+            line: line)
+        XCTAssertEqual(title.value as? String, draft, file: file, line: line)
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            actions.waitForExistence(timeout: 3), file: file, line: line)
         actions.tap()
         app.buttons["Edit"].tap()
-        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            title.waitForExistence(timeout: 3), file: file, line: line)
         XCTAssertNotEqual(
-            title.value as? String, draft, "Cancel should discard the draft")
+            title.value as? String, draft, "Cancel should discard the draft",
+            file: file, line: line)
         title.tap()
         title.typeText(" saved")
         app.buttons["metadata.save"].tap()
-        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(
+            title.waitForNonExistence(timeout: 5), file: file, line: line)
     }
 
     @MainActor
@@ -5137,7 +5165,9 @@ final class BleatLiveUITests: XCTestCase {
     private func scrollUntilHittable(
         _ element: XCUIElement,
         in app: XCUIApplication,
-        direction: LiveScrollDirection
+        direction: LiveScrollDirection,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
         for _ in 0..<20 {
             if element.waitForExistence(timeout: 0.5), element.isHittable {
@@ -5150,6 +5180,13 @@ final class BleatLiveUITests: XCTestCase {
                 app.swipeDown()
             }
         }
+        let exists = element.exists
+        let hittable = exists && element.isHittable
+        XCTAssertTrue(
+            hittable,
+            "Expected \(element) to exist and be hittable after 20 \(direction) swipes; "
+                + "observed exists=\(exists), hittable=\(hittable)",
+            file: file, line: line)
     }
 
     private var releaseSecretScanIsEnabled: Bool {

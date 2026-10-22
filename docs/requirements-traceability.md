@@ -1060,3 +1060,12 @@ deferred macOS work, optional source concerns and configuration/device acceptanc
 It credits #438/#439 and retains the unresolved iPad observation without claiming
 epic or release completion. Counts use distinct units; missing audit entries and
 historical follow-up labels are not current bug counts.
+
+## Original UI fixture caller criteria (#375)
+
+[Scoped caller-failure review](release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375)
+records the remaining source-location/exhaustion corrections while preserving
+the already delivered explicit fixture signals and lifecycle tests. The four
+original acceptance criteria and revision-specific execution records are tracked
+in [issue #375](https://github.com/terminaloutcomes/bleat/issues/375); separate
+accessibility/device observations do not redefine this fixture-state scope.

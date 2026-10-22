@@ -1585,12 +1585,12 @@
     {
       "id": "BleatUITests::testBookDetailEditSurvivesSameBookDownloadProgress",
       "path": "Tests/BleatUITests/BleatUITests.swift",
-      "line": 1666,
+      "line": 1840,
       "purpose": "Book Detail Edit Survives Same Book Download Progress.",
       "review": {
         "status": "reviewed",
-        "decision": "followup",
-        "reason": "Inspected forwarding body and shared checkEditDuringDownload helper. The 42-second DispatchQueue delay is intended to span simulated download progress and eventual completion, but it does not observe a completion signal; follow-up records replacing the guessed delay with semantic progress/completion synchronization."
+        "decision": "keep",
+        "reason": "The shared helper now uses explicit observed progress and completion signals rather than the historical 42-second inference; draft, cancellation and save postconditions remain, and all 19 assertions forward the calling test location."
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
@@ -1603,17 +1603,37 @@
         "status": "focused_repetitions_verified_owning_pending",
         "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
         "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      },
+      "historicalReviewBefore375": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Inspected forwarding body and shared checkEditDuringDownload helper. The 42-second DispatchQueue delay is intended to span simulated download progress and eventual completion, but it does not observe a completion signal; follow-up records replacing the guessed delay with semantic progress/completion synchronization."
+      },
+      "issue375CallerReview": {
+        "rules": {
+          "1": "Assert paused text, progress and layout relationships; edit cases retain observed byte updates, completed state, draft/cancel/save outcomes.",
+          "2": "Existing bounded existence/property waits and gesture counts are unchanged.",
+          "3": "Typography and editing are fixture UI checks; they make no physical playback-position claim.",
+          "4": "Tests own the launched fixture application; no new tasks, observers or cancellation policy are introduced.",
+          "5": "A fresh deterministic launch establishes paused/download-edit state independently for each case.",
+          "6": "These are Simulator fixtures; live, accessibility configuration, screenshots and device acceptance remain separate.",
+          "7": "No retry loop, extra sleep, larger wait or relaxed assertion is added.",
+          "8": "Every changed bounded assertion receives the caller file and line; live exhaustion now fails with expected and observed reachability.",
+          "9": "Retain exact focused repetitions and owning-lane outcomes at their executed source revision in issue #375; skipped opt-in cases are not passing coverage."
+        },
+        "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
       }
     },
     {
       "id": "BleatUITests::testBookDetailEditSurvivesUnrelatedDownloadProgress",
       "path": "Tests/BleatUITests/BleatUITests.swift",
-      "line": 1672,
+      "line": 1846,
       "purpose": "Book Detail Edit Survives Unrelated Download Progress.",
       "review": {
         "status": "reviewed",
-        "decision": "followup",
-        "reason": "Inspected forwarding body and shared checkEditDuringDownload helper. The 42-second DispatchQueue delay is intended to span simulated download progress and eventual completion, but it does not observe a completion signal; follow-up records replacing the guessed delay with semantic progress/completion synchronization."
+        "decision": "keep",
+        "reason": "The shared helper now uses explicit observed progress and completion signals rather than the historical 42-second inference; draft, cancellation and save postconditions remain, and all 19 assertions forward the calling test location."
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
@@ -1626,6 +1646,26 @@
         "status": "focused_repetitions_verified_owning_pending",
         "evidence": "docs/release-evidence/test-reliability-audit.md#follow-on-timing-batch-2026-10-16",
         "note": "Explicit progress/completion or actual playback-time observations replace elapsed-time inference. Two focused executions passed; owning UI class execution is separate evidence."
+      },
+      "historicalReviewBefore375": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Inspected forwarding body and shared checkEditDuringDownload helper. The 42-second DispatchQueue delay is intended to span simulated download progress and eventual completion, but it does not observe a completion signal; follow-up records replacing the guessed delay with semantic progress/completion synchronization."
+      },
+      "issue375CallerReview": {
+        "rules": {
+          "1": "Assert paused text, progress and layout relationships; edit cases retain observed byte updates, completed state, draft/cancel/save outcomes.",
+          "2": "Existing bounded existence/property waits and gesture counts are unchanged.",
+          "3": "Typography and editing are fixture UI checks; they make no physical playback-position claim.",
+          "4": "Tests own the launched fixture application; no new tasks, observers or cancellation policy are introduced.",
+          "5": "A fresh deterministic launch establishes paused/download-edit state independently for each case.",
+          "6": "These are Simulator fixtures; live, accessibility configuration, screenshots and device acceptance remain separate.",
+          "7": "No retry loop, extra sleep, larger wait or relaxed assertion is added.",
+          "8": "Every changed bounded assertion receives the caller file and line; live exhaustion now fails with expected and observed reachability.",
+          "9": "Retain exact focused repetitions and owning-lane outcomes at their executed source revision in issue #375; skipped opt-in cases are not passing coverage."
+        },
+        "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6",
+        "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
       }
     },
     {
@@ -9379,6 +9419,64 @@
         "evidence": "docs/release-evidence/test-runner-verification.md#release-secret-scan-simulator-build-admission-362",
         "execution_manifest": ".build/i362-release-scan-final-checks.json"
       }
+    },
+    {
+      "id": "BleatUITests::testBookDetailDownloadStatusWrapsAtLargestDynamicType",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 1041,
+      "purpose": "Verify paused download status and progress layout at largest accessibility Dynamic Type.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "The calling test selects largest accessibility Dynamic Type; its shared helper asserts paused 80/160 KB text, fully visible status and Stop control, nonoverlap and progress-label ordering. Caller file/line is now retained."
+      },
+      "profile": "ui_fixture",
+      "enablement": "Default BleatUITests Simulator target; deterministic UI fixture launch.",
+      "setup_dependencies": "Fresh --ui-testing-context-download-removal and --ui-testing-paused-download launch with an explicit preferred content size.",
+      "action_postconditions": "Open the book detail, scroll within the existing 20-gesture budget, then assert paused text, status/Stop reachability and layout relative to progress. Screenshot is supporting evidence.",
+      "synchronization_timeout": "Existing 10-second book wait and 20-gesture maximum; no fixed-delay download completion inference.",
+      "rules": {
+        "1": "Assert paused text, progress and layout relationships; edit cases retain observed byte updates, completed state, draft/cancel/save outcomes.",
+        "2": "Existing bounded existence/property waits and gesture counts are unchanged.",
+        "3": "Typography and editing are fixture UI checks; they make no physical playback-position claim.",
+        "4": "Tests own the launched fixture application; no new tasks, observers or cancellation policy are introduced.",
+        "5": "A fresh deterministic launch establishes paused/download-edit state independently for each case.",
+        "6": "These are Simulator fixtures; live, accessibility configuration, screenshots and device acceptance remain separate.",
+        "7": "No retry loop, extra sleep, larger wait or relaxed assertion is added.",
+        "8": "Every changed bounded assertion receives the caller file and line; live exhaustion now fails with expected and observed reachability.",
+        "9": "Retain exact focused repetitions and owning-lane outcomes at their executed source revision in issue #375; skipped opt-in cases are not passing coverage."
+      },
+      "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6",
+      "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
+    },
+    {
+      "id": "BleatUITests::testBookDetailDownloadStatusFitsAtDefaultDynamicType",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 1048,
+      "purpose": "Verify paused download status and progress layout at default large Dynamic Type.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "The calling test selects default large Dynamic Type; its shared helper asserts paused 80/160 KB text, fully visible status and Stop control, nonoverlap and progress-label ordering. Caller file/line is now retained."
+      },
+      "profile": "ui_fixture",
+      "enablement": "Default BleatUITests Simulator target; deterministic UI fixture launch.",
+      "setup_dependencies": "Fresh --ui-testing-context-download-removal and --ui-testing-paused-download launch with an explicit preferred content size.",
+      "action_postconditions": "Open the book detail, scroll within the existing 20-gesture budget, then assert paused text, status/Stop reachability and layout relative to progress. Screenshot is supporting evidence.",
+      "synchronization_timeout": "Existing 10-second book wait and 20-gesture maximum; no fixed-delay download completion inference.",
+      "rules": {
+        "1": "Assert paused text, progress and layout relationships; edit cases retain observed byte updates, completed state, draft/cancel/save outcomes.",
+        "2": "Existing bounded existence/property waits and gesture counts are unchanged.",
+        "3": "Typography and editing are fixture UI checks; they make no physical playback-position claim.",
+        "4": "Tests own the launched fixture application; no new tasks, observers or cancellation policy are introduced.",
+        "5": "A fresh deterministic launch establishes paused/download-edit state independently for each case.",
+        "6": "These are Simulator fixtures; live, accessibility configuration, screenshots and device acceptance remain separate.",
+        "7": "No retry loop, extra sleep, larger wait or relaxed assertion is added.",
+        "8": "Every changed bounded assertion receives the caller file and line; live exhaustion now fails with expected and observed reachability.",
+        "9": "Retain exact focused repetitions and owning-lane outcomes at their executed source revision in issue #375; skipped opt-in cases are not passing coverage."
+      },
+      "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6",
+      "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -9523,5 +9621,87 @@
     "scope": "Active native phase process group under direct host-driver SIGTERM; not detached group ownership, deferred macOS app changes or Release cleanup.",
     "execution": "Required-signing owning host at e9835ae:609 exact identities passed,zero skips/failures;604core+5transcription products equal canonical inventory;configuration hash unchanged. Final harness correction changes no driver/host inputs:corrected CLI owning target4/4 and all5affected identities individually passed;entitlement owning1/1 and shared native-owner34/34 results remain tied to unchanged source. Strict Clippy,formatting and docs pass. Original individual workflow observation failure and every compile/parser attempt remain retained. Final delta review and exact-head CI pending.",
     "evidence": "docs/release-evidence/test-runner-verification.md#host-driver-cancellation-362"
+  },
+  "issue375_caller_failures": {
+    "scope": "Nine existing helpers; existing gesture loops, waits, predicates, tolerances, test bodies and production fixtures are unchanged. Only caller attribution and a terminal live failure assertion change.",
+    "helpers": [
+      {
+        "id": "BleatAccessibilityAuditUITests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatAccessibilityAuditUITests.swift",
+        "line": 384,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "de9ee1bbb7de4b86c4957b03cabb3548490ae95f82a5926582732463963984ca"
+      },
+      {
+        "id": "BleatAccessibilityAuditUITests/scrollAboveFloatingTabs",
+        "path": "Tests/BleatUITests/BleatAccessibilityAuditUITests.swift",
+        "line": 420,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "de9ee1bbb7de4b86c4957b03cabb3548490ae95f82a5926582732463963984ca"
+      },
+      {
+        "id": "BleatDynamicTypeUITests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatDynamicTypeUITests.swift",
+        "line": 262,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "9d25bd619acbebaecca43fcd18a116478a814308f0bf8d864e5df5b6cc6419b8"
+      },
+      {
+        "id": "BleatLandscapeUITests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatLandscapeUITests.swift",
+        "line": 226,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "26d2dffb36657dd260c87744ba7795fcb1f6235f5d4efd38c0a81a94236355b4"
+      },
+      {
+        "id": "BleatReleaseScreenshotTests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatReleaseScreenshotTests.swift",
+        "line": 428,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "ac67c21b03dd3106f6107a51b44e430c8ceaa36e7d00752f9bc38dd10c78f382"
+      },
+      {
+        "id": "BleatVoiceOverUITests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatVoiceOverUITests.swift",
+        "line": 281,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "e184be54c607caef30eec68f9f8b3e8a7d1f31a9942d671c800c66cefecfdabe"
+      },
+      {
+        "id": "BleatUITests/assertBookDetailDownloadStatusFits",
+        "path": "Tests/BleatUITests/BleatUITests.swift",
+        "line": 1053,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6"
+      },
+      {
+        "id": "BleatUITests/checkEditDuringDownload",
+        "path": "Tests/BleatUITests/BleatUITests.swift",
+        "line": 1851,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6"
+      },
+      {
+        "id": "BleatLiveUITests/scrollUntilHittable",
+        "path": "Tests/BleatUITests/BleatUITests.swift",
+        "line": 5165,
+        "decision": "keep after caller-attribution correction",
+        "sourceSha256": "3c1ac440920f71d0722844705f2e90a0efb9949e68de2da3e5e4e518777cbab6"
+      }
+    ],
+    "rules": {
+      "1": "Assert paused text, progress and layout relationships; edit cases retain observed byte updates, completed state, draft/cancel/save outcomes.",
+      "2": "Existing bounded existence/property waits and gesture counts are unchanged.",
+      "3": "Typography and editing are fixture UI checks; they make no physical playback-position claim.",
+      "4": "Tests own the launched fixture application; no new tasks, observers or cancellation policy are introduced.",
+      "5": "A fresh deterministic launch establishes paused/download-edit state independently for each case.",
+      "6": "These are Simulator fixtures; live, accessibility configuration, screenshots and device acceptance remain separate.",
+      "7": "No retry loop, extra sleep, larger wait or relaxed assertion is added.",
+      "8": "Every changed bounded assertion receives the caller file and line; live exhaustion now fails with expected and observed reachability.",
+      "9": "Retain exact focused repetitions and owning-lane outcomes at their executed source revision in issue #375; skipped opt-in cases are not passing coverage."
+    },
+    "preservation": "The full prior six-suite patch is preserved separately; its gesture-loop changes are not included. Historical per-test decisions remain in historicalReviewBefore375.",
+    "execution": "Clean implementing revision 65a889c8d978a4701ce0b40fb89f5306b7a2b2c3: all four affected download-status/edit identities individually passed twice (8 executions); owning standard Simulator lane passed 627 app and 119 UI cases with six explicitly allowed opt-in skips and zero failures/runtime warnings. All ten original fixture UI identities and four app lifecycle identities passed. The interrupted outer tool wrapper has no exit receipt; the unchanged original native core owner continued without restart and its exit0 was observed through macOS kqueue; both native bundles independently passed canonical discovery/result verification. Separate accessibility attempt and Release secret gate stopped at build exit65 with zero native tests: internal CodeSign error and host LLVM missing Z3 library respectively. Seven scanner regressions passed; no new archive/final scan pass claimed. Owned resources retired. Earlier configuration results retain their actual revisions; final exact-head CI remains separately recorded in issue #375.",
+    "evidence": "docs/release-evidence/test-reliability-other-followups.md#ui-fixture-caller-failures-375"
   }
 }
