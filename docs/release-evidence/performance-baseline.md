@@ -206,6 +206,29 @@ remote data source, same cache):
 - Simulator tests: Release configuration via the `BleatPerformance` scheme.
 - iPad: removed from issue #46 scope.
 
+## Current-stable setup readiness correction (2026-10-22)
+
+At main `4c7bb10580728f6f831b7b6e4d92b374b068d2be`, the configured
+10,000-book run against pinned current-stable 2.37.0 stopped during fixture
+setup. The root scan completed all 10,000 items in 9m33s; the prefixed server
+was still scanning when the former 620-attempt budget expired at 7,909 items.
+**Zero native tests executed.** The disk/time guard did not stop the run.
+The original sanitized Compose log and execution receipt are retained locally;
+owned project containers and volumes were independently verified absent.
+This is evidence of an insufficient setup allowance, not an app test failure.
+
+The existing Rust generator now offers read-only `--print-scan-attempts` mode.
+The live harness delegates its count-scaled budget to that mode: ten items per
+attempt plus 120 startup attempts, giving 1,120 attempts for 10,000 books.
+Each HTTP request retains its own timeout, so this is an attempt budget,
+not a promise of exactly 1,120 seconds. The count must remain 1–100,000.
+Exact seeded-count validation, one-second polling interval, and native
+120-second load / 30-second cache-fallback assertions are unchanged.
+The CLI regression checks valid/invalid counts and proves this mode neither
+creates nor changes media. All three generator CLI regressions passed;
+independent review found no actionable issue. The configured rerun is pending;
+the historical 2.36 measurements above are not relabelled as 2.37 results.
+
 ## Remaining evidence gap
 
 - **Energy:** Simulator cannot measure energy; physical-device evidence is
