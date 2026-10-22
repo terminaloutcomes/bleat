@@ -10517,6 +10517,12 @@
       "name": "testBackgroundEventFenceDoesNotWaitForLaterCallbacks",
       "line": 9267,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testInterruptionResumePreservesLaterPauseAndOutputRemoval",
+      "line": 11860,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

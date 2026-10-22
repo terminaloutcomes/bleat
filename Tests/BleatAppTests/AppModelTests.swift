@@ -11856,6 +11856,63 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(atBoundary.localTime, 0)
     }
 
+    #if os(iOS)
+        func testInterruptionResumePreservesLaterPauseAndOutputRemoval()
+            async throws
+        {
+            for subsequentPause in ["none", "user", "outputRemoved"] {
+                let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+                let activation = TestAudioSessionActivation()
+                let playback = fixture.model(
+                    activation: activation,
+                    nowPlayingCoordinator: NowPlayingCoordinator(
+                        infoCenter: TestNowPlayingInfoPublisher(),
+                        registersRemoteCommands: false))
+                addTeardownBlock { @MainActor in
+                    await playback.stop()
+                    fixture.cleanUp()
+                }
+                await playback.startDownloaded(
+                    detail: fixture.detail, trackURLs: [fixture.audioURL],
+                    accountID: fixture.accountID, account: nil)
+                XCTAssertTrue(playback.isPlaybackRequested, subsequentPause)
+                XCTAssertEqual(activation.callCount, 1, subsequentPause)
+                playback.handleInterruption(
+                    typeValue: AVAudioSession.InterruptionType.began.rawValue,
+                    optionsValue: 0)
+                XCTAssertFalse(playback.isPlaybackRequested, subsequentPause)
+                XCTAssertEqual(playback.state, .paused, subsequentPause)
+                if subsequentPause == "user" {
+                    playback.pause()
+                } else if subsequentPause == "outputRemoved" {
+                    playback.handleRouteChange(
+                        reasonValue: AVAudioSession.RouteChangeReason
+                            .oldDeviceUnavailable.rawValue)
+                }
+                let savedPosition = playback.currentTime
+                playback.handleInterruption(
+                    typeValue: AVAudioSession.InterruptionType.ended.rawValue,
+                    optionsValue: AVAudioSession.InterruptionOptions
+                        .shouldResume
+                        .rawValue)
+                let shouldResume = subsequentPause == "none"
+                XCTAssertEqual(
+                    playback.isPlaybackRequested, shouldResume, subsequentPause)
+                XCTAssertEqual(
+                    activation.callCount, shouldResume ? 2 : 1, subsequentPause)
+                if !shouldResume {
+                    XCTAssertEqual(playback.state, .paused, subsequentPause)
+                    XCTAssertEqual(
+                        playback.runtimeSnapshotForTesting.playerRate, 0,
+                        subsequentPause)
+                    XCTAssertEqual(
+                        playback.currentTime, savedPosition,
+                        accuracy: 0.001, subsequentPause)
+                }
+            }
+        }
+    #endif
+
     func testMediaServicesResetRestoresPlayingAndPausedIntent() async throws {
         for shouldPlay in [true, false] {
             let fixture = try playbackRecoveryFixture()
@@ -28040,6 +28097,8 @@ final class AppModelTests: XCTestCase {
             )
         )
         buffer.frameLength = 8_000
+        let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+        for index in 0..<Int(buffer.frameLength) { samples[index] = 0 }
         for _ in 0..<audioSeconds {
             try audioFile.write(from: buffer)
         }

@@ -66,3 +66,45 @@ Simulator and disposable-server tests do not establish physical headphone/CarPla
 behavior, actual Bonjour resolution on a user's network, dedicated live WebSocket
 authentication/reconnect behavior, actual CloudKit deletion, or original-device
 CloudKit crash recovery. Those evidence gaps remain open under issue #339.
+
+## Audio interruption intent (2026-10-22)
+
+Controlled policy input against baseline `4b5829d2` reproduced stale interruption
+resume intent: playing → interruption began → user Pause or output removal →
+interruption ended with `shouldResume` requested playback again. In each later-
+pause case the activation count changed from one to two and the native silent
+player rate became 1.0 instead of remaining 0. Normal interruption resumption
+passed its control. One exact test failed, with zero skips or runtime warnings;
+its eight assertion failures are retained in
+`.build/audio-interruption-before.xcresult` and its exported activity tree.
+
+The fix retires pending interruption resume intent on Pause/output removal,
+preserves the prior intent when the interruption itself performs the pause,
+and consumes the saved intent before resuming. This follows the
+[Apple interruption guidance](https://developer.apple.com/library/archive/documentation/Audio/Conceptual/AudioSessionProgrammingGuide/HandlingAudioInterruptions/HandlingAudioInterruptions.html)
+without changing audio-session categories or route policies.
+
+The regression invokes the exact main-actor production policy handlers directly;
+only their access changed from private to internal. It uses independently owned
+local CAF media with explicitly zeroed samples, fake session activation, an
+isolated Now Playing publisher, and disabled system remote-command registration.
+It does not broadcast synthetic global notifications or operate personal devices.
+It proves app-side intent/rate behavior, not NotificationCenter adapter delivery,
+physical output routing, audible speaker playback, or the full Overcast/CarPlay/
+AirPods handoff. #341's accepted AirPods-only result and original background-
+recovery/VoiceOver evidence remain credited. Physical protocols stay separate.
+
+Post-fix focused validation passed one exact identity in
+`.build/audio-interruption-after.xcresult`. The owning app suite passed all 630
+identities in `.build/audio-interruption-owner.xcresult`, with zero failures,
+skips, expected failures or runtime warnings. Its exact result tree includes the
+new regression and adjacent reset, resume-activation, resolving-remote-Play and
+preparation-cancellation cases. Strict Swift formatting and documentation checks
+passed. Xcode retained its existing OS-build parsing/debugger diagnostics; native
+runtime warnings were empty. Final published-head CI is recorded on the PR.
+
+A separate Stop diagnostic-suspension witness also failed against the baseline
+while a ready silent player remained requested at rate 1.0 and its
+Now Playing snapshot stayed published. That witness is preserved separately in
+`.build/audio-stop-before.xcresult`; its fix is not included in this interruption
+slice. No Stop resolution or whole audio acceptance is claimed here.

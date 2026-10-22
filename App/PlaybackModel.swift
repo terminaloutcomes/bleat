@@ -1706,6 +1706,7 @@ final class PlaybackModel {
     }
 
     func pause() {
+        resumeAfterInterruption = false
         cancelSelectionResume?()
         guard !isAccountSwitchShutdownInProgress else {
             return
@@ -4079,7 +4080,7 @@ final class PlaybackModel {
     }
 
     #if os(iOS)
-        private func handleInterruption(
+        func handleInterruption(
             typeValue: UInt?,
             optionsValue: UInt
         ) {
@@ -4090,25 +4091,25 @@ final class PlaybackModel {
             }
             switch type {
             case .began:
-                resumeAfterInterruption = isPlaybackRequested
+                let wasPlaybackRequested = isPlaybackRequested
                 pause()
+                resumeAfterInterruption = wasPlaybackRequested
             case .ended:
                 let options = AVAudioSession.InterruptionOptions(
                     rawValue: optionsValue
                 )
-                if resumeAfterInterruption,
-                    options.contains(.shouldResume)
-                {
-                    play()
-                }
+                let shouldResume =
+                    resumeAfterInterruption
+                    && options.contains(.shouldResume)
                 resumeAfterInterruption = false
+                if shouldResume { play() }
             @unknown default:
                 resumeAfterInterruption = false
                 pause()
             }
         }
 
-        private func handleRouteChange(reasonValue: UInt?) {
+        func handleRouteChange(reasonValue: UInt?) {
             guard let reasonValue,
                 let reason = AVAudioSession.RouteChangeReason(
                     rawValue: reasonValue
