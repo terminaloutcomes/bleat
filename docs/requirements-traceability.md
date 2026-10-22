@@ -491,9 +491,10 @@ The supplied fixture CA is the HTTPS client's only root; redirects are disabled.
 The Rust contract/lifecycle suite has 25 cases, including interrupted Simulator
 creation recovery by an exact pre-registered run name. The complete scripts library
 suite passed 132 cases before the final capture-path review. This is unit and
-native-child evidence, not a ten-screen Simulator result. Native capture and
-visual-review evidence must be recorded separately before claiming G5 acceptance;
-this migration does not close #369 or the other device/manual gates.
+native-child evidence. The [retained native receipt](release-evidence/release-screenshots-rust.md)
+separately verifies one iPhone portrait/light Release journey, its ten PNGs,
+visual review and owned cleanup. The other seven default combinations remain
+unverified; this migration does not close #369 or the other device/manual gates.
 
 ## Bold Text, Increase Contrast, and interaction-target audit
 

@@ -36,6 +36,7 @@
   - [Core test follow-ups](release-evidence/test-reliability-core-followups.md)
   - [UI, live and tooling follow-ups](release-evidence/test-reliability-other-followups.md)
 - [Statistics validation](statistics-validation.md)
+- [Release screenshot Rust migration](release-evidence/release-screenshots-rust.md)
 - [CarPlay release evidence](release-evidence/carplay.md)
 - [Performance baseline](release-evidence/performance-baseline.md)
 - [Telemetry security evidence](release-evidence/telemetry-release-security.md)
