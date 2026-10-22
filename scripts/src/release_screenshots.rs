@@ -2,6 +2,7 @@
 mod capture;
 mod model;
 mod native;
+mod png;
 #[cfg(test)]
 mod tests;
 

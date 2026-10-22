@@ -9877,6 +9877,54 @@
       "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
       "action_postconditions": "Recover a created Simulator from its exact pre-registered name when no UDID returned, reject malformed rows, and preserve another run device.",
       "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_png_normalization_preserves_pixels_profiles_and_unrelated_text",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 422,
+      "purpose": "Remove stale EXIF and Adobe XMP from a synthetic PNG container while preserving exact pixel/profile and unrelated text chunks; native decoding is a separate check.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Remove stale EXIF and Adobe XMP from a synthetic PNG container while preserving exact pixel/profile and unrelated text chunks; native decoding is a separate check. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Remove stale EXIF and Adobe XMP from a synthetic PNG container while preserving exact pixel/profile and unrelated text chunks; native decoding is a separate check.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_png_normalization_is_idempotent",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 449,
+      "purpose": "Keep every byte of an already canonical PNG container unchanged across repeated normalization.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Keep every byte of an already canonical PNG container unchanged across repeated normalization. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Keep every byte of an already canonical PNG container unchanged across repeated normalization.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_png_normalization_rejects_incomplete_or_ambiguous_containers",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 464,
+      "purpose": "Reject invalid signatures, truncated or oversized chunks, missing end chunks, malformed end chunks and trailing bytes before file replacement.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Reject invalid signatures, truncated or oversized chunks, missing end chunks, malformed end chunks and trailing bytes before file replacement. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Reject invalid signatures, truncated or oversized chunks, missing end chunks, malformed end chunks and trailing bytes before file replacement.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -10107,7 +10155,7 @@
   "releaseScreenshotRustMigration": {
     "baseRevision": "c9a142bc28a5864d3f7bd718d2aebc5ca9555fdf",
     "scope": "scripts/src/release_screenshots/tests.rs",
-    "newReviewedCases": 25,
+    "newReviewedCases": 28,
     "boundary": "Only newly introduced workflow regressions are recorded. This does not repair the separate 85 known omissions or certify the retained semantic-review queues."
   }
 }

@@ -400,3 +400,81 @@ fn release_screenshot_interrupted_create_recovers_only_exact_owned_names() {
         .is_err()
     );
 }
+
+fn screenshot_png_chunks(chunks: &[(&[u8; 4], &[u8])]) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    // Container-only fixtures: checksum/pixel decoding remains the native
+    // decoder's responsibility. These tests assert exact retained bytes.
+    for (kind, payload) in chunks {
+        bytes.extend_from_slice(
+            &u32::try_from(payload.len())
+                .expect("small fixture")
+                .to_be_bytes(),
+        );
+        bytes.extend_from_slice(*kind);
+        bytes.extend_from_slice(payload);
+        bytes.extend_from_slice(&[0; 4]);
+    }
+    bytes
+}
+
+#[test]
+fn release_screenshot_png_normalization_preserves_pixels_profiles_and_unrelated_text() {
+    let keep: &[(&[u8; 4], &[u8])] = &[
+        (b"IHDR", b"dimensions"),
+        (b"iCCP", b"display-p3-profile"),
+        (b"iTXt", b"Caption\0useful text"),
+        (b"IDAT", b"exact compressed pixels"),
+        (b"IEND", b""),
+    ];
+    let input = screenshot_png_chunks(&[
+        keep[0],
+        keep[1],
+        (b"eXIf", b"orientation8"),
+        (
+            b"iTXt",
+            b"XML:com.adobe.xmp\0<tiff:Orientation>8</tiff:Orientation>",
+        ),
+        keep[2],
+        keep[3],
+        keep[4],
+    ]);
+    assert_eq!(
+        super::png::normalize_orientation_metadata(&input).expect("normalize"),
+        screenshot_png_chunks(keep)
+    );
+}
+
+#[test]
+fn release_screenshot_png_normalization_is_idempotent() {
+    let original = screenshot_png_chunks(&[
+        (b"IHDR", b"dimensions"),
+        (b"IDAT", b"pixels"),
+        (b"IEND", b""),
+    ]);
+    let once = super::png::normalize_orientation_metadata(&original).expect("already normalized");
+    assert_eq!(once, original);
+    assert_eq!(
+        super::png::normalize_orientation_metadata(&once).expect("repeat"),
+        original
+    );
+}
+
+#[test]
+fn release_screenshot_png_normalization_rejects_incomplete_or_ambiguous_containers() {
+    let valid = screenshot_png_chunks(&[(b"IHDR", b"dimensions"), (b"IEND", b"")]);
+    let mut trailing = valid.clone();
+    trailing.push(0);
+    let mut enormous = valid.clone();
+    enormous[8..12].copy_from_slice(&u32::MAX.to_be_bytes());
+    for bytes in [
+        b"not png".to_vec(),
+        valid[..valid.len() - 1].to_vec(),
+        trailing,
+        enormous,
+        screenshot_png_chunks(&[(b"IHDR", b"dimensions")]),
+        screenshot_png_chunks(&[(b"IEND", b"not empty")]),
+    ] {
+        assert!(super::png::normalize_orientation_metadata(&bytes).is_err());
+    }
+}

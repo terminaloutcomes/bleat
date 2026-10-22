@@ -10481,6 +10481,24 @@
       "name": "release_screenshot_interrupted_create_recovers_only_exact_owned_names",
       "line": 381,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_png_normalization_preserves_pixels_profiles_and_unrelated_text",
+      "line": 422,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_png_normalization_is_idempotent",
+      "line": 449,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "name": "release_screenshot_png_normalization_rejects_incomplete_or_ambiguous_containers",
+      "line": 464,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

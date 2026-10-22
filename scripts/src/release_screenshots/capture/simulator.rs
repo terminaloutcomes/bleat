@@ -323,6 +323,13 @@ impl Session {
                     .run("normalize landscape image", &mut cmd, 30, true)?;
                 fs::rename(rotated, &source)?;
             }
+            if orientation == "landscapeLeft" {
+                let normalized = crate::release_screenshots::png::normalize_orientation_metadata(
+                    &fs::read(&source)?,
+                )
+                .map_err(Error::Invalid)?;
+                fs::write(&source, normalized)?;
+            }
             model::validate_dimensions(self.native.dimensions(&source)?, dimensions, orientation)?;
             let target = destination.join(name);
             fs::copy(&source, &target)?;
