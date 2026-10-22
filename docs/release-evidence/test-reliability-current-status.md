@@ -2,61 +2,109 @@
 
 Issue [#362](https://github.com/terminaloutcomes/bleat/issues/362) remains open.
 This checkpoint reconciles landed implementation with evidence and the
-maintainer's 21 October priority: finish important demonstrated problems and
+maintainer's 22 October priority: finish important demonstrated problems and
 acceptance work; defer macOS application changes and optional hardening.
 An unchecked historical bullet is not itself an unfixed bug.
 
 ## Revision and counting
 
-Source checkpoint: `c71298edfb918678145cdd97bf5fb62f8422f19e` (merged #440).
-It contains the reviewed #437 integration, #438 fallback-test completion repair,
-and #439 host-driver cancellation repair. Subsequent #430 updated the mise
-action, and #440 repaired two demonstrated Release gate build failures.
-[Exact-head Validate Bleat39632228095](https://github.com/terminaloutcomes/bleat/actions/runs/39632228095)
-passed at #440's reviewed `cdd7a38`. Historical executions below retain their
-actual revisions; the owning local Simulator run remains tied to `adc7ac4`.
+Application/test source checkpoint: `f59a7629cd3156ca8086690f2bbc4a4169e01608`
+(merged #442). Its tree matches reviewed/tested
+`fd40daca480a0ef1be6aeb817c95a361c8bfaf7f`. #431's SwiftProtobuf update,
+#440/#441's Release repairs/receipt, and #442's original #375 caller diagnostics
+are landed. [Exact-head Validate Bleat39700230098](https://github.com/terminaloutcomes/bleat/actions/runs/39700230098)
+verified 608 host passes plus the expected unsigned-Keychain skip, 629 iOS
+passes with zero skips/runtime warnings, and 332 Rust passes. Current results
+and earlier unsuccessful attempts remain revision-specific; none is erased or
+relabeled as a new execution by this documentation refresh.
 
 Count different units separately:
 
 | Category | Count / current disposition |
 | --- | --- |
-| Proven unresolved implementation bugs | 0 currently confirmed after #438/#439/#440. Two demonstrated Release gate build blockers are repaired, and the full gate passed with the documented explicit-version setting. This is not a claim the app is bug-free. |
+| Proven unresolved implementation bugs | 0 currently confirmed after the bounded fixes and focused investigation. This is not a claim that the app is bug-free. |
 | Unresolved observed validation failures | 1: iPad Increase Contrast mini-player geometry; see below. |
-| Important implementation remainder | 0 confirmed code fixes after #440. This receipt reconciles the delivered work; full Release archive/surface-scan acceptance passed with the documented explicit release version. |
-| Missing structured audit/index records | 87 source-confirmed declarations: 25 app, 8 UI, 54 Rust. These are record omissions, not reproduced defects. |
+| Important implementation remainder | No demonstrated code fix is currently queued. #375 is delivered; full Release archive/surface-scan acceptance passed at the reviewed #442 head. |
+| Known missing structured audit/index entries | 85 existing declarations: 25 app, 6 UI, 54 Rust. Both navigation-index rows and primary per-test audit rows are absent for this known list; tests themselves exist. See the counting/assurance boundary below. |
 | Existing-record review queue | 71 app semantic rechecks and 241 core helper-context rechecks retained from the bounded prior reconciliation. These overlap source concerns and are not implementation-task counts. |
 | Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
-| Optional/unproven hardening groups | 22, listed below; no implementation is authorized merely by a source concern. |
-| Broader configuration/device acceptance | 8 tracked groups: G4 completed; 7 remain separate configuration/device dispositions, not seven new code defects. |
+| Optional/unproven source concerns | 20 residual groups after #442 delivered UI-1/UI-7 and the required caller attribution. These are backlogged concerns, not confirmed defects or an implementation queue. |
+| Configuration/device acceptance | G4 is complete. Six groups remain active (G1/G2/G5/G6/G7/G8); G3 signed macOS acceptance is explicitly deferred. These are validation groups, not six code defects. |
 
-The previous 19-PR backlog (#417–#429, #432–#437) is merged, as are #438/#439/#440.
+The previous 19-PR backlog (#417–#429, #432–#437) is merged, as are #438–#442.
 Do not report those PRs, the old 140 follow-up labels, or navigation line drift as
 remaining code work. Full audit compliance still requires the record review
 and configuration dispositions; this checkpoint does not certify it.
 
+## What the 85 missing entries mean
+
+This is a known documentation-coverage list, not 85 missing tests, 85 failing
+tests, or 85 demonstrated implementation fixes. The preserved source-declaration
+comparison at `58223214` found 87 `(source path, function name)` pairs absent
+from `TestSupport/TestAudit/source-index.json`'s `declarations` list. Rechecking
+that exact list at `f59a762` finds 85 absent: 25 app, 6 UI and 54 Rust. All 85
+functions still exist uniquely in source. #442 added the two existing
+download-status entries, so the known list fell from 87 to 85. This bounded
+recheck is not a new repository-wide discovery or semantic audit.
+
+For those 85 pairs, the primary per-test rows are also absent from
+`app.json`'s `methods` or `other.json`'s `tests`, as applicable. They are not merely
+rows with a stale line number. Some have review or execution evidence elsewhere:
+for example, the cover-save/artwork case is mentioned in another app-review
+section. Missing a structured row does not establish that a test was never run
+or reviewed; that existing evidence must be credited rather than recreated.
+
+Concrete existing tests in the known list include:
+
+- [Cold-start cover revalidation](https://github.com/terminaloutcomes/bleat/blob/f59a7629cd3156ca8086690f2bbc4a4169e01608/Tests/BleatAppTests/CoverCacheLifecycleTests.swift#L44):
+  `testColdStartRevalidatesBeforeReturningAndPersistsUnchangedTimestampReplacement`.
+- [Typed sign-in failure UI](https://github.com/terminaloutcomes/bleat/blob/f59a7629cd3156ca8086690f2bbc4a4169e01608/Tests/BleatUITests/BleatUITests.swift#L1484):
+  `testTypedHomeFailureWithoutDownloads`.
+- [Exact download-runner results](https://github.com/terminaloutcomes/bleat/blob/f59a7629cd3156ca8086690f2bbc4a4169e01608/scripts/tests/fixed_runner_verification.rs#L87):
+  `download_runner_accepts_exact_results_without_literal_tab_matching`.
+
+The index stores location/name/language for navigation and inventory comparison;
+the audit row records purpose, setup, action/postcondition, waits/budgets,
+cleanup, compiler/skip conditions, applicable rules and a reasoned keep/fix/
+follow-up disposition. Filling the gap means inspecting the relevant body and
+helpers, linking valid existing review/execution, and adding or linking an honest
+record plus index row. A template or name match cannot certify the nine rules;
+no 85-row bulk repair or semantic review was performed by this status refresh.
+
+The original [#362 scope](https://github.com/terminaloutcomes/bleat/issues/362)
+requested a per-test audit across targets. The JSON/index format was the chosen
+tracking mechanism, not 85 additional product requirements. Missing rows do not
+stop the tests building/running or invalidate independently verified passes.
+They limit a claim of complete per-test audit reconciliation from this ledger.
+The separate 71-app/241-core queue concerns existing records needing semantic
+rechecks; it is not the same omission list and must not be added to it as a bug
+count. Stale prose references are a third, separate tracking problem.
+
 ## Child acceptance reconciliation
 
-Four children are closed: #370, #371, #373 and #376. Four remain open: #369,
-#372, #374 and #375, for the explicit formal/configuration dispositions below.
-These are issue counts, not four newly discovered bugs.
+Five children are closed: #370, #371, #373, #375 and #376. Three remain open:
+#369, #372 and #374, for the explicit formal/configuration dispositions below.
+These are issue counts, not three newly discovered bugs.
 
 | Issue | Landed source/evidence | Current disposition |
 | --- | --- | --- |
-| #369 | #417 adds the five host and nine build-helper records, moved-path history and parity checker. #418 and #437 reconcile reviewed command-owner records. The eight checker regressions and preservation checks are retained in [the audit](test-reliability-audit.md#missing-audit-entry-repair-369). | The old 14-record repair is delivered. Keep comprehensive inventory/semantic reconciliation open; retain the 87 omissions and existing-record queue explicitly. |
+| #369 | #417 adds the five host and nine build-helper records, moved-path history and parity checker. #418 and #437 reconcile reviewed command-owner records. The eight checker regressions and preservation checks are retained in [the audit](test-reliability-audit.md#missing-audit-entry-repair-369). | The old 14-record repair is delivered. Keep comprehensive inventory/semantic reconciliation open; retain the 85 known omissions and the distinct existing-record review queue explicitly. |
 | #370 | The small `build-scripts` package, caller-environment/dependency/sandbox regressions and workflow consumers are present. #418 bounds the three build-helper regression commands. Actual Xcode build-for-testing without compiler/SDK overrides is retained in [build-helper evidence](test-reliability-audit.md#build-helper-dependency-isolation-2026-10-16); current app CI continues to build using it. | Closed after reconciliation: all four bounded extraction acceptance items have implementation/execution evidence. Later independent subprocess hardening is a separate optional concern. |
 | #371 | Exact native identities, multiplicities and skip policy are verified by the current runners. #419/#425/#427–#429 own runner/report commands, #420 rejects malformed children, #426 supplies legacy-summary audit records, #432 preserves repository-root results, #435 preserves typed paid-build failures, and #439 handles driver cancellation. See [runner evidence](test-runner-verification.md). | Closed after reconciliation: all four selection/parser/execution acceptance items are delivered. Retained JSON/schema replay is distinct from fresh native execution. Further aggregate/nested-owner hardening is not a demonstrated selection defect. |
 | #372 | Account/transport/telemetry/callback/observer fixes through #434 are merged. Specific original semantics, focused repetitions and signed owners are retained in [core follow-ups](test-reliability-core-followups.md), #437 and #439. | Delivered changed fixtures are credited; broad per-record/helper audit remains in #369. Keep formal acceptance open rather than certify every host helper from one passing suite. |
 | #373 | Controlled-clock progress reset, foreground/background expiry and callback-drain tests remain; production defaults use `ContinuousClock`. Cache tests retain parent-supervised startup/cancellation/timeout/success boundaries. | Closed after reconciliation: all four bounded clock/cache criteria have evidence: original focused repetitions at `39fd45a`, clock-specific native selections retained in #428, plus all named clock/drain and five cache cases in the retained 609-pass signed report at `e9835ae`. This does not establish live CloudKit/device behavior. |
 | #374 | #386 and later app fixes, #393, #438 and the current 627-test app owner cover changed iOS semantics. #438's controlled ordering witness reproduced the actual premature completion assertion; [exact-head CI39581982755](https://github.com/terminaloutcomes/bleat/actions/runs/39581982755) verified 629 iOS outcomes. | No confirmed open app defect from the focused investigation. Formal source audit and deferred macOS configuration remain explicit; do not count source-only candidates as bugs. |
-| #375 | #436 supplies post-registration gate cancellation/repeated release/reuse; #437 fixes the edit-download fixture menu. Three native app fixture regressions and 629 iOS CI outcomes are retained at #437. | Current owning standard UI validation passed 119 tests with six explicitly allowed skips; 627 application tests also passed. Playback-menu semantic assertions remain. Optional caller-diagnostic edits are preserved unpublished, not silently counted as delivered. |
+| #375 | #436 supplies gate cancellation/repeated release/reuse; #437 fixes the edit-download fixture menu. #442 delivers nine helper caller/exhaustion diagnostics and the two existing download-status audit/index rows, preserving loops, waits and semantic assertions. | Closed: all four original criteria are satisfied. Four affected journeys passed individually twice; the implementing owner passed 627 app and 119 UI cases with six named opt-in skips. Exact-head CI and normal merge are verified. The larger gesture-loop patch stays separate; the iPad observation is not declared fixed. |
 | #376 | Already closed: #380/#381 cleanup, two Audiobookshelf profiles, two app-live journeys and specific artwork phone acceptance have revision-specific evidence. | Preserve its closed state. The remaining configuration/device gates below are not certified by that closure. |
 
 The signed evidence above is 609 distinct identities (604 core and five
 transcription), zero failures/skips, executed at `e9835ae`. Its 215 tracked host
-inputs remained identical through #439 and `adc7ac4`. At this checkpoint 214
-remain identical; #440 changed the paid-build validator's iOS branch, retaining
-its macOS branch. The signed result is retained execution at `e9835ae`, not a new
-signed run of #440 or this documentation checkpoint. #439's exact-head
+inputs remained identical through #439 and `adc7ac4`. At the historical #440
+checkpoint `c71298e`, 214 remained identical; the paid-build validator changed
+its iOS branch while retaining its macOS branch. #431 later changed the package
+manifest/resolutions. No current all-input equivalence claim is made here. The
+signed result remains execution at `e9835ae`, not a new signed run of this
+checkpoint; current unsigned CI retains its explicit Keychain exclusion. #439's exact-head
 [CI39585563313](https://github.com/terminaloutcomes/bleat/actions/runs/39585563313)
 verified 608 host passes plus the named unsigned Keychain skip, 629 iOS passes
 with zero failures/skips/expected failures/runtime warnings, and 329 Rust passes
@@ -64,17 +112,26 @@ across 22 nonempty targets. The 26 other Cargo targets were compile-only.
 
 ## Important local acceptance
 
-Current owning Simulator/UI gate: **passed**, command
-`BLEAT_SKIP_HOST=1 mise run test:local`, at `adc7ac4`. The Release Simulator
-build passed; all 627 application identities passed with no skips, and the UI
-selection contained 125 identities: 119 passed and six explicitly allowed skips.
-Canonical result/discovery checks found no failures, expected failures or runtime
-warnings. Allowed skips were external-URL confirmation, the two opt-in live
-journeys, Release screenshots, and Release-secret refresh/logout. Configured
-accessibility tests remain a separate gate. Private result bundles, exact
-identities and receipt are retained in `.build/i362-important-ui-verified.json`.
-The owning run did not change source or configuration. Existing signed host
-evidence is reused rather than relabelled as a new run.
+Latest owning Simulator/UI evidence: **passed native owner and verified bundles**,
+command `BLEAT_SKIP_HOST=1 mise run test:local`, at clean `65a889c8d978a4701ce0b40fb89f5306b7a2b2c3`.
+All 627 app identities passed; UI selected 125 identities: 119 passed and six
+explicitly allowed opt-in skips. All ten original fixture UI and four app
+lifecycle identities passed. There were no failures, expected failures or runtime
+warnings. The interrupted outer execution wrapper has no final exit receipt;
+the unchanged original native core owner continued without restart and its
+exit 0 was observed through the host process-exit mechanism. Both original
+bundles independently passed canonical discovery/result verification.
+The earlier successful `adc7ac4` gate remains historical evidence, not a rerun.
+
+The six owning-lane skips remain external-URL confirmation, two live journeys,
+Release screenshots and Release-secret refresh/logout. Separately executing some
+of those configurations later does not change this run's skip count. Dedicated
+accessibility cases were excluded. Four affected download-status/edit-progress
+cases also passed individually twice at `65a889c`; only audit/evidence metadata
+and main ancestry changed before reviewed #442 head `fd40daca`.
+See [#375's delivered criteria and receipts](https://github.com/terminaloutcomes/bleat/issues/375).
+
+### Historical Release repair attempts (21 October 2026)
 
 The first real Release secret-leakage gate then failed at build-for-testing,
 after seven scanner Python regressions passed and before any native App/UI
@@ -126,16 +183,53 @@ is inferred.
 
 ## Configuration and device groups
 
-| Gate | Existing evidence / remaining prerequisite |
-| --- | --- |
-| G1 Configured accessibility/layout/VoiceOver | Standard UI is distinct from configured matrices. Retain the partial Bold Text/Increase Contrast result and unresolved observation below. Dynamic Type, VoiceOver, landscape and spoken/gesture manual evidence must retain their actual configurations. |
-| G2 Opt-in performance/large library | App 10k and local cache workloads have revision-specific evidence. The opt-in 250k statistics benchmark has historical Release measurements in [Statistics Validation](../statistics-validation.md); default host/CI does not execute it. Disposable-server large-library acceptance still needs its owned dataset and exact selection. |
-| G3 Signed macOS app/authentication | Explicitly deferred by the maintainer; host tests and compilation do not substitute for app/authentication/relaunch execution. Five preserved implementation groups remain in #369. |
-| G4 Release-secret/archive | Completed at clean `4542700` using the documented checked-in marketing version and fresh UTC build: seven Python/nine native passes, inspected archive, nine surfaces / 667 files / 1,677,234,199 bytes, zero prohibited findings and two expected server redactions. Cleanup verified. Original failures retained; no source metadata bump, validation bypass or deployment. |
-| G5 Release screenshots | Release fixture/configuration prerequisite and screenshot review; a normal UI pass is not screenshot acceptance. |
-| G6 Physical CarPlay | Applicable connected hardware and scenario observations required. #377's artwork acceptance does not establish this gate. |
-| G7 Physical audio routes | Applicable Bluetooth/AirPlay/headphone/interruption hardware and scenario observations required. Simulator playback does not establish routing. |
-| G8 Physical background transfer | Physical OS/background/termination scenarios and actual transfer outcomes required. Simulator recovery does not establish execution in the background. |
+G4 is now freshly complete at clean `fd40daca`: seven scanner regressions and
+all nine exact native cases passed, the normal unsigned Release archive was
+inspected (version `2026.10.14`, build `20261022.0143.03`), and all nine surfaces
+passed final scanning: 667 files / 1,684,100,832 bytes, zero prohibited findings
+and two expected server-artifact redactions. Owned runtime resources were
+verified retired. The [approved public receipt](https://github.com/terminaloutcomes/bleat/issues/369)
+retains the earlier signing, Homebrew LLVM/Z3 and disk-guard interruptions.
+The successful run selected an already-installed consistent rustup toolchain
+through caller PATH only; no package installation, persistent environment,
+signing/security change or release metadata bump was made. The earlier
+`4542700` acceptance above remains historical, not overwritten.
+
+G3 signed macOS app/authentication and its five implementation groups remain
+explicitly deferred, not completed. Host tests or compilation do not substitute
+for that app/authentication/relaunch acceptance.
+
+Six groups remain active. Available tools are not passing evidence; unrun
+configurations are not reported as blocked merely because they are unrun.
+The 22 October no-build checks found the configured Xcode/iOS 26.5 Simulator,
+running Docker, required screenshot tools, valid checked-in screenshot fixtures
+and local fixture-hostname resolution. No acceptance suite was executed for
+this documentation pass.
+
+| Group | Already evidenced | Executable here / remaining prerequisite |
+| --- | --- | --- |
+| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The original iPad width failure remains unexplained. | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
+| G2 Opt-in performance/large library | App 10k/cache and the 250k-slice Release benchmark retain revision-specific [measurements](../statistics-validation.md); they are not new runs. | Existing synthetic-library generator and `BLEAT_LARGE_LIBRARY_COUNT` live-harness mode support an owned 10k dataset and exact paged-load/cache-fallback test. Dataset seeding and capacity preflight remain work, not a demonstrated missing private account/hardware permission. No large workload ran here. |
+| G5 Release screenshots | The checked-in five-book/ten-screen fixture and no-build cover/manifest validation pass. G4 proves a separate Release archive, not screenshot capture. | The local disposable HTTPS/Docker/Simulator capture pipeline is available; native capture/export and image review remain unexecuted. Full agreed device/orientation/appearance coverage and visual review must be recorded before closing this group. |
+| G6 Physical CarPlay | App/CarPlay semantics and #377's specific artwork phone observation remain revision-specific evidence. | Needs a user-operated compatible iPhone and actual CarPlay head unit/scenario observations. No such session was performed; Simulator/phone artwork evidence does not replace it. |
+| G7 Physical audio routes | Simulator readiness/rate/position coverage remains useful within its scope. | Needs a suitable installed device build, applicable Bluetooth/AirPlay/headphone hardware, interruptions and observed route changes. This pass did not establish hardware availability or request installation/pairing access. |
+| G8 Physical background transfer | Simulator recovery and completion assertions retain their source-bound outcomes. | Needs a user-operated physical iOS device, owned server/transfer and background/termination/relaunch observations. Simulator recovery does not prove OS background execution. No physical session was performed. |
+
+### Smallest next acceptance unit
+
+Run only the previously unexecuted **iPad Bold Text configuration**: one owned
+iPad Pro 13-inch (M5), iOS 26.5, portrait, Increase Contrast disabled and Bold
+Text enabled/rebooted as in the supported accessibility harness. Select the
+three existing `testBoldTextLoginAccessibilityAudit`,
+`testBoldTextPrimaryJourneysAccessibilityAudit` and
+`testBoldTextPlaybackAccessibilityAudit` identities, not the full matrix.
+Completion requires three exact passes with no skips/failures/runtime warnings,
+effective-setting assertions, all 12 named screenshots retained/reviewed, source
+and configuration recorded, and owned-device cleanup verified. Recheck free
+space and retain the 3 GiB guard. Native host/Xcode/CoreSimulator access is
+required and available; no production credentials, new worktree or physical
+hardware are required. This unit does not close all of G1 or resolve the
+Increase Contrast observation. It has not been executed by this refresh.
 
 ### Preserved iPad observation
 
@@ -148,7 +242,18 @@ cause. Relevant app/test code matched main; unpublished exhaustion diagnostics
 were not reached. The exact original result, recording, focused pass and restored
 Simulator settings are retained under #375.
 
-Disposition: **observed failure, not reproduced once, cause unresolved**.
+A later single diagnostic run at private `137fae4971a8ed98eb4b899023b6894d8d600c9b`
+matched the iPad/runtime/Increase Contrast configuration. It passed its exact
+identity with no skips/failures/runtime warnings and captured the frame used by
+the width assertion: **852 × 44 points**, equal to the immediate bounds and
+subsequent reads; one accessibility node was present and hittable, and the tree
+and screenshot agreed. The three relevant app files match the original failure
+source. Extra diagnostic observations can perturb subsequent timing, so this is
+a negative reproduction, not an explanation of the historical zero frame.
+The private probe/attachments are preserved; the published source was restored,
+no workaround shipped, and no retry loop was used.
+
+Disposition: **original observed failure, cause still unresolved; no fix claimed**.
 Do not call it fixed or infer a persistent layout defect. No blind retry,
 threshold relaxation or speculative app patch is part of this reconciliation.
 
@@ -160,13 +265,13 @@ observed impact before turning a source concern into a code fix.
 
 | Stable group | Count | Disposition |
 | --- | --- | --- |
-| UI-1–UI-7 | 7 | Caller/exhaustion diagnostics across six suites and download-status wrappers; preserved unpublished; no demonstrated product failure caused by these paths. |
+| UI-2–UI-6 residual loop proposals | 5 | #442 delivered the required caller attribution and the UI-1 live-exhaustion/UI-7 wrapper goals. Only the larger proposed gesture-loop changes remain preserved unpublished; unchanged loops are not demonstrated product defects. |
 | HOST deadlines plus HOST-2–HOST-4 | 4 | Additional execution deadlines and nested bearer/migration/cache ownership concerns. #439 closes the demonstrated driver-SIGTERM boundary only; do not re-open that completed fix as a deadline redesign. |
 | REL-1–REL-5 | 5 | Broader release broker/Simulator/server/telemetry retirement and evidence preservation; no current observed failure established. |
 | APP-CURRENT-01–APP-CURRENT-05 | 5 | Consumption/admission/cleanup/player-diagnostic source candidates from the earlier audit. No reproduced defect is inferred from sleeps, yields or a possible failure path alone. |
 | RUST-1 | 1 | Broader HTTP-fixture retirement concern; not a demonstrated current failure. |
 
-The five MAC groups are deferred separately, not included in these 22 concerns.
+The five MAC groups are deferred separately, not included in these 20 residual concerns.
 No optional source concern is a required per-slice merge gate. Missing records,
 source review and unrun configurations remain explicit rather than being
 papered over with generic keep labels or an unsupported epic-complete claim.
