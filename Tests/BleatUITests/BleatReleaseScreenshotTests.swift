@@ -520,7 +520,7 @@ final class BleatReleaseScreenshotTests: XCTestCase {
         let environment = ProcessInfo.processInfo.environment
         guard environment["BLEAT_SCREENSHOT_ENABLED"] == "1" else {
             throw XCTSkip(
-                "Run scripts/capture-release-screenshots.sh to provide screenshot data."
+                "Run mise run screenshots to provide screenshot data."
             )
         }
         guard let server = environment["BLEAT_SCREENSHOT_APP_URL"],

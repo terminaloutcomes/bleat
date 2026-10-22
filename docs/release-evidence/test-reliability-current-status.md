@@ -29,7 +29,7 @@ Count different units separately:
 | Existing-record review queue | 71 app semantic rechecks and 241 core helper-context rechecks retained from the bounded prior reconciliation. These overlap source concerns and are not implementation-task counts. |
 | Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
 | Optional/unproven source concerns | 20 residual groups after #442 delivered UI-1/UI-7 and the required caller attribution. These are backlogged concerns, not confirmed defects or an implementation queue. |
-| Configuration/device acceptance | G4 is complete. Six groups remain active (G1/G2/G5/G6/G7/G8); G3 signed macOS acceptance is explicitly deferred. These are validation groups, not six code defects. |
+| Configuration/device acceptance | G4 and G5 are complete. Five groups remain active (G1/G2/G6/G7/G8); G3 signed macOS acceptance is explicitly deferred. These are validation groups, not five code defects. |
 
 The previous 19-PR backlog (#417–#429, #432–#437) is merged, as are #438–#442.
 Do not report those PRs, the old 140 follow-up labels, or navigation line drift as
@@ -199,18 +199,18 @@ G3 signed macOS app/authentication and its five implementation groups remain
 explicitly deferred, not completed. Host tests or compilation do not substitute
 for that app/authentication/relaunch acceptance.
 
-Six groups remain active. Available tools are not passing evidence; unrun
-configurations are not reported as blocked merely because they are unrun.
-The 22 October no-build checks found the configured Xcode/iOS 26.5 Simulator,
-running Docker, required screenshot tools, valid checked-in screenshot fixtures
-and local fixture-hostname resolution. No acceptance suite was executed for
-this documentation pass.
+Five groups remain active after G5's screenshot matrix. Available tools are not
+passing evidence; unrun configurations are not reported as blocked merely
+because they are unrun. The earlier 22 October no-build preflight established
+local prerequisites. Subsequent native screenshot execution and the lossless
+export correction are recorded in the G5 receipt below; they do not close other
+acceptance groups.
 
 | Group | Already evidenced | Executable here / remaining prerequisite |
 | --- | --- | --- |
-| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The original iPad width failure remains unexplained. | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix; the later bounded result is recorded below. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
+| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The single-frame width-query correction merged in #444; the later Increase Contrast tap/presentation observation remains inconclusive (diagnostics below). | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix; the later bounded result is recorded below. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
 | G2 Opt-in performance/large library | App 10k/cache and the 250k-slice Release benchmark retain revision-specific [measurements](../statistics-validation.md); they are not new runs. | Existing synthetic-library generator and `BLEAT_LARGE_LIBRARY_COUNT` live-harness mode support an owned 10k dataset and exact paged-load/cache-fallback test. Dataset seeding and capacity preflight remain work, not a demonstrated missing private account/hardware permission. No large workload ran here. |
-| G5 Release screenshots | The checked-in five-book/ten-screen fixture and no-build cover/manifest validation pass. G4 proves a separate Release archive, not screenshot capture. | The local disposable HTTPS/Docker/Simulator capture pipeline is available; native capture/export and image review remain unexecuted. Full agreed device/orientation/appearance coverage and visual review must be recorded before closing this group. |
+| G5 Release screenshots — complete | The [Rust migration receipt](release-screenshots-rust.md#full-matrix-and-orientation-correction) records eight exact native passes and 80 visually reviewed PNGs across both devices, appearances and orientations. Original files are retained. The observed EXIF/XMP orientation defect is corrected losslessly with separate capture/export provenance. | Default matrix, file/manifest validation and independently verified owned cleanup are evidenced. Optional video was not run. This does not substitute for G1 manual accessibility or physical-device groups. |
 | G6 Physical CarPlay | App/CarPlay semantics and #377's specific artwork phone observation remain revision-specific evidence. | Needs a user-operated compatible iPhone and actual CarPlay head unit/scenario observations. No such session was performed; Simulator/phone artwork evidence does not replace it. |
 | G7 Physical audio routes | Simulator readiness/rate/position coverage remains useful within its scope. | Needs a suitable installed device build, applicable Bluetooth/AirPlay/headphone hardware, interruptions and observed route changes. This pass did not establish hardware availability or request installation/pairing access. |
 | G8 Physical background transfer | Simulator recovery and completion assertions retain their source-bound outcomes. | Needs a user-operated physical iOS device, owned server/transfer and background/termination/relaunch observations. Simulator recovery does not prove OS background execution. No physical session was performed. |

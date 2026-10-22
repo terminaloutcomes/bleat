@@ -95,6 +95,12 @@ server:
 mise run screenshots
 ```
 
+The Rust `capture-release-screenshots` command owns setup, native command
+deadlines, signals, the 3 GiB disk guard, capture validation and cleanup. It
+reads the pinned current-stable profile directly; screenshot capture no longer
+executes the shell profile or JSON/image-validation scripts. Docker, Xcode and
+its Simulator tools, and macOS `sips` remain native prerequisites.
+
 This is intentionally separate from `mise run check` and the ordinary live
 fixtures. It builds `Bleat` and `BleatUITests` in Release with CloudKit
 disabled, creates one iPhone 17 Pro Max and one 13-inch iPad Pro simulator,
@@ -128,9 +134,17 @@ run, in portrait and landscape-left; dark screenshots use a `-dark` filename
 suffix (for example `01-home-dark.png`). Landscape screenshots sit below the
 device's `landscapeLeft/` directory, and the manifest records each capture's
 actual orientation and pixel dimensions. On failure, redacted Compose logs and the relevant
-`.xcresult` bundles remain under the same directory for inspection. Everything
+`.xcresult` bundles remain under the same directory for inspection. Screenshots
+already exported before a later failure are retained too. The final manifest is
+written only after every selected capture verifies. Everything
 else—including generated media, Caddy certificates, Docker volumes, credentials,
-and simulators—is removed automatically.
+and simulators—is removed automatically, with cleanup failures reported.
+Compact native summary/identity receipts remain in
+`.build/release-screenshot-receipts/`; successful large result bundles are
+removed. An existing output directory is never replaced. Preserve or select a
+new destination with `BLEAT_SCREENSHOT_OUTPUT_DIRECTORY` before another run.
+If owned resources cannot be retired, its private workspace is retained for
+diagnosis rather than deleting a mounted directory.
 
 The default task selects the latest installed iOS runtime. Override it when a
 release requires a specific installed runtime or presentation:
@@ -149,7 +163,12 @@ mise run screenshots
 that set. `BLEAT_SCREENSHOT_ORIENTATIONS` accepts `portrait` and/or
 `landscapeLeft` (default `portrait,landscapeLeft`). For a focused landscape
 audit, set the appearance to `light` and the orientation to `landscapeLeft`.
-The device list must contain one supported iPhone and one supported iPad. The
+The device list must contain exactly one supported iPhone and optionally one
+supported iPad. For a bounded ten-screen slice, set
+`BLEAT_SCREENSHOT_DEVICES=com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max`,
+`BLEAT_SCREENSHOT_APPEARANCES=light`, and
+`BLEAT_SCREENSHOT_ORIENTATIONS=portrait`. This selection does not certify the
+other device/orientation/appearance combinations. The
 harness reports the available runtime device types when a selection is
 unavailable. Add a scene by extending the ordered `screenshots` list in the
 fixture and adding a matching named attachment in `BleatReleaseScreenshotTests`;

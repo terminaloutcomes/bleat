@@ -477,6 +477,26 @@ carries the fix and closes the issue on merge. Simulator results do not establis
 physical-device accessibility behavior; manual spoken-output and gesture work
 remains tracked separately by #39.
 
+## Release screenshot workflow ownership
+
+The #369 screenshot workflow is implemented by the Rust
+`capture-release-screenshots` command and `release_screenshots` modules. The
+capture/check shell entrypoints are removed; the command reads the pinned live
+profile directly and retains the fixture, trusted local CA, HTTP range probe,
+Release build, exact native test and image/manifest contracts. Native tools
+remain invocation-owned with deadlines, signal retirement, a 3 GiB disk guard,
+and verified cleanup of only the generated project/containers/Simulators.
+The supplied fixture CA is the HTTPS client's only root; redirects are disabled.
+
+The Rust contract/lifecycle suite has 28 cases, including interrupted Simulator
+creation recovery and lossless removal of stale landscape orientation metadata. The complete scripts library
+suite passed 132 cases before the final capture-path review. This is unit and
+native-child evidence. The [retained native receipt](release-evidence/release-screenshots-rust.md)
+separately records the first iPhone slice and the eight-context default Release
+matrix: 80 PNGs, visual/file review and verified owned cleanup. Native capture
+at `3af98f7` and pixel-preserving export correction at `756431d` retain separate
+provenance. G5 is evidenced; this does not close #369 or other device/manual gates.
+
 ## Bold Text, Increase Contrast, and interaction-target audit
 
 The Now Playing close toolbar control exposes `player.close` while retaining

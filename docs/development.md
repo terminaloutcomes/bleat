@@ -611,6 +611,13 @@ before treating it as installable.
 
 ## Release screenshots
 
+`mise run screenshots` uses the Rust `capture-release-screenshots` command.
+`mise run screenshots:check` runs its Rust regressions and validates the actual
+fixture cover assets without Docker or a Simulator. The command retains
+exact native identity receipts, enforces a 3 GiB disk guard, and cleans only
+its own disposable resources. See [the developer tools guide](developer-tools.md#release-screenshots)
+for bounded device/orientation/appearance selections and output retention.
+
 The harness builds the app and test targets in Release. CarPlay observation
 regressions that use Debug-only counters run in Debug app tests; their tests
 and helper share the counters' `#if DEBUG` condition so Release test builds

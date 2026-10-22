@@ -24,6 +24,7 @@ pub mod large_library;
 pub mod listening_repair;
 pub mod live_fixtures;
 pub mod paid_build_modes;
+pub mod release_screenshots;
 pub mod runner_readiness;
 pub mod site_news;
 pub mod swift_test_results;

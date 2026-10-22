@@ -37,6 +37,7 @@ pub enum Stage {
     XcodeTestEnumeration,
     XcodeTestExecution,
     HostDriver,
+    ReleaseScreenshots,
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Cause {
@@ -457,6 +458,14 @@ impl Running {
         )
     }
 
+    /// Request a graceful signal without releasing the leader's identity anchor.
+    /// Used by native screen recording so its container is flushed before retirement.
+    pub(crate) fn request_signal(&mut self, signal: i32) -> io::Result<()> {
+        if self.owner.exited_without_reaping()? {
+            return Ok(());
+        }
+        self.owner.signal(signal).map(|_| ())
+    }
     pub(crate) fn interrupt(&mut self, signal: i32) -> Result<Output, Box<Failure>> {
         self.finish(Some(Cause::Interrupted { signal }))
     }

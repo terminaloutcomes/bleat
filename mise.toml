@@ -180,11 +180,14 @@ run = ["./scripts/clean-build-artifacts.sh"]
 
 [tasks.screenshots]
 description = "Capture Release screenshots from the live Barnyard fixture"
-run = ["./scripts/capture-release-screenshots.sh"]
+run = ["cargo run --quiet --locked --package scripts --bin capture-release-screenshots --"]
 
 [tasks."screenshots:check"]
 description = "Validate the release screenshot fixture and harness contracts"
-run = ["./scripts/test-release-screenshot-harness.sh"]
+run = [
+  "cargo test --quiet --locked --package scripts --lib release_screenshots",
+  "cargo run --quiet --locked --package scripts --bin capture-release-screenshots -- --validate-fixtures",
+]
 
 [tasks."test:landscape"]
 description = "Run the focused landscape UI audit on iPhone and iPad simulators"
