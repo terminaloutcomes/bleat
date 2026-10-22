@@ -9925,6 +9925,22 @@
       "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
       "action_postconditions": "Reject invalid signatures, truncated or oversized chunks, missing end chunks, malformed end chunks and trailing bytes before file replacement.",
       "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::scan_budget_mode_is_read_only_and_rejects_invalid_counts",
+      "path": "scripts/tests/large_library_cli.rs",
+      "line": 117,
+      "purpose": "Read-only large-fixture scan-budget mode validates counts and preserves existing media.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Independent review inspected the new CLI regression: valid outputs, invalid-count failure with empty stdout and exact preservation of sentinel bytes and directory entries."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default large_library_cli integration test; no skip or external services.",
+      "setup_dependencies": "Invocation-owned temporary directory and compiled generate-large-library binary; no media generator, Docker or network.",
+      "action_postconditions": "Require supported count budgets, reject zero/oversized counts, leave existing sentinel bytes and directory entries unchanged.",
+      "synchronization_timeout": "Synchronous local CLI execution; configured live acceptance is evidenced separately."
     }
   ],
   "issue371_smoke_runner_lifecycle": {
