@@ -226,8 +226,39 @@ Exact seeded-count validation, one-second polling interval, and native
 120-second load / 30-second cache-fallback assertions are unchanged.
 The CLI regression checks valid/invalid counts and proves this mode neither
 creates nor changes media. All three generator CLI regressions passed;
-independent review found no actionable issue. The configured rerun is pending;
-the historical 2.36 measurements above are not relabelled as 2.37 results.
+independent review found no actionable issue.
+
+The single corrected configured run passed at runtime/setup/test inputs
+`d627ad953b2ee2dbe090ba58b39017f042350c6c`, equivalent at published
+`30230b9fc605238f759acca3be4eeca53d51c3a1` (only audit/index/traceability
+metadata changed). Exact discovery selected one XCTest identity:
+`BleatCoreLiveTests.LibraryRepositoryLiveTests/testPagedLoadAndCacheFallbackOfLargeLibrary`.
+Its native observation records one pass, zero failures/skips; the empty
+Swift Testing selection is not counted as test execution. Native duration was
+20.479 seconds. Root and prefix scans each added 10,000 items, with zero missing,
+in 9m17s and 13m07s respectively.
+
+| Current-stable 2.37.0 path | Remote load: 100 pages / 10,000 books | Cache fallback: 100 pages / 10,000 books |
+| --- | --- | --- |
+| Root | 8.986s | 1.074s |
+| Prefix | 8.925s | 1.172s |
+
+Fallback uses the existing failing remote source and the populated cache; this
+does not simulate an actual server process shutdown. The entire setup/build/test
+run took 28m30s, exit zero, without firing the disk/time guard. Independent
+post-run checks found no owned project containers or volumes; 13.42 GiB remained
+free. The owned generated dataset and compact receipts are retained for reuse.
+Dependency manifest warnings about OpenTelemetry's deprecated watchOS v4 setting
+remain in the log; no runtime warning was observed. The initial diagnostic reader
+looked for a combined JUnit file; this runner instead retains exact selection
+and native XCTest observation shards, which were inspected directly.
+
+Sanitized execution/identity/metric hashes and the original failed attempt are
+retained locally. [PR #446](https://github.com/terminaloutcomes/bleat/pull/446)
+records independent review and exact-head CI. This completes the selected
+current-stable executable G2 unit; it does not relabel historical host, AppModel,
+Release UI, 2.36 live or 250k statistics measurements as fresh execution.
+Physical energy remains separately tracked in #95.
 
 ## Remaining evidence gap
 
