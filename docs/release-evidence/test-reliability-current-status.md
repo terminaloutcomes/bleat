@@ -23,8 +23,8 @@ Count different units separately:
 | Category | Count / current disposition |
 | --- | --- |
 | Proven unresolved implementation bugs | 0 currently confirmed after the bounded fixes and focused investigation. This is not a claim that the app is bug-free. |
-| Unresolved observed validation failures | 1: iPad Increase Contrast mini-player geometry; see below. |
-| Important implementation remainder | No demonstrated code fix is currently queued. #375 is delivered; full Release archive/surface-scan acceptance passed at the reviewed #442 head. |
+| Unresolved observed validation failures | iPad accessibility remains one active investigation: transient null frame queries are demonstrated; the corrected geometry assertion passed Bold Text, while Increase Contrast later failed to present Now Playing. See below. |
+| Important implementation remainder | The demonstrated multi-query geometry assertion is corrected in this change; the later Increase Contrast presentation failure remains unresolved. #375 and the full Release gate remain delivered. |
 | Known missing structured audit/index entries | 85 existing declarations: 25 app, 6 UI, 54 Rust. Both navigation-index rows and primary per-test audit rows are absent for this known list; tests themselves exist. See the counting/assurance boundary below. |
 | Existing-record review queue | 71 app semantic rechecks and 241 core helper-context rechecks retained from the bounded prior reconciliation. These overlap source concerns and are not implementation-task counts. |
 | Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
@@ -208,28 +208,30 @@ this documentation pass.
 
 | Group | Already evidenced | Executable here / remaining prerequisite |
 | --- | --- | --- |
-| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The original iPad width failure remains unexplained. | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
+| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The original iPad width failure remains unexplained. | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix; the later bounded result is recorded below. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
 | G2 Opt-in performance/large library | App 10k/cache and the 250k-slice Release benchmark retain revision-specific [measurements](../statistics-validation.md); they are not new runs. | Existing synthetic-library generator and `BLEAT_LARGE_LIBRARY_COUNT` live-harness mode support an owned 10k dataset and exact paged-load/cache-fallback test. Dataset seeding and capacity preflight remain work, not a demonstrated missing private account/hardware permission. No large workload ran here. |
 | G5 Release screenshots | The checked-in five-book/ten-screen fixture and no-build cover/manifest validation pass. G4 proves a separate Release archive, not screenshot capture. | The local disposable HTTPS/Docker/Simulator capture pipeline is available; native capture/export and image review remain unexecuted. Full agreed device/orientation/appearance coverage and visual review must be recorded before closing this group. |
 | G6 Physical CarPlay | App/CarPlay semantics and #377's specific artwork phone observation remain revision-specific evidence. | Needs a user-operated compatible iPhone and actual CarPlay head unit/scenario observations. No such session was performed; Simulator/phone artwork evidence does not replace it. |
 | G7 Physical audio routes | Simulator readiness/rate/position coverage remains useful within its scope. | Needs a suitable installed device build, applicable Bluetooth/AirPlay/headphone hardware, interruptions and observed route changes. This pass did not establish hardware availability or request installation/pairing access. |
 | G8 Physical background transfer | Simulator recovery and completion assertions retain their source-bound outcomes. | Needs a user-operated physical iOS device, owned server/transfer and background/termination/relaunch observations. Simulator recovery does not prove OS background execution. No physical session was performed. |
 
-### Smallest next acceptance unit
+### Latest bounded iPad acceptance unit
 
-Run only the previously unexecuted **iPad Bold Text configuration**: one owned
-iPad Pro 13-inch (M5), iOS 26.5, portrait, Increase Contrast disabled and Bold
-Text enabled/rebooted as in the supported accessibility harness. Select the
-three existing `testBoldTextLoginAccessibilityAudit`,
-`testBoldTextPrimaryJourneysAccessibilityAudit` and
-`testBoldTextPlaybackAccessibilityAudit` identities, not the full matrix.
-Completion requires three exact passes with no skips/failures/runtime warnings,
-effective-setting assertions, all 12 named screenshots retained/reviewed, source
-and configuration recorded, and owned-device cleanup verified. Recheck free
-space and retain the 3 GiB guard. Native host/Xcode/CoreSimulator access is
-required and available; no production credentials, new worktree or physical
-hardware are required. This unit does not close all of G1 or resolve the
-Increase Contrast observation. It has not been executed by this refresh.
+The three previously unexecuted iPad Bold Text cases ran at `dd63da4`: login
+and primary journeys passed; playback reported a zero-width `player.mini.open`.
+One instrumented reproduction preserved the failure and captured valid/null/valid
+successive frames (852 × 44, `CGRect.null`, 852 × 44), one query match, and a wide
+visible control. The underlying reason for the transient null accessibility
+frame remains unknown; this is not evidence of a visibly collapsed app layout.
+
+The minimum-target helper now uses one sampled rectangle for bounds and both
+unchanged 43.5-point dimensions, without waits or retries. At code head
+`72226c1`, all three Bold Text cases passed in the original order, with zero
+skips/runtime warnings and all 12 named screenshots retained and reviewed.
+The additional Increase Contrast playback selection passed mini-player geometry
+but failed later waiting for `player.screen` after a correct-centre tap. Its tree
+remained on Book Detail. That later failure is retained without retry; full G1
+acceptance remains open. See [traceability](../requirements-traceability.md#22-october-geometry-query-correction-and-remaining-ipad-failure).
 
 ### Preserved iPad observation
 

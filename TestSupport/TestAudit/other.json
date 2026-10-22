@@ -742,7 +742,7 @@
       "review": {
         "status": "reviewed",
         "decision": "keep",
-        "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
+        "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found. 22 October bounded correction: assertMinimumTarget uses one sampled frame for bounds and both unchanged 43.5-point dimensions. A retained reproduction showed valid/null/valid successive AX frames; no retry or production change is introduced. See the geometry-query correction in requirements traceability for source-bound outcomes and the later unresolved Increase Contrast presentation failure."
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
@@ -790,7 +790,7 @@
       "review": {
         "status": "reviewed",
         "decision": "keep",
-        "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
+        "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found. 22 October bounded correction: assertMinimumTarget uses one sampled frame for bounds and both unchanged 43.5-point dimensions. A retained reproduction showed valid/null/valid successive AX frames; no retry or production change is introduced. See the geometry-query correction in requirements traceability for source-bound outcomes and the later unresolved Increase Contrast presentation failure."
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
