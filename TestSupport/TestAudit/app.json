@@ -49969,6 +49969,37 @@
         "#if os(iOS)"
       ],
       "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
+    },
+    {
+      "identifier": "AppModelTests/testInterruptionResumePreservesLaterPauseAndOutputRemoval",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11860
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An interruption may resume prior playback only when no later user pause or output removal invalidated that intent.",
+        "purpose": "Distinguish normal interruption resume from later pause/output-loss policy on a native player with explicitly silent local media.",
+        "ruleAssessments": {
+          "1": "Three independent fixture scenarios require prior requested playback, interruption pause, normal resume or retained pause after explicit Pause/outputRemoved; assert exact activation count, requested state, paused player rate and retained position.",
+          "2": "Exact synchronous production handlers establish ordering; no sleep, yield drain or notification-queue marker.",
+          "3": "No advancing-position tolerance: retained pause position equality uses0.001seconds for stored numeric stability; playback samples are zero.",
+          "4": "Register async teardown before start; stop each owned model and remove unique fixture/defaults.",
+          "5": "Unique local CAF and defaults per scenario, zeroed samples, fake activation, isolated NowPlaying publisher and no registered remote commands.",
+          "6": "App-hosted native AVQueuePlayer with controlled direct policy input. No real NotificationCenter delivery, call/Siri, headset/CarPlay or audible-output claim.",
+          "7": "Retain baseline failing bundle and activity tree; both invalidated-intent cases fail while normal resume control passes; no timeout increase or retry-to-green.",
+          "8": "Scenario-labelled exact typed state, intent, activation and rate assertions; ordinary nonthrowing policy actions cannot skip final assertions.",
+          "9": "Focused corrected1/1 and owning630/630 passed, zero skips/failures/expected failures/runtime warnings; exact neighbor identities verified. Original baseline1failed with8assertions. Final headCI recorded on deliveryPR."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Controlled reproduction covers the demonstrated stale interruption-resume policy defect without claiming hardware acceptance."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/release-evidence/callback-cancellation-audit.md#audio-interruption-intent-2026-10-22"
     }
   ],
   "decisionCounts": {
@@ -50040,5 +50071,10 @@
     "scope": "Two new iOS-only declarations and one extended backoff case. Historical methodCount and decisionCounts above retain their original audit scope.",
     "evidence": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22",
     "execution": "629 owning app identities passed, including both new cases and extended retry case; isolated durability regression passed. Original-ordering corrected control failed as expected."
+  },
+  "audioInterruptionReview": {
+    "baseline": "4b5829d2def2d4cc4dd707e1e87d1b917a677dea",
+    "scope": "One new iOS-only policy regression. Historical methodCount/decisionCounts retain their original scope.",
+    "evidence": "docs/release-evidence/callback-cancellation-audit.md#audio-interruption-intent-2026-10-22"
   }
 }

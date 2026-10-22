@@ -1335,7 +1335,7 @@ Handle:
 - AirPlay handoff;
 - media services reset.
 
-Headphone/output removal pauses playback. Resume after an interruption only when the system indicates resumption is appropriate and the user had been playing before the interruption.
+Headphone/output removal pauses playback. Resume after an interruption only when the system indicates resumption is appropriate and the user had been playing before the interruption. A later user Pause or output removal cancels the pending automatic resumption; a normal interruption alone preserves the prior play intent.
 
 ### 9.7 Sleep timer and resume rewind
 
