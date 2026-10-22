@@ -108,3 +108,52 @@ while a ready silent player remained requested at rate 1.0 and its
 Now Playing snapshot stayed published. That witness is preserved separately in
 `.build/audio-stop-before.xcresult`; its fix is not included in this interruption
 slice. No Stop resolution or whole audio acceptance is claimed here.
+
+## Explicit Stop retirement (2026-10-22)
+
+A separate controlled baseline witness held `.closePlayback` diagnostic recording
+after Stop entered. The ready silent native player retained requested playback
+at rate 1.0 and its Now Playing snapshot stayed published. The initial one-test
+result failed three assertions in `.build/audio-stop-before.xcresult`. The
+extended playing/interrupted witness also failed its one exact identity in
+`.build/audio-stop-retirement-before.xcresult`, including retained interruption
+resume and direct-Play behavior while Stop was held.
+
+A distinct replacement witness started book B successfully while book A's Stop
+remained held. Releasing that old Stop cleared B's identity, active/requested
+state and snapshot and changed its native rate to 0. One exact test failed five
+assertions in `.build/audio-stop-replacement-before.xcresult`. Both A and B's
+ready/playing/positive-rate preconditions and B's pre-release published identity
+passed. Xcode's insight grouping describes duplicate assertion text as multiple
+“runs”; the canonical test tree contains one identity with five failure-message
+children, not multiple test executions. All baseline results had zero skips and
+native runtime warnings. The added instrumentation source is preserved in
+`.build/audio-stop-before-source.patch` against `8c0b5ff`; Stop behavior was
+unchanged by that instrumentation or the preceding interruption fix.
+
+Stop now pauses and retires interruption intent, presentation and command
+admission before its first diagnostic suspension. It enters the existing idle
+state, so queued player-state observations cannot republish the stopped book;
+direct Play rejects that retained idle preparation. Immediately after diagnostic
+recording, an ownership check abandons the old Stop if a newer generation has
+started. Later cleanup behavior is unchanged.
+
+Both corrected focused identities passed separately in
+`.build/audio-stop-retirement-after.xcresult` and
+`.build/audio-stop-replacement-after.xcresult`. The owning app suite passed
+all 632 identities in `.build/audio-stop-owner.xcresult`, with zero failures,
+skips, expected failures or runtime warnings. Its exact tree verifies both new
+regressions, three-start serialization, interruption intent, Stop/preparation
+cancellation and natural-end Now Playing cleanup. Strict Swift formatting and
+documentation checks passed; final published-head CI is recorded on the PR.
+Existing Xcode OS-build/debugger metadata diagnostics remain retained.
+
+These regressions use explicitly silent local CAF media, fake audio-session
+activation, independent defaults, isolated system-info publishers and disabled
+remote-command registration. They prove controlled app-side player/intent and
+diagnostic-ordering behavior, not physical call/Siri notifications, speaker
+output, headset reconnection or OS selection of Bleat instead of Overcast.
+The accepted AirPods-only result remains credited; the full cross-app/CarPlay/
+AirPods and broader route/interruption protocols in #341 remain unverified.
+Neither paired physical iPhone was available, and no personal playback, device
+settings or physical test was changed.

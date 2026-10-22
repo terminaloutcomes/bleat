@@ -11913,6 +11913,159 @@ final class AppModelTests: XCTestCase {
         }
     #endif
 
+    #if os(iOS)
+        func testExplicitStopPausesBeforeDiagnosticSuspension() async throws {
+            for interruptedBeforeStop in [false, true] {
+                let context = "interrupted=\(interruptedBeforeStop)"
+                let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+                let activation = TestAudioSessionActivation()
+                let gate = AsyncGate()
+                let recorder = GatedClosePlaybackDiagnosticRecorder(gate: gate)
+                let coordinator = NowPlayingCoordinator(
+                    infoCenter: TestNowPlayingInfoPublisher(),
+                    registersRemoteCommands: false)
+                let playback = fixture.model(
+                    activation: activation, nowPlayingCoordinator: coordinator,
+                    diagnostics: recorder)
+                addTeardownBlock { @MainActor in
+                    await gate.release()
+                    await playback.stop()
+                    fixture.cleanUp()
+                }
+                await playback.startDownloaded(
+                    detail: fixture.detail, trackURLs: [fixture.audioURL],
+                    accountID: fixture.accountID, account: nil)
+                await assertEventually(
+                    "ready silent player before Stop: \(context)",
+                    timeout: .seconds(5),
+                    observed: { self.playbackDiagnostic(playback) },
+                    condition: {
+                        playback.runtimeSnapshotForTesting.itemStatus
+                            == .readyToPlay
+                            && playback.runtimeSnapshotForTesting
+                                .timeControlStatus == .playing
+                            && playback.runtimeSnapshotForTesting.playerRate > 0
+                    })
+                XCTAssertTrue(playback.isPlaybackRequested, context)
+                XCTAssertNotNil(coordinator.latestSnapshot, context)
+                if interruptedBeforeStop {
+                    playback.handleInterruption(
+                        typeValue: AVAudioSession.InterruptionType.began
+                            .rawValue,
+                        optionsValue: 0)
+                    XCTAssertFalse(playback.isPlaybackRequested, context)
+                }
+                let stopped = expectation(
+                    description: "explicit Stop returned: \(context)")
+                let task = Task { @MainActor in
+                    await playback.stop()
+                    stopped.fulfill()
+                }
+                addTeardownBlock { @MainActor in
+                    await gate.release()
+                    await task.value
+                }
+                let entered = await gate.waitUntilEntered(timeout: .seconds(5))
+                XCTAssertTrue(
+                    entered, "Stop reached diagnostic suspension: \(context)")
+                XCTAssertFalse(playback.isPlaybackRequested, context)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerRate, 0, context)
+                XCTAssertEqual(playback.state, .idle, context)
+                XCTAssertNil(coordinator.latestSnapshot, context)
+                let activationCount = activation.callCount
+                playback.handleInterruption(
+                    typeValue: AVAudioSession.InterruptionType.ended.rawValue,
+                    optionsValue: AVAudioSession.InterruptionOptions
+                        .shouldResume.rawValue)
+                playback.play()
+                XCTAssertFalse(playback.isPlaybackRequested, context)
+                XCTAssertEqual(
+                    playback.runtimeSnapshotForTesting.playerRate, 0, context)
+                XCTAssertEqual(activation.callCount, activationCount, context)
+                XCTAssertNil(coordinator.latestSnapshot, context)
+                await gate.release()
+                await fulfillment(of: [stopped], timeout: 5)
+                await task.value
+                XCTAssertFalse(playback.hasActiveBook, context)
+                XCTAssertFalse(playback.isPlaybackRequested, context)
+            }
+        }
+
+        func testStopCompletionDoesNotRetireNewerSelection() async throws {
+            let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+            let activation = TestAudioSessionActivation()
+            let gate = AsyncGate()
+            let recorder = GatedClosePlaybackDiagnosticRecorder(gate: gate)
+            let coordinator = NowPlayingCoordinator(
+                infoCenter: TestNowPlayingInfoPublisher(),
+                registersRemoteCommands: false)
+            let playback = fixture.model(
+                activation: activation, nowPlayingCoordinator: coordinator,
+                diagnostics: recorder)
+            addTeardownBlock { @MainActor in
+                await gate.release()
+                await playback.stop()
+                fixture.cleanUp()
+            }
+            await playback.startDownloaded(
+                detail: fixture.detail, trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID, account: nil)
+            await assertEventually(
+                "ready first silent player before held Stop",
+                timeout: .seconds(5),
+                observed: { self.playbackDiagnostic(playback) },
+                condition: {
+                    playback.runtimeSnapshotForTesting.itemStatus
+                        == .readyToPlay
+                        && playback.runtimeSnapshotForTesting.timeControlStatus
+                            == .playing
+                        && playback.runtimeSnapshotForTesting.playerRate > 0
+                })
+            XCTAssertTrue(playback.isPlaybackRequested)
+            let stopped = expectation(description: "superseded Stop returned")
+            let stopTask = Task { @MainActor in
+                await playback.stop()
+                stopped.fulfill()
+            }
+            addTeardownBlock { @MainActor in
+                await gate.release()
+                await stopTask.value
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(5))
+            XCTAssertTrue(entered, "old Stop held before replacement selection")
+            let replacement = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "replacement-book", title: "Replacement",
+                    libraryID: fixtureLibrary().id))
+            await playback.startDownloaded(
+                detail: replacement, trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID, account: nil)
+            await assertEventually(
+                "ready replacement silent player", timeout: .seconds(5),
+                observed: { self.playbackDiagnostic(playback) },
+                condition: {
+                    playback.itemID == replacement.id
+                        && playback.runtimeSnapshotForTesting.itemStatus
+                            == .readyToPlay
+                        && playback.runtimeSnapshotForTesting.timeControlStatus
+                            == .playing
+                        && playback.runtimeSnapshotForTesting.playerRate > 0
+                })
+            XCTAssertTrue(playback.isPlaybackRequested)
+            XCTAssertEqual(coordinator.latestSnapshot?.itemID, replacement.id)
+            await gate.release()
+            await fulfillment(of: [stopped], timeout: 5)
+            await stopTask.value
+            XCTAssertEqual(playback.itemID, replacement.id)
+            XCTAssertTrue(playback.hasActiveBook)
+            XCTAssertTrue(playback.isPlaybackRequested)
+            XCTAssertEqual(coordinator.latestSnapshot?.itemID, replacement.id)
+            XCTAssertGreaterThan(
+                playback.runtimeSnapshotForTesting.playerRate, 0)
+        }
+    #endif
+
     func testMediaServicesResetRestoresPlayingAndPausedIntent() async throws {
         for shouldPlay in [true, false] {
             let fixture = try playbackRecoveryFixture()
