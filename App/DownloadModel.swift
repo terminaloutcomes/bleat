@@ -763,6 +763,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored
     private(set) var taskCompletionProcessingSequenceForTesting = 0
     @ObservationIgnored
+    private(set) var backgroundEventProcessingSequenceForTesting = 0
+    @ObservationIgnored
     private(set) var automaticCleanupEvaluationSequenceForTesting = 0
     private let diagnosticEmitter: OrderedDownloadDiagnosticEmitter
     private var diagnosticSequence = 0
@@ -772,6 +774,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
     private let backgroundSessionIdentifier: String
     private let transferRetrySleep: @Sendable (Duration) async throws -> Void
     private let replacementTaskStartCheckpoint: @Sendable () async -> Void
+    private let callbackProcessingCheckpoint: @Sendable () async -> Void
+    private let backgroundEventsFinished: @MainActor @Sendable () -> Void
     private let pauseOperationCheckpoint: @Sendable () async -> Void
     private let pauseManifestCommit:
         @Sendable (DownloadStorage, DownloadTaskIdentity, Int64) async throws
@@ -1055,7 +1059,18 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
                 )
             },
         removalStorageCheckpoint:
-            @escaping @MainActor @Sendable () async throws -> Void = {}
+            @escaping @MainActor @Sendable () async throws -> Void = {},
+        callbackProcessingCheckpoint:
+            @escaping @Sendable () async -> Void = {},
+        backgroundEventsFinished:
+            @escaping @MainActor @Sendable () -> Void = {
+                #if os(iOS)
+                    let completion = BleatAppDelegate
+                        .backgroundDownloadCompletion
+                    BleatAppDelegate.backgroundDownloadCompletion = nil
+                    completion?()
+                #endif
+            }
     ) {
         self.service = service
         diagnosticEmitter = OrderedDownloadDiagnosticEmitter(
@@ -1070,6 +1085,8 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         self.pauseOperationCheckpoint = pauseOperationCheckpoint
         self.pauseManifestCommit = pauseManifestCommit
         self.removalStorageCheckpoint = removalStorageCheckpoint
+        self.callbackProcessingCheckpoint = callbackProcessingCheckpoint
+        self.backgroundEventsFinished = backgroundEventsFinished
         self.defaults = defaults
         networkPolicy = Self.loadNetworkPolicy(from: defaults)
         let loadedMaximumConcurrentDownloads =
@@ -5938,6 +5955,7 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
+            await self.callbackProcessingCheckpoint()
             switch result {
             case .placed(
                 let committedByteLength,
@@ -6086,7 +6104,9 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         didCompleteWithError error: (any Error)?
     ) {
         Task { @MainActor [weak self] in
-            await self?.recordCompletionOutcome(task: task, error: error)
+            guard let self else { return }
+            await self.callbackProcessingCheckpoint()
+            await self.recordCompletionOutcome(task: task, error: error)
         }
     }
 
@@ -6132,11 +6152,10 @@ final class DownloadModel: NSObject, URLSessionDownloadDelegate {
         forBackgroundURLSession session: URLSession
     ) {
         #if os(iOS)
-            Task { @MainActor in
-                let completion =
-                    BleatAppDelegate.backgroundDownloadCompletion
-                BleatAppDelegate.backgroundDownloadCompletion = nil
-                completion?()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.backgroundEventProcessingSequenceForTesting += 1
+                self.backgroundEventsFinished()
             }
         #endif
     }

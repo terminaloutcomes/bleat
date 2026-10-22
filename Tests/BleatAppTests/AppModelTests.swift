@@ -5,6 +5,7 @@ import CloudKit
 import MediaPlayer
 import Observation
 import SwiftData
+import Synchronization
 import XCTest
 
 @testable import Bleat
@@ -9120,6 +9121,110 @@ final class AppModelTests: XCTestCase {
         lateSession.invalidateAndCancel()
         await model.removeAll()
     }
+
+    #if os(iOS)
+        func testBackgroundEventsCompletionWaitsForDurableChunkReconciliation()
+            async throws
+        {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "BleatBackgroundDrain-\(UUID().uuidString)",
+                    isDirectory: true)
+            let defaultsSuite = "BackgroundDrain.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixtureBook(
+                    id: "item-1", title: "Background completion",
+                    libraryID: fixtureLibrary().id))
+            let (plan, storage) = try await prepareInterruptedDownload(
+                root: root, account: account, detail: detail,
+                downloadID: "background-drain", committedByteCount: 5)
+            let identity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "background-drain"),
+                accountID: account.id,
+                itemID: detail.id, track: plan.tracks[1])
+            let request = URLRequest(
+                url: try XCTUnwrap(URL(string: "https://192.0.2.1/audio")))
+            let gate = AsyncGate()
+            let completion = expectation(
+                description: "background events completed")
+            let completionCount = Mutex(0)
+            let model = DownloadModel(
+                service: TestAppService(
+                    activeAccount: .success(account),
+                    downloadPlan: .failure(
+                        .downloadPlan(.unexpectedStatus(404)))),
+                defaults: defaults, storageRootURL: root,
+                backgroundSessionIdentifier: backgroundSessionIdentifier(
+                    "event-drain"),
+                startDownloadTask: { _ in },
+                callbackProcessingCheckpoint: { await gate.enterAndWait() },
+                backgroundEventsFinished: {
+                    completionCount.withLock { $0 += 1 }
+                    completion.fulfill()
+                })
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [
+                LateTransferDownloadURLProtocol.self
+            ]
+            let session = URLSession(
+                configuration: configuration, delegate: model,
+                delegateQueue: nil)
+            addTeardownBlock { @MainActor in
+                await gate.release()
+                session.invalidateAndCancel()
+                await model.removeAll()
+                defaults.removePersistentDomain(forName: defaultsSuite)
+                try? FileManager.default.removeItem(at: root)
+            }
+            await model.start(accounts: [account])
+            let descriptor = DownloadChunkTaskDescription(
+                identity: identity,
+                range: try DownloadByteRange(start: 5, endInclusive: 7),
+                validator: nil)
+            let task = session.downloadTask(with: request)
+            task.taskDescription = try descriptor.encode()
+            task.resume()
+            let entered = await gate.waitUntilEntered(timeout: .seconds(5))
+            XCTAssertTrue(
+                entered,
+                "native chunk callback reached reconciliation checkpoint")
+            let before = try await storage.records()
+            XCTAssertNotEqual(before.first?.manifest.state, .complete)
+            await Task.detached {
+                model.urlSessionDidFinishEvents(
+                    forBackgroundURLSession: session)
+            }.value
+            await assertEventually(
+                "finish-events handoff observed", timeout: .seconds(5),
+                observed: {
+                    "handoff sequence=\(model.backgroundEventProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.backgroundEventProcessingSequenceForTesting == 1
+                })
+            XCTAssertEqual(
+                completionCount.withLock { $0 }, 0,
+                "OS completion must wait while the delivered chunk is not durably reconciled"
+            )
+            await gate.release()
+            await fulfillment(of: [completion], timeout: 5)
+            await assertEventually(
+                "download manifest committed", timeout: .seconds(5),
+                observed: {
+                    "state=\(String(describing: model.records.first?.manifest.state))"
+                },
+                condition: { model.records.first?.manifest.state == .complete })
+            XCTAssertEqual(completionCount.withLock { $0 }, 1)
+            let after = try await storage.records()
+            XCTAssertEqual(after.first?.manifest.state, .complete)
+            let layout = try DownloadStorageLayout(rootURL: root)
+            XCTAssertEqual(
+                try Data(contentsOf: layout.destinationURL(for: identity))
+                    .count, 8)
+        }
+    #endif
 
     func testSystemResumedRangeSuffixRetriesFromDurableOffset()
         async throws
