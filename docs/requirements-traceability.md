@@ -488,7 +488,8 @@ remain invocation-owned with deadlines, signal retirement, a 3 GiB disk guard,
 and verified cleanup of only the generated project/containers/Simulators.
 The supplied fixture CA is the HTTPS client's only root; redirects are disabled.
 
-The Rust contract/lifecycle suite has 24 cases. The complete scripts library
+The Rust contract/lifecycle suite has 25 cases, including interrupted Simulator
+creation recovery by an exact pre-registered run name. The complete scripts library
 suite passed 132 cases before the final capture-path review. This is unit and
 native-child evidence, not a ten-screen Simulator result. Native capture and
 visual-review evidence must be recorded separately before claiming G5 acceptance;

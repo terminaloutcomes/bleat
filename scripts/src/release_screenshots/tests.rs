@@ -362,16 +362,41 @@ fn release_screenshot_output_admission_preserves_previous_evidence() {
 fn release_screenshot_cleanup_does_not_certify_malformed_or_owned_simulator_inventory() {
     let owned = vec!["owned-id".to_owned()];
     capture::verify_simulators_absent(
-        &json!({"devices":{"runtime":[{"udid":"unrelated-id"}]}}),
+        &json!({"devices":{"runtime":[{"udid":"unrelated-id","name":"unrelated"}]}}),
         &owned,
+        &[],
     )
     .expect("unrelated device preserved");
     for value in [
         json!({}),
         json!({"devices":{"runtime":null}}),
         json!({"devices":{"runtime":[{}]}}),
-        json!({"devices":{"runtime":[{"udid":"owned-id"}]}}),
+        json!({"devices":{"runtime":[{"udid":"owned-id","name":"owned"}]}}),
     ] {
-        assert!(capture::verify_simulators_absent(&value, &owned).is_err());
+        assert!(capture::verify_simulators_absent(&value, &owned, &[]).is_err());
     }
+}
+
+#[test]
+fn release_screenshot_interrupted_create_recovers_only_exact_owned_names() {
+    let names = vec!["Bleat Release iphone exact-run".to_owned()];
+    let inventory = json!({"devices":{"runtime":[
+        {"udid":"created-id","name":"Bleat Release iphone exact-run"},
+        {"udid":"other-id","name":"Bleat Release iphone another-run"}
+    ]}});
+    assert_eq!(
+        capture::owned_simulators(&inventory, &[], &names).expect("recover creation"),
+        vec!["created-id"]
+    );
+    assert!(capture::verify_simulators_absent(&inventory, &[], &names).is_err());
+    let cleaned = json!({"devices":{"runtime":[{"udid":"other-id","name":"Bleat Release iphone another-run"}]}});
+    capture::verify_simulators_absent(&cleaned, &[], &names).expect("unrelated preserved");
+    assert!(
+        capture::owned_simulators(
+            &json!({"devices":{"runtime":[{"udid":"broken"}]}}),
+            &[],
+            &names
+        )
+        .is_err()
+    );
 }

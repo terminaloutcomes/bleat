@@ -28,6 +28,7 @@ struct Session {
     project: String,
     password: String,
     simulators: Vec<String>,
+    simulator_names: Vec<String>,
     compose_started: bool,
     media_started: bool,
     recording: Option<Recording>,
@@ -71,6 +72,7 @@ pub(super) fn run(
         project,
         password: format!("{:032x}", rand::random::<u128>()),
         simulators: vec![],
+        simulator_names: vec![],
         compose_started: false,
         media_started: false,
         recording: None,
@@ -191,6 +193,25 @@ impl Session {
         {
             failures.push("recording flush/retirement");
         }
+        // Creation may have succeeded before its command was interrupted. Discover
+        // only exact names registered before spawning, never other jobs' devices.
+        if !self.simulator_names.is_empty() {
+            match self
+                .native
+                .output(
+                    "discover owned Simulators",
+                    "xcrun",
+                    &["simctl", "list", "devices", "--json"],
+                    60,
+                )
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| owned_simulators(&v, &self.simulators, &self.simulator_names).ok())
+            {
+                Some(ids) => self.simulators = ids,
+                None => failures.push("owned Simulator discovery"),
+            }
+        }
         if !success {
             let directory = self.output.join("failure");
             if fs::create_dir_all(&directory).is_err() {
@@ -245,7 +266,7 @@ impl Session {
                 60,
             );
         }
-        if !self.simulators.is_empty() {
+        if !self.simulators.is_empty() || !self.simulator_names.is_empty() {
             match self
                 .native
                 .output(
@@ -258,7 +279,9 @@ impl Session {
                 .and_then(|s| serde_json::from_str::<Value>(&s).ok())
             {
                 Some(v) => {
-                    if verify_simulators_absent(&v, &self.simulators).is_err() {
+                    if verify_simulators_absent(&v, &self.simulators, &self.simulator_names)
+                        .is_err()
+                    {
                         failures.push("owned Simulator remains or inventory is malformed");
                     }
                 }
@@ -338,7 +361,7 @@ impl Session {
                 failures.push("owned media container remains or verification failed");
             }
         }
-        let receipt = json!({"run":self.run_id,"captureSucceeded":success,"ownedSimulators":self.simulators,"composeProject":self.project,"cleanupFailures":failures});
+        let receipt = json!({"run":self.run_id,"captureSucceeded":success,"ownedSimulators":self.simulators,"ownedSimulatorNames":self.simulator_names,"composeProject":self.project,"cleanupFailures":failures});
         if model::write_json(&self.receipt_directory().join("cleanup.json"), &receipt).is_err() {
             failures.push("cleanup receipt");
         }
@@ -359,7 +382,7 @@ impl Session {
             .map_err(|_| Error::Invalid("owned workspace location"))?;
         model::write_json(
             &directory.join("ownership.json"),
-            &json!({"run":self.run_id,"composeProject":self.project,"composeStarted":self.compose_started,"mediaContainerLabel":format!("bleat.release-screenshot.run={}",self.run_id),"ownedSimulators":self.simulators,"privateWorkspace":workspace}),
+            &json!({"run":self.run_id,"composeProject":self.project,"composeStarted":self.compose_started,"mediaContainerLabel":format!("bleat.release-screenshot.run={}",self.run_id),"ownedSimulators":self.simulators,"ownedSimulatorNames":self.simulator_names,"privateWorkspace":workspace}),
         )
     }
 }
@@ -542,20 +565,37 @@ pub(super) fn claim_output(output: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn verify_simulators_absent(value: &Value, owned: &[String]) -> Result<()> {
+pub(super) fn owned_simulators(
+    value: &Value,
+    owned: &[String],
+    names: &[String],
+) -> Result<Vec<String>> {
     let runtimes = value["devices"]
         .as_object()
         .ok_or(Error::Invalid("Simulator cleanup inventory"))?;
+    let mut found = std::collections::BTreeSet::new();
     for devices in runtimes.values() {
         for device in devices
             .as_array()
             .ok_or(Error::Invalid("Simulator cleanup rows"))?
         {
             let id = text(device, "udid")?;
-            if owned.iter().any(|owned| owned == id) {
-                return invalid("owned Simulator remains");
+            let name = text(device, "name")?;
+            if owned.iter().any(|owned| owned == id) || names.iter().any(|owned| owned == name) {
+                found.insert(id.to_owned());
             }
         }
+    }
+    Ok(found.into_iter().collect())
+}
+
+pub(super) fn verify_simulators_absent(
+    value: &Value,
+    owned: &[String],
+    names: &[String],
+) -> Result<()> {
+    if !owned_simulators(value, owned, names)?.is_empty() {
+        return invalid("owned Simulator remains");
     }
     Ok(())
 }

@@ -15,6 +15,8 @@ impl Session {
             "ipad"
         };
         let name = format!("Bleat Release {label} {}", self.run_id);
+        self.simulator_names.push(name.clone());
+        self.record_ownership()?;
         let simulator = self
             .native
             .output(

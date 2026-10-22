@@ -9861,6 +9861,22 @@
       "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
       "action_postconditions": "Accept inventory containing only unrelated devices, and reject missing/malformed rows or a remaining owned Simulator.",
       "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
+    },
+    {
+      "id": "scripts::release_screenshot_interrupted_create_recovers_only_exact_owned_names",
+      "path": "scripts/src/release_screenshots/tests.rs",
+      "line": 381,
+      "purpose": "Recover a created Simulator from its exact pre-registered name when no UDID returned, reject malformed rows, and preserve another run device.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Inspected the new body and its workflow helpers. Recover a created Simulator from its exact pre-registered name when no UDID returned, reject malformed rows, and preserve another run device. Scoped Rust execution is separate from native screenshot acceptance."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default scripts library test; no opt-in skip. Native child helpers execute only in the isolated child process selected by the parent case.",
+      "setup_dependencies": "Checked-in screenshot/profile/source fixtures, synthetic JSON/plist/markers and invocation-owned temporary directories; the two lifecycle cases use the current test executable.",
+      "action_postconditions": "Recover a created Simulator from its exact pre-registered name when no UDID returned, reject malformed rows, and preserve another run device.",
+      "synchronization_timeout": "Synchronous deterministic validation; temporary filesystem work is scoped to the test. No Docker, Simulator, credentials or production service."
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -10091,7 +10107,7 @@
   "releaseScreenshotRustMigration": {
     "baseRevision": "c9a142bc28a5864d3f7bd718d2aebc5ca9555fdf",
     "scope": "scripts/src/release_screenshots/tests.rs",
-    "newReviewedCases": 24,
+    "newReviewedCases": 25,
     "boundary": "Only newly introduced workflow regressions are recorded. This does not repair the separate 85 known omissions or certify the retained semantic-review queues."
   }
 }
