@@ -14889,7 +14889,28 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "current_cancellation_completion_review": {
+        "date": "2026-10-23",
+        "baseline": "82875e205a99987893013c3a6aaafbe0a179b700",
+        "decision": "keep_after_test_fix",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372",
+        "action_postconditions": "Original exact call-count/task-local, typed callbackTimedOut and held stopping/post-release retry assertions remain applicable in their respective tests.",
+        "synchronization": "Existing bounded probe entry plus a terminal BoundedTestCounter increment only after the real cancellation wait (and lifecycle finish/complete where applicable) returns. Task.value is consumed only after positive observation.",
+        "cleanup": "withTestCleanup cancels owned callers, releases the latched probe and boundedly observes return on normal/guard/throw exits; watchdog callback is ended on every exit. Unknown work is not joined after timeout.",
+        "boundary": "Synthetic state-machine/cancellation probe. Does not certify native CKSyncEngine execution, personal CloudKit data or whole production watchdog/task-graph drainage.",
+        "rules": {
+          "1": "Original semantic assertions retained.",
+          "2": "Five-second terminal observation is a hang diagnostic, not a scheduler-speed product requirement.",
+          "3": "No playback/seek assertions.",
+          "4": "Await APIs, bounded caller joins and cleanup on both exits; timeout cancellation is not claimed as termination.",
+          "5": "Fresh run/lifecycle/probe/counters only; no disk, defaults, network or real account fixture.",
+          "6": "Controlled host state-machine evidence only.",
+          "7": "No sleeps, tolerance widening or retry-to-green; compile-only failed attempt retained.",
+          "8": "Inline test-site #expect includes cancellation phase, elapsed and budget; original typed causes retained.",
+          "9": "Focused repetitions, owner and signed-host evidence recorded in linked receipt after verification."
+        }
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCallbackCancellationCompletesBeforeLifecycleAllowsRetry",
@@ -14942,6 +14963,27 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
+      },
+      "current_cancellation_completion_review": {
+        "date": "2026-10-23",
+        "baseline": "82875e205a99987893013c3a6aaafbe0a179b700",
+        "decision": "keep_after_test_fix",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372",
+        "action_postconditions": "Original exact call-count/task-local, typed callbackTimedOut and held stopping/post-release retry assertions remain applicable in their respective tests.",
+        "synchronization": "Existing bounded probe entry plus a terminal BoundedTestCounter increment only after the real cancellation wait (and lifecycle finish/complete where applicable) returns. Task.value is consumed only after positive observation.",
+        "cleanup": "withTestCleanup cancels owned callers, releases the latched probe and boundedly observes return on normal/guard/throw exits; watchdog callback is ended on every exit. Unknown work is not joined after timeout.",
+        "boundary": "Synthetic state-machine/cancellation probe. Does not certify native CKSyncEngine execution, personal CloudKit data or whole production watchdog/task-graph drainage.",
+        "rules": {
+          "1": "Original semantic assertions retained.",
+          "2": "Five-second terminal observation is a hang diagnostic, not a scheduler-speed product requirement.",
+          "3": "No playback/seek assertions.",
+          "4": "Await APIs, bounded caller joins and cleanup on both exits; timeout cancellation is not claimed as termination.",
+          "5": "Fresh run/lifecycle/probe/counters only; no disk, defaults, network or real account fixture.",
+          "6": "Controlled host state-machine evidence only.",
+          "7": "No sleeps, tolerance widening or retry-to-green; compile-only failed attempt retained.",
+          "8": "Inline test-site #expect includes cancellation phase, elapsed and budget; original typed causes retained.",
+          "9": "Focused repetitions, owner and signed-host evidence recorded in linked receipt after verification."
+        }
       }
     },
     {
@@ -14995,6 +15037,27 @@
         "status": "source_updated_focused_and_signed_execution_recorded",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes the named timing boundary. Focused host execution is recorded in the core follow-up; the active signed owning run remains pending."
+      },
+      "current_cancellation_completion_review": {
+        "date": "2026-10-23",
+        "baseline": "82875e205a99987893013c3a6aaafbe0a179b700",
+        "decision": "keep_after_test_fix",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372",
+        "action_postconditions": "Original exact call-count/task-local, typed callbackTimedOut and held stopping/post-release retry assertions remain applicable in their respective tests.",
+        "synchronization": "Existing bounded probe entry plus a terminal BoundedTestCounter increment only after the real cancellation wait (and lifecycle finish/complete where applicable) returns. Task.value is consumed only after positive observation.",
+        "cleanup": "withTestCleanup cancels owned callers, releases the latched probe and boundedly observes return on normal/guard/throw exits; watchdog callback is ended on every exit. Unknown work is not joined after timeout.",
+        "boundary": "Synthetic state-machine/cancellation probe. Does not certify native CKSyncEngine execution, personal CloudKit data or whole production watchdog/task-graph drainage.",
+        "rules": {
+          "1": "Original semantic assertions retained.",
+          "2": "Five-second terminal observation is a hang diagnostic, not a scheduler-speed product requirement.",
+          "3": "No playback/seek assertions.",
+          "4": "Await APIs, bounded caller joins and cleanup on both exits; timeout cancellation is not claimed as termination.",
+          "5": "Fresh run/lifecycle/probe/counters only; no disk, defaults, network or real account fixture.",
+          "6": "Controlled host state-machine evidence only.",
+          "7": "No sleeps, tolerance widening or retry-to-green; compile-only failed attempt retained.",
+          "8": "Inline test-site #expect includes cancellation phase, elapsed and budget; original typed causes retained.",
+          "9": "Focused repetitions, owner and signed-host evidence recorded in linked receipt after verification."
+        }
       }
     },
     {

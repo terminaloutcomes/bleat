@@ -9,7 +9,7 @@ import Testing
 final class PrivateCloudSyncTests {
     @Test
     func testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()
-        async
+        async throws
     {
         let run = PrivateCloudSyncRun()
         let probe = CloudKitCancellationProbe()
@@ -17,11 +17,33 @@ final class PrivateCloudSyncTests {
             await run.requestCancellation { await probe.cancel() }
             await run.requestCancellation { await probe.cancel() }
         }
-        await run.waitForCancellation()
-        let calls = await probe.calls
-        let inheritedDelegateContext = await probe.inheritedDelegateContext
-        #expect(calls == 1)
-        #expect(!inheritedDelegateContext)
+        let returned = BoundedTestCounter()
+        let caller = Task {
+            await run.waitForCancellation()
+            await returned.increment()
+        }
+        try await withTestCleanup {
+            caller.cancel()
+            await probe.release()
+            let cleanup = await returned.wait(untilAtLeast: 1)
+            #expect(
+                cleanup.reached,
+                "cancellation caller cleanup returning: elapsed \(cleanup.elapsed), limit \(cleanup.timeout)"
+            )
+            if cleanup.reached { await caller.value }
+        } operation: {
+            let completion = await returned.wait(untilAtLeast: 1)
+            #expect(
+                completion.reached,
+                "coalesced cancellation caller returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return }
+            await caller.value
+            let calls = await probe.calls
+            let inheritedDelegateContext = await probe.inheritedDelegateContext
+            #expect(calls == 1)
+            #expect(!inheritedDelegateContext)
+        }
     }
 
     @Test
@@ -32,34 +54,50 @@ final class PrivateCloudSyncTests {
         let run = try await lifecycle.begin()
         let probe = CloudKitCancellationProbe(holdCompletion: true)
         await run.requestCancellation { await probe.cancel() }
-        let entryWait = await probe.waitForEntry()
-        #expect(
-            entryWait.reached,
-            "CloudKit cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
-        )
-        guard entryWait.reached else {
-            await probe.release()
-            return
-        }
-        let completion = Task {
+        let returned = BoundedTestCounter()
+        let caller = Task {
             await run.waitForCancellation()
             await lifecycle.finish(run)
             await run.complete(.success(()))
+            await returned.increment()
         }
-        do {
+        try await withTestCleanup {
+            caller.cancel()
+            await probe.release()
+            let cleanup = await returned.wait(untilAtLeast: 1)
+            #expect(
+                cleanup.reached,
+                "cancellation caller cleanup returning: elapsed \(cleanup.elapsed), limit \(cleanup.timeout)"
+            )
+            if cleanup.reached { await caller.value }
+        } operation: {
+            let entryWait = await probe.waitForEntry()
+            #expect(
+                entryWait.reached,
+                "CloudKit cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
+            )
+            guard entryWait.reached else { return }
+            do {
+                _ = try await lifecycle.begin()
+                Issue.record("Cancellation must drain before a new run begins")
+            } catch let error as PrivateCloudSyncError {
+                #expect(error == .stopping)
+            }
+            await probe.release()
+            let completion = await returned.wait(untilAtLeast: 1)
+            #expect(
+                completion.reached,
+                "cancellation lifecycle caller returning after release: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return }
+            await caller.value
             _ = try await lifecycle.begin()
-            Issue.record("Cancellation must drain before a new run begins")
-        } catch {
-            #expect(error == .stopping)
         }
-        await probe.release()
-        await completion.value
-        _ = try await lifecycle.begin()
     }
 
     @Test
     func testCallbackWatchdogCancellationEscapesDelegateTaskLocals()
-        async
+        async throws
     {
         let run = PrivateCloudSyncRun(deadline: .zero)
         let probe = CloudKitCancellationProbe()
@@ -67,21 +105,46 @@ final class PrivateCloudSyncTests {
             .withValue(true) {
                 await run.beginCallback { await probe.cancel() }
             }
-        let entryWait = await probe.waitForEntry()
-        #expect(
-            entryWait.reached,
-            "watchdog cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
-        )
-        guard entryWait.reached else {
+        try await withTestCleanup {
+            await probe.release()
             await run.endCallback(callbackID)
-            return
+        } operation: {
+            let entryWait = await probe.waitForEntry()
+            #expect(
+                entryWait.reached,
+                "watchdog cancellation did not enter its probe within \(entryWait.timeout); elapsed \(entryWait.elapsed)"
+            )
+            guard entryWait.reached else { return }
+            await run.endCallback(callbackID)
+            let returned = BoundedTestCounter()
+            let caller = Task {
+                await run.waitForCancellation()
+                await returned.increment()
+            }
+            try await withTestCleanup {
+                caller.cancel()
+                await probe.release()
+                let cleanup = await returned.wait(untilAtLeast: 1)
+                #expect(
+                    cleanup.reached,
+                    "watchdog caller cleanup returning: elapsed \(cleanup.elapsed), limit \(cleanup.timeout)"
+                )
+                if cleanup.reached { await caller.value }
+            } operation: {
+                let completion = await returned.wait(untilAtLeast: 1)
+                #expect(
+                    completion.reached,
+                    "watchdog cancellation caller returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+                )
+                guard completion.reached else { return }
+                await caller.value
+                let inheritedDelegateContext =
+                    await probe.inheritedDelegateContext
+                #expect(!inheritedDelegateContext)
+                let failure = await run.failure()
+                #expect(failure?.cause == .callbackTimedOut)
+            }
         }
-        await run.endCallback(callbackID)
-        await run.waitForCancellation()
-        let inheritedDelegateContext = await probe.inheritedDelegateContext
-        #expect(!inheritedDelegateContext)
-        let failure = await run.failure()
-        #expect(failure?.cause == .callbackTimedOut)
     }
 
     @Test

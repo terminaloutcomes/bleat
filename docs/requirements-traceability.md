@@ -1120,3 +1120,12 @@ validation and unchanged fixture files; [the performance receipt](release-eviden
 preserves the original setup failure separately from native test outcomes.
 Exact 10k readiness and native load/cache-fallback performance assertions remain
 unchanged. This does not establish physical-device energy acceptance.
+
+
+### CloudKit cancellation caller completion (#372)
+
+Three existing cancellation/task-local/lifecycle tests now bound actual caller
+return before consuming task values, and release/cancel/observe owned callers
+on every exit. Existing typed causes, exact count and retry-order assertions
+remain; no production CloudKit or whole-task-graph termination claim is added.
+See [the scoped source review and validation](release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372).
