@@ -246,6 +246,7 @@
         #if DEBUG
             private(set) var observationCallbackCountForTesting = 0
             private(set) var observationRefreshCountForTesting = 0
+            private(set) var cellularActionCompletionSequenceForTesting = 0
         #endif
 
         init(
@@ -1348,7 +1349,13 @@
             let download = CPAlertAction(title: "Download", style: .default) {
                 @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
-                    guard let self, self.presentationGeneration == connection,
+                    guard let self else { return }
+                    defer {
+                        #if DEBUG
+                            cellularActionCompletionSequenceForTesting += 1
+                        #endif
+                    }
+                    guard self.presentationGeneration == connection,
                         self.presenter != nil
                     else { return }
                     await self.model.downloads.confirmCellularDownload(
@@ -1359,7 +1366,13 @@
             let cancel = CPAlertAction(title: "Cancel", style: .cancel) {
                 @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
-                    guard let self, self.presentationGeneration == connection,
+                    guard let self else { return }
+                    defer {
+                        #if DEBUG
+                            cellularActionCompletionSequenceForTesting += 1
+                        #endif
+                    }
+                    guard self.presentationGeneration == connection,
                         self.presenter != nil
                     else { return }
                     self.model.downloads.cancelCellularDownload(id: requestID)

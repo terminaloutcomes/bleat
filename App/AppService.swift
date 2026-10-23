@@ -1428,6 +1428,9 @@ actor LiveAppService: AppServicing {
 
     private var liveClients: [AccountID: LiveClientRegistration] = [:]
     private var networkProbeGeneration = 0
+    #if DEBUG
+        private(set) var networkProbeProcessingSequenceForTesting = 0
+    #endif
     private var networkProbeTask: Task<Void, Never>?
     private var accountEndpointProbes: [AccountID: Task<Void, Never>] = [:]
     private var networkPathState: AppNetworkPathState = .unknown
@@ -1868,6 +1871,11 @@ actor LiveAppService: AppServicing {
         endpointPathGeneration: ServerEndpointPathGeneration,
         clientToken: UUID?
     ) async {
+        defer {
+            #if DEBUG
+                networkProbeProcessingSequenceForTesting += 1
+            #endif
+        }
         await probeLocalEndpoint(
             account: account, generation: generation,
             endpointPathGeneration: endpointPathGeneration)

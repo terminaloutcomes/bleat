@@ -51,6 +51,10 @@
         private var renderedCapacity: Int?
         private var authorFailureRow: CPListItem?
         private var authorResult: LibraryRepositoryResult<LibraryItemsPage>?
+        #if DEBUG
+            private(set) var selectionTaskAdmissionSequenceForTesting = 0
+            private(set) var selectionTaskCompletionSequenceForTesting = 0
+        #endif
 
         init(
             model: AppModel, account: ServerAccount, libraryID: LibraryID,
@@ -422,6 +426,9 @@
                 completion.callback()
                 return
             }
+            #if DEBUG
+                selectionTaskAdmissionSequenceForTesting += 1
+            #endif
             let id = UUID()
             switch action {
             case .author, .retryAuthor: authorSelections.insert(id)
@@ -436,6 +443,9 @@
                     let completed = self.selectionCompletions.removeValue(
                         forKey: id)
                     completed?.callback()
+                    #if DEBUG
+                        self.selectionTaskCompletionSequenceForTesting += 1
+                    #endif
                 }
                 await self.perform(action, revision: revision)
             }
