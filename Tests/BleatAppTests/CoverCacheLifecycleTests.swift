@@ -564,7 +564,8 @@ import XCTest
                         revisionFailure.fulfill()
                     case .prepareVariantDirectory:
                         variantFailure.fulfill()
-                    case .writeRevision, .encodeVariant, .writeVariant:
+                    case .writeRevision, .encodeVariant, .writeVariant,
+                        .removeCacheRoot:
                         XCTFail("Unexpected failure stage: \(stage.rawValue)")
                     }
                 }, cacheRoot: root,

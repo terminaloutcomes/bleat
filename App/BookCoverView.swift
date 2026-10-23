@@ -115,9 +115,10 @@ enum BookCoverDiskFailureStage: String, Sendable {
     case writeRevision = "write_revision"
     case encodeVariant = "encode_variant"
     case writeVariant = "write_variant"
+    case removeCacheRoot = "remove_cache_root"
 }
 
-enum BookCoverDiskFailureCause: Equatable, Sendable {
+enum BookCoverDiskFailureCause: Equatable, Sendable, Codable {
     case cocoa(code: Int)
     case posix(code: Int32)
     case unclassified
@@ -158,6 +159,11 @@ enum BookCoverDiskFailureCause: Equatable, Sendable {
     }
 }
 
+enum BookCoverCacheResetFailure: Error, Equatable, Sendable, Codable {
+    case cacheDirectoryUnavailable
+    case removalFailed(BookCoverDiskFailureCause)
+}
+
 enum BookCoverCacheEvent: Sendable {
     case joined, committed, obsoleteCompletion
     case diskFailure(
@@ -179,6 +185,12 @@ actor BookCoverImageLoader: BookCoverImageLoading {
         async
     {
         await shared.invalidate(for: url, accountID: accountID)
+    }
+
+    nonisolated static func resetSharedLocalData()
+        async throws(BookCoverCacheResetFailure)
+    {
+        try await shared.removeAllForLocalDataReset()
     }
 
     private static let maximumResponseBytes = 5 * 1_024 * 1_024
@@ -506,6 +518,32 @@ actor BookCoverImageLoader: BookCoverImageLoading {
         }
         if let directory = accountCacheDirectory(for: accountID) {
             try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    func removeAllForLocalDataReset() throws(BookCoverCacheResetFailure) {
+        // Retire every owner before deleting any bytes. A cancellation-ignoring
+        // fetch cannot commit after its generation has been removed.
+        retireRequests { _ in true }
+        clearMemoryCache()
+        inFlight = [:]
+        generations = [:]
+        requestedRevisions = [:]
+        latestRequested = [:]
+        validated = []
+        guard let directory = cacheDirectory else {
+            throw .cacheDirectoryUnavailable
+        }
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch let error as NSError
+            where error.domain == NSCocoaErrorDomain
+            && error.code == NSFileNoSuchFileError
+        {
+            // Reset is idempotent when no artwork has been cached.
+        } catch {
+            reportDiskFailure(error, stage: .removeCacheRoot)
+            throw .removalFailed(BookCoverDiskFailureCause(error: error))
         }
     }
 

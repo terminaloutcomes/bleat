@@ -741,6 +741,8 @@ struct AppFailure: Equatable, Sendable, Codable {
                 "Bleat removed its local store but could not confirm deletion of every saved credential."
             case .persistentStore:
                 "Bleat could not clear its local store. Your accounts and saved credentials were left unchanged."
+            case .bookCovers:
+                "Bleat removed your accounts and saved credentials, but could not finish removing cached artwork. Retry Reset to finish artwork cleanup."
             }
         case .accountUnavailable:
             "That saved account is no longer available."
@@ -1525,6 +1527,8 @@ extension PrivateCloudSyncFailure {
 final class AppModel {
     private let service: any AppServicing
     private let invalidateBookCover: @Sendable (URL, AccountID) async -> Void
+    private let resetBookCovers:
+        @Sendable () async throws(BookCoverCacheResetFailure) -> Void
     private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
     private let diagnostics: any DiagnosticRecording
     private let remoteTelemetryConsentStore: RemoteTelemetryConsentStore
@@ -1943,10 +1947,15 @@ final class AppModel {
             @escaping @MainActor @Sendable () async throws -> Void = {},
         invalidateBookCover:
             @escaping @Sendable (URL, AccountID) async -> Void =
-            BookCoverImageLoader.invalidateShared(for:accountID:)
+            BookCoverImageLoader.invalidateShared(for:accountID:),
+        resetBookCovers:
+            @escaping @Sendable () async throws(BookCoverCacheResetFailure) ->
+            Void =
+            BookCoverImageLoader.resetSharedLocalData
     ) {
         self.service = service
         self.invalidateBookCover = invalidateBookCover
+        self.resetBookCovers = resetBookCovers
         self.cloudStorageNoticeDefaults = cloudStorageNoticeDefaults
         cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
             in: cloudStorageNoticeDefaults)
@@ -2353,7 +2362,7 @@ final class AppModel {
         username: String,
         password: String
     ) async -> Bool {
-        guard !loginStatus.isSubmitting else {
+        guard !loginStatus.isSubmitting, !isResettingLocalData else {
             return false
         }
         let telemetrySpan = remoteTelemetryTracer.beginSpan(
@@ -2422,7 +2431,7 @@ final class AppModel {
 
     @discardableResult
     func loginWithOpenID(serverAddress: String) async -> Bool {
-        guard !loginStatus.isSubmitting else {
+        guard !loginStatus.isSubmitting, !isResettingLocalData else {
             return false
         }
         loginStatus = .submitting(.checkingServer)
@@ -7149,7 +7158,7 @@ final class AppModel {
     }
 
     func resetLocalData() async {
-        guard !isResettingLocalData else {
+        guard !isResettingLocalData, !loginStatus.isSubmitting else {
             return
         }
         isResettingLocalData = true
@@ -7192,6 +7201,13 @@ final class AppModel {
                 return
             }
             try await service.resetLocalData()
+            let coverFailure: BookCoverCacheResetFailure?
+            do {
+                try await resetBookCovers()
+                coverFailure = nil
+            } catch {
+                coverFailure = error
+            }
             clearLocalPreferences()
             accounts.removeAll()
             account = nil
@@ -7205,9 +7221,24 @@ final class AppModel {
             pendingCloudServerConfigurationChanges.removeAll()
             pendingCloudConfigurationConflict = nil
             phase = .signedOut
-            await diagnostics.record(
-                .completed(.resetAppData, category: .app)
-            )
+            if let coverFailure {
+                let failure = AppFailure(
+                    operation: .resetAppData,
+                    serviceError: .localDataReset(.bookCovers(coverFailure))
+                )
+                localDataResetFailure = failure
+                await diagnostics.record(
+                    .failed(
+                        .resetAppData,
+                        category: .app,
+                        failureCode: failure.diagnosticFailureCode
+                    )
+                )
+            } else {
+                await diagnostics.record(
+                    .completed(.resetAppData, category: .app)
+                )
+            }
         } catch let error {
             let failure = AppFailure(
                 operation: .resetAppData,

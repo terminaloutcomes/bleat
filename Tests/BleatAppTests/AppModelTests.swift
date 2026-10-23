@@ -26,6 +26,7 @@ extension DownloadStorageLayout {
 }
 
 #if os(iOS)
+    import Darwin
     import UIKit
 #endif
 
@@ -23933,6 +23934,470 @@ final class AppModelTests: XCTestCase {
             )
         )
     }
+
+    #if os(iOS)
+        func testResetLocalDataRemovesOwnedArtworkAndRejectsLateFetch()
+            async throws
+        {
+            let parent = FileManager.default.temporaryDirectory
+                .appendingPathComponent("reset-artwork-\(UUID().uuidString)")
+            let root = parent.appendingPathComponent("BookCovers")
+            try FileManager.default.createDirectory(
+                at: parent, withIntermediateDirectories: true)
+            addTeardownBlock { try? FileManager.default.removeItem(at: parent) }
+            let outside = parent.appendingPathComponent("outside-cache.bin")
+            let sentinel = Data([9, 8, 7])
+            try sentinel.write(to: outside)
+            let account = try fixtureAccount()
+            let orphan = AccountID(rawValue: "removed-cover-account")
+            let url = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://books.example/api/items/reset-cover/cover?ts=0"
+                ))
+            let lateURL = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://books.example/api/items/late-cover/cover?ts=0")
+            )
+            let data = try XCTUnwrap(
+                artworkTestImage(edge: 2, colour: .blue).pngData())
+            let gate = AsyncGate()
+            let loader = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { request in
+                    if request.url?.path == lateURL.path {
+                        await gate.enterAndWait()
+                    }
+                    return (
+                        data,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200,
+                                httpVersion: nil, headerFields: nil))
+                    )
+                })
+            let first = await loader.image(for: url, accountID: account.id)
+            let orphanImage = await loader.image(for: url, accountID: orphan)
+            XCTAssertNotNil(first)
+            XCTAssertNotNil(orphanImage)
+            let legacy = root.appendingPathComponent("orphan-legacy-account")
+                .appendingPathComponent("legacy-cover.bin")
+            try FileManager.default.createDirectory(
+                at: legacy.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
+            try data.write(to: legacy)
+            let resetCalls = Mutex(0)
+            let service = TestAppService(
+                activeAccount: .success(account), libraries: .success([]))
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: parent.appendingPathComponent(
+                    "downloads"),
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("reset-artwork"),
+                resetBookCovers: {
+                    () async throws(BookCoverCacheResetFailure) in
+                    resetCalls.withLock { $0 += 1 }
+                    try await loader.removeAllForLocalDataReset()
+                })
+            await model.start()
+            let returned = expectation(
+                description: "retired artwork fetch returned")
+            let lateFetch = Task { @MainActor in
+                let image = await loader.image(
+                    for: lateURL, accountID: account.id)
+                returned.fulfill()
+                return image
+            }
+            addTeardownBlock {
+                await gate.release()
+                _ = await lateFetch.value
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+            XCTAssertTrue(entered, "old fetch admitted before reset")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+
+            let resetReturned = expectation(
+                description: "reset returned while the old fetch remained held")
+            let resetTask = Task { @MainActor in
+                await model.resetLocalData()
+                resetReturned.fulfill()
+            }
+            addTeardownBlock {
+                await gate.release()
+                await resetTask.value
+                _ = await lateFetch.value
+            }
+            await fulfillment(of: [resetReturned], timeout: 3)
+
+            XCTAssertEqual(resetCalls.withLock { $0 }, 1)
+            XCTAssertNil(model.localDataResetFailure)
+            XCTAssertEqual(model.phase, .signedOut)
+            XCTAssertTrue(model.accounts.isEmpty)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
+            await gate.release()
+            await fulfillment(of: [returned], timeout: 3)
+            let retired = await lateFetch.value
+            await resetTask.value
+            XCTAssertNil(retired)
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: root.path),
+                "late completion cannot recreate reset cache files")
+            // Zero-timestamp cache-only probes do not create revision metadata.
+            let cached = await loader.image(
+                for: url, accountID: account.id, policy: .cacheOnly)
+            let orphanCached = await loader.image(
+                for: url, accountID: orphan, policy: .cacheOnly)
+            XCTAssertNil(cached)
+            XCTAssertNil(orphanCached)
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
+        }
+
+        func testFailedLocalDataResetPreservesOwnedArtwork() async throws {
+            let parent = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "failed-reset-artwork-\(UUID().uuidString)")
+            let root = parent.appendingPathComponent("BookCovers")
+            addTeardownBlock { try? FileManager.default.removeItem(at: parent) }
+            let account = try fixtureAccount()
+            let url = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://books.example/api/items/reset-cover/cover?ts=0"
+                ))
+            let data = try XCTUnwrap(
+                artworkTestImage(edge: 2, colour: .blue).pngData())
+            let loader = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { request in
+                    (
+                        data,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200,
+                                httpVersion: nil, headerFields: nil))
+                    )
+                })
+            let seeded = await loader.image(for: url, accountID: account.id)
+            XCTAssertNotNil(seeded)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+            let resetCalls = Mutex(0)
+            let service = TestAppService(
+                activeAccount: .success(account), libraries: .success([]),
+                localDataReset: .failure(.localDataReset(.persistentStore)))
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: parent.appendingPathComponent(
+                    "downloads"),
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("failed-reset-artwork"),
+                resetBookCovers: {
+                    () async throws(BookCoverCacheResetFailure) in
+                    resetCalls.withLock { $0 += 1 }
+                    try await loader.removeAllForLocalDataReset()
+                })
+            await model.start()
+
+            await model.resetLocalData()
+
+            XCTAssertEqual(resetCalls.withLock { $0 }, 0)
+            XCTAssertEqual(model.phase, .signedIn)
+            XCTAssertEqual(model.account, account)
+            XCTAssertEqual(
+                model.localDataResetFailure,
+                AppFailure(
+                    operation: .resetAppData,
+                    serviceError: .localDataReset(.persistentStore)))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+            let retained = await loader.image(
+                for: url, accountID: account.id, policy: .cacheOnly)
+            XCTAssertEqual(retained?.size.width, 2)
+        }
+
+        func testLoginIsIgnoredWhileArtworkResetIsRunning() async throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "reset-login-admission-\(UUID().uuidString)")
+            addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+            let account = try fixtureAccount()
+            let gate = AsyncGate()
+            let resetCalls = Mutex(0)
+            let service = TestAppService(
+                activeAccount: .success(nil), login: .success(account),
+                libraries: .success([]))
+            let model = AppModel(
+                service: service, downloadsStorageRootURL: root,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("reset-login-admission"),
+                resetBookCovers: {
+                    () async throws(BookCoverCacheResetFailure) in
+                    resetCalls.withLock { $0 += 1 }
+                    await gate.enterAndWait()
+                })
+            await model.start()
+            let resetReturned = expectation(
+                description: "held artwork reset returned")
+            let resetTask = Task { @MainActor in
+                await model.resetLocalData()
+                resetReturned.fulfill()
+            }
+            addTeardownBlock {
+                await gate.release()
+                await resetTask.value
+            }
+            let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+            XCTAssertTrue(entered)
+            XCTAssertTrue(model.isResettingLocalData)
+            XCTAssertEqual(resetCalls.withLock { $0 }, 1)
+            let loginReturned = expectation(
+                description: "both login methods rejected")
+            let loginTask = Task { @MainActor in
+                let native = await model.login(
+                    serverAddress: "https://books.example", username: "reader",
+                    password: "synthetic-password")
+                let openID = await model.loginWithOpenID(
+                    serverAddress: "https://books.example")
+                loginReturned.fulfill()
+                return (native, openID)
+            }
+            addTeardownBlock {
+                await gate.release()
+                await resetTask.value
+                _ = await loginTask.value
+            }
+            await fulfillment(of: [loginReturned], timeout: 3)
+            let nativeRequests = await service.loginRequests()
+            let openIDRequests = await service.openIDLoginRequests()
+            XCTAssertTrue(nativeRequests.isEmpty)
+            XCTAssertTrue(openIDRequests.isEmpty)
+            XCTAssertTrue(model.isResettingLocalData)
+
+            await gate.release()
+            await fulfillment(of: [resetReturned], timeout: 3)
+            let admitted = await loginTask.value
+            await resetTask.value
+            XCTAssertFalse(admitted.0)
+            XCTAssertFalse(admitted.1)
+            XCTAssertEqual(model.phase, .signedOut)
+            XCTAssertNil(model.account)
+            XCTAssertNil(model.localDataResetFailure)
+        }
+
+        func testArtworkResetIsIgnoredWhileLoginIsRunning() async throws {
+            for useOpenID in [false, true] {
+                let context = useOpenID ? "OpenID" : "native"
+                let root = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "login-reset-admission-\(UUID().uuidString)")
+                addTeardownBlock {
+                    try? FileManager.default.removeItem(at: root)
+                }
+                let account: ServerAccount
+                if useOpenID {
+                    account = try fixtureAccount(authenticationMethods: [
+                        .openID
+                    ])
+                } else {
+                    account = try fixtureAccount()
+                }
+                let gate = AsyncGate()
+                let resetCalls = Mutex(0)
+                let service = TestAppService(
+                    activeAccount: .success(nil), login: .success(account),
+                    libraries: .success([]), loginGate: gate)
+                let model = AppModel(
+                    service: service, downloadsStorageRootURL: root,
+                    downloadsBackgroundSessionIdentifier:
+                        backgroundSessionIdentifier("login-reset-admission"),
+                    resetBookCovers: {
+                        () async throws(BookCoverCacheResetFailure) in
+                        resetCalls.withLock { $0 += 1 }
+                    })
+                await model.start()
+                let loginReturned = expectation(
+                    description: "\(context) login returned")
+                let loginTask = Task { @MainActor in
+                    let admitted: Bool
+                    if useOpenID {
+                        admitted = await model.loginWithOpenID(
+                            serverAddress: "https://books.example")
+                    } else {
+                        admitted = await model.login(
+                            serverAddress: "https://books.example",
+                            username: "reader",
+                            password: "synthetic-password")
+                    }
+                    loginReturned.fulfill()
+                    return admitted
+                }
+                addTeardownBlock {
+                    await gate.release()
+                    _ = await loginTask.value
+                }
+                let entered = await gate.waitUntilEntered(timeout: .seconds(3))
+                XCTAssertTrue(entered, context)
+                XCTAssertTrue(model.loginStatus.isSubmitting, context)
+                let nativeRequests = await service.loginRequests()
+                let openIDRequests = await service.openIDLoginRequests()
+                XCTAssertEqual(nativeRequests.count, useOpenID ? 0 : 1, context)
+                XCTAssertEqual(openIDRequests.count, useOpenID ? 1 : 0, context)
+                let resetReturned = expectation(
+                    description: "reset rejected during \(context)")
+                let resetTask = Task { @MainActor in
+                    await model.resetLocalData()
+                    resetReturned.fulfill()
+                }
+                addTeardownBlock {
+                    await gate.release()
+                    _ = await loginTask.value
+                    await resetTask.value
+                }
+                await fulfillment(of: [resetReturned], timeout: 3)
+                let resetCount = await service.resetLocalDataRequestCount()
+                XCTAssertEqual(resetCount, 0, context)
+                XCTAssertEqual(resetCalls.withLock { $0 }, 0, context)
+                XCTAssertTrue(model.loginStatus.isSubmitting, context)
+                XCTAssertFalse(model.isResettingLocalData, context)
+
+                await gate.release()
+                await fulfillment(of: [loginReturned], timeout: 3)
+                let admitted = await loginTask.value
+                await resetTask.value
+                XCTAssertTrue(admitted, context)
+                XCTAssertEqual(model.phase, .signedIn, context)
+                XCTAssertEqual(model.account, account, context)
+            }
+        }
+
+        func testArtworkCleanupFailureReportsPartialResetAndCanRetry()
+            async throws
+        {
+            let parent = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "partial-reset-artwork-\(UUID().uuidString)")
+            let protectedParent = parent.appendingPathComponent("cover-owner")
+            let root = protectedParent.appendingPathComponent("BookCovers")
+            try FileManager.default.createDirectory(
+                at: protectedParent, withIntermediateDirectories: true)
+            addTeardownBlock {
+                // Restore only this fixture before deleting it, including when
+                // any setup/assertion exits early with its parent read-only.
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o700],
+                    ofItemAtPath: protectedParent.path)
+                try? FileManager.default.removeItem(at: parent)
+            }
+            let outside = protectedParent.appendingPathComponent(
+                "outside-cache.bin")
+            let sentinel = Data([9, 8, 7])
+            try sentinel.write(to: outside)
+            let account = try fixtureAccount()
+            let url = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://books.example/api/items/partial-reset-cover/cover?ts=0"
+                ))
+            let data = try XCTUnwrap(
+                artworkTestImage(edge: 2, colour: .blue).pngData())
+            let failures = Mutex<[BookCoverCacheEvent]>([])
+            let loader = BookCoverImageLoader(
+                observe: { event in failures.withLock { $0.append(event) } },
+                cacheRoot: root,
+                fetch: { request in
+                    (
+                        data,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200,
+                                httpVersion: nil, headerFields: nil))
+                    )
+                })
+            let seeded = await loader.image(for: url, accountID: account.id)
+            XCTAssertNotNil(seeded)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+            let service = TestAppService(
+                activeAccount: .success(account), libraries: .success([]))
+            let diagnostics = AppDiagnosticRecorderSpy()
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: parent.appendingPathComponent(
+                    "downloads"),
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("partial-reset-artwork"),
+                diagnostics: diagnostics,
+                resetBookCovers: {
+                    () async throws(BookCoverCacheResetFailure) in
+                    try await loader.removeAllForLocalDataReset()
+                })
+            await model.start()
+            // Downloads live outside this protected parent. Only the final
+            // cover-root removal is denied by the synthetic permission fault.
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o555], ofItemAtPath: protectedParent.path)
+            let attributes = try FileManager.default.attributesOfItem(
+                atPath: protectedParent.path)
+            XCTAssertEqual(
+                (attributes[.posixPermissions] as? NSNumber)?.intValue, 0o555)
+
+            await model.resetLocalData()
+
+            XCTAssertEqual(model.phase, .signedOut)
+            XCTAssertTrue(model.accounts.isEmpty)
+            XCTAssertNil(model.account)
+            XCTAssertFalse(model.isResettingLocalData)
+            let failure = try XCTUnwrap(model.localDataResetFailure)
+            XCTAssertEqual(
+                failure,
+                AppFailure(
+                    operation: .resetAppData,
+                    serviceError: .localDataReset(
+                        .bookCovers(.removalFailed(.posix(code: EACCES))))))
+            XCTAssertEqual(
+                failure.diagnosticFailureCode, .localDataResetCoverRemovalFailed
+            )
+            let reportedRemoval = failures.withLock { events in
+                events.contains { event in
+                    guard
+                        case .diskFailure(
+                            stage: .removeCacheRoot, cause: .posix(let code)) =
+                            event
+                    else { return false }
+                    return code == EACCES
+                }
+            }
+            XCTAssertTrue(reportedRemoval)
+            let events = await diagnostics.events().filter {
+                $0.operation == .resetAppData
+            }
+            XCTAssertEqual(
+                events.filter { $0.name == .operationFailed }.map(
+                    \.failureCode),
+                [.localDataResetCoverRemovalFailed])
+            XCTAssertFalse(events.contains { $0.name == .operationCompleted })
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
+
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o700], ofItemAtPath: protectedParent.path)
+            await model.resetLocalData()
+
+            let resetCount = await service.resetLocalDataRequestCount()
+            XCTAssertEqual(resetCount, 2)
+            XCTAssertEqual(model.phase, .signedOut)
+            XCTAssertNil(model.localDataResetFailure)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
+            let finalEvents = await diagnostics.events().filter {
+                $0.operation == .resetAppData
+            }
+            XCTAssertEqual(
+                finalEvents.filter { $0.name == .operationCompleted }.count, 1)
+        }
+    #endif
 
     func testResetLocalDataDisablesPrivateCloudBeforeItCanResynchronize()
         async throws

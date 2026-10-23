@@ -195,6 +195,7 @@ enum LocalDataResetFailure: Error, Equatable, Sendable, Codable {
     case downloads
     case credentials(TokenVaultError)
     case persistentStore
+    case bookCovers(BookCoverCacheResetFailure)
 }
 
 enum AccountIdentityMigrationFailure: Error, Equatable, Sendable {

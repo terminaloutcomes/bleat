@@ -211,6 +211,10 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case localDataResetDownloadsFailed = "local_data_reset_downloads_failed"
     case localDataResetCredentialsFailed = "local_data_reset_credentials_failed"
     case localDataResetStoreFailed = "local_data_reset_store_failed"
+    case localDataResetCoverDirectoryUnavailable =
+        "local_data_reset_cover_directory_unavailable"
+    case localDataResetCoverRemovalFailed =
+        "local_data_reset_cover_removal_failed"
     case legacyDiagnosticDirectoryUnavailable =
         "legacy_diagnostic_directory_unavailable"
     case legacyDiagnosticDirectoryRemovalFailed =

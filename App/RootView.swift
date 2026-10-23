@@ -88,6 +88,33 @@ struct RootView: View {
                     .tint(colourScheme.color)
             case .signedOut:
                 NativeLoginView(model: model).tint(colourScheme.color)
+                    .disabled(model.isResettingLocalData)
+                    .safeAreaInset(edge: .top) {
+                        if let failure = model.localDataResetFailure,
+                            case .localDataReset(.bookCovers) = failure.cause
+                        {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label(
+                                    failure.title,
+                                    systemImage: failure.systemImage)
+                                Text(failure.message)
+                                    .accessibilityIdentifier(
+                                        "app.resetLocalData.error")
+                                Button("Retry Reset") {
+                                    Task { await model.resetLocalData() }
+                                }
+                                .disabled(
+                                    model.isResettingLocalData
+                                        || model.loginStatus.isSubmitting
+                                )
+                                .accessibilityIdentifier(
+                                    "app.resetLocalData.retry")
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.regularMaterial)
+                        }
+                    }
             case .signedIn:
                 SignedInView(model: model, navigation: navigation)
                     .tint(colourScheme.color)
