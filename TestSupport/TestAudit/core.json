@@ -8870,6 +8870,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterUsesLocalServerAndPreservesPathPrefix",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-48ba1e7cc272",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact candidate order, local marker and prefix rewrite.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 9
@@ -8909,6 +8919,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterSkipsFailedLocalServerUntilRevalidated",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-11015166c55a",
+        "currentDecision": "keep; no code change",
+        "assessment": "Unavailable local leaves the exact primary candidate.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 33
@@ -8948,6 +8968,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-57127d923054",
+        "currentDecision": "keep; no code change",
+        "assessment": "Both prefix arguments preserve exact request/destination/body/auth counts, stale-success rejection and controlled probe recovery.",
+        "synchronizationAndOwnership": "Awaited real URLSession requests use the locked immediate URLProtocol fixture in a serialized suite; handler reset is deferred. No live server or new held caller.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 51
@@ -8987,6 +9017,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-3017c6e05cc8",
+        "currentDecision": "keep; no code change",
+        "assessment": "Failed, unknown and matching-generation validated selections remain explicit.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 141
@@ -9026,6 +9066,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-f25967d01929",
+        "currentDecision": "keep; no code change",
+        "assessment": "Configuration during evaluation retains primary until validation.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 176
@@ -9065,6 +9115,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-1b5a0c5d8b4f",
+        "currentDecision": "keep; no code change",
+        "assessment": "Old candidate success cannot clear current unknown/primary state.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 200
@@ -9104,6 +9164,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testURLOnlyCompletionCannotMutateCurrentPathSelection",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-2b9d7df9fc09",
+        "currentDecision": "keep; no code change",
+        "assessment": "Generation-less completion preserves validated selection/availability; this does not assert activity suppression.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 222
@@ -9143,6 +9213,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-c1592a648e2e",
+        "currentDecision": "keep; no code change",
+        "assessment": "Unresolved evaluation finishes on primary with temporarily-unavailable local state.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 250
@@ -9182,6 +9262,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-4c12eaefd8b1",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact rewritten URL, primary identity and non-local flag.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 268
@@ -9221,6 +9311,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-236184fd37ae",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact URL, GET/auth and constrained/expensive-network flags.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 294
@@ -9260,6 +9360,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testSuccessfulProbeRestoresFailedLocalServer",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-01c113f50339",
+        "currentDecision": "keep; no code change",
+        "assessment": "Matching successful probe restores local selection.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 325
@@ -9299,6 +9409,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterTracksAPIAndAuthenticationUsageSeparately",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-55493a7ad63f",
+        "currentDecision": "keep; no code change",
+        "assessment": "Local API and primary authentication remain independent.",
+        "synchronizationAndOwnership": "Fresh local actor and awaited immediate state transitions; no held fake, detached caller or external observer requires new cancellation machinery.",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound; this is a current helper-context recheck, not a new defect."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 342
@@ -9338,6 +9458,16 @@
     },
     {
       "identifier": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterStreamsEveryServerConnectionPurpose",
+      "routerReview20261023": {
+        "base": "d2c4f85f0224b72eb34a49d8b791c23d730ab21e",
+        "catalogID": "AUD-C-ca5591e818c7",
+        "currentDecision": "keep after four-purpose assertion coverage correction",
+        "assessment": "All six typed purposes publish checked snapshots; added API/authentication/cover/download cases preserve existing playback/WebSocket assertions and accumulated dedicated fields.",
+        "synchronizationAndOwnership": "Existing five-second bounded reader joins timeout/read children and forwards stage/caller diagnostics. Fresh actor/stream; no whole observer-retirement claim.",
+        "historicalCohortMember": false,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "historicalAssessment": "Prior fields remain revision-bound. This current review supersedes the old stream unbounded-read finding, already addressed by the existing bounded helper."
+      },
       "source": {
         "path": "Tests/BleatCoreTests/HTTPTransportTests.swift",
         "line": 372
