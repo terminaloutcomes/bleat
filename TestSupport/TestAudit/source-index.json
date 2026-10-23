@@ -6207,13 +6207,13 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testCallbackCancellationCompletesBeforeLifecycleAllowsRetry",
-      "line": 28,
+      "line": 50,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testCallbackWatchdogCancellationEscapesDelegateTaskLocals",
-      "line": 53,
+      "line": 99,
       "language": "swift"
     },
     {

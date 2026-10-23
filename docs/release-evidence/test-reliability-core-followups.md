@@ -2284,3 +2284,67 @@ the new test has an individual nine-rule audit and host inventory entry. Eight
 following navigation entries move seven lines and retain both prior histories;
 they are not eight semantic findings. All unrelated audit/index rows and the
 historical declared baseline counts are preserved.
+
+
+## CloudKit cancellation caller completion (#372)
+
+This bounded review starts from `82875e205a99987893013c3a6aaafbe0a179b700`.
+It covers exactly three existing `PrivateCloudSyncTests` identities:
+
+- `testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce`
+- `testCallbackCancellationCompletesBeforeLifecycleAllowsRetry`
+- `testCallbackWatchdogCancellationEscapesDelegateTaskLocals`
+
+The probe entry notification and latched early release were already delivered.
+Current source still awaited final cancellation directly in two tests and joined
+an unbounded lifecycle caller in the third. This is a test failure-diagnostic gap,
+not a demonstrated production CloudKit defect. Each caller now signals only after
+its actual awaited cancellation API sequence returns; the lifecycle sequence also
+finishes/completes the run before signalling. Five-second observations precede
+all task-value joins. The budget diagnoses a missing phase rather than imposing
+a product execution-speed requirement. Inline test assertions retain phase,
+elapsed time and timeout at the caller.
+
+Awaited cleanup cancels only owned callers, releases the existing latched probe,
+and observes return within the same bounded budget on normal, guard and throwing
+exits. The watchdog callback is ended on every exit. An unconfirmed task is never
+joined after timeout; cancellation does not prove an uncooperative operation or
+whole production watchdog/task graph terminated. Original exact coalesced call
+count, escaped task-local context, typed `callbackTimedOut`, held `.stopping` and
+post-release retry assertions remain. Production and shared helper bytes are
+unchanged. These are synthetic host state-machine tests, with no personal
+CloudKit account, device, network, persistence or playback operation.
+
+The three audit rows receive scoped current dispositions; their historical
+follow-up decisions and timing receipts remain. No declaration or inventory count
+changes, broader queue subtraction, or #372/#362 completion is claimed.
+
+Final local validation on Xcode 27.1 / macOS passed all three exact identities
+in three independent focused executions, all 54 owning `PrivateCloudSyncTests`,
+and all 609 exact signed-host identities. There were zero failures/errors/skips
+in those final runs; the signed inventory verifier and coverage export exited 0.
+Results and per-command disk-guard receipts are retained under
+`.build/cloud-cancellation-*`, with signed XML in `.build/host-results/tests.xml`.
+The guard retained its 3 GiB floor; the signed run used 14.48 GiB free before and
+14.14 GiB afterward. Strict changed-file Swift formatting, scoped audit/index
+parity (609 host / 46 Rust functions), documentation references and diff checks
+passed. Those structural checks do not certify whole-repository semantics.
+
+A controlled test-only negative witness withheld the lifecycle probe release:
+its exact selected identity failed the intended terminal assertion at the test
+caller after 5.30 seconds, with one issue and nonzero exit. Cleanup then released
+the latched probe and returned without a second cleanup failure. The final test
+source was restored byte-for-byte before owning/signed validation. This is a
+witness for missing completion observation, not a production fault injection or
+proof that arbitrary stuck operations terminate.
+
+Independent review of all five changed files found no actionable findings and
+cleared publication after local evidence verification; published-head CI remains
+a separate gate. The first command spelling for formatting could not locate
+`swift-format`; the supported `xcrun swift-format` invocation succeeded. The
+initial native build failed before executing tests because a cleanup closure
+erased inferred catch typing. An explicit `PrivateCloudSyncError` catch preserves
+the original `.stopping` assertion; that compile-only attempt is retained, not
+counted as coverage. Existing upstream watchOS deprecation, native toolchain and
+intentional storage/cleanup-fixture diagnostics remain in the raw logs; no broad
+warning-free or physical CloudKit acceptance claim is made.
