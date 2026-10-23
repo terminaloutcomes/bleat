@@ -322,7 +322,8 @@ final class TelemetryAuthenticationTests {
 
     @Test
     func testConcurrentRefreshIsSingleFlight() async throws {
-        let transport = FakeTelemetryTransport(tokenDelay: .milliseconds(100))
+        let responseGate = AuthTelemetryTestSignal()
+        let transport = FakeTelemetryTransport(tokenResponseGate: responseGate)
         let attester = FakeTelemetryAttester()
         let provider = TelemetryTokenProvider(
             attester: attester,
@@ -336,20 +337,60 @@ final class TelemetryAuthenticationTests {
         )
         await provider.setEnabled(true)
 
-        let tokens = try await withThrowingTaskGroup(of: String.self) { group in
-            for _ in 0..<12 {
-                group.addTask { try await provider.currentToken() }
+        let returned = BoundedTestCounter()
+        let callers = (0..<12).map { _ in
+            Task {
+                let result = await telemetryTokenResult(from: provider)
+                await returned.increment()
+                return result
             }
-            var values: [String] = []
-            for try await value in group { values.append(value) }
-            return values
         }
-        let tokenChallengeCount = await transport.tokenChallengeCount
-        let tokenCount = await transport.tokenCount
-        #expect(Set(tokens) == ["token-1"])
-        #expect(tokenChallengeCount == 1)
-        #expect(tokenCount == 1)
-        #expect(attester.assertionCount == 1)
+        try await withTestCleanup {
+            for caller in callers { caller.cancel() }
+            await provider.setEnabled(false)
+            await transport.retireTokenResponse()
+            let cleanup = await returned.wait(
+                untilAtLeast: 12, timeout: .seconds(10))
+            #expect(
+                cleanup.reached,
+                "single-flight caller cleanup: elapsed \(cleanup.elapsed), limit \(cleanup.timeout)"
+            )
+            if cleanup.reached {
+                for caller in callers { _ = await caller.value }
+            }
+        } operation: {
+            try #require(
+                await requireAuthTelemetrySignal(
+                    transport.tokenEntrySignal,
+                    stage: "single-flight token response held"))
+            try #require(
+                await requireAuthTelemetryCondition(
+                    // Keep admission below the fake response's ten-second expiry.
+                    stage: "all twelve refresh waiters registered",
+                    timeout: .seconds(5)
+                ) {
+                    await provider.refreshWaiterCountForTesting == 12
+                })
+            await responseGate.signal()
+            let completion = await returned.wait(
+                untilAtLeast: 12, timeout: .seconds(10))
+            #expect(
+                completion.reached,
+                "single-flight callers returning: elapsed \(completion.elapsed), limit \(completion.timeout)"
+            )
+            guard completion.reached else { return }
+            var tokens: [String] = []
+            for caller in callers {
+                tokens.append(try await caller.value.get())
+            }
+            let tokenChallengeCount = await transport.tokenChallengeCount
+            let tokenCount = await transport.tokenCount
+            #expect(tokens.count == 12)
+            #expect(Set(tokens) == ["token-1"])
+            #expect(tokenChallengeCount == 1)
+            #expect(tokenCount == 1)
+            #expect(attester.assertionCount == 1)
+        }
     }
 
     @Test

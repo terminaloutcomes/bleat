@@ -505,7 +505,7 @@
     "testResourceRejectsArbitraryOrUnboundedStrings()",
     "testRepresentativeEncodingContainsNoSensitiveValues()",
     "testDefaultCollectionPolicyMatchesReviewedBounds()",
-    "testInactiveTracerProducesNoExportableSpan()",
+    "testInactiveTracerHasNoContextOrPropagation()",
     "testPipelineBatchesReviewedSpansWithExactResource()",
     "testSpansStartedDuringAsynchronousInitializationAreExported()",
     "testFailedExportIsRetainedAndDrainedAfterRelaunch()",

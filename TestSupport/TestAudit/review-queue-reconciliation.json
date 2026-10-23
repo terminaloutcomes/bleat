@@ -5,18 +5,18 @@
     374
   ],
   "historicalSnapshotRevision": "58223214dba2e401d5d24e64f0b81b3c910e1061",
-  "reconciledSourceRevision": "c1a7777f170783823d575ea0ccd155dc66b3dd64",
+  "reconciledSourceRevision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
   "definition": "Fixed historical review-candidate identities, not all repository tests, defects, missing tests, execution counts or physical acceptance tasks. A completed scoped review is bounded by its evidence; partial cleanup/finding or passing execution alone is not full current-context review. Original audit fields remain historical.",
   "counts": {
     "historicalCandidates": 312,
     "coreCandidates": 241,
     "appCandidates": 71,
-    "completedBeforeThisSlice": 62,
-    "completedByThisSlice": 35,
-    "completedScopedReviews": 97,
-    "pendingCore": 144,
+    "completedBeforeThisSlice": 97,
+    "completedByThisSlice": 58,
+    "completedScopedReviews": 155,
+    "pendingCore": 86,
     "pendingApp": 71,
-    "pendingTotal": 215
+    "pendingTotal": 157
   },
   "limits": [
     "Nine core pending records have cleanup-only partial reviews; they remain pending.",
@@ -238,40 +238,65 @@
       "id": "AUD-C-3eed5f271a66",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConfigurationRequiresHTTPSOriginAndPositiveTimeout",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Valid HTTPS origin/default timeout accepted; five unsafe endpoint shapes and zero timeout produce exact typed errors. Not exhaustive numeric-edge coverage.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-627f0c7c3452",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testEachExportUsesExactlyOneCurrentBearerValue",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two awaited exports use exactly one current bearer metadata value each; async count 2 and shutdown count 0. Immediate locked fake, not network or complete exporter retirement evidence.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-dbc8c63f6384",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "One unauthenticated response invalidates expired token, retries exactly once and succeeds with renewed final metadata. First-request metadata is not separately asserted.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-9654c51c1f0e",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPersistentAuthenticationRejectionNeverLoops",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two persistent authentication rejections yield failure after exactly 2 exports/requests and invalidate both tokens; queued third success remains unused.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-0eb14d3177c6",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testLogExporterRefreshesOnceAndDisableGatesQueuedRecords",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Log retry uses renewed bearer and one invalidation; disabling rejects another export without another RPC, then awaited shutdown is counted once. Provider admission after disable is not separately counted.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
@@ -323,24 +348,39 @@
       "id": "AUD-C-e79031122a8c",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Rejected/failure/cancelled responses each yield failure after one export without invalidation. Immediate fake results, not proof of a bound for an uncooperative real client.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-938f8f6a0dc4",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Typed protobuf decoding now checks one trace/log resource, one named scope and exact representative span name/log body, retaining path/header/async-request/shutdown checks. No real HTTPS or exhaustive serialization claim; log POST is not separately asserted.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1cedd7fb70a5",
       "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Pure response mapping:200 success,401 unauthenticated,403 rejected,429 failure,cancellation and connection error remain distinct. No network request is made.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
@@ -1711,288 +1751,469 @@
       "id": "AUD-C-15a888b5f1d9",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact endpoint/outcome span multiplicities, event schema and synthetic marker nondisclosure; custom URLProtocol immediate terminal responses, no live network.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-80df4ea7d9d2",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact two typed attempt records retain progress endpoint, local URLProtocol error then primary success; not real connectivity.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-d256301e1acf",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two spans, one event each, preserved explicit start/end within 1 ms and no added export after deactivation; tolerance is timestamp conversion, not playback.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-c696541d9ecd",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact reviewed operation-name set and descriptor key set/failure category across all operations; pure encoding.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-89c943bb024f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedTelemetryAuthenticationRequestSpansShareParentTrace",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Four buffered spans, expected child names/kinds and exact parent/span trace relation after activation/flush; constructed events, no authentication transport.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-a2404caefa7b",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedChapterSpanExportsMeasurementsUnderBatchParent",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Parent/child trace IDs and exact chapter key set plus selected measurement values; remaining numeric values not separately asserted here.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-75768ffc23c9",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact 64 capacity eviction indices/outcomes, terminal completion/dedup and late log-presence counts; immediate locked probe, no CloudKit requests.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-80b609ce7f3c",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Duplicate abandonment and capacity eviction exact indices; refreshed duplicate completes index 64. Other active spans deliberately remain in local recorder, no external resources.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-4ef6034e647a",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTerminalOutcomesFreeCapacity",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Success/local-storage/cancel outcomes and no extra capacity abandonment after replacements; synthetic lifecycle recorder.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-69426fee491f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitAbandonmentExportsReviewedReasonAndStage",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two exact abandonment reasons, reviewed stage/outcome and strict attribute keyset exported; synthetic capacity lifecycle, not cloud service.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-6d611fa51ed0",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitLifecycleProducesReviewedLogsAndSpan",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two correlated logs, async export count and exact reviewed rate-limit metadata; only first span inspected, no real cloud request.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-154569cdda6b",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDownloadLifecycleProducesTypedCorrelatedLogs",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Three correlated lifecycle logs, retry metadata and failure schema with forbidden URL/path keys absent; manually constructed events, no actual download. Temp-directory defer; no explicit pipeline shutdown in this case.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-745fc3aeca9a",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOutcomeEncodingNeverIncludesRawErrorText",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Typed success/cancel/failure category mapping and exact live-update schema; no raw arbitrary Error is injected, so limited to descriptor enum encoding.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-472e1e65d2fd",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testChapterTranscriptionSpanEncodesReviewedInputMeasurements",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact full encoded measurement dictionary; synthetic validated input, no transcription.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-dbf4aa7eea7b",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRetryCountsAreBounded",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Explicit negative/0/1/2/3/max bucket mapping.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-bc3f1340cc1f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceEncodingContainsOnlyStableTechnicalValues",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact normalized resource dictionary and omitted device.model.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f7ee4f62f512",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceAcceptsIntegerAndDottedNumericBuilds",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two exact leading-zero numeric normalizations.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-307de2519c72",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceRejectsArbitraryOrUnboundedStrings",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Typed version/build errors plus malformed/out-of-range builds; last invalid OS/version cases assert any error only.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-d7cce980252f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRepresentativeEncodingContainsNoSensitiveValues",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Specified markers absent from representative typed resource/descriptor; markers are not supplied as input, no general redaction/adversarial-data claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-01b281728b51",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDefaultCollectionPolicyMatchesReviewedBounds",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact default sampling/age/bytes/no-count-cap/drop-oldest policy.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-ccdc828e390c",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerProducesNoExportableSpan",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
-      "partialEvidence": null
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Corrected disconnected-observer oracle: actual returned span has nil context and empty propagation before/after ending. Renamed to describe that narrower contract; no connected-export/pipeline claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
+      "partialEvidence": null,
+      "currentIdentity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerHasNoContextOrPropagation"
     },
     {
       "id": "AUD-C-7d116cea237c",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPipelineBatchesReviewedSpansWithExactResource",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two names, exact resource, no events/links and asynchronous batch count; connected pipeline and recording exporter.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1060a907a5ea",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpansStartedDuringAsynchronousInitializationAreExported",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Explicit prepareForActivation buffered app-launch span exported after pipeline activation, no controlled concurrent initializer race.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-41541b050474",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testFailedExportIsRetainedAndDrainedAfterRelaunch",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Disk batch exists after failed export, first instance shutdown, reconstructed pipeline drains exact app-launch and removes files; same process, not app relaunch.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-96c8bf9344f9",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistencePrunesExpiredAndCorruptBatches",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Known span persisted; invalid JSON added; controlled clock +3 h reconstruction removes all batches; no sleep.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-fe6c1563882f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceNeverExceedsConfiguredByteLimit",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Twenty awaited exports total JSON-file bytes bounded 4096; file size read fallback 0 limits filesystem-error diagnosis; no-count-cap checked.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-a94eed087c9d",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testByteLimitEvictsOnlyTheOldestRequiredSpans",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Constructed encoded-size threshold forces minimum eviction; decoded retained exact middle/newest names. Span helper uses real endTime ordering, not manual clock.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-9b99ec1d6cc0",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceStoresOnlySpanDataAndHasNoCountCap",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Persisted JSON decodes as 200 SpanData and default no-count-cap; does not assert no additional JSON keys beyond decoder acceptance.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-2b4a621ed503",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceDrainsOldestSpanFirstAfterRelaunch",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Newest then oldest persisted, instance disabled; reconstructed exporter drains exact oldest/newest order; same-process recreation.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1e9aa6d77526",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOversizedBatchDropsOldestSpansWithoutExceedingLimit",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "8 byte policy cannot fit one span; accepted export yields no batch files; single-span oversize, not multi-element trimming.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-16666ed36d72",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpanEndDoesNotWaitForBlockedDownstreamExport",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Synchronous end elapsed<100 ms with configured 1 s recording-export delay; no explicit downstream-entry witness, not controlled blocked-export proof.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-60389bc3423f",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundStyleFlushReturnsAtItsDeadline",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Pipeline flush 50 ms budget returns<250 ms with 1 s delayed exporter; no explicit entry/completion witness or lower bound; no OS background execution.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-d34b8b97583b",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundFlushAttemptsOneDrainWhileBackgrounded",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Foregroundfalse buffers, explicit allowWhileBackgrounded flush succeeds and exports exact span; does not assert number of downstream attempts beyond exact recorded data.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-06c82d898015",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalStopsNewSpansAndPurgesRetainedData",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Existing failed batch witnessed, deactivate/purge then newspan leaves batch files empty; immediate observation only, not drained future-export proof.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-58e512a1a89a",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "End held old-generation span after deactivate/purge, awaitedshutdown, no exported spans/files; connected recording observer.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-c1568e470a63",
       "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRapidReenableExportsOnlyCleanGeneration",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Old span ended after new activation, currentflush and oldshutdown; old exporter empty and current exact libraryrefresh only. Newcurrent deactivate/purge, no new shutdown witness.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
@@ -2111,56 +2332,91 @@
       "id": "AUD-C-c0601eae9bad",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityDoesNotRefresh",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Disabled/missing/current/expiring/expired states are exact; request counts remain 0 before acquisition and 4 across passive availability reads. Controlled Date advance, not real-time latency.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-79ef3ae76f4b",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityPreservesFailureCause",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact unsupported/rejected/configuration/response/rate/backoff-to-transient availability causes across independent providers and immediate fakes. Suppressed acquisition throws are followed by exact failure-state oracles; no native attestation/network claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-4ab2eb4cdee4",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConsentEnablementIsLazyAndFirstTokenEnrolls",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Disabled error, zero eager transport/attester work, exact first token/four requests/attester counts/five tracing operations+successes and stored enrollment. Memory fake persistence only.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-c2451c078e69",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testUnsupportedAttesterPerformsNoWork",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Exact unsupported error plus zero transport requests/attester calls. No native device availability claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-cb9e45d776ba",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two provider objects share the same in-memory enrollment actor; first provider caches token while new provider makes two acquisition calls. Demonstrates provider reconstruction, not disk persistence or process relaunch.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-0d32f0a6395f",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTokenWithinRefreshWindowIsRenewedWithoutReenrollment",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Controlled 481-second advance selects token 2; exact two token challenges and zero generated keys. No wall-clock sleep or expiry scheduler claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-5bac7dd18dbe",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConcurrentRefreshIsSingleFlight",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Corrected overlap oracle: hold response until all 12 refresh waiters are positively registered, then require 12 terminal caller results and exact token/challenge/token/assertion counts. Five-second admission watchdog precedes the fake response expiry; bounded cleanup cancels, disables, retires and joins returned callers. No real attestation/server claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
@@ -2182,56 +2438,91 @@
       "id": "AUD-C-a6cfb7fbe187",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidStoredKeyClearsEnrollmentAndRestartsOnce",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Injected first assertion invalidation yields token 1, exactly one key generation/deletion and replacement stored key. Synthetic invalidation/re-enrollment, not real App Attest key lifecycle.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-209bc374d591",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testServerRejectionDoesNotReplaceDisabledInstallation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two sequential rejection calls produce one challenge, zero store deletions/key generation. Establishes cached rejection/no replacement, not concurrent failure fanout or real server enforcement.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-217934e152d4",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testEnrollmentRejectionStopsRetriesUntilReenabled",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Two sequential failures share one challenge/enrollment/key generation; disable+enable permits exactly one additional attempt. Synthetic consent reset/cache contract.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-53733a1d9d46",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidationOnlyClearsTheTokenThatWasRejected",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Sequential wrong-token invalidation retains token 1; matching-token invalidation yields token 2 and exactly two challenges. No concurrent response ordering claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-7d663c56da45",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTransientFailureAppliesBoundedLazyBackoff",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Controlled Date/jitter and two injected transient failures establish immediate backingOff, rejection before 2-second retry boundary and eventual token. Lazy access-based backoff, no autonomous timer/maximum-cap matrix claim.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-ea6e2749a2f1",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testRateLimitRetryAfterDelaysTheNextChallengeAttempt",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "At 59.9 seconds cached backoff retains one challenge; at 60.1 seconds second exact rate-limit failure records two. Controlled Date, not real network timing.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-40d6ae552559",
       "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testErrorsContainNoChallengeKeyOrTokenMaterial",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "scope_and_limits": "Descriptions of the listed closed typed error values exclude three synthetic marker strings. Does not exercise transport errors carrying real payloads, broader logging, provider diagnostics or exhaustive sensitive-material flow.",
+        "current_input_rationale": "Current body/helpers and source contracts reviewed; changed test oracles are validated separately, with no production behavior change."
+      },
       "partialEvidence": null
     },
     {
@@ -3222,6 +3513,22 @@
         "pendingTotal": 250
       },
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372"
+    },
+    {
+      "sourceRevision": "c1a7777f170783823d575ea0ccd155dc66b3dd64",
+      "counts": {
+        "historicalCandidates": 312,
+        "coreCandidates": 241,
+        "appCandidates": 71,
+        "completedBeforeThisSlice": 62,
+        "completedByThisSlice": 35,
+        "completedScopedReviews": 97,
+        "pendingCore": 144,
+        "pendingApp": 71,
+        "pendingTotal": 215
+      },
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#authentication-contract-context-and-canonical-credential-oracle-372"
     }
-  ]
+  ],
+  "identityResolution": "identity is the fixed historical cohort identity; optional currentIdentity names a renamed current declaration. Stable IDs and historical identities are preserved."
 }

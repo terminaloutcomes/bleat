@@ -6680,7 +6680,7 @@
     },
     {
       "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
-      "name": "testInactiveTracerProducesNoExportableSpan",
+      "name": "testInactiveTracerHasNoContextOrPropagation",
       "line": 895,
       "language": "swift"
     },
