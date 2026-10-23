@@ -11,12 +11,12 @@
     "historicalCandidates": 312,
     "coreCandidates": 241,
     "appCandidates": 71,
-    "completedBeforeThisSlice": 155,
-    "completedByThisSlice": 59,
-    "completedScopedReviews": 214,
-    "pendingCore": 27,
+    "completedBeforeThisSlice": 214,
+    "completedByThisSlice": 27,
+    "completedScopedReviews": 241,
+    "pendingCore": 0,
     "pendingApp": 71,
-    "pendingTotal": 98
+    "pendingTotal": 71
   },
   "limits": [
     "Nine core records retain historical cleanup-only partial evidence; current scoped reviews are now complete and explicitly preserve their limits.",
@@ -668,8 +668,13 @@
       "id": "AUD-C-c4a076ccc051",
       "identity": "Tests/BleatCoreTests/DownloadStorageTests.swift::testStorageRequirementRejectsOverflow",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Int64.max plus one expected-track byte produces requirementOverflow. Pure value calculation; no filesystem operation.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
@@ -881,24 +886,39 @@
       "id": "AUD-C-2c41ecec4a50",
       "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksCacheWritePerformance",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Deterministic 200-page/10k-book memory-cache writes finish within ten seconds. This case has no readback oracle or MainActor heartbeat.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1aa43559f4dc",
       "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksCacheReadPerformance",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "After seeding 200 pages, every read exists with 50 items and finishes within ten seconds. Exact book content and off-main responsiveness are not asserted.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-7be0b1002141",
       "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksOnDiskStorageSize",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "An owned temporary SQLite store has a positive main-file size after 200 saves; main/WAL/SHM sizes are reported. No size ceiling or readback; optional-file size defaults to zero on absence/error.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
@@ -2515,112 +2535,182 @@
       "id": "AUD-C-6eb57317a29e",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Two subscriptions share prepared memory after snapshot rows are removed; stopping the first retains five seconds and stopping the last releases the live snapshot. No independent reader task; explicit stops occur on normal exit.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-678c51275088",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "A disk store seeded with history progress 1/3 is reopened with saving disabled. Failed update preserves the observation revision and completedPages=1 in observation/repository; totalPages is not separately reasserted.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-62a807d8a7f9",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "A synthetic remote 90-second session has exact book/day/time/all-device coverage and zero completed chapters, with nil audiobook seconds/effective average. No real server.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f6412d58b622",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Archive import, same-memory-container reconstruction, repeat import and remote upsert preserve the exact snapshot; a lower-seconds update retains ten seconds and one slice. No process/disk durability claim.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-802d5e8c75e7",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Two accounts total ten seconds; selected range is five, reset makes it zero, and the other account retains five.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-649777a733d1",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Twenty repeated final-five-second segments yield one started chapter and zero completed chapters in summary/book. Deterministic aggregation, not a playback engine.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-e3bcc8f04e2a",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::duplicateCompletionEventsCountOneHistoricalRuntime",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Two completion milestones for one book count one completed book, 100 seconds runtime and the earliest completion date.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-b0cc8b593727",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Synthetic samples from zero through twelve seconds preserve exact persisted-plus-live totals across checkpoints. No explicit finish or real playback.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-ff51f6e83296",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "The same session ID in two accounts retains separate two-second accumulators; reset clears only its account, and finishing retains the other's two seconds.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f77b245155f9",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeResetDiscardsGrowingSegmentAfterCheckpoint",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Both five/seven-second arguments verify range reset after a checkpoint, a replacement segment and preserved other-account totals.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-889fed942d8b",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Cache-only reads return nil before/after import; explicit snapshot builds five seconds and reset invalidates it. No polling scheduler is run.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-48e494ceeb80",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Four warmed query scopes remain exactly equal to archive rebuilds after synthetic playback, finish and confirmed/uncertain remote synchronization.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-132673c0d236",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Twenty-five unscoped range requests against an empty repository retain two snapshot rows; lifetime is unchanged, earliest range absent and latest present. Per-account capacity is not exercised.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-a2015d208b1c",
       "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::stored250000SlicesArchiveResetAndCachedRelaunch",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "The opt-in 250k workload retains every original total and timing assertion. Its first import now uses existing withTestCleanup to cancel/join the heartbeat on success or throw. Controlled throwing-path proof and final flagged compilation are separate from unexecuted 250k performance acceptance.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
@@ -2824,72 +2914,117 @@
       "id": "AUD-C-40543b1a986d",
       "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::awaitsCleanupAfterSuccess",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Awaited cleanup yields then sets its flag; the operation returns exactly 42 and cleanup is observed. No retained child task.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-3b353d2dd913",
       "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::awaitsCleanupAfterOperationFailure",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "An exact typed operation failure survives asynchronous successful cleanup, whose flag is observed.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-34816be6714a",
       "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::propagatesCleanupFailure",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "An exact typed cleanup failure propagates after operation success. Combined-failure behavior belongs to separate existing cases.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f29ffe5bf5be",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testWebVTTUsesWholeBookTimestampsAndEscapesCueText",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Exact UTF-8 WebVTT output checks whole-book one-hour timestamps, Unicode, entity escaping and CRLF normalization. Pure exporter fixtures.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-bab38a07afd8",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testSubRipSortsSegmentsAndUsesSequentialCueIdentifiers",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Exact two-cue CRLF SubRip output checks time sorting and sequential cue IDs, retaining arrow text.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-466c5cfc8596",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testWebVTTSeparatesAdjacentCueBlocks",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Exact adjacent 500-millisecond WebVTT blocks include the required blank separator.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-58ecda45c7f6",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testPartialCanonicalTranscriptCanBeExported",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "A partial canonical transcript exports the available chapter text. Exact timestamps/full syntax belong to separate format cases.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-11487369c41d",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCueTextCannotTerminateItsOwnCueWithBlankLines",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Exact WebVTT/SubRip output normalizes leading, trailing and embedded blank lines while keeping two text lines in one cue.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-4f78a13042d4",
       "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testExportRejectsMissingAndInvalidSegments",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "scope_and_limits": "Empty input produces noSegments, while reversed/zero-duration segments produce invalidSegment across formats.",
+        "current_input_rationale": "Current source/helper semantics reviewed; corrected gated body has controlled throwing-path witness and final opt-in compilation, while ordinary selected/owning evidence is recorded separately."
+      },
       "partialEvidence": null
     },
     {
@@ -3838,6 +3973,21 @@
         "pendingTotal": 157
       },
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372"
+    },
+    {
+      "sourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+      "counts": {
+        "historicalCandidates": 312,
+        "coreCandidates": 241,
+        "appCandidates": 71,
+        "completedBeforeThisSlice": 155,
+        "completedByThisSlice": 59,
+        "completedScopedReviews": 214,
+        "pendingCore": 27,
+        "pendingApp": 71,
+        "pendingTotal": 98
+      },
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372"
     }
   ],
   "identityResolution": "identity is the fixed historical cohort identity; optional currentIdentity names a renamed current declaration. Stable IDs and historical identities are preserved."

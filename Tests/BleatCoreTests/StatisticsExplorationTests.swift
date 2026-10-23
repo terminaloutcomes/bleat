@@ -792,8 +792,12 @@ struct StatisticsExplorationTests {
                 return (ticks, largestGap)
             }
             let importedAt = clock.now
-            try await repository?.importArchive(archive)
-            heartbeat.cancel()
+            try await withTestCleanup {
+                heartbeat.cancel()
+                _ = await heartbeat.value
+            } operation: {
+                try await repository?.importArchive(archive)
+            }
             let responsiveness = await heartbeat.value
             print(
                 "statistics_performance main_actor_max_gap=\(responsiveness.1), ticks=\(responsiveness.0)"

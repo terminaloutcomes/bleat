@@ -8380,7 +8380,16 @@
       "classification": "Deterministic arithmetic boundary test.",
       "compiler_skip": "No test-level compile condition, opt-in flag, or skip applies.",
       "reason": "Uses the exact overflow boundary and typed failure.",
-      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up."
+      "shared_helper_review": "Fixture creates a fresh UUID temp directory and deterministic Storage/Layout/plan/detail, and removeRoot runs in defer (best-effort try?). placeCompleteTestFile appends exactly expected bytes then finalizes. The helper cleanup suppresses removal errors; unique per-test roots limit cross-test contamination, but cleanup failure diagnostics are a possible follow-up.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-c4a076ccc051",
+        "currentDecision": "keep; no code change",
+        "assessment": "Int64.max plus one expected-track byte produces requirementOverflow. Pure value calculation; no filesystem operation.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/DownloadStorageTests.swift::testStoragePreflightReadsCapacityFromVolume",
@@ -10347,7 +10356,16 @@
         "8": "Timing assertion carries a useful threshold message; perf-summary records the measurement.",
         "9": "Repeat individually and in suite remains pending execution."
       },
-      "review_status": "source_reviewed"
+      "review_status": "source_reviewed",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-2c41ecec4a50",
+        "currentDecision": "keep; no code change",
+        "assessment": "Deterministic 200-page/10k-book memory-cache writes finish within ten seconds. This case has no readback oracle or MainActor heartbeat.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksCacheReadPerformance",
@@ -10376,7 +10394,16 @@
         "8": "Missing page has a direct assertion message; performance ceiling has a failure message.",
         "9": "Repeat individually and in suite remains pending execution."
       },
-      "review_status": "source_reviewed"
+      "review_status": "source_reviewed",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-1aa43559f4dc",
+        "currentDecision": "keep; no code change",
+        "assessment": "After seeding 200 pages, every read exists with 50 items and finishes within ten seconds. Exact book content and off-main responsiveness are not asserted.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheReadsDoNotBlockTheMainActor",
@@ -10452,7 +10479,16 @@
         "8": "Non-empty-file assertion has a useful failure message; sizes are emitted in named summaries.",
         "9": "Repeat individually and in suite remains pending execution."
       },
-      "review_status": "source_reviewed"
+      "review_status": "source_reviewed",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-7be0b1002141",
+        "currentDecision": "keep; no code change",
+        "assessment": "An owned temporary SQLite store has a positive main-file size after 200 saves; main/WAL/SHM sizes are reported. No size ceiling or readback; optional-file size defaults to zero on absence/error.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/LibraryCacheTests.swift::testEmptyLibrarySnapshotPersistsAcrossCacheActors",
@@ -21426,7 +21462,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-6eb57317a29e",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two subscriptions share prepared memory after snapshot rows are removed; stopping the first retains five seconds and stopping the last releases the live snapshot. No independent reader task; explicit stops occur on normal exit.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::observationHistoryAndPresentationAreAccountScoped",
@@ -21558,7 +21603,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic failure-injection test using a file-backed writable baseline followed by a read-only SwiftData container.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-678c51275088",
+        "currentDecision": "keep; no code change",
+        "assessment": "A disk store seeded with history progress 1/3 is reopened with saving disabled. Failed update preserves the observation revision and completedPages=1 in observation/repository; totalPages is not separately reasserted.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
@@ -21597,7 +21651,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-62a807d8a7f9",
+        "currentDecision": "keep; no code change",
+        "assessment": "A synthetic remote 90-second session has exact book/day/time/all-device coverage and zero completed chapters, with nil audiobook seconds/effective average. No real server.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
@@ -21636,7 +21699,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f6412d58b622",
+        "currentDecision": "keep; no code change",
+        "assessment": "Archive import, same-memory-container reconstruction, repeat import and remote upsert preserve the exact snapshot; a lower-seconds update retains ten seconds and one slice. No process/disk durability claim.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
@@ -21675,7 +21747,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-802d5e8c75e7",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two accounts total ten seconds; selected range is five, reset makes it zero, and the other account retains five.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
@@ -21714,7 +21795,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-649777a733d1",
+        "currentDecision": "keep; no code change",
+        "assessment": "Twenty repeated final-five-second segments yield one started chapter and zero completed chapters in summary/book. Deterministic aggregation, not a playback engine.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::duplicateCompletionEventsCountOneHistoricalRuntime",
@@ -21753,7 +21843,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-e3bcc8f04e2a",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two completion milestones for one book count one completed book, 100 seconds runtime and the earliest completion date.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
@@ -21792,7 +21891,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-b0cc8b593727",
+        "currentDecision": "keep; no code change",
+        "assessment": "Synthetic samples from zero through twelve seconds preserve exact persisted-plus-live totals across checkpoints. No explicit finish or real playback.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
@@ -21831,7 +21939,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-ff51f6e83296",
+        "currentDecision": "keep; no code change",
+        "assessment": "The same session ID in two accounts retains separate two-second accumulators; reset clears only its account, and finishing retains the other's two seconds.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeResetDiscardsGrowingSegmentAfterCheckpoint",
@@ -21870,7 +21987,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f77b245155f9",
+        "currentDecision": "keep; no code change",
+        "assessment": "Both five/seven-second arguments verify range reset after a checkpoint, a replacement segment and preserved other-account totals.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar",
@@ -21955,7 +22081,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-889fed942d8b",
+        "currentDecision": "keep; no code change",
+        "assessment": "Cache-only reads return nil before/after import; explicit snapshot builds five seconds and reset invalidates it. No polling scheduler is run.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
@@ -21994,7 +22129,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-48e494ceeb80",
+        "currentDecision": "keep; no code change",
+        "assessment": "Four warmed query scopes remain exactly equal to archive rebuilds after synthetic playback, finish and confirmed/uncertain remote synchronization.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
@@ -22033,7 +22177,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Deterministic host statistics/repository test using in-memory SwiftData with fixed accounts, timestamps, samples and local archives.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-132673c0d236",
+        "currentDecision": "keep; no code change",
+        "assessment": "Twenty-five unscoped range requests against an empty repository retain two snapshot rows; lifetime is unchanged, earliest range absent and latest present. Per-account capacity is not exercised.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::stored250000SlicesArchiveResetAndCachedRelaunch",
@@ -22072,7 +22225,16 @@
       "timeout_tolerance": "No elapsed-time tolerance except opt-in explicit performance bounds.",
       "classification": "Opt-in performance test compiled and executed only with BLEAT_STATISTICS_PERFORMANCE; file-backed 250,000-slice stress workload, not part of routine signed host lane.",
       "compiler_skip": "Guarded by BLEAT_STATISTICS_PERFORMANCE; absent from normal target compilation/execution unless explicitly enabled.",
-      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded."
+      "shared_helper_review": "container()/repository() constructs fresh in-memory SwiftData; slice/session value helpers use fixed deterministic IDs/times. The opt-in case uses a file-backed 250k fixture and explicit heartbeat/performance assertions. AsyncStream event reads in named tests are not bounded.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-a2015d208b1c",
+        "currentDecision": "keep after test cleanup correction",
+        "assessment": "The opt-in 250k workload retains every original total and timing assertion. Its first import now uses existing withTestCleanup to cancel/join the heartbeat on success or throw. Controlled throwing-path proof and final flagged compilation are separate from unexecuted 250k performance acceptance.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsTests.swift::testUncertaintyDisplayRequiresAtLeastFifteenMinutes",
@@ -23839,7 +24001,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Fresh fixed inputs with a direct result assertion."
+      "reason": "Fresh fixed inputs with a direct result assertion.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-40543b1a986d",
+        "currentDecision": "keep; no code change",
+        "assessment": "Awaited cleanup yields then sets its flag; the operation returns exactly 42 and cleanup is observed. No retained child task.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TestCleanupTests.swift::awaitsCleanupAfterOperationFailure",
@@ -23871,7 +24042,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Fresh fixed inputs with a direct result assertion."
+      "reason": "Fresh fixed inputs with a direct result assertion.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-3b353d2dd913",
+        "currentDecision": "keep; no code change",
+        "assessment": "An exact typed operation failure survives asynchronous successful cleanup, whose flag is observed.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TestCleanupTests.swift::propagatesCleanupFailure",
@@ -23903,7 +24083,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Fresh fixed inputs with a direct result assertion."
+      "reason": "Fresh fixed inputs with a direct result assertion.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-34816be6714a",
+        "currentDecision": "keep; no code change",
+        "assessment": "An exact typed cleanup failure propagates after operation success. Combined-failure behavior belongs to separate existing cases.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TestCleanupTests.swift::retainsOperationFailureWhenCleanupAlsoFails",
@@ -24362,7 +24551,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f29ffe5bf5be",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact UTF-8 WebVTT output checks whole-book one-hour timestamps, Unicode, entity escaping and CRLF normalization. Pure exporter fixtures.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testSubRipSortsSegmentsAndUsesSequentialCueIdentifiers",
@@ -24394,7 +24592,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-bab38a07afd8",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact two-cue CRLF SubRip output checks time sorting and sequential cue IDs, retaining arrow text.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testWebVTTSeparatesAdjacentCueBlocks",
@@ -24426,7 +24633,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-466c5cfc8596",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact adjacent 500-millisecond WebVTT blocks include the required blank separator.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCanonicalTranscriptExportIsRepeatable",
@@ -24491,7 +24707,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-58ecda45c7f6",
+        "currentDecision": "keep; no code change",
+        "assessment": "A partial canonical transcript exports the available chapter text. Exact timestamps/full syntax belong to separate format cases.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCueTextCannotTerminateItsOwnCueWithBlankLines",
@@ -24523,7 +24748,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-11487369c41d",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact WebVTT/SubRip output normalizes leading, trailing and embedded blank lines while keeping two text lines in one cue.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TranscriptExportTests.swift::testExportRejectsMissingAndInvalidSegments",
@@ -24555,7 +24789,16 @@
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Deterministic host test",
       "compiler_skip": "None identified.",
-      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior."
+      "reason": "Literal transcript fixture and direct full-output or typed-error assertions cover the named behavior.",
+      "remainingCoreContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-4f78a13042d4",
+        "currentDecision": "keep; no code change",
+        "assessment": "Empty input produces noSegments, while reversed/zero-duration segments produce invalidSegment across formats.",
+        "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
+        "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      }
     },
     {
       "identifier": "Tests/BleatTranscriptionTests/AudioChapterSliceExporterTests.swift::exportsBoundedChapter",
