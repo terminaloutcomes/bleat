@@ -5,21 +5,21 @@
     374
   ],
   "historicalSnapshotRevision": "58223214dba2e401d5d24e64f0b81b3c910e1061",
-  "reconciledSourceRevision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+  "reconciledSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
   "definition": "Fixed historical review-candidate identities, not all repository tests, defects, missing tests, execution counts or physical acceptance tasks. A completed scoped review is bounded by its evidence; partial cleanup/finding or passing execution alone is not full current-context review. Original audit fields remain historical.",
   "counts": {
     "historicalCandidates": 312,
     "coreCandidates": 241,
     "appCandidates": 71,
-    "completedBeforeThisSlice": 97,
-    "completedByThisSlice": 58,
-    "completedScopedReviews": 155,
-    "pendingCore": 86,
+    "completedBeforeThisSlice": 155,
+    "completedByThisSlice": 59,
+    "completedScopedReviews": 214,
+    "pendingCore": 27,
     "pendingApp": 71,
-    "pendingTotal": 157
+    "pendingTotal": 98
   },
   "limits": [
-    "Nine core pending records have cleanup-only partial reviews; they remain pending.",
+    "Nine core records retain historical cleanup-only partial evidence; current scoped reviews are now complete and explicitly preserve their limits.",
     "Two app pending records have earlier narrow P2 fixes and one has a later background-completion review; all three still lack full current semantic rechecks.",
     "Configured Release, physical/device and other accepted executions remain credited independently; no such acceptance is reopened by this ledger.",
     "The #438/#458 app fixes and the #459 stream case are outside these fixed cohorts and are not subtracted.",
@@ -1263,80 +1263,130 @@
       "id": "AUD-C-109bb874ad2a",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Exact opaque archive copy, completed migration, source removal, unrelated preference and upgrade notice; reconstruction shares the container. Seeded legacy account mapping is not separately asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-fa293fd25006",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedStoredStateDoesNotBecomeAnEmptyDefault",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Malformed engine-state shape produces invalidStoredState and retains the original string.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-d512238913dd",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedBookkeepingContentsRemainRetained",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Malformed values in both bookkeeping keys produce invalidStoredState and retain the exact dictionary.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-6ee5dbd8c94c",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A secure archive missing required fields produces invalidLegacyMetadata and retains its source. Process survival is implicit; no isolated trap witness.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-0d68779f6cf5",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A constructed permission error retains exact diagnostic code, operation, domain and native code, without UserInfo text. No failing filesystem operation is performed.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-14b9e85eec5f",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A 200-valid/one-invalid migration retains 201 sources and 200 committed rows; repairing the invalid archive completes 201 rows and removes the source key. Per-row payloads are not all asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-3c1d1aa134d8",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedCoordinatorStateRetainsAllLegacyData",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Malformed coordinator bytes produce invalidLegacyState, retain the archive key and exact bad state, and leave migration incomplete. Archive bytes are not separately compared.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-de798e210ce8",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An archive-key/embedded-record-ID mismatch produces invalidLegacyMetadata and retains the single source entry. Retained bytes are not separately compared.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-5e89b93a2802",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Detection, acknowledgment and repeated detection preserve the acknowledged version in the same defaults instance; no process restart.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
       "id": "AUD-C-b3a9c1033d12",
       "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Starting with 58,404 metadata rows, 200 commits preserve total count, set exactly 200 digests and retain sentinel fields. This does not measure writes or prove other rows were never rewritten.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },
     {
@@ -1359,392 +1409,637 @@
       "id": "AUD-C-5791ad09defa",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testEveryPrivateCloudErrorPreservesDiagnosticFailureCode",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Ten listed error cases preserve exact failure codes directly and through DiagnosticEvent. This is not an exhaustive future-enum matrix.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f370fd82da34",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Pure configuration validation accepts private scope and rejects public/shared scope. No CKSyncEngine is initialized.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-72e4f22d2a95",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackFailureOverridesSuccessfulEngineCompletion",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A reported callback failure overrides later successful engine completion. Completion precedes the wait; no live engine, held callback or watchdog.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-e40988f9801c",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInterruptedFetchedBatchCanReconcileOnRetry",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An immediate checkpoint throws on its third check; callbackTimedOut is retained and retry imports three slices. No real timeout, partial committed-record or exact identity claim.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-515b5906a5f3",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNonPrivateDatabaseHasSpecificDiagnosticCode",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Nonprivate scope maps to the exact diagnostic code and sourceBug category.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-dc752e8ce1c4",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitFailurePreservesExactCodeRetryAndPartialCodes",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A synthetic partial CKError preserves two deduplicated child codes, a 2.5-second retry interval and retryability.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-3364aca59221",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyConflictPartialFailureAllowsOneReconciliationRetry",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Pure conflict classification distinguishes conflict-only/mixed partial failures and permits attempt zero but rejects attempt one. No retry engine runs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-76aabb1d09fb",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitDiagnosticIncludesOperationAndTypedFailureDetails",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Exact operation, failure code, retry milliseconds and record count are retained. Absence of literal localizedDescription is checked, not arbitrary payload nondisclosure.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-06221dd57374",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedCloudKitEventRecorderPreservesRecordCount",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An immediate actor recorder preserves upload operation, count 17 and message in its first event. Total event count is not asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1e55c1ff9343",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Constructed completion diagnostics retain operation, duration and count fragments. No adversarial payload is injected.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-8b9c2a0872e2",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotDefaultsHeadphoneCommands",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An independent UUID-defaults snapshot has exact default backward/forward headphone commands.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-fdbc51d29bc8",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotRoundTripsHeadphoneCommands",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Independent source/target defaults preserve chapter commands, maximum downloads 15 and all lookahead through JSON and apply. Not every configuration field is asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-ad4c5a3d4adc",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationNormalizesLookaheadBeforeApplying",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Nine numeric boundary/normalization cases assert decoded and applied normalized lookahead; immediate actor store, no timing.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-282779137c46",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyConfigurationDefaultsMissingHeadphoneCommands",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Legacy JSON missing new fields decodes default backward/forward commands and maximum downloads five.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f12204149d65",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationRejectsInvalidHeadphoneCommand",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An invalid headphone command fails JSON decoding. The exact decoding error and path are not asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-512d63713fb9",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testRejectingFetchedAccountChangePreservesAndReturnsLocalEdit",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Rejecting a fetched account change preserves the local edit and returns the exact decoded edited account. No UI prompt is exercised.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-733639f3f13b",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDelayedSupersededAccountGenerationDoesNotPromptOrRevert",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Sequential application of an old generation preserves the edited account, supersession ID and retained payload, without prompting. No delayed network delivery is created.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-f7e0b6e252f1",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedAccountUpdateRequiresConfirmationBeforeApplying",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A fetched account update remains pending until explicit acceptance, then applies the exact remote update. This exercises direct APIs, not UI automation.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-3b3ceb592c60",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCloudOnlyAccountRequiresConfirmationBeforeAdding",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An unknown fetched account remains absent locally with an exact pending incoming change and nil current account. Acceptance is not exercised here.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-8c3c9b1331df",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testTwoLegacyDeviceAccountsConvergeWithoutDuplicatePrompts",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Two synthetic legacy account IDs converge to a canonical save without duplicate prompts; confirmations and same-container reconstruction preserve exact deletion identities and canonical payload. No physical devices.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-8b0082f677ab",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedConfigurationConflictWaitsForUserDecision",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A fetched baseline preserves the local edit and exact local/iCloud configuration conflict. No UI decision is automated.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-73046c79e2e8",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testMatchingServerConflictCachesServerRecordWithoutAnotherSave",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An equivalent server conflict prepares nothing and caches the server record ID/tag. The synthetic server tag is nil; no real server metadata claim.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-de00d5c13cdb",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationConflictAfterNewLocalEditRebasesAndRetries",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A newer local configuration edit rebases the exact pending payload and save ID. Synthetic server ID/nil tag are compared; no engine retry occurs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-41e05a733b69",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testStructurallyEquivalentSentConfigurationConflictWaitsForDecision",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Differently formatted equivalent JSON plus a differing server snapshot yields an exact conflict and no pending upload. Structural equivalence is intentional.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-a1be025f15f8",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUsingICloudResolvesConfigurationConflict",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Choosing iCloud clears the conflict, applies its exact snapshot and produces no outgoing record.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-0baf8546dc58",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testKeepingThisDevicePreparesCurrentConfigurationForUpload",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Keeping this device prepares the exact current local payload while leaving the conflict pending confirmation. Send confirmation is not exercised here.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-1e815405e9b7",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testExplicitFetchedRecordPersistenceSurvivesStoreRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Explicit persistence and same-container reconstruction retain record ID/type and decoded configuration, with no new preparation.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-b38b63c218c4",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testBatchedAccountConflictsPersistCompletedStateAfterRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Two equivalent account conflicts settle; reconstruction retains exact IDs/types/payloads and prepares nothing. Dependencies remain in the same process.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-2da1cf930900",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSavedRecordSystemFieldsSurviveStoreRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Reconstruction retains a synthetic saved record ID/type. No nonnil server change tag, creation metadata or full archive equality is established.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-c0ac781a5bcf",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "After confirmed initial Configuration send, preparation is empty before and after same-container reconstruction.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-c93e349547dc",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Failed and unsent statistics payloads decode exactly before/after reconstruction; confirmation clears retained payload and later preparation is empty.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-b33bc4d96b35",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedPendingStateSavesPreserveRetryState",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "An owned on-disk store reopened read-only produces typed write/native-permission errors on two retries and retains conflict/revision/account changes. No process or CloudKit failure is simulated.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-7dd3da6dc800",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionAfterCacheEvictionPreservesHistory",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "After account save confirmation and reconstruction, the account record ID remains discoverable with statistics excluded. No deletion or listening-history scenario is executed despite the historical name.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-70f061498f06",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnconfirmedRecordsRemainPreparedForRetry",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Two awaited preparation calls return equal record-ID arrays without send confirmation.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-6aab902ba777",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyChangedConfigurationIsPreparedAfterBaseline",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "After a confirmed baseline, a local edit prepares exactly one Configuration record. Its payload is not separately asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-2665522a4699",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSynchronizedStatisticsAreExcludedFromLaterPreparation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Initial preparation contains slice/configuration types; confirming both leaves later preparation empty.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-88413f9424f3",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyNilStatisticsSyncStateIsPreparedForReconciliation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A directly saved legacy nil sync flag makes a ListeningSlice type preparable. Exact payload/identity is not asserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-be7f15f3d841",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDirtyStatisticsSurviveRelaunchAndAreReconciledOnce",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A failed slice survives same-container reconstruction, is the sole retried type and clears after confirmation. No process relaunch.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-65aa2d428708",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletedStatisticsRemainPendingUntilCloudKitConfirmsDeletion",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Reset produces the exact slice deletion on repeated preparation; explicit confirmation clears it.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-8a965e45a3a3",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedRecordDoesNotOverridePendingLocalDeletion",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Fetching a locally deleted slice does not restore its archive and leaves one deletion pending. Its identity is not separately reasserted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-e8f31322809f",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testValidFetchedRecordsPersistWhenAnotherRecordIsInvalid",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A mixed valid-slice/malformed-completion batch throws invalidRecord while preserving the exact valid slice.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-06d96626ff79",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudZoneMakesLocalStatisticsUploadableAgain",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "After a confirmed baseline, local removeAllRecords makes the slice uploadable again. No actual cloud zone is deleted.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-2f372eb0ed38",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsCleanStatisticsAfterStoreRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A confirmed clean slice is discoverable by account with statistics included after same-container reconstruction. No account deletion runs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-244defd5e76a",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A reset slice's pending deletion is found as the exact single name after same-container reconstruction. No remote deletion runs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-93ea323ec53b",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNestedFailurePreservesSpecificOperation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Pure coordinator mapping preserves a nested fetchChanges failure despite an outer synchronize operation.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-3f977017a071",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedStatisticsBatchIsImportedIdempotently",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Applying the same 200 records twice leaves 100 slices and 100 completions. Counts are checked, not every identity/value.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-ff94c5e33ea5",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingConfigurationConflictSurvivesStoreRecreation",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Same-container reconstruction preserves the exact local/cloud configuration conflict and excludes Configuration from preparation.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-17d14081da2f",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInvalidPersistedConfigurationConflictFailsClosed",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "A malformed persisted conflict produces invalidLegacyState during preparation. No transport runs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-C-01fd28d86c74",
       "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudDataClearsInvalidPersistedConfigurationConflict",
       "queue": "core-helper-context",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "scope_and_limits": "Malformed conflict first blocks preparation; local removeAllRecords clears its legacy key and makes Configuration preparable before/after reconstruction. No cloud deletion runs.",
+        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+      },
       "partialEvidence": null
     },
     {
@@ -3528,6 +3823,21 @@
         "pendingTotal": 215
       },
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#authentication-contract-context-and-canonical-credential-oracle-372"
+    },
+    {
+      "sourceRevision": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+      "counts": {
+        "historicalCandidates": 312,
+        "coreCandidates": 241,
+        "appCandidates": 71,
+        "completedBeforeThisSlice": 97,
+        "completedByThisSlice": 58,
+        "completedScopedReviews": 155,
+        "pendingCore": 86,
+        "pendingApp": 71,
+        "pendingTotal": 157
+      },
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372"
     }
   ],
   "identityResolution": "identity is the fixed historical cohort identity; optional currentIdentity names a renamed current declaration. Stable IDs and historical identities are preserved."

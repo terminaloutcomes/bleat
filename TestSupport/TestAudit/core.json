@@ -15226,7 +15226,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-109bb874ad2a",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact opaque archive copy, completed migration, source removal, unrelated preference and upgrade notice; reconstruction shares the container. Seeded legacy account mapping is not separately asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::cancelledMigrationRetainsCommittedProgressAndCoalescesCallers",
@@ -15313,7 +15322,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-fa293fd25006",
+        "currentDecision": "keep; no code change",
+        "assessment": "Malformed engine-state shape produces invalidStoredState and retains the original string.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedBookkeepingContentsRemainRetained",
@@ -15353,7 +15371,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-d512238913dd",
+        "currentDecision": "keep; no code change",
+        "assessment": "Malformed values in both bookkeeping keys produce invalidStoredState and retain the exact dictionary.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap",
@@ -15393,7 +15420,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-6ee5dbd8c94c",
+        "currentDecision": "keep; no code change",
+        "assessment": "A secure archive missing required fields produces invalidLegacyMetadata and retains its source. Process survival is implicit; no isolated trap witness.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
@@ -15432,7 +15468,16 @@
       "classification": "Deterministic persistence migration test using CloudKit-encoded fixture records and in-memory SwiftData/isolated UserDefaults; no real CloudKit account is used.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
-      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test."
+      "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-0d68779f6cf5",
+        "currentDecision": "keep; no code change",
+        "assessment": "A constructed permission error retains exact diagnostic code, operation, domain and native code, without UserInfo text. No failing filesystem operation is performed.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::failedMigrationSaveRetainsLegacyPreferences",
@@ -15529,7 +15574,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-14b9e85eec5f",
+        "currentDecision": "keep; no code change",
+        "assessment": "A 200-valid/one-invalid migration retains 201 sources and 200 committed rows; repairing the invalid archive completes 201 rows and removes the source key. Per-row payloads are not all asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedCoordinatorStateRetainsAllLegacyData",
@@ -15569,7 +15623,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-3c1d1aa134d8",
+        "currentDecision": "keep; no code change",
+        "assessment": "Malformed coordinator bytes produce invalidLegacyState, retain the archive key and exact bad state, and leave migration incomplete. Archive bytes are not separately compared.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
@@ -15609,7 +15672,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-de798e210ce8",
+        "currentDecision": "keep; no code change",
+        "assessment": "An archive-key/embedded-record-ID mismatch produces invalidLegacyMetadata and retains the single source entry. Retained bytes are not separately compared.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
@@ -15649,7 +15721,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-5e89b93a2802",
+        "currentDecision": "keep; no code change",
+        "assessment": "Detection, acknowledgment and repeated detection preserve the acknowledged version in the same defaults instance; no process restart.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
@@ -15689,7 +15770,16 @@
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The test asserts exact typed migration/storage outcome and preserved or migrated persisted values using isolated state.",
       "shared_helper_review": "fixture() creates a new all-model in-memory container and two unique defaults suites; suites are not explicitly removed. MigrationCancellationProbe.checkpoint asserts the 200-row stage then sleeps cancellably for 30 seconds; waitForEntry is an unbounded continuation used by the cancellation test.",
-      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+      "defaults_lifecycle_review": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-b3a9c1033d12",
+        "currentDecision": "keep; no code change",
+        "assessment": "Starting with 58,404 metadata rows, 200 commits preserve total count, set exactly 200 digests and retain sentinel fields. This does not measure writes or prove other rows were never rewritten.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce",
@@ -15936,7 +16026,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-5791ad09defa",
+        "currentDecision": "keep; no code change",
+        "assessment": "Ten listed error cases preserve exact failure codes directly and through DiagnosticEvent. This is not an exhaustive future-enum matrix.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope",
@@ -15975,7 +16074,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f370fd82da34",
+        "currentDecision": "keep; no code change",
+        "assessment": "Pure configuration validation accepts private scope and rejects public/shared scope. No CKSyncEngine is initialized.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackDeadlinePausesInBackgroundAndBlocksRetryUntilDrain",
@@ -16106,7 +16214,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-72e4f22d2a95",
+        "currentDecision": "keep; no code change",
+        "assessment": "A reported callback failure overrides later successful engine completion. Completion precedes the wait; no live engine, held callback or watchdog.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInterruptedFetchedBatchCanReconcileOnRetry",
@@ -16145,7 +16262,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-e40988f9801c",
+        "currentDecision": "keep; no code change",
+        "assessment": "An immediate checkpoint throws on its third check; callbackTimedOut is retained and retry imports three slices. No real timeout, partial committed-record or exact identity claim.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNonPrivateDatabaseHasSpecificDiagnosticCode",
@@ -16184,7 +16310,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-515b5906a5f3",
+        "currentDecision": "keep; no code change",
+        "assessment": "Nonprivate scope maps to the exact diagnostic code and sourceBug category.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitFailurePreservesExactCodeRetryAndPartialCodes",
@@ -16223,7 +16358,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-dc752e8ce1c4",
+        "currentDecision": "keep; no code change",
+        "assessment": "A synthetic partial CKError preserves two deduplicated child codes, a 2.5-second retry interval and retryability.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyConflictPartialFailureAllowsOneReconciliationRetry",
@@ -16262,7 +16406,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-3364aca59221",
+        "currentDecision": "keep; no code change",
+        "assessment": "Pure conflict classification distinguishes conflict-only/mixed partial failures and permits attempt zero but rejects attempt one. No retry engine runs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitDiagnosticIncludesOperationAndTypedFailureDetails",
@@ -16301,7 +16454,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-76aabb1d09fb",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact operation, failure code, retry milliseconds and record count are retained. Absence of literal localizedDescription is checked, not arbitrary payload nondisclosure.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedCloudKitEventRecorderPreservesRecordCount",
@@ -16340,7 +16502,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-06221dd57374",
+        "currentDecision": "keep; no code change",
+        "assessment": "An immediate actor recorder preserves upload operation, count 17 and message in its first event. Total event count is not asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount",
@@ -16379,7 +16550,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-1e55c1ff9343",
+        "currentDecision": "keep; no code change",
+        "assessment": "Constructed completion diagnostics retain operation, duration and count fragments. No adversarial payload is injected.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotDefaultsHeadphoneCommands",
@@ -16418,7 +16598,16 @@
       "classification": "Deterministic CloudConfiguration/UserDefaults persistence and decoding test using isolated suites.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-8b9c2a0872e2",
+        "currentDecision": "keep; no code change",
+        "assessment": "An independent UUID-defaults snapshot has exact default backward/forward headphone commands.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotRoundTripsHeadphoneCommands",
@@ -16457,7 +16646,16 @@
       "classification": "Deterministic CloudConfiguration/UserDefaults persistence and decoding test using isolated suites.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-fdbc51d29bc8",
+        "currentDecision": "keep; no code change",
+        "assessment": "Independent source/target defaults preserve chapter commands, maximum downloads 15 and all lookahead through JSON and apply. Not every configuration field is asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationNormalizesLookaheadBeforeApplying",
@@ -16496,7 +16694,16 @@
       "classification": "Deterministic CloudConfiguration/UserDefaults persistence and decoding test using isolated suites.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-ad4c5a3d4adc",
+        "currentDecision": "keep; no code change",
+        "assessment": "Nine numeric boundary/normalization cases assert decoded and applied normalized lookahead; immediate actor store, no timing.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyConfigurationDefaultsMissingHeadphoneCommands",
@@ -16535,7 +16742,16 @@
       "classification": "Deterministic CloudConfiguration/UserDefaults persistence and decoding test using isolated suites.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-282779137c46",
+        "currentDecision": "keep; no code change",
+        "assessment": "Legacy JSON missing new fields decodes default backward/forward commands and maximum downloads five.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationRejectsInvalidHeadphoneCommand",
@@ -16574,7 +16790,16 @@
       "classification": "Deterministic CloudConfiguration/UserDefaults persistence and decoding test using isolated suites.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f12204149d65",
+        "currentDecision": "keep; no code change",
+        "assessment": "An invalid headphone command fails JSON decoding. The exact decoding error and path are not asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testRejectingFetchedAccountChangePreservesAndReturnsLocalEdit",
@@ -16613,7 +16838,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-512d63713fb9",
+        "currentDecision": "keep; no code change",
+        "assessment": "Rejecting a fetched account change preserves the local edit and returns the exact decoded edited account. No UI prompt is exercised.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDelayedSupersededAccountGenerationDoesNotPromptOrRevert",
@@ -16652,7 +16886,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-733639f3f13b",
+        "currentDecision": "keep; no code change",
+        "assessment": "Sequential application of an old generation preserves the edited account, supersession ID and retained payload, without prompting. No delayed network delivery is created.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedAccountUpdateRequiresConfirmationBeforeApplying",
@@ -16691,7 +16934,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-f7e0b6e252f1",
+        "currentDecision": "keep; no code change",
+        "assessment": "A fetched account update remains pending until explicit acceptance, then applies the exact remote update. This exercises direct APIs, not UI automation.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCloudOnlyAccountRequiresConfirmationBeforeAdding",
@@ -16730,7 +16982,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-3b3ceb592c60",
+        "currentDecision": "keep; no code change",
+        "assessment": "An unknown fetched account remains absent locally with an exact pending incoming change and nil current account. Acceptance is not exercised here.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testTwoLegacyDeviceAccountsConvergeWithoutDuplicatePrompts",
@@ -16769,7 +17030,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-8c3c9b1331df",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two synthetic legacy account IDs converge to a canonical save without duplicate prompts; confirmations and same-container reconstruction preserve exact deletion identities and canonical payload. No physical devices.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedConfigurationConflictWaitsForUserDecision",
@@ -16808,7 +17078,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-8b0082f677ab",
+        "currentDecision": "keep; no code change",
+        "assessment": "A fetched baseline preserves the local edit and exact local/iCloud configuration conflict. No UI decision is automated.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testMatchingServerConflictCachesServerRecordWithoutAnotherSave",
@@ -16847,7 +17126,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-73046c79e2e8",
+        "currentDecision": "keep; no code change",
+        "assessment": "An equivalent server conflict prepares nothing and caches the server record ID/tag. The synthetic server tag is nil; no real server metadata claim.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationConflictAfterNewLocalEditRebasesAndRetries",
@@ -16886,7 +17174,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-de00d5c13cdb",
+        "currentDecision": "keep; no code change",
+        "assessment": "A newer local configuration edit rebases the exact pending payload and save ID. Synthetic server ID/nil tag are compared; no engine retry occurs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testStructurallyEquivalentSentConfigurationConflictWaitsForDecision",
@@ -16925,7 +17222,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-41e05a733b69",
+        "currentDecision": "keep; no code change",
+        "assessment": "Differently formatted equivalent JSON plus a differing server snapshot yields an exact conflict and no pending upload. Structural equivalence is intentional.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUsingICloudResolvesConfigurationConflict",
@@ -16964,7 +17270,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-a1be025f15f8",
+        "currentDecision": "keep; no code change",
+        "assessment": "Choosing iCloud clears the conflict, applies its exact snapshot and produces no outgoing record.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testKeepingThisDevicePreparesCurrentConfigurationForUpload",
@@ -17003,7 +17318,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-0baf8546dc58",
+        "currentDecision": "keep; no code change",
+        "assessment": "Keeping this device prepares the exact current local payload while leaving the conflict pending confirmation. Send confirmation is not exercised here.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testExplicitFetchedRecordPersistenceSurvivesStoreRecreation",
@@ -17042,7 +17366,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-1e815405e9b7",
+        "currentDecision": "keep; no code change",
+        "assessment": "Explicit persistence and same-container reconstruction retain record ID/type and decoded configuration, with no new preparation.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testBatchedAccountConflictsPersistCompletedStateAfterRecreation",
@@ -17081,7 +17414,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-b38b63c218c4",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two equivalent account conflicts settle; reconstruction retains exact IDs/types/payloads and prepares nothing. Dependencies remain in the same process.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSavedRecordSystemFieldsSurviveStoreRecreation",
@@ -17120,7 +17462,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-2da1cf930900",
+        "currentDecision": "keep; no code change",
+        "assessment": "Reconstruction retains a synthetic saved record ID/type. No nonnil server change tag, creation metadata or full archive equality is established.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend",
@@ -17159,7 +17510,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-c0ac781a5bcf",
+        "currentDecision": "keep; no code change",
+        "assessment": "After confirmed initial Configuration send, preparation is empty before and after same-container reconstruction.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction",
@@ -17198,7 +17558,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-c93e349547dc",
+        "currentDecision": "keep; no code change",
+        "assessment": "Failed and unsent statistics payloads decode exactly before/after reconstruction; confirmation clears retained payload and later preparation is empty.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedPendingStateSavesPreserveRetryState",
@@ -17237,7 +17606,16 @@
       "classification": "Deterministic file-backed SwiftData failure-injection test using a read-only container and isolated defaults; intentional permission-denied native errors are asserted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-b33bc4d96b35",
+        "currentDecision": "keep; no code change",
+        "assessment": "An owned on-disk store reopened read-only produces typed write/native-permission errors on two retries and retains conflict/revision/account changes. No process or CloudKit failure is simulated.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionAfterCacheEvictionPreservesHistory",
@@ -17276,7 +17654,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-7dd3da6dc800",
+        "currentDecision": "keep; no code change",
+        "assessment": "After account save confirmation and reconstruction, the account record ID remains discoverable with statistics excluded. No deletion or listening-history scenario is executed despite the historical name.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnconfirmedRecordsRemainPreparedForRetry",
@@ -17315,7 +17702,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-70f061498f06",
+        "currentDecision": "keep; no code change",
+        "assessment": "Two awaited preparation calls return equal record-ID arrays without send confirmation.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyChangedConfigurationIsPreparedAfterBaseline",
@@ -17354,7 +17750,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-6aab902ba777",
+        "currentDecision": "keep; no code change",
+        "assessment": "After a confirmed baseline, a local edit prepares exactly one Configuration record. Its payload is not separately asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSynchronizedStatisticsAreExcludedFromLaterPreparation",
@@ -17393,7 +17798,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-2665522a4699",
+        "currentDecision": "keep; no code change",
+        "assessment": "Initial preparation contains slice/configuration types; confirming both leaves later preparation empty.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyNilStatisticsSyncStateIsPreparedForReconciliation",
@@ -17432,7 +17846,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-88413f9424f3",
+        "currentDecision": "keep; no code change",
+        "assessment": "A directly saved legacy nil sync flag makes a ListeningSlice type preparable. Exact payload/identity is not asserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDirtyStatisticsSurviveRelaunchAndAreReconciledOnce",
@@ -17471,7 +17894,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-be7f15f3d841",
+        "currentDecision": "keep; no code change",
+        "assessment": "A failed slice survives same-container reconstruction, is the sole retried type and clears after confirmation. No process relaunch.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletedStatisticsRemainPendingUntilCloudKitConfirmsDeletion",
@@ -17510,7 +17942,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-65aa2d428708",
+        "currentDecision": "keep; no code change",
+        "assessment": "Reset produces the exact slice deletion on repeated preparation; explicit confirmation clears it.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedRecordDoesNotOverridePendingLocalDeletion",
@@ -17549,7 +17990,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-8a965e45a3a3",
+        "currentDecision": "keep; no code change",
+        "assessment": "Fetching a locally deleted slice does not restore its archive and leaves one deletion pending. Its identity is not separately reasserted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testValidFetchedRecordsPersistWhenAnotherRecordIsInvalid",
@@ -17588,7 +18038,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-e8f31322809f",
+        "currentDecision": "keep; no code change",
+        "assessment": "A mixed valid-slice/malformed-completion batch throws invalidRecord while preserving the exact valid slice.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudZoneMakesLocalStatisticsUploadableAgain",
@@ -17627,7 +18086,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-06d96626ff79",
+        "currentDecision": "keep; no code change",
+        "assessment": "After a confirmed baseline, local removeAllRecords makes the slice uploadable again. No actual cloud zone is deleted.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsCleanStatisticsAfterStoreRecreation",
@@ -17666,7 +18134,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-2f372eb0ed38",
+        "currentDecision": "keep; no code change",
+        "assessment": "A confirmed clean slice is discoverable by account with statistics included after same-container reconstruction. No account deletion runs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation",
@@ -17705,7 +18182,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-244defd5e76a",
+        "currentDecision": "keep; no code change",
+        "assessment": "A reset slice's pending deletion is found as the exact single name after same-container reconstruction. No remote deletion runs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNestedFailurePreservesSpecificOperation",
@@ -17744,7 +18230,16 @@
       "classification": "Deterministic typed CloudKit error/diagnostic value test; no live CloudKit service is contacted.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-93ea323ec53b",
+        "currentDecision": "keep; no code change",
+        "assessment": "Pure coordinator mapping preserves a nested fetchChanges failure despite an outer synchronize operation.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedStatisticsBatchIsImportedIdempotently",
@@ -17783,7 +18278,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-3f977017a071",
+        "currentDecision": "keep; no code change",
+        "assessment": "Applying the same 200 records twice leaves 100 slices and 100 completions. Counts are checked, not every identity/value.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingConfigurationConflictSurvivesStoreRecreation",
@@ -17822,7 +18326,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-ff94c5e33ea5",
+        "currentDecision": "keep; no code change",
+        "assessment": "Same-container reconstruction preserves the exact local/cloud configuration conflict and excludes Configuration from preparation.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInvalidPersistedConfigurationConflictFailsClosed",
@@ -17861,7 +18374,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-17d14081da2f",
+        "currentDecision": "keep; no code change",
+        "assessment": "A malformed persisted conflict produces invalidLegacyState during preparation. No transport runs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudDataClearsInvalidPersistedConfigurationConflict",
@@ -17900,7 +18422,16 @@
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
       "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
       "reason": "The body asserts the typed state transition or semantic value it names using controlled local state and no retry-based flake masking.",
-      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked."
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "privateCloudContextReview20261023": {
+        "base": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "catalogID": "AUD-C-01fd28d86c74",
+        "currentDecision": "keep; no code change",
+        "assessment": "Malformed conflict first blocks preparation; local removeAllRecords clears its legacy key and makes Configuration preparable before/after reconstruction. No cloud deletion runs.",
+        "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
+        "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/ProgressSyncTests.swift::testOlderServerReadsAllProgressFromCurrentUser",
