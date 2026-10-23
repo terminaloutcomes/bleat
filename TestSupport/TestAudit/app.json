@@ -51287,6 +51287,161 @@
         "#if os(iOS)"
       ],
       "execution": "docs/cover-cache-lifecycle.md#typed-persistence-failure-reporting-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testResetLocalDataRemovesOwnedArtworkAndRejectsLateFetch",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 23939
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Remove every owned artwork generation and reject a pre-reset cancellation-ignoring fetch.",
+        "purpose": "Seed current, orphan-account and legacy artwork; hold the old fetch; observe bounded reset return, missing root/cache entries, nil retired result and intact outside sentinel.",
+        "ruleAssessments": {
+          "1": "Seed current, orphan-account and legacy artwork; hold the old fetch; observe bounded reset return, missing root/cache entries, nil retired result and intact outside sentinel.",
+          "2": "Control operation admission with explicit gates and observed task returns. Three-second expectations are failure budgets; no arbitrary sleeps or retry-to-green.",
+          "3": "Use exact typed failures, account/state/call identities and file presence. Sentinel bytes intentionally identify the owned fixture.",
+          "4": "Own unique temporary roots/background session identifiers; restore fixture permissions and release/join held tasks before deleting fixture roots. No user data or credentials.",
+          "5": "Use the reset-closure seam introduced by this slice, existing TestAppService and the actual native BookCoverImageLoader with tiny local PNGs; no new service locator or network.",
+          "6": "Native Simulator app-hosted execution; no physical data-protection, real credential deletion or user-app reset claim.",
+          "7": "Original two-case baseline and separate zero-test compilation failure retained. Corrected exact case passes; no assertions weakened or silent rerun substituted.",
+          "8": "Exact typed reset stage/cause and operation failure distinguish partial reset from success without private paths, descriptions, URLs or contents in diagnostics.",
+          "9": "Focused five unique native cases and complete638unique owning app cases passed with zero failures/skips/expected failures/runtime warnings; tested source hashes unchanged. First owning attempt executed zero after Simulator Busy launch refusal; verified owned-device recovery and distinct retry retained. Published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves an observed reset gap or the required partial-failure/admission behavior at the real model/loader boundary."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testFailedLocalDataResetPreservesOwnedArtwork",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24059
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Preserve artwork and signed-in state when the preceding persistent-store reset fails.",
+        "purpose": "Require zero cover-reset calls, exact persistent-store failure, original signed-in account and retained real cached pixels.",
+        "ruleAssessments": {
+          "1": "Require zero cover-reset calls, exact persistent-store failure, original signed-in account and retained real cached pixels.",
+          "2": "Await the actual model operation and verify exact calls and retained pixels; this preservation control requires no gate, arbitrary sleep or retry.",
+          "3": "Use exact typed failures, account/state/call identities and file presence. Sentinel bytes intentionally identify the owned fixture.",
+          "4": "Own a unique temporary root/background session identifier and remove only that fixture after the operation; this ungated case has no held task or permission change.",
+          "5": "Use the reset-closure seam introduced by this slice, existing TestAppService and the actual native BookCoverImageLoader with tiny local PNGs; no new service locator or network.",
+          "6": "Native Simulator app-hosted execution; no physical data-protection, real credential deletion or user-app reset claim.",
+          "7": "Original two-case baseline and separate zero-test compilation failure retained. Corrected exact case passes; no assertions weakened or silent rerun substituted.",
+          "8": "Exact typed reset stage/cause and operation failure distinguish partial reset from success without private paths, descriptions, URLs or contents in diagnostics.",
+          "9": "Focused five unique native cases and complete638unique owning app cases passed with zero failures/skips/expected failures/runtime warnings; tested source hashes unchanged. First owning attempt executed zero after Simulator Busy launch refusal; verified owned-device recovery and distinct retry retained. Published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves an observed reset gap or the required partial-failure/admission behavior at the real model/loader boundary."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testLoginIsIgnoredWhileArtworkResetIsRunning",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24121
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Reject native and OpenID login while artwork reset is suspended.",
+        "purpose": "Hold the reset provider, require both login results false with zero service login requests, then release/join and verify clean signed-out completion.",
+        "ruleAssessments": {
+          "1": "Hold the reset provider, require both login results false with zero service login requests, then release/join and verify clean signed-out completion.",
+          "2": "Control operation admission with explicit gates and observed task returns. Three-second expectations are failure budgets; no arbitrary sleeps or retry-to-green.",
+          "3": "Use exact typed failures, account/state/call identities and file presence. Sentinel bytes intentionally identify the owned fixture.",
+          "4": "Own unique temporary roots/background session identifiers; restore fixture permissions and release/join held tasks before deleting fixture roots. No user data or credentials.",
+          "5": "Use the reset-closure seam introduced by this slice, existing TestAppService login gates, AsyncGate and exact call counters; these admission cases do not exercise an image loader or PNG.",
+          "6": "Native Simulator app-hosted execution; no physical data-protection, real credential deletion or user-app reset claim.",
+          "7": "Original two-case baseline and separate zero-test compilation failure retained. Corrected exact case passes; no assertions weakened or silent rerun substituted.",
+          "8": "Exact typed reset stage/cause and operation failure distinguish partial reset from success without private paths, descriptions, URLs or contents in diagnostics.",
+          "9": "Focused five unique native cases and complete638unique owning app cases passed with zero failures/skips/expected failures/runtime warnings; tested source hashes unchanged. First owning attempt executed zero after Simulator Busy launch refusal; verified owned-device recovery and distinct retry retained. Published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves an observed reset gap or the required partial-failure/admission behavior at the real model/loader boundary."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testArtworkResetIsIgnoredWhileLoginIsRunning",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24190
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Reject reset while native or OpenID login is suspended.",
+        "purpose": "For both methods hold actual fake-service admission; require zero store/cover reset calls, preserve submitting state, then release/join and verify the admitted login account.",
+        "ruleAssessments": {
+          "1": "For both methods hold actual fake-service admission; require zero store/cover reset calls, preserve submitting state, then release/join and verify the admitted login account.",
+          "2": "Control operation admission with explicit gates and observed task returns. Three-second expectations are failure budgets; no arbitrary sleeps or retry-to-green.",
+          "3": "Use exact typed failures, account/state/call identities and file presence. Sentinel bytes intentionally identify the owned fixture.",
+          "4": "Own unique temporary roots/background session identifiers; restore fixture permissions and release/join held tasks before deleting fixture roots. No user data or credentials.",
+          "5": "Use the reset-closure seam introduced by this slice, existing TestAppService login gates, AsyncGate and exact call counters; these admission cases do not exercise an image loader or PNG.",
+          "6": "Native Simulator app-hosted execution; no physical data-protection, real credential deletion or user-app reset claim.",
+          "7": "Original two-case baseline and separate zero-test compilation failure retained. Corrected exact case passes; no assertions weakened or silent rerun substituted.",
+          "8": "Exact typed reset stage/cause and operation failure distinguish partial reset from success without private paths, descriptions, URLs or contents in diagnostics.",
+          "9": "Focused five unique native cases and complete638unique owning app cases passed with zero failures/skips/expected failures/runtime warnings; tested source hashes unchanged. First owning attempt executed zero after Simulator Busy launch refusal; verified owned-device recovery and distinct retry retained. Published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves an observed reset gap or the required partial-failure/admission behavior at the real model/loader boundary."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testArtworkCleanupFailureReportsPartialResetAndCanRetry",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24276
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Report incomplete artwork cleanup truthfully after store/credentials removal and allow retry.",
+        "purpose": "Use actual owned parent mode0555 to force exact EACCES/removal-stage; require typed failure, cleared auth, failed diagnostic without completion, outside sentinel, then restore0700 and verify successful retry.",
+        "ruleAssessments": {
+          "1": "Use actual owned parent mode0555 to force exact EACCES/removal-stage; require typed failure, cleared auth, failed diagnostic without completion, outside sentinel, then restore0700 and verify successful retry.",
+          "2": "Control operation admission with explicit gates and observed task returns. Three-second expectations are failure budgets; no arbitrary sleeps or retry-to-green.",
+          "3": "Use exact typed failures, account/state/call identities and file presence. Sentinel bytes intentionally identify the owned fixture.",
+          "4": "Own unique temporary roots/background session identifiers; restore fixture permissions and release/join held tasks before deleting fixture roots. No user data or credentials.",
+          "5": "Use the reset-closure seam introduced by this slice, existing TestAppService and the actual native BookCoverImageLoader with tiny local PNGs; no new service locator or network.",
+          "6": "Native Simulator app-hosted execution; no physical data-protection, real credential deletion or user-app reset claim.",
+          "7": "Original two-case baseline and separate zero-test compilation failure retained. Corrected exact case passes; no assertions weakened or silent rerun substituted.",
+          "8": "Exact typed reset stage/cause and operation failure distinguish partial reset from success without private paths, descriptions, URLs or contents in diagnostics.",
+          "9": "Focused five unique native cases and complete638unique owning app cases passed with zero failures/skips/expected failures/runtime warnings; tested source hashes unchanged. First owning attempt executed zero after Simulator Busy launch refusal; verified owned-device recovery and distinct retry retained. Published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves an observed reset gap or the required partial-failure/admission behavior at the real model/loader boundary."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
     }
   ],
   "decisionCounts": {
@@ -51392,5 +51547,13 @@
     "integrationBase": "5c46802a20104647ff67a8f3176106525da8b0b7",
     "scope": "One new controlled iOS case; retain all #450 rows and historical audit counts. Only directory-preparation failures are fault-injected; write/encoding stages are source-reviewed.",
     "evidence": "docs/cover-cache-lifecycle.md#typed-persistence-failure-reporting-2026-10-23"
+  },
+  "coverResetReview": {
+    "scope": "Five new isolated native reset/partial-failure/admission regressions; no bulk audit reconciliation.",
+    "evidence": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23",
+    "baseline": "Two executed: cleanup witness failed six assertions; earlier-store-failure control passed. Initial compilation attempt executed zero tests.",
+    "focused": "Five unique native cases passed; zero failures/skips/expected failures/runtime warnings.",
+    "boundaries": "Synthetic fixtures only; no real app reset, physical protection claim or cover account-migration fix.",
+    "owner": "638 unique native app tests passed, zero failures/skips/expected failures/runtime warnings; source hashes unchanged and runner/guard exit0; first zero-test Simulator launch refusal retained."
   }
 }

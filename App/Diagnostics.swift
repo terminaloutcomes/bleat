@@ -271,6 +271,10 @@ extension AppFailure {
             .localDataResetCredentialsFailed
         case (_, .localDataReset(.persistentStore)):
             .localDataResetStoreFailed
+        case (_, .localDataReset(.bookCovers(.cacheDirectoryUnavailable))):
+            .localDataResetCoverDirectoryUnavailable
+        case (_, .localDataReset(.bookCovers(.removalFailed))):
+            .localDataResetCoverRemovalFailed
         case (_, .persistenceUnavailable): .persistenceUnavailable
         case (_, .storedDataMigrationFailed): .storedDataMigrationFailed
         case (_, .invalidInput): .invalidInput

@@ -11051,6 +11051,36 @@
       "name": "testDiskPreparationFailureIsReportedWithoutLosingOnlineArtwork",
       "line": 538,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testResetLocalDataRemovesOwnedArtworkAndRejectsLateFetch",
+      "line": 23939,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFailedLocalDataResetPreservesOwnedArtwork",
+      "line": 24059,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testLoginIsIgnoredWhileArtworkResetIsRunning",
+      "line": 24121,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testArtworkResetIsIgnoredWhileLoginIsRunning",
+      "line": 24190,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testArtworkCleanupFailureReportsPartialResetAndCanRetry",
+      "line": 24276,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

@@ -94,6 +94,39 @@ it cannot bypass invalidation with an old local image. Each CarPlay image reques
 captures both cache keys before suspension and checks the shared identity again
 before installing pixels or seeding a retained presentation.
 
+## Reset Local Data artwork ownership (2026-10-23)
+
+Reset Local Data now retires all cover requests and memory ownership before
+removing the loader's entire owned artwork root, including account directories
+and legacy orphan files. A cancellation-ignoring fetch cannot return or persist
+its retired image. A missing root is already clean; an unavailable root or
+failed deletion produces a typed failure with the precise safe disk cause.
+This uses the existing approved actor-owned deletion boundary; #411 remains
+separate.
+
+Artwork removal follows successful store and credential reset. An earlier store
+failure preserves artwork and the signed-in state. If artwork removal then fails,
+the accounts and credentials are already gone: the model signs out, reports an
+incomplete reset instead of completion, and presents Retry Reset on the login
+screen. Login and reset exclude each other, including OpenID login.
+
+The controlled baseline executed two native cases: the cleanup witness failed
+six assertions, while the earlier-store-failure preservation control passed.
+Current and orphan artwork remained cached and a held old fetch returned its
+image. The preceding typed-closure compilation failure executed zero tests and
+is retained separately. The five corrected focused cases passed with zero
+failures, skips, expected failures or runtime warnings. They additionally cover
+actual owned-directory permission failure and successful retry, and both
+native/OpenID login/reset admission orders. Independent complete source review
+found no remaining issues after correcting task cleanup and concurrent admission.
+The first owning run stopped during test discovery with a Simulator Busy launch
+error and executed zero tests. The owned Simulator was found shut down and was
+booted to a verified ready state. The distinct owning run passed all 638 unique
+app tests, including all five new cases, with zero failures, skips, expected
+failures or runtime warnings; the supported runner and outer disk guard exited 0.
+Exact tested source hashes remained unchanged. Published-head CI is separate.
+No physical-device reset or real user-data reset is claimed.
+
 ## Other assets: inventory and distinct policies
 
 | Asset / owner | Identity, authority and persistence | Freshness, integrity, limits and cleanup |
