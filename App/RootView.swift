@@ -141,6 +141,9 @@ struct RootView: View {
                 .tint(colourScheme.color)
             }
         }
+        #if os(iOS)
+            .modifier(IPadKeyboardScope(model: model, navigation: navigation))
+        #endif
         #if DEBUG || BLEAT_UI_TESTING
             .overlay(alignment: .topTrailing) {
                 VStack {
@@ -1735,6 +1738,7 @@ private struct SignedInView: View {
         .sheet(
             isPresented: $navigation.showsPlayer,
             onDismiss: {
+                navigation.keyboardPlayerDidDismiss()
                 if signInAfterPlayerDismissal {
                     signInAfterPlayerDismissal = false
                     resumeSignInAccount = model.account
@@ -3729,6 +3733,15 @@ private struct SearchView: View {
             prompt: "Books, authors, or series"
         )
         .searchFocused($isSearchFocused)
+        #if os(iOS)
+            .task(id: navigation.keyboardSearchFocusRequest) {
+                if navigation.keyboardSearchFocusRequest != 0,
+                    navigation.selectedTab == .search
+                {
+                    isSearchFocused = true
+                }
+            }
+        #endif
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isSearchFocused {
                 HStack {

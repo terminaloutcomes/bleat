@@ -42,6 +42,7 @@
 - [Telemetry security evidence](release-evidence/telemetry-release-security.md)
 - [Low Data live updates](release-evidence/low-data-live-updates.md)
 - [Mini-player Reduce Motion](release-evidence/mini-player-reduce-motion.md)
+- [iPad keyboard shortcut candidate](release-evidence/ipad-keyboard-shortcuts.md)
 - [Download recovery](release-evidence/download-recovery.md)
 - [Secret leakage](release-evidence/secret-leakage.md)
 - [Telemetry App Store privacy](release-evidence/telemetry-app-store-privacy.md)

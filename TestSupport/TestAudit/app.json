@@ -51535,6 +51535,254 @@
         "AppModelTests native app target"
       ],
       "execution": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testAllShortcutsAreAvailableInActiveIPadPlayback",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 12
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "All six actions are admitted by the explicit active/signed-in/iPad/prepared policy value; this is a policy test, not UIKit delivery.",
+        "purpose": "All six actions are admitted by the explicit active/signed-in/iPad/prepared policy value; this is a policy test, not UIKit delivery.",
+        "ruleAssessments": {
+          "1": "All six actions are admitted by the explicit active/signed-in/iPad/prepared policy value; this is a policy test, not UIKit delivery.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testTextEntryPreservesSearchAndBlocksPlaybackShortcuts",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 20
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
+        "purpose": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
+        "ruleAssessments": {
+          "1": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testShortcutsDoNotCrossDeviceAuthenticationSceneOrPresentationBoundaries",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 34
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Each device/authentication/scene/presentation admission boundary rejects every action through the value policy.",
+        "purpose": "Each device/authentication/scene/presentation admission boundary rejects every action through the value policy.",
+        "ruleAssessments": {
+          "1": "Each device/authentication/scene/presentation admission boundary rejects every action through the value policy.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testSearchRemainsAvailableWithoutPlayableMedia",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 54
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Search stays available without prepared or resumable media while transport/rate remain unavailable.",
+        "purpose": "Search stays available without prepared or resumable media while transport/rate remain unavailable.",
+        "ruleAssessments": {
+          "1": "Search stays available without prepared or resumable media while transport/rate remain unavailable.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testRestoredSelectionCanToggleWithoutEnablingPreparedMediaCommands",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 64
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Actual PlaybackModel cold selection and resume handler accept one remote toggle without preparing/activating audio; skip/rate remain unavailable.",
+        "purpose": "Actual PlaybackModel cold selection and resume handler accept one remote toggle without preparing/activating audio; skip/rate remain unavailable.",
+        "ruleAssessments": {
+          "1": "Actual PlaybackModel cold selection and resume handler accept one remote toggle without preparing/activating audio; skip/rate remain unavailable.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testKeyboardSearchRevealsRootAndRequestsFocusWithoutDiscardingQuery",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 130
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Search reveals its root, retains query and unrelated navigation, and advances its focus request on repeated commands.",
+        "purpose": "Search reveals its root, retains query and unrelated navigation, and advances its focus request on repeated commands.",
+        "ruleAssessments": {
+          "1": "Search reveals its root, retains query and unrelated navigation, and advances its focus request on repeated commands.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testPlayerSearchWaitsForDismissalAndRequestsFocusExactlyOnce",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 155
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Repeated pending Search requests wait for player dismissal; duplicate dismissal callbacks do not repeat focus.",
+        "purpose": "Repeated pending Search requests wait for player dismissal; duplicate dismissal callbacks do not repeat focus.",
+        "ruleAssessments": {
+          "1": "Repeated pending Search requests wait for player dismissal; duplicate dismissal callbacks do not repeat focus.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
+    },
+    {
+      "identifier": "IPadKeyboardTests/testHostedScopeExposesPublicShortcutRegistrationAndGuardedSearch",
+      "source": {
+        "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+        "line": 186
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
+        "purpose": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
+        "ruleAssessments": {
+          "1": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
+          "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
+          "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
+          "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
+          "5": "Actual policy/coordinator and cold PlaybackModel boundary; hosted scope uses actual UIKit/SwiftUI lifecycle and synthetic UITestAppService. No personal account, server or audible media operation.",
+          "6": "Native app-host/Simulator coverage; public metadata and direct guarded action calls do not prove hardware modifier delivery.",
+          "7": "Original native UI failures and baseline-identical standard Cmd-A failure are retained. Public-probe test-oracle corrections and zero-test compile failure are explicit in the evidence document.",
+          "8": "Ordinary exact XCTest assertions retain their body locations; public metadata diagnostics contain input/modifier/selector/type only. No secret payload or production diagnostic hook.",
+          "9": "Seven initial policy/navigation/cold-resume identities and one corrected hosted identity have passing receipts; final owning execution is recorded separately in the evidence document. No full keyboard acceptance claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Bounded candidate regression coverage; native modified-key acceptance remains blocked and #40 stays open."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS); native BleatAppTests; no opt-in skip"
+      ],
+      "execution": "docs/release-evidence/ipad-keyboard-shortcuts.md"
     }
   ],
   "decisionCounts": {
@@ -51660,5 +51908,11 @@
     "scope": "Two new native declarations plus an enhanced existing service-failure control; historical counts and every prior record retained.",
     "evidence": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23",
     "boundary": "Deletes trusted alias artwork roots after successful account removal; does not claim indirect alias-record reclamation, denied-delete recovery or physical system-artwork assurance."
+  },
+  "ipadKeyboardCandidateReview": {
+    "scope": "Eight new candidate records only; preserve historical counts/dispositions.",
+    "status": "unmerged; native modified-key acceptance blocked",
+    "evidence": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+    "addedMethodCount": 8
   }
 }

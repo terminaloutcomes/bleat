@@ -30,6 +30,19 @@ can seek, choose chapters, change speed, and set a sleep timer. Now Playing and
 CarPlay provide system playback controls; available CarPlay search depends on
 the operating system. Opening downloaded books from Home opens their details.
 
+### iPad keyboard shortcuts
+
+With a keyboard connected, use Command-P for play/pause, Command-Left Arrow
+and Command-Right Arrow to skip by your configured intervals, and
+Command-Minus and Command-Plus to move through the featured playback speeds.
+Command-F opens Search, retains your query, and focuses its text field.
+
+Position and play/pause shortcuts leave text editing to the focused field; speed
+shortcuts remain available while editing. All shortcuts are unavailable behind
+other sheets or confirmations. Command-F works while editing Search,
+but does not dismiss another sheet or confirmation. Standard text-entry keys,
+including Space and arrow keys, keep their usual meaning.
+
 ## Download and use offline
 
 Use a book's download action to keep its audio locally. Settings provides

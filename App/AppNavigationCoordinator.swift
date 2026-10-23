@@ -113,6 +113,25 @@ final class AppNavigationCoordinator {
     var searchQuery = ""
     var searchScope: DeepLinkSearchScope = .all
     var showsPlayer = false
+    private(set) var keyboardSearchFocusRequest: UInt64 = 0
+    private var focusSearchAfterPlayerDismissal = false
+
+    func requestKeyboardSearch() {
+        selectedTab = .search
+        searchPath = NavigationPath()
+        if showsPlayer || focusSearchAfterPlayerDismissal {
+            focusSearchAfterPlayerDismissal = true
+            showsPlayer = false
+        } else {
+            keyboardSearchFocusRequest &+= 1
+        }
+    }
+
+    func keyboardPlayerDidDismiss() {
+        guard focusSearchAfterPlayerDismissal else { return }
+        focusSearchAfterPlayerDismissal = false
+        keyboardSearchFocusRequest &+= 1
+    }
     private var bookDestinations: [BookNavigationOrigin: [Int: UUID]] =
         [:]
     var pendingRoute: DeepLinkRoute?
