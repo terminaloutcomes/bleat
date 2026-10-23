@@ -943,6 +943,13 @@ final class OpenIDAuthenticationTests {
     func testAuthorizationAndPersistenceFailuresRemainTyped() async throws {
         let loginData = try Self.fixture(named: "login-tokens")
         let authorizationData = try Self.fixture(named: "authorize")
+        let provisionalID = AccountID(rawValue: "account")
+        let server = try NormalizedServerURL("https://example.com")
+        let canonicalID = AccountID.canonical(
+            server: server,
+            userID: UserID(rawValue: "fixture-user")
+        )
+        #expect(provisionalID != canonicalID)
         let cases:
             [(
                 OpenIDTestTransport.Configuration,
@@ -1001,8 +1008,8 @@ final class OpenIDAuthenticationTests {
 
             await assertThrowsErrorAsync(
                 try await coordinator.loginWithOpenID(
-                    accountID: AccountID(rawValue: "account"),
-                    server: NormalizedServerURL("https://example.com"),
+                    accountID: provisionalID,
+                    server: server,
                     callbackURL: Self.callbackURL,
                     browser: OpenIDTestBrowser.success(
                         callbackURL: Self.callbackURL
@@ -1013,10 +1020,10 @@ final class OpenIDAuthenticationTests {
             }
             let clearCount = await transport.clearCount()
             #expect(clearCount == 2)
-            let stored = await store.credentials(
-                for: AccountID(rawValue: "account")
-            )
+            let stored = await store.credentials(for: provisionalID)
             #expect(stored == nil)
+            let canonicalStored = await store.credentials(for: canonicalID)
+            #expect(canonicalStored == nil)
         }
     }
 
