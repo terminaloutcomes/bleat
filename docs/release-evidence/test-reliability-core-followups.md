@@ -2410,3 +2410,97 @@ never modified. Independent source and full-diff reviews found no actionable
 issues, and local exact outcomes were verified before publication. Published-head
 CI is a separate gate. This changes no shared helper, declares no new test, and
 closes neither #372 nor #362.
+
+
+## Router helper-context and six-purpose stream review (#372)
+
+This bounded slice starts from main `d2c4f85f0224b72eb34a49d8b791c23d730ab21e`. It rechecks
+12 unchanged router records from the historical 241-record helper-context
+snapshot and strengthens one separate existing stream test. These are 12
+justified no-change conclusions and one explicit assertion-coverage gap, not
+13 production bugs. No production source or shared helper changes.
+
+| Stable record | Existing test | Current disposition |
+| --- | --- | --- |
+| `AUD-C-48ba1e7cc272` | `testEndpointRouterUsesLocalServerAndPreservesPathPrefix` | Keep: Exact candidate order, local marker and prefix rewrite. |
+| `AUD-C-11015166c55a` | `testEndpointRouterSkipsFailedLocalServerUntilRevalidated` | Keep: Unavailable local leaves the exact primary candidate. |
+| `AUD-C-57127d923054` | `testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe` | Keep: Both prefix arguments preserve exact request/destination/body/auth counts, stale-success rejection and controlled probe recovery. |
+| `AUD-C-3017c6e05cc8` | `testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange` | Keep: Failed, unknown and matching-generation validated selections remain explicit. |
+| `AUD-C-f25967d01929` | `testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated` | Keep: Configuration during evaluation retains primary until validation. |
+| `AUD-C-1b5a0c5d8b4f` | `testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation` | Keep: Old candidate success cannot clear current unknown/primary state. |
+| `AUD-C-2b9d7df9fc09` | `testURLOnlyCompletionCannotMutateCurrentPathSelection` | Keep: Generation-less completion preserves validated selection/availability; this does not assert activity suppression. |
+| `AUD-C-c1592a648e2e` | `testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable` | Keep: Unresolved evaluation finishes on primary with temporarily-unavailable local state. |
+| `AUD-C-4c12eaefd8b1` | `testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL` | Keep: Exact rewritten URL, primary identity and non-local flag. |
+| `AUD-C-236184fd37ae` | `testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy` | Keep: Exact URL, GET/auth and constrained/expensive-network flags. |
+| `AUD-C-01c113f50339` | `testSuccessfulProbeRestoresFailedLocalServer` | Keep: Matching successful probe restores local selection. |
+| `AUD-C-55493a7ad63f` | `testEndpointRouterTracksAPIAndAuthenticationUsageSeparately` | Keep: Local API and primary authentication remain independent. |
+| `AUD-C-ca5591e818c7` | `testEndpointRouterStreamsEveryServerConnectionPurpose` | Keep after coverage correction: All six typed purposes publish checked snapshots; added API/authentication/cover/download cases preserve existing playback/WebSocket assertions and accumulated dedicated fields. |
+
+Each router is fresh and its state transitions are awaited. Eleven unchanged
+cases are direct actor-state checks. The parameterized sync case executes both
+root and prefixed paths using real URLSession calls handled by the immediate,
+locked URLProtocol fixture in a serialized suite; its handler is reset with
+`defer`. It retains exact request counts, method/auth fields, structurally
+decoded body and availability/probe assertions. These fixtures do not establish
+live-server or physical-network behavior. No held caller or cancellation-ignoring
+fake is introduced, and no complete framework-session drainage is claimed.
+
+The existing stream test previously covered only playback and WebSocket. The
+specification's Diagnostics contract requires publication for all six purposes.
+Four typed cases now also assert API, authentication, cover and download
+snapshots, including exact latest usage/purpose and preservation of dedicated
+API/authentication/WebSocket state. Initial/playback/WebSocket assertions remain
+unchanged. Every added read uses the existing five-second bounded reader and
+stage/caller-located failure helper. The reader joins its timeout/read children;
+this does not prove completion of the router's asynchronous observer-removal
+callback. No sleeps, retries or observer-drain machinery are added. This is
+router publication coverage, not evidence that the four real asset/request
+adapters or physical connections were exercised.
+
+Playback timing/seek tolerances are inapplicable to these state/event cases.
+Setup uses independent local actors and synthetic HTTPS values; postconditions
+are typed and immediate or use the existing bounded event wait. Original audit
+fields and receipts remain historical; `routerReview20261023` explicitly records
+the current per-record disposition, including superseding the stream's old
+unbounded-read finding that the earlier timing batch already addressed.
+
+The 12 unchanged cases are distinct from the five historical-cohort members
+identified by #455/#456, yielding 17 named cohort members with those three
+slices' evidence. The stream case is outside that cohort. This does not recalculate
+the whole remaining queue or turn unmatched historical records into defects.
+No declarations are added/renamed; audit/index identities and historical global
+counts remain unchanged. #372/#374/#362 remain open.
+
+On Xcode 27.1 / macOS, the changed stream identity passed in three fixed,
+independent Swift Testing runs. The owning HTTP transport suite passed all
+**19 function identities**, including both root and `/audiobookshelf` arguments
+of the sync-recovery case. The complete signed host gate passed **609 unique
+inventory identities with zero skips**; all 13 selected identities were present
+and passed. Native XML, built-in inventory verification, exact selected identities
+and source hashes were inspected. The final Swift SHA-256 remained
+`0634493393c56b561f637b4ffc6ec6d3fed5811773180f48ed4dfd6014883dd6`
+through focused, owning and signed runs. These successful executions have no
+test failures; the host log retains four deliberate cleanup-fixture known issues
+and existing upstream/toolchain/storage-fixture diagnostics. No broad
+warning-free claim is made.
+
+The first signed attempt executed zero tests: the cached generated host runner
+failed `codesign --verify --strict` with a missing-resource-envelope error.
+Direct verification reproduced that error. Its 1.8 MiB owned derived output was
+retained under `.build/router-purpose-failed-host-runner-derived`; the supported
+gate then rebuilt that runner at its original path and verified signature,
+Keychain entitlement and provisioning-profile presence before the passing run.
+No signer/account/security settings, production source or other caches changed.
+This is a distinct pre-test infrastructure failure, not a failed 609-test run
+or a passing signature check by omission.
+
+Retained evidence is `.build/router-purpose-focused-{1,2,3}.{log,xml}`,
+`.build/router-purpose-owning.{log,xml}`, both signed-attempt logs and execution
+receipts, `.build/router-purpose-signed-host-tests.xml` and corresponding
+`*-verified.json` records. The 3 GiB active disk guard stayed enabled; the clean
+signed run used 12.08 GiB before and 11.98 GiB after. Strict changed-file Swift
+lint, documentation, scoped audit/index parity (609 host / 46 Rust functions)
+and diff checks passed. Independent full three-file review found no actionable
+issues and revalidated the 12 no-change conclusions. Published-head CI remains
+a separate gate. Existing traceability names are unchanged; this slice adds no
+product behavior or physical acceptance evidence.

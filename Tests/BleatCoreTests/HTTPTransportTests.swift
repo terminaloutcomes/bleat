@@ -415,6 +415,55 @@ final class HTTPTransportTests {
         else { return }
         #expect(webSocketUpdate.webSocket == .primary)
         #expect(webSocketUpdate.lastConnection?.purpose == .webSocket)
+
+        let localCandidate = try #require(candidates.first)
+        let primaryCandidate = try #require(candidates.last)
+        let remainingPurposes:
+            [(
+                purpose: ServerConnectionPurpose,
+                candidate: ServerEndpointCandidate,
+                expected: ServerEndpointActivitySnapshot
+            )] = [
+                (
+                    .api, localCandidate,
+                    ServerEndpointActivitySnapshot(
+                        lastConnection: ServerConnectionActivity(
+                            usage: .local, purpose: .api),
+                        api: .local, webSocket: .primary)
+                ),
+                (
+                    .authentication, primaryCandidate,
+                    ServerEndpointActivitySnapshot(
+                        lastConnection: ServerConnectionActivity(
+                            usage: .primary, purpose: .authentication),
+                        authentication: .primary, api: .local,
+                        webSocket: .primary)
+                ),
+                (
+                    .cover, localCandidate,
+                    ServerEndpointActivitySnapshot(
+                        lastConnection: ServerConnectionActivity(
+                            usage: .local, purpose: .cover),
+                        authentication: .primary, api: .local,
+                        webSocket: .primary)
+                ),
+                (
+                    .download, primaryCandidate,
+                    ServerEndpointActivitySnapshot(
+                        lastConnection: ServerConnectionActivity(
+                            usage: .primary, purpose: .download),
+                        authentication: .primary, api: .local,
+                        webSocket: .primary)
+                ),
+            ]
+        for (purpose, candidate, expected) in remainingPurposes {
+            await router.recordConnection(candidate, purpose: purpose)
+            guard
+                let update = await requireEndpointActivitySnapshot(
+                    from: reader, stage: "\(purpose.rawValue) update")
+            else { return }
+            #expect(update == expected)
+        }
     }
 
     @Test
