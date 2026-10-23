@@ -1598,7 +1598,8 @@ final class PlaybackModel {
             return
         }
         guard !isAccountSwitchShutdownInProgress, player != nil,
-            preparation != nil, state != .preparing, state != .ended
+            preparation != nil, state != .idle, state != .preparing,
+            state != .ended
         else { return }
         do {
             try configureAudioSession()
@@ -2096,9 +2097,7 @@ final class PlaybackModel {
     }
 
     private func stop(allowsSupersession: Bool) async {
-        await diagnostics.record(
-            .started(.closePlayback, category: .playback)
-        )
+        resumeAfterInterruption = false
         generation &+= 1
         let operationGeneration = generation
         playbackRequested = false
@@ -2108,6 +2107,16 @@ final class PlaybackModel {
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = nil
         player?.pause()
+        // Retire presentation and command admission before cleanup can suspend.
+        // Queued player observations already reject the idle state.
+        state = .idle
+        nowPlayingCoordinator.clear()
+        await diagnostics.record(
+            .started(.closePlayback, category: .playback)
+        )
+        guard !allowsSupersession || generation == operationGeneration else {
+            return
+        }
         if preparation?.sessionID != nil {
             await syncProgress()
         } else {

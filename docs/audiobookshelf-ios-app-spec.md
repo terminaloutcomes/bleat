@@ -1157,7 +1157,7 @@ During local account-identity migration, malformed selection metadata is discard
 so valid playback positions can migrate; a typed migration-stage diagnostic
 records the discard. Unsupported record versions remain untouched.
 Pause, interruption and route
-loss retain it. Explicit Stop clears the selection while retaining position;
+loss retain it. Explicit Stop pauses playback and retires system controls before waiting for diagnostic recording, clears the selection while retaining position, and must not let a delayed old Stop clear a newer selection;
 account switching and account/book removal invalidate matching references.
 Cold launch restores a paused selection without opening a stream or activating
 audio. Explicit Play waits for account/download bootstrap and uses

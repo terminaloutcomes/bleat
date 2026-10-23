@@ -50000,6 +50000,68 @@
         "#if os(iOS)"
       ],
       "execution": "docs/release-evidence/callback-cancellation-audit.md#audio-interruption-intent-2026-10-22"
+    },
+    {
+      "identifier": "AppModelTests/testExplicitStopPausesBeforeDiagnosticSuspension",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11917
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Explicit Stop retires the old player, interruption intent and system controls before its diagnostic suspension.",
+        "purpose": "Exercise actual Stop implementation and native silent player through a controlled diagnostic suspension.",
+        "ruleAssessments": {
+          "1": "For playing and interrupted cases require ready native player/rate>0 before Stop; hold actual close-start diagnostic, require idle/intentfalse/rate0/snapshotnil; end interruption and request Play while held, require no activation/resume, release and join Stop.",
+          "2": "Gate admission and actual player readiness/completion establish ordering with five-second failure budgets; no arbitrary sleep/yield marker.",
+          "3": "No equality assertion on advancing position; positive ready/time-control/rate preconditions distinguish a playing player from an already-zero rate.",
+          "4": "Register fixture cleanup before playback; release gate and await owned Stop task in teardown before removing storage/defaults.",
+          "5": "Unique temporary CAF/defaults, explicit zero samples, fake activation, isolated NowPlaying publisher and disabled remote-command registration.",
+          "6": "App-hosted native player and exact Stop/production policy handlers with in-memory service/recorder; no physical OS routing or cross-app command delivery claim.",
+          "7": "Retain initial and extended baseline failures, exact before/after bundles and source patch; no timeout relaxation or retry-to-green.",
+          "8": "Named gate/readiness stages, context-labelled playing/interrupted assertions and exact identity/state/rate/snapshot oracles.",
+          "9": "Each corrected focused identity passed; owning632/632 passed with zero failures/skips/expected failures/runtime warnings. Both new identities and adjacent serialization/cancellation/interrupt/end cases verified. Baseline failures retained; published-head CI separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Explicit Stop retires the old player, interruption intent and system controls before its diagnostic suspension."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/release-evidence/callback-cancellation-audit.md#explicit-stop-retirement-2026-10-22"
+    },
+    {
+      "identifier": "AppModelTests/testStopCompletionDoesNotRetireNewerSelection",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11995
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A Stop held at its close-start diagnostic must not clear a newer prepared selection.",
+        "purpose": "Exercise actual Stop implementation and native silent player through a controlled diagnostic suspension.",
+        "ruleAssessments": {
+          "1": "Require ready A; hold A Stop; start distinct B and require ready/requested/published identity; release old Stop and require B identity, active/requested state, published snapshot and positive native rate survive.",
+          "2": "Gate admission and actual player readiness/completion establish ordering with five-second failure budgets; no arbitrary sleep/yield marker.",
+          "3": "No equality assertion on advancing position; positive ready/time-control/rate preconditions distinguish a playing player from an already-zero rate.",
+          "4": "Register fixture cleanup before playback; release gate and await owned Stop task in teardown before removing storage/defaults.",
+          "5": "Unique temporary CAF/defaults, explicit zero samples, fake activation, isolated NowPlaying publisher and disabled remote-command registration.",
+          "6": "App-hosted native player and exact Stop/production policy handlers with in-memory service/recorder; no physical OS routing or cross-app command delivery claim.",
+          "7": "Retain initial and extended baseline failures, exact before/after bundles and source patch; no timeout relaxation or retry-to-green.",
+          "8": "Named gate/readiness stages, context-labelled playing/interrupted assertions and exact identity/state/rate/snapshot oracles.",
+          "9": "Each corrected focused identity passed; owning632/632 passed with zero failures/skips/expected failures/runtime warnings. Both new identities and adjacent serialization/cancellation/interrupt/end cases verified. Baseline failures retained; published-head CI separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "A Stop held at its close-start diagnostic must not clear a newer prepared selection."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/release-evidence/callback-cancellation-audit.md#explicit-stop-retirement-2026-10-22"
     }
   ],
   "decisionCounts": {
@@ -50076,5 +50138,10 @@
     "baseline": "4b5829d2def2d4cc4dd707e1e87d1b917a677dea",
     "scope": "One new iOS-only policy regression. Historical methodCount/decisionCounts retain their original scope.",
     "evidence": "docs/release-evidence/callback-cancellation-audit.md#audio-interruption-intent-2026-10-22"
+  },
+  "audioStopReview": {
+    "baseline": "8c0b5ffa6c881dc1e39a1161e066c79513a012ab",
+    "scope": "Two new iOS-only Stop regressions; original audit counts remain historical scope. Direct policy/silent player evidence does not complete physical #341 protocols.",
+    "evidence": "docs/release-evidence/callback-cancellation-audit.md#explicit-stop-retirement-2026-10-22"
   }
 }
