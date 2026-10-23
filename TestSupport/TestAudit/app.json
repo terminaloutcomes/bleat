@@ -13365,6 +13365,16 @@
     },
     {
       "identifier": "AppModelTests/testNetworkRecoveryReplacesStaleBackgroundTransfer",
+      "staleTransferFixtureReview": {
+        "baseline": "6c8c5561081eff5e22b667b9f7604d166410a44e",
+        "decision": "fix test fixture; production scheduling unchanged",
+        "initialState": "Commit track 0 through DownloadStorage before recovery; assert only track 1 is incomplete and is next for manual recovery.",
+        "preservedPostconditions": "Both startup/network-change modes, real native cancellation and off-actor repeated callback, one replacement with a new transfer ID, track 1 suffix offset 5/length 3, retained five bytes, one admission/request, cleared pending recovery and final descriptor cleanup remain asserted.",
+        "causalWitness": "Hold the recovery planner, admit the actual native cancellation callback, await its completion, then release the planner. The original fixture reproduces all four CI failures in each mode; temporary instrumentation is not retained.",
+        "execution": "Three fixed native repetitions and all 641 distinct owning app identities passed; zero failures/skips/expected failures/runtime warnings. Supported runner verified built discovery; exact source hashes match.",
+        "boundary": "Synthetic storage/service and suspended URLSession tasks; startDownloadTask is a no-op. No live transfer, user-data mutation or production download defect is claimed.",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#single-incomplete-track-recovery-fixture-2026-10-23"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 8953,

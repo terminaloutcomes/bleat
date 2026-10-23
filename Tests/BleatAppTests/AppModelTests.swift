@@ -9558,6 +9558,29 @@ final class AppModelTests: XCTestCase {
                 downloadID: "stale-transfer",
                 committedByteCount: 5
             )
+            // Only the interrupted second track remains unfinished. Otherwise
+            // callback recovery may legitimately schedule the earlier track.
+            let firstIdentity = try DownloadTaskIdentity(
+                downloadID: DownloadID(rawValue: "stale-transfer"),
+                accountID: account.id, itemID: detail.id, track: plan.tracks[0])
+            let firstTrack = root.appendingPathComponent(
+                "completed-first-track")
+            try Data(repeating: 0xAB, count: 4).write(to: firstTrack)
+            _ = try await storage.commitChunk(
+                firstIdentity, temporaryURL: firstTrack,
+                range: try DownloadByteRange(start: 0, endInclusive: 3),
+                validator: nil)
+            let fixtureRecords = try await storage.records()
+            let interruptedRecord = try XCTUnwrap(fixtureRecords.first)
+            XCTAssertEqual(
+                interruptedRecord.manifest.entries.filter {
+                    $0.state != .complete
+                }
+                .map(\.trackIndex), [1])
+            XCTAssertEqual(
+                DownloadModel.nextManualDownloadIdentity(in: interruptedRecord)?
+                    .trackIndex, 1)
+
             let authorizedRequest = URLRequest(
                 url: try XCTUnwrap(
                     URL(string: "https://192.0.2.1/private-audio"))
