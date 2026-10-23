@@ -2923,7 +2923,18 @@
       "classification": "Synchronous value-validation test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-3eed5f271a66",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConfigurationRequiresHTTPSOriginAndPositiveTimeout",
+        "assessment": "Valid HTTPS origin/default timeout accepted; five unsafe endpoint shapes and zero timeout produce exact typed errors. Not exhaustive numeric-edge coverage.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testEachExportUsesExactlyOneCurrentBearerValue",
@@ -2962,7 +2973,18 @@
       "classification": "Deterministic exporter test with local fakes.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-627f0c7c3452",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testEachExportUsesExactlyOneCurrentBearerValue",
+        "assessment": "Two awaited exports use exactly one current bearer metadata value each; async count 2 and shutdown count 0. Immediate locked fake, not network or complete exporter retirement evidence.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce",
@@ -3001,7 +3023,18 @@
       "classification": "Deterministic exporter state test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-dbc8c63f6384",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce",
+        "assessment": "One unauthenticated response invalidates expired token, retries exactly once and succeeds with renewed final metadata. First-request metadata is not separately asserted.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPersistentAuthenticationRejectionNeverLoops",
@@ -3040,7 +3073,18 @@
       "classification": "Deterministic bounded retry policy test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-9654c51c1f0e",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPersistentAuthenticationRejectionNeverLoops",
+        "assessment": "Two persistent authentication rejections yield failure after exactly 2 exports/requests and invalidate both tokens; queued third success remains unused.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testLogExporterRefreshesOnceAndDisableGatesQueuedRecords",
@@ -3079,7 +3123,18 @@
       "classification": "Deterministic log exporter lifecycle test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-0eb14d3177c6",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testLogExporterRefreshesOnceAndDisableGatesQueuedRecords",
+        "assessment": "Log retry uses renewed bearer and one invalidation; disabling rejects another export without another RPC, then awaited shutdown is counted once. Provider admission after disable is not separately counted.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testSuspendedTokenProviderDistinguishesCancellationFromRetirement",
@@ -3623,7 +3678,18 @@
       "classification": "Deterministic result mapping.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-e79031122a8c",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
+        "assessment": "Rejected/failure/cancelled responses each yield failure after one export without invalidation. Immediate fake results, not proof of a bound for an uncooperative real client.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConcurrentExportsUseProviderSafelyAndReuseOneClient",
@@ -3970,7 +4036,18 @@
       "classification": "Deterministic request adapter test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-938f8f6a0dc4",
+        "currentDecision": "keep after test correction",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
+        "assessment": "Typed protobuf decoding now checks one trace/log resource, one named scope and exact representative span name/log body, retaining path/header/async-request/shutdown checks. No real HTTPS or exhaustive serialization claim; log POST is not separately asserted.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
@@ -4009,7 +4086,18 @@
       "classification": "Synchronous response mapping test.",
       "compiler_skip": "No test-level compiler guard/skip/opt-in identified.",
       "reason": "Specific request/result/state postconditions cover the contract.",
-      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading."
+      "shared_helper_review": "Recording clients/providers synchronize mutable state with locks or actors. SuspendedTokenProvider uses a 30-second cancellable sleep plus DispatchSemaphore signal; CancellationIgnoringTokenProvider deliberately waits one real second in 10ms increments. AsyncShutdownGate uses checked continuations and requires release. captureStandardOutput redirects process-global stdout/stderr descriptors via dup2 and closes them after reading.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-1cedd7fb70a5",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
+        "assessment": "Pure response mapping:200 success,401 unauthenticated,403 rejected,429 failure,cancellation and connection error remain distinct. No network request is made.",
+        "synchronizationAndOwnership": "Immediate actor token sequences and locked recording clients; awaited results and explicit shutdown checks only where asserted. No held private response is added; whole production exporter/timer/task-graph retirement is not certified.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testCancellationAfterUnauthenticatedResponsePreventsRefreshAndRetry",
@@ -18043,7 +18131,18 @@
       "classification": "Deterministic transport telemetry test using ephemeral URLSession and repository URLProtocol stubs; no real network is used.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-15a888b5f1d9",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome",
+        "assessment": "Exact endpoint/outcome span multiplicities, event schema and synthetic marker nondisclosure; custom URLProtocol immediate terminal responses, no live network.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint",
@@ -18082,7 +18181,18 @@
       "classification": "Deterministic transport telemetry test using ephemeral URLSession and repository URLProtocol stubs; no real network is used.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-80df4ea7d9d2",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint",
+        "assessment": "Exact two typed attempt records retain progress endpoint, local URLProtocol error then primary success; not real connectivity.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes",
@@ -18121,7 +18231,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Intentional elapsed-time contract uses fixed wall-clock bounds; source inspection found the sleep is used to stage blocked completion or measure deadline, not to claim unrelated work completed. No observed instability recorded.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-d256301e1acf",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes",
+        "assessment": "Two spans, one event each, preserved explicit start/end within 1 ms and no added export after deactivation; tolerance is timestamp conversion, not playback.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes",
@@ -18160,7 +18281,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-c696541d9ecd",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes",
+        "assessment": "Exact reviewed operation-name set and descriptor key set/failure category across all operations; pure encoding.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedTelemetryAuthenticationRequestSpansShareParentTrace",
@@ -18199,7 +18331,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-89c943bb024f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedTelemetryAuthenticationRequestSpansShareParentTrace",
+        "assessment": "Four buffered spans, expected child names/kinds and exact parent/span trace relation after activation/flush; constructed events, no authentication transport.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedChapterSpanExportsMeasurementsUnderBatchParent",
@@ -18238,7 +18381,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-a2404caefa7b",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedChapterSpanExportsMeasurementsUnderBatchParent",
+        "assessment": "Parent/child trace IDs and exact chapter key set plus selected measurement values; remaining numeric values not separately asserted here.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals",
@@ -18277,7 +18431,18 @@
       "classification": "Deterministic private-cloud telemetry test with synthetic events and a lock-protected CloudSpanProbe; no CloudKit service is contacted.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-75768ffc23c9",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals",
+        "assessment": "Exact 64 capacity eviction indices/outcomes, terminal completion/dedup and late log-presence counts; immediate locked probe, no CloudKit requests.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder",
@@ -18316,7 +18481,18 @@
       "classification": "Deterministic private-cloud telemetry test with synthetic events and a lock-protected CloudSpanProbe; no CloudKit service is contacted.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-80b609ce7f3c",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder",
+        "assessment": "Duplicate abandonment and capacity eviction exact indices; refreshed duplicate completes index 64. Other active spans deliberately remain in local recorder, no external resources.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTerminalOutcomesFreeCapacity",
@@ -18355,7 +18531,18 @@
       "classification": "Deterministic private-cloud telemetry test with synthetic events and a lock-protected CloudSpanProbe; no CloudKit service is contacted.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-4ef6034e647a",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTerminalOutcomesFreeCapacity",
+        "assessment": "Success/local-storage/cancel outcomes and no extra capacity abandonment after replacements; synthetic lifecycle recorder.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitAbandonmentExportsReviewedReasonAndStage",
@@ -18394,7 +18581,18 @@
       "classification": "Deterministic private-cloud telemetry test with synthetic events and a lock-protected CloudSpanProbe; no CloudKit service is contacted.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-69426fee491f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitAbandonmentExportsReviewedReasonAndStage",
+        "assessment": "Two exact abandonment reasons, reviewed stage/outcome and strict attribute keyset exported; synthetic capacity lifecycle, not cloud service.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitLifecycleProducesReviewedLogsAndSpan",
@@ -18433,7 +18631,18 @@
       "classification": "Deterministic private-cloud telemetry test with synthetic events and a lock-protected CloudSpanProbe; no CloudKit service is contacted.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-6d611fa51ed0",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitLifecycleProducesReviewedLogsAndSpan",
+        "assessment": "Two correlated logs, async export count and exact reviewed rate-limit metadata; only first span inspected, no real cloud request.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDownloadLifecycleProducesTypedCorrelatedLogs",
@@ -18472,7 +18681,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-154569cdda6b",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDownloadLifecycleProducesTypedCorrelatedLogs",
+        "assessment": "Three correlated lifecycle logs, retry metadata and failure schema with forbidden URL/path keys absent; manually constructed events, no actual download. Temp-directory defer; no explicit pipeline shutdown in this case.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOutcomeEncodingNeverIncludesRawErrorText",
@@ -18511,7 +18731,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-745fc3aeca9a",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOutcomeEncodingNeverIncludesRawErrorText",
+        "assessment": "Typed success/cancel/failure category mapping and exact live-update schema; no raw arbitrary Error is injected, so limited to descriptor enum encoding.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testChapterTranscriptionSpanEncodesReviewedInputMeasurements",
@@ -18550,7 +18781,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-472e1e65d2fd",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testChapterTranscriptionSpanEncodesReviewedInputMeasurements",
+        "assessment": "Exact full encoded measurement dictionary; synthetic validated input, no transcription.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRetryCountsAreBounded",
@@ -18589,7 +18831,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-dbf4aa7eea7b",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRetryCountsAreBounded",
+        "assessment": "Explicit negative/0/1/2/3/max bucket mapping.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceEncodingContainsOnlyStableTechnicalValues",
@@ -18628,7 +18881,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-bc3f1340cc1f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceEncodingContainsOnlyStableTechnicalValues",
+        "assessment": "Exact normalized resource dictionary and omitted device.model.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceAcceptsIntegerAndDottedNumericBuilds",
@@ -18667,7 +18931,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-f7ee4f62f512",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceAcceptsIntegerAndDottedNumericBuilds",
+        "assessment": "Two exact leading-zero numeric normalizations.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceRejectsArbitraryOrUnboundedStrings",
@@ -18706,7 +18981,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-307de2519c72",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceRejectsArbitraryOrUnboundedStrings",
+        "assessment": "Typed version/build errors plus malformed/out-of-range builds; last invalid OS/version cases assert any error only.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRepresentativeEncodingContainsNoSensitiveValues",
@@ -18745,7 +19031,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-d7cce980252f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRepresentativeEncodingContainsNoSensitiveValues",
+        "assessment": "Specified markers absent from representative typed resource/descriptor; markers are not supplied as input, no general redaction/adversarial-data claim.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDefaultCollectionPolicyMatchesReviewedBounds",
@@ -18784,10 +19081,21 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-01b281728b51",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDefaultCollectionPolicyMatchesReviewedBounds",
+        "assessment": "Exact default sampling/age/bytes/no-count-cap/drop-oldest policy.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
-      "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerProducesNoExportableSpan",
+      "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerHasNoContextOrPropagation",
       "source": {
         "path": "Tests/BleatCoreTests/RemoteTelemetryTests.swift",
         "line": 895
@@ -18823,7 +19131,19 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-ccdc828e390c",
+        "currentDecision": "keep after test correction",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerHasNoContextOrPropagation",
+        "assessment": "Corrected disconnected-observer oracle: actual returned span has nil context and empty propagation before/after ending. Renamed to describe that narrower contract; no connected-export/pipeline claim.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract.",
+        "renamedFrom": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerProducesNoExportableSpan"
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPipelineBatchesReviewedSpansWithExactResource",
@@ -18862,7 +19182,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-7d116cea237c",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPipelineBatchesReviewedSpansWithExactResource",
+        "assessment": "Two names, exact resource, no events/links and asynchronous batch count; connected pipeline and recording exporter.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpansStartedDuringAsynchronousInitializationAreExported",
@@ -18901,7 +19232,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-1060a907a5ea",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpansStartedDuringAsynchronousInitializationAreExported",
+        "assessment": "Explicit prepareForActivation buffered app-launch span exported after pipeline activation, no controlled concurrent initializer race.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testFailedExportIsRetainedAndDrainedAfterRelaunch",
@@ -18940,7 +19282,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-41541b050474",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testFailedExportIsRetainedAndDrainedAfterRelaunch",
+        "assessment": "Disk batch exists after failed export, first instance shutdown, reconstructed pipeline drains exact app-launch and removes files; same process, not app relaunch.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistencePrunesExpiredAndCorruptBatches",
@@ -18979,7 +19332,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-96c8bf9344f9",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistencePrunesExpiredAndCorruptBatches",
+        "assessment": "Known span persisted; invalid JSON added; controlled clock +3 h reconstruction removes all batches; no sleep.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceNeverExceedsConfiguredByteLimit",
@@ -19018,7 +19382,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-fe6c1563882f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceNeverExceedsConfiguredByteLimit",
+        "assessment": "Twenty awaited exports total JSON-file bytes bounded 4096; file size read fallback 0 limits filesystem-error diagnosis; no-count-cap checked.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testByteLimitEvictsOnlyTheOldestRequiredSpans",
@@ -19057,7 +19432,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-a94eed087c9d",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testByteLimitEvictsOnlyTheOldestRequiredSpans",
+        "assessment": "Constructed encoded-size threshold forces minimum eviction; decoded retained exact middle/newest names. Span helper uses real endTime ordering, not manual clock.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceStoresOnlySpanDataAndHasNoCountCap",
@@ -19096,7 +19482,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-9b99ec1d6cc0",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceStoresOnlySpanDataAndHasNoCountCap",
+        "assessment": "Persisted JSON decodes as 200 SpanData and default no-count-cap; does not assert no additional JSON keys beyond decoder acceptance.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceDrainsOldestSpanFirstAfterRelaunch",
@@ -19135,7 +19532,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-2b4a621ed503",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceDrainsOldestSpanFirstAfterRelaunch",
+        "assessment": "Newest then oldest persisted, instance disabled; reconstructed exporter drains exact oldest/newest order; same-process recreation.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOversizedBatchDropsOldestSpansWithoutExceedingLimit",
@@ -19174,7 +19582,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-1e9aa6d77526",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOversizedBatchDropsOldestSpansWithoutExceedingLimit",
+        "assessment": "8 byte policy cannot fit one span; accepted export yields no batch files; single-span oversize, not multi-element trimming.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpanEndDoesNotWaitForBlockedDownstreamExport",
@@ -19213,7 +19632,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Intentional elapsed-time contract uses fixed wall-clock bounds; source inspection found the sleep is used to stage blocked completion or measure deadline, not to claim unrelated work completed. No observed instability recorded.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-16666ed36d72",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpanEndDoesNotWaitForBlockedDownstreamExport",
+        "assessment": "Synchronous end elapsed<100 ms with configured 1 s recording-export delay; no explicit downstream-entry witness, not controlled blocked-export proof.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSynchronousSpanWitnessReturnsBeforePersistenceAndAsyncFlushWaits",
@@ -19365,7 +19795,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "Intentional elapsed-time contract uses fixed wall-clock bounds; source inspection found the sleep is used to stage blocked completion or measure deadline, not to claim unrelated work completed. No observed instability recorded.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-60389bc3423f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundStyleFlushReturnsAtItsDeadline",
+        "assessment": "Pipeline flush 50 ms budget returns<250 ms with 1 s delayed exporter; no explicit entry/completion witness or lower bound; no OS background execution.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundFlushAttemptsOneDrainWhileBackgrounded",
@@ -19404,7 +19845,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-d34b8b97583b",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundFlushAttemptsOneDrainWhileBackgrounded",
+        "assessment": "Foregroundfalse buffers, explicit allowWhileBackgrounded flush succeeds and exports exact span; does not assert number of downstream attempts beyond exact recorded data.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalCancelsAnActiveDownstreamExport",
@@ -19489,7 +19941,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-06c82d898015",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalStopsNewSpansAndPurgesRetainedData",
+        "assessment": "Existing failed batch witnessed, deactivate/purge then newspan leaves batch files empty; immediate observation only, not drained future-export proof.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration",
@@ -19528,7 +19991,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-58e512a1a89a",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration",
+        "assessment": "End held old-generation span after deactivate/purge, awaitedshutdown, no exported spans/files; connected recording observer.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRapidReenableExportsOnlyCleanGeneration",
@@ -19567,7 +20041,18 @@
       "classification": "Deterministic host telemetry test using a temporary storage directory, synthetic spans/events, and recording exporters; it does not contact a telemetry service.",
       "compiler_skip": "No test-level compiler condition, opt-in flag, or skip applies.",
       "reason": "The test asserts the reviewed encoding, retention, privacy, ordering, or state transition using deterministic local exporters and semantic values.",
-      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors."
+      "shared_helper_review": "Inspected resource/recorded-span/temp-directory helpers and all exporters. Recording fakes protect mutable captures with NSLock; TestAsyncSignal is a one-shot but unbounded continuation; CancellableBlockingSpanExporter uses bounded semaphore entry methods and a 10ms async polling loop until cancellation/deadline. Temporary-directory defer cleanup suppresses removal errors.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-c1568e470a63",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRapidReenableExportsOnlyCleanGeneration",
+        "assessment": "Old span ended after new activation, currentflush and oldshutdown; old exporter empty and current exact libraryrefresh only. Newcurrent deactivate/purge, no new shutdown witness.",
+        "synchronizationAndOwnership": "Independent local fixture directories/exporters and awaited operations where present. Elapsed-bound cases do not establish downstream entry/completion; not every case awaits pipeline shutdown. Same-process reconstruction and schema-only marker limits are preserved per assessment.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/ServerDiscoveryTests.swift::testDecodesPinnedLiveStatusFixture",
@@ -21758,7 +22243,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-c0601eae9bad",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityDoesNotRefresh",
+        "assessment": "Disabled/missing/current/expiring/expired states are exact; request counts remain 0 before acquisition and 4 across passive availability reads. Controlled Date advance, not real-time latency.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityPreservesFailureCause",
@@ -21797,7 +22293,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-79ef3ae76f4b",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityPreservesFailureCause",
+        "assessment": "Exact unsupported/rejected/configuration/response/rate/backoff-to-transient availability causes across independent providers and immediate fakes. Suppressed acquisition throws are followed by exact failure-state oracles; no native attestation/network claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityReportsActiveAcquisition",
@@ -21902,7 +22409,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-4ab2eb4cdee4",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConsentEnablementIsLazyAndFirstTokenEnrolls",
+        "assessment": "Disabled error, zero eager transport/attester work, exact first token/four requests/attester counts/five tracing operations+successes and stored enrollment. Memory fake persistence only.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testUnsupportedAttesterPerformsNoWork",
@@ -21941,7 +22459,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-c2451c078e69",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testUnsupportedAttesterPerformsNoWork",
+        "assessment": "Exact unsupported error plus zero transport requests/attester calls. No native device availability claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly",
@@ -21980,7 +22509,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-cb9e45d776ba",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly",
+        "assessment": "Two provider objects share the same in-memory enrollment actor; first provider caches token while new provider makes two acquisition calls. Demonstrates provider reconstruction, not disk persistence or process relaunch.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTokenWithinRefreshWindowIsRenewedWithoutReenrollment",
@@ -22019,7 +22559,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-0d32f0a6395f",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTokenWithinRefreshWindowIsRenewedWithoutReenrollment",
+        "assessment": "Controlled 481-second advance selects token 2; exact two token challenges and zero generated keys. No wall-clock sleep or expiry scheduler claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConcurrentRefreshIsSingleFlight",
@@ -22058,7 +22609,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-5bac7dd18dbe",
+        "currentDecision": "keep after test correction",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConcurrentRefreshIsSingleFlight",
+        "assessment": "Corrected overlap oracle: hold response until all 12 refresh waiters are positively registered, then require 12 terminal caller results and exact token/challenge/token/assertion counts. Five-second admission watchdog precedes the fake response expiry; bounded cleanup cancels, disables, retires and joins returned callers. No real attestation/server claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOnlyWaiterCancelsUnderlyingRefresh",
@@ -22209,7 +22771,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-a6cfb7fbe187",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidStoredKeyClearsEnrollmentAndRestartsOnce",
+        "assessment": "Injected first assertion invalidation yields token 1, exactly one key generation/deletion and replacement stored key. Synthetic invalidation/re-enrollment, not real App Attest key lifecycle.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testServerRejectionDoesNotReplaceDisabledInstallation",
@@ -22248,7 +22821,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-209bc374d591",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testServerRejectionDoesNotReplaceDisabledInstallation",
+        "assessment": "Two sequential rejection calls produce one challenge, zero store deletions/key generation. Establishes cached rejection/no replacement, not concurrent failure fanout or real server enforcement.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testEnrollmentRejectionStopsRetriesUntilReenabled",
@@ -22287,7 +22871,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-217934e152d4",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testEnrollmentRejectionStopsRetriesUntilReenabled",
+        "assessment": "Two sequential failures share one challenge/enrollment/key generation; disable+enable permits exactly one additional attempt. Synthetic consent reset/cache contract.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidationOnlyClearsTheTokenThatWasRejected",
@@ -22326,7 +22921,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-53733a1d9d46",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidationOnlyClearsTheTokenThatWasRejected",
+        "assessment": "Sequential wrong-token invalidation retains token 1; matching-token invalidation yields token 2 and exactly two challenges. No concurrent response ordering claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testDisablingCancelsRefreshAndClearsMemoryToken",
@@ -22431,7 +23037,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-7d663c56da45",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTransientFailureAppliesBoundedLazyBackoff",
+        "assessment": "Controlled Date/jitter and two injected transient failures establish immediate backingOff, rejection before 2-second retry boundary and eventual token. Lazy access-based backoff, no autonomous timer/maximum-cap matrix claim.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testRateLimitRetryAfterDelaysTheNextChallengeAttempt",
@@ -22470,7 +23087,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-ea6e2749a2f1",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testRateLimitRetryAfterDelaysTheNextChallengeAttempt",
+        "assessment": "At 59.9 seconds cached backoff retains one challenge; at 60.1 seconds second exact rate-limit failure records two. Controlled Date, not real network timing.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testErrorsContainNoChallengeKeyOrTokenMaterial",
@@ -22509,7 +23137,18 @@
       "classification": "Deterministic host token-provider test with injected TestClock, actor memory enrollment store, lock-protected fake attester and actor scripted transport.",
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The test directly asserts the typed token state, request counts or backoff transitions named by its scenario using an injected clock and local fakes.",
-      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test."
+      "shared_helper_review": "TestClock is lock-protected; fake attester counters use NSLock, MemoryEnrollmentStore/FakeTelemetryTransport serialize state via actors, transport delay observes task cancellation. Error helper checks typed provider error. Caller-specific waits assessed per test.",
+      "telemetryContextReview20261023": {
+        "base": "bc5cf95ae1574b2fae960fa34b9c9b48db8df457",
+        "catalogID": "AUD-C-40d6ae552559",
+        "currentDecision": "keep; no code change",
+        "currentIdentifier": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testErrorsContainNoChallengeKeyOrTokenMaterial",
+        "assessment": "Descriptions of the listed closed typed error values exclude three synthetic marker strings. Does not exercise transport errors carrying real payloads, broader logging, provider diagnostics or exhaustive sensitive-material flow.",
+        "synchronizationAndOwnership": "Independent actor stores/transports and controlled Date/jitter inputs. Immediate cases introduce no held caller. The changed single-flight case uses existing response/waiter seams and bounded terminal observations before joins; same-memory-store reconstruction is not process relaunch.",
+        "rules": "Exact semantic outcomes and applicable admitted/completed conditions reviewed (1,2); playback tolerance inapplicable (3). Scoped ownership, independent fixtures and framework/integration limits explicit (4,5,6). Controlled negative witnesses replace weak oracles without retries or sleep relaxation (7); caller/stage diagnostics retained (8). Fresh focused/owning/signed receipts follow separately (9).",
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-contract-context-and-observable-oracles-372",
+        "historicalAssessment": "Prior primary fields and evidence remain revision-bound; this scoped annotation supersedes the identified weak oracle without certifying every production or helper contract."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/TelemetryAuthenticationTransportTests.swift::testConfigurationRequiresHTTPSExceptExplicitLoopbackDevelopment",

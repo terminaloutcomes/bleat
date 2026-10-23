@@ -1,6 +1,8 @@
 import Darwin
 import Foundation
 @preconcurrency import OpenTelemetryApi
+@preconcurrency import OpenTelemetryProtocolExporterCommon
+import SwiftProtobuf
 import Testing
 
 @testable import BleatCore
@@ -1000,7 +1002,16 @@ final class AuthenticatedOtlpSpanExporterTests {
         #expect(
             spanRequest.value(forHTTPHeaderField: "Authorization")
                 == "Bearer span-token")
-        #expect(!(try #require(spanRequest.httpBody).isEmpty))
+        let spanBody = try #require(spanRequest.httpBody)
+        #expect(!spanBody.isEmpty)
+        let tracePayload =
+            try Opentelemetry_Proto_Collector_Trace_V1_ExportTraceServiceRequest(
+                serializedBytes: spanBody)
+        #expect(tracePayload.resourceSpans.count == 1)
+        let spanScopes = tracePayload.resourceSpans.flatMap(\.scopeSpans)
+        #expect(spanScopes.map { $0.scope.name } == ["app.bleat.test"])
+        #expect(
+            spanScopes.flatMap(\.spans).map(\.name) == ["bleat.app.launch"])
 
         let logTransport = RecordingHTTPTransport(result: .success)
         let logClient = HttpRemoteTelemetryOtlpLogClient(
@@ -1024,7 +1035,17 @@ final class AuthenticatedOtlpSpanExporterTests {
         #expect(
             logRequest.value(forHTTPHeaderField: "Authorization")
                 == "Bearer log-token")
-        #expect(!(try #require(logRequest.httpBody).isEmpty))
+        let logBody = try #require(logRequest.httpBody)
+        #expect(!logBody.isEmpty)
+        let logPayload =
+            try Opentelemetry_Proto_Collector_Logs_V1_ExportLogsServiceRequest(
+                serializedBytes: logBody)
+        #expect(logPayload.resourceLogs.count == 1)
+        let logScopes = logPayload.resourceLogs.flatMap(\.scopeLogs)
+        #expect(logScopes.map { $0.scope.name } == ["app.bleat.test"])
+        #expect(
+            logScopes.flatMap(\.logRecords).map { $0.body.stringValue }
+                == ["CloudKit synchronization lifecycle"])
 
         await spanClient.shutdown()
         await logClient.shutdown()

@@ -892,11 +892,16 @@ final class RemoteTelemetryTests {
 
     @Test
 
-    func testInactiveTracerProducesNoExportableSpan() {
-        let exporter = RecordingSpanExporter()
+    func testInactiveTracerHasNoContextOrPropagation() {
         let tracer = InactiveRemoteTelemetryTracer()
-        tracer.beginSpan(operation: .appLaunch).end(.succeeded)
-        #expect(exporter.recordedSpans.isEmpty)
+        let span = tracer.beginSpan(operation: .appLaunch)
+        #expect(span.spanContext == nil)
+        #expect(span.propagationHeaders.isEmpty)
+
+        span.end(.succeeded)
+
+        #expect(span.spanContext == nil)
+        #expect(span.propagationHeaders.isEmpty)
     }
 
     @Test
