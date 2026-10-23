@@ -1,0 +1,3035 @@
+{
+  "schemaVersion": 1,
+  "issues": [
+    372,
+    374
+  ],
+  "historicalSnapshotRevision": "58223214dba2e401d5d24e64f0b81b3c910e1061",
+  "reconciledSourceRevision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+  "definition": "Fixed historical review-candidate identities, not all repository tests, defects, missing tests, execution counts or physical acceptance tasks. A completed scoped review is bounded by its evidence; partial cleanup/finding or passing execution alone is not full current-context review. Original audit fields remain historical.",
+  "counts": {
+    "historicalCandidates": 312,
+    "coreCandidates": 241,
+    "appCandidates": 71,
+    "completedBeforeThisSlice": 45,
+    "completedByThisSlice": 17,
+    "completedScopedReviews": 62,
+    "pendingCore": 179,
+    "pendingApp": 71,
+    "pendingTotal": 250
+  },
+  "limits": [
+    "Nine core pending records have cleanup-only partial reviews; they remain pending.",
+    "Two app pending records have earlier narrow P2 fixes and one has a later background-completion review; all three still lack full current semantic rechecks.",
+    "Configured Release, physical/device and other accepted executions remain credited independently; no such acceptance is reopened by this ledger.",
+    "The #438/#458 app fixes and the #459 stream case are outside these fixed cohorts and are not subtracted.",
+    "No repository-wide security clearance is claimed; pre-existing zip advisories remain separate."
+  ],
+  "records": [
+    {
+      "id": "AUD-C-c5fe015b40e3",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testStoresMultipleUsersAndServersWithOneActiveContext",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Exact identities, active selection/snapshot, removal and re-addition state; reconstructed actor shares the in-memory container.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1dc60179dabf",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testRejectsDuplicateRemoteUserOnSameNormalizedServer",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Typed duplicate rejection after normalized server matching preserves the exact existing account.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-9d22308aa1ca",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testConnectionStateAndActiveSelectionPersistAcrossStoreActors",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Reauthentication state and selected identity survive reconstruction of a store actor over the same in-memory container.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-702ca0822f7e",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testLegacyIdentityMigrationRekeysAccountAndStatistics",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Legacy identity is removed; canonical account, statistics account ID and alias are checked.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1d3b4961b1f2",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testPendingRestoredAccountSurvivesRelaunchInactive",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Pending restoration remains inactive across store actor reconstruction over the same in-memory container.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d41ba54cfad5",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testContradictoryAliasIsTypedAndPreservesOriginal",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Typed contradictory-alias failure preserves the original canonical alias mapping.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-751894e965e5",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testLocalServerPersistsWithoutChangingPrimaryIdentity",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Local-server configuration is returned without changing primary identity.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-cf716d4447e3",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testReplacingPrimaryServerRekeysExistingAccountData",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Primary-server replacement checks new canonical identity, old absence and active selection.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-529f3734caf7",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testRemovingActiveAccountSelectsDeterministicReplacement",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Active-account removal selects the deterministic replacement, preserves exact survivors and returns false for repeated removal.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8186b6d8e60e",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testMissingAccountOperationsRemainTyped",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Missing-account operations preserve typed accountNotFound errors and absent account/active state.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c70121a484c2",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testServerAccountValidationAndCodableExcludeCredentials",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Valid account Codable round-trip, credential-field/marker exclusions, invalid identity/schema errors and OpenID capability flags; no real token-store privacy claim.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-be639693d5e4",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testLoginPersistsAccountAndCredentialsTransactionally",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Login returns canonical identity, stores the active account and exact synthetic credentials, with zero deletions; failure rollback is a separate previously fixed test.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f4b5abe85518",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testOnboardingRejectsNonLocalServerBeforeTransport",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Non-local onboarding returns the typed unavailable outcome before any transport call and leaves no account.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ed66e20b6514",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testOnboardingReportsCredentialRollbackFailure",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Credential rollback failure preserves its typed cause, remaining synthetic credentials and the exact original account.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-654ca95d156e",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testPersistedSignOutAndRemovalUseStoredServerAndClearCredentials",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Sign-out/removal exercise the stored-account coordinator path and assert remote status, reauthentication, credential removal, logout token values and account removal. No explicit logout-host/prefix oracle is claimed.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-28592b4c6004",
+      "identity": "Tests/BleatCoreTests/AccountStoreTests.swift::testPersistedLifecycleRejectsUnknownAccountBeforeLogout",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Unknown-account sign-out returns the typed missing-account outcome before transport; this case does not exercise the removal branch.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3eed5f271a66",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testConfigurationRequiresHTTPSOriginAndPositiveTimeout",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-627f0c7c3452",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testEachExportUsesExactlyOneCurrentBearerValue",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-dbc8c63f6384",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testUnauthenticatedResponseInvalidatesMatchingTokenAndRetriesOnce",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-9654c51c1f0e",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPersistentAuthenticationRejectionNeverLoops",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-0eb14d3177c6",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testLogExporterRefreshesOnceAndDisableGatesQueuedRecords",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b50328ac3a08",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testManualOtlpClockSettlesSleepExactlyOnce",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "controlled_otlp_contracts",
+        "reviewed_source_revision": "9ad32eae602d4aed380799bce0433238665f66a8",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "scope_and_limits": "Three explicit nine-rule keep/controlled_deadline_review records and focused/owner/signed/mutation receipts. No whole production task-graph drainage or new live-clock guarantee.",
+        "current_input_rationale": "All three function sections and ManualOtlpClock suffix byte-identical to reviewed source; later changes affect separate concurrent-export tests/helpers.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-503cf9c415e4",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testSuccessfulTokenAcquisitionCancelsManualDeadlineSleeper",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "controlled_otlp_contracts",
+        "reviewed_source_revision": "9ad32eae602d4aed380799bce0433238665f66a8",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "scope_and_limits": "Three explicit nine-rule keep/controlled_deadline_review records and focused/owner/signed/mutation receipts. No whole production task-graph drainage or new live-clock guarantee.",
+        "current_input_rationale": "All three function sections and ManualOtlpClock suffix byte-identical to reviewed source; later changes affect separate concurrent-export tests/helpers.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-09336bc475ed",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testExpiredControlledDeadlinePreventsRPC",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "controlled_otlp_contracts",
+        "reviewed_source_revision": "9ad32eae602d4aed380799bce0433238665f66a8",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#controlled-otlp-deadline-and-uncooperative-provider-issue-372",
+        "scope_and_limits": "Three explicit nine-rule keep/controlled_deadline_review records and focused/owner/signed/mutation receipts. No whole production task-graph drainage or new live-clock guarantee.",
+        "current_input_rationale": "All three function sections and ManualOtlpClock suffix byte-identical to reviewed source; later changes affect separate concurrent-export tests/helpers.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e79031122a8c",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testPermissionAndTransportFailuresDoNotRefreshOrBlockCaller",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-938f8f6a0dc4",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testAsyncHTTPClientsUseStandardSignalPathsAndProtobufBodies",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1cedd7fb70a5",
+      "identity": "Tests/BleatCoreTests/AuthenticatedOtlpSpanExporterTests.swift::testHTTPResponseStatusPreservesAuthenticationAndTransportFailures",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7346237ab5f5",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRotatingRefresh",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "coalesced_request_callers",
+        "reviewed_source_revision": "ee4b1f08b40f51a37aa8754557ba87a8479c24b4",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372",
+        "scope_and_limits": "Updated primary per-record rules/reasons, original findings retained, actual bounded caller outcomes and private fake ownership reviewed; full production drainage remains unclaimed.",
+        "current_input_rationale": "Three function sections byte-identical to reviewed source. Later 9ae4087 changes separate join/late-arrival fixtures; that receipt explicitly preserves authentication decisions/suspension points.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-5a010a7861fb",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneRejectedRefresh",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "coalesced_request_callers",
+        "reviewed_source_revision": "ee4b1f08b40f51a37aa8754557ba87a8479c24b4",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372",
+        "scope_and_limits": "Updated primary per-record rules/reasons, original findings retained, actual bounded caller outcomes and private fake ownership reviewed; full production drainage remains unclaimed.",
+        "current_input_rationale": "Three function sections byte-identical to reviewed source. Later 9ae4087 changes separate join/late-arrival fixtures; that receipt explicitly preserves authentication decisions/suspension points.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7a97e94e10bb",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTwentyUnauthorizedRequestsShareOneSavedPasswordRecovery",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "coalesced_request_callers",
+        "reviewed_source_revision": "ee4b1f08b40f51a37aa8754557ba87a8479c24b4",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#coalesced-request-caller-and-private-waiter-ownership-issue-372",
+        "scope_and_limits": "Updated primary per-record rules/reasons, original findings retained, actual bounded caller outcomes and private fake ownership reviewed; full production drainage remains unclaimed.",
+        "current_input_rationale": "Three function sections byte-identical to reviewed source. Later 9ae4087 changes separate join/late-arrival fixtures; that receipt explicitly preserves authentication decisions/suspension points.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3b314c19bd26",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRejectedRefreshUsesSavedPasswordAndRetriesRequest",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-622220378853",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshContractFailuresUseSavedPasswordAndRetryRequest",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d01791aa85e6",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedPasswordRejectionRemainsTyped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-cc79ee9b8bb0",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginCannotChangeRemoteUserIdentity",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d54d0553b4a6",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testSavedLoginAuthorizationRejectionRequiresReauthentication",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-cba3b9ff809b",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testForbiddenResponseDoesNotRefresh",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-dcfcd57c6084",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAuthenticationEndpointsNeverEnterRefresh",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-16cc2737c80e",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testOrdinaryRequestRetriesOnlyOnce",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a45370be3a44",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailuresAreTypedAndAccountScoped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-5e38411cf5a6",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshTransportFailureIsNotCachedAndRetries",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c3d70910cf00",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testConclusiveRefreshStatusFailureIsMemoized",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "refresh_status_identity_semantics",
+        "reviewed_source_revision": "d527c14d0e53c429215d65b358da2dea05d8a6bb",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#refresh-status-test-identity-issue-372",
+        "scope_and_limits": "Explicit scoped naming/semantic disposition and rule9 three repetitions/24-owner/577-signed evidence; not generic credential-error coverage.",
+        "current_input_rationale": "Selected function section unchanged; later coalescing/join work uses other scenarios/fakes. Existing primary row retains the specific semantic correction and execution receipt.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4ce37e9d8b96",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testTransientSavedLoginFailuresAreNotCachedAndRetry",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-31003d23f77f",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testMissingSessionTokensUseSynchronizedNativeLogin",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d28987f12c52",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCredentialFailuresAreTyped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-878c5af5d19e",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRequestValidationAndTransportFailuresAreTyped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7fdac98a049a",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testAlreadyRotatedCredentialsAvoidAnotherRefresh",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-9283d5e197d4",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testCompletedRotationCoversAStaleCredentialRead",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1cd56b49a278",
+      "identity": "Tests/BleatCoreTests/AuthenticatedRequestTests.swift::testRefreshFailureDoesNotAffectAnotherAccount",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c4a076ccc051",
+      "identity": "Tests/BleatCoreTests/DownloadStorageTests.swift::testStorageRequirementRejectsOverflow",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-48ba1e7cc272",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterUsesLocalServerAndPreservesPathPrefix",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-11015166c55a",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterSkipsFailedLocalServerUntilRevalidated",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-57127d923054",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testFailedLocalSyncStaysOnPrimaryUntilSuccessfulProbe",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3017c6e05cc8",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterUsesPrimaryUntilLocalIsRevalidatedAfterPathChange",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f25967d01929",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testRouteConfiguredDuringPathEvaluationRemainsPrimaryUntilValidated",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1b5a0c5d8b4f",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testPreChangeLocalSuccessCannotCompleteCurrentPathEvaluation",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2b9d7df9fc09",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testURLOnlyCompletionCannotMutateCurrentPathSelection",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c1592a648e2e",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testUnresolvedPathEvaluationLeavesLocalTemporarilyUnavailable",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4c12eaefd8b1",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterBuildsPrimaryFallbackFromResolvedLocalURL",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-236184fd37ae",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testPrimaryFallbackRequestPreservesAuthenticationAndNetworkPolicy",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-01c113f50339",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testSuccessfulProbeRestoresFailedLocalServer",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-55493a7ad63f",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testEndpointRouterTracksAPIAndAuthenticationUsageSeparately",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "router_context_459",
+        "reviewed_source_revision": "f22479658a18601b319af13acf3824d4e5426c16",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#router-helper-context-and-six-purpose-stream-review-372",
+        "scope_and_limits": "Twelve routerReview20261023 keep/no-change assessments with exact source review and focused/owner19/signed609/CI receipts. Stream assertion correction is outside cohort. Synthetic router/URLProtocol behavior only; no physical network or full observer/session drainage.",
+        "current_input_rationale": "Current source is reviewed #459 tree and equals main32bfe602.",
+        "merged_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-996b8e3c1d6b",
+      "identity": "Tests/BleatCoreTests/HTTPTransportTests.swift::testOpenIDTransportDefaultConfigurationIsInitiallyEmpty",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "scope_and_limits": "Fresh default ephemeral OpenID transport has zero cookies before and after awaited empty clearing. No request, nonempty clear, browser or provider termination is exercised.",
+        "current_input_rationale": "Source and helpers unchanged from baseline; this PR changes documentation only."
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2c41ecec4a50",
+      "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksCacheWritePerformance",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1aa43559f4dc",
+      "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksCacheReadPerformance",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7be0b1002141",
+      "identity": "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testTenKBooksOnDiskStorageSize",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-6f22f7f475ff",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testOnlineLogoutUsesRefreshHeaderAndClearsCredentials",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c23ef15fd810",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutRejectsUnsafeProviderRedirectWithoutBlockingCleanup",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f65da14ee399",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testRemoteFailuresStillDeleteLocalCredentials",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-0c0e1e8df027",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testMissingOrUnreadableCredentialsStillRunDeletion",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-873ba73d3551",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testCredentialDeletionFailureIsTypedAndRequiresReauthentication",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-63df1c89614d",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testInvalidAccountDoesNotReadDeleteOrSend",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-86b991b55a6e",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testLogoutSettlesRefreshAndInvalidatesTheRotatedToken",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "logout_caller_lifecycle",
+        "reviewed_source_revision": "66e951364f852009d2b649dde5d9f8965320a292",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
+        "scope_and_limits": "Current primary nine-rule records, root exact identity list, focused/owner/signed/mutation receipts; original typed results preserved, no whole production-task drainage.",
+        "current_input_rationale": "Whole LogoutTests.swift byte-identical to final overlap-review source.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2cc24e51bf86",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testRequestCannotStartRefreshAfterLogoutBegins",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "logout_caller_lifecycle",
+        "reviewed_source_revision": "66e951364f852009d2b649dde5d9f8965320a292",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
+        "scope_and_limits": "Current primary nine-rule records, root exact identity list, focused/owner/signed/mutation receipts; original typed results preserved, no whole production-task drainage.",
+        "current_input_rationale": "Whole LogoutTests.swift byte-identical to final overlap-review source.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e913b6c98c02",
+      "identity": "Tests/BleatCoreTests/LogoutTests.swift::testSuccessfulResponseStartedBeforeCompletedLogoutIsInvalidated",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "logout_caller_lifecycle",
+        "reviewed_source_revision": "66e951364f852009d2b649dde5d9f8965320a292",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#logout-caller-completion-and-private-response-latching-issue-372",
+        "scope_and_limits": "Current primary nine-rule records, root exact identity list, focused/owner/signed/mutation receipts; original typed results preserved, no whole production-task drainage.",
+        "current_input_rationale": "Whole LogoutTests.swift byte-identical to final overlap-review source.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f87b4159e6a7",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserFactoryMapsProviderCompletions",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_failure_context_456",
+        "reviewed_source_revision": "671019c78b85a848e5c7f898e1a5e4cb0459793b",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "scope_and_limits": "Four explicit current per-record annotations and #456 focus/owner/signed/oracle witness; three keep/no-change plus one unexpected-error cleanup-oracle correction. No real browser/Keychain/network or full native task drainage claim.",
+        "current_input_rationale": "Reviewed #456 landed tree verified equal; later router work does not alter OpenID tests/helpers.",
+        "merged_revision": "bae2daf33d9b61e6377a5ec4e4324b9b4b070897",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-aee7bc42f859",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionCompletesAndConfiguresSession",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2fc27386472f",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsMissingPresentationAnchor",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7eed9f01bd1b",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionMapsCancellationAndFailure",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_failure_context_456",
+        "reviewed_source_revision": "671019c78b85a848e5c7f898e1a5e4cb0459793b",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "scope_and_limits": "Four explicit current per-record annotations and #456 focus/owner/signed/oracle witness; three keep/no-change plus one unexpected-error cleanup-oracle correction. No real browser/Keychain/network or full native task drainage claim.",
+        "current_input_rationale": "Reviewed #456 landed tree verified equal; later router work does not alter OpenID tests/helpers.",
+        "merged_revision": "bae2daf33d9b61e6377a5ec4e4324b9b4b070897",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-bd93bb53aeaa",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsASecondActiveSession",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_overlap_and_private_contracts",
+        "reviewed_source_revision": "bc97af72af464ed9939e0d08d2e2fc99cf9f364e",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372",
+        "scope_and_limits": "Explicit primary per-record current rules and root exact identity list; four focused identities/owner21/signed605 and mutation evidence cover this scoped lifecycle/retirement review. No whole native/worker drainage.",
+        "current_input_rationale": "Later #456 changes only the separate unexpected-browser-error subcase plus audit/evidence; these selected bodies and private lifecycle helpers remain unchanged.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3f1623384088",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testPKCEUsesRFC7636ChallengeAndSecureShapes",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b7e8b147de83",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testPKCERandomFailureRemainsTyped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2976cd29258d",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackURLValidation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d229dd7d8c0e",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackRequiresExactURLStateAndCode",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-bd80aab48650",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCompleteCookieBoundFlowValidatesThenPersists",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-464ba3e270f5",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testBeginRejectsInvalidResponsesAndCleansUp",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-78c4d96ca21d",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testBrowserCancellationAndFailureCleanUp",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_failure_context_456",
+        "reviewed_source_revision": "671019c78b85a848e5c7f898e1a5e4cb0459793b",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "scope_and_limits": "Four explicit current per-record annotations and #456 focus/owner/signed/oracle witness; three keep/no-change plus one unexpected-error cleanup-oracle correction. No real browser/Keychain/network or full native task drainage claim.",
+        "current_input_rationale": "Reviewed #456 landed tree verified equal; later router work does not alter OpenID tests/helpers.",
+        "merged_revision": "bae2daf33d9b61e6377a5ec4e4324b9b4b070897",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-256507ec04db",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidBrowserCallbacksNeverReachExchange",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-145dcd9aefad",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testCallbackWithoutCodeNeverReachesExchange",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-48b9ad8348a7",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testExchangeFailuresNeverPersistAndAlwaysCleanUp",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_failure_context_456",
+        "reviewed_source_revision": "671019c78b85a848e5c7f898e1a5e4cb0459793b",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "scope_and_limits": "Four explicit current per-record annotations and #456 focus/owner/signed/oracle witness; three keep/no-change plus one unexpected-error cleanup-oracle correction. No real browser/Keychain/network or full native task drainage claim.",
+        "current_input_rationale": "Reviewed #456 landed tree verified equal; later router work does not alter OpenID tests/helpers.",
+        "merged_revision": "bae2daf33d9b61e6377a5ec4e4324b9b4b070897",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-aae4619dd61e",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testAuthorizationAndPersistenceFailuresRemainTyped",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a012d02e56d1",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidAccountDoesNotTouchAttemptOrCookies",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-109bb874ad2a",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-fa293fd25006",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedStoredStateDoesNotBecomeAnEmptyDefault",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-d512238913dd",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedBookkeepingContentsRemainRetained",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-6ee5dbd8c94c",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::secureArchiveWithMissingRequiredFieldsFailsWithoutAFrameworkTrap",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-0d68779f6cf5",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::nativeStorageFailureRetainsItsSpecificDomainCodeAndStage",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-14b9e85eec5f",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::partialMigrationRetainsSourceAndResumesWithoutLosingCommittedRows",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-3c1d1aa134d8",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::malformedCoordinatorStateRetainsAllLegacyData",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-de798e210ce8",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationRejectsArchiveIdentityMismatchWithoutDiscardingSource",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-5e89b93a2802",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::upgradeNoticeAcknowledgmentSurvivesRepeatedLegacyDetection",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-b3a9c1033d12",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::twoHundredMetadataChangesDoNotRewriteFiftyEightThousandRows",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
+    },
+    {
+      "id": "AUD-C-7367fceadd17",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "cloud_cancellation_completion_455",
+        "reviewed_source_revision": "769fd12e0893105c05414fd184ef31891886dc34",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372",
+        "scope_and_limits": "Exact current_cancellation_completion_review and #455 receipts; only one of its three tests intersects this fixed cohort. Bounded actual caller completion and cleanup; no physical CloudKit or whole graph drainage.",
+        "current_input_rationale": "Reviewed #455 landed tree verified equal; later OpenID/router changes do not alter these source/helper inputs.",
+        "merged_revision": "f564e367912c644444f8962bca78a8f0e1466d88",
+        "reviewed_and_merged_trees_equal": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-5791ad09defa",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testEveryPrivateCloudErrorPreservesDiagnosticFailureCode",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f370fd82da34",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCoordinatorAcceptsOnlyPrivateCloudKitDatabaseScope",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-72e4f22d2a95",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCallbackFailureOverridesSuccessfulEngineCompletion",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e40988f9801c",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInterruptedFetchedBatchCanReconcileOnRetry",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-515b5906a5f3",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNonPrivateDatabaseHasSpecificDiagnosticCode",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-dc752e8ce1c4",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitFailurePreservesExactCodeRetryAndPartialCodes",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3364aca59221",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyConflictPartialFailureAllowsOneReconciliationRetry",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-76aabb1d09fb",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitDiagnosticIncludesOperationAndTypedFailureDetails",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-06221dd57374",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedCloudKitEventRecorderPreservesRecordCount",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1e55c1ff9343",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudKitStageDiagnosticIncludesPrivacySafeRecordCount",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8b9c2a0872e2",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotDefaultsHeadphoneCommands",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-fdbc51d29bc8",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationSnapshotRoundTripsHeadphoneCommands",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ad4c5a3d4adc",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationNormalizesLookaheadBeforeApplying",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-282779137c46",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyConfigurationDefaultsMissingHeadphoneCommands",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f12204149d65",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationRejectsInvalidHeadphoneCommand",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-512d63713fb9",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testRejectingFetchedAccountChangePreservesAndReturnsLocalEdit",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-733639f3f13b",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDelayedSupersededAccountGenerationDoesNotPromptOrRevert",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f7e0b6e252f1",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedAccountUpdateRequiresConfirmationBeforeApplying",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3b3ceb592c60",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedCloudOnlyAccountRequiresConfirmationBeforeAdding",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8c3c9b1331df",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testTwoLegacyDeviceAccountsConvergeWithoutDuplicatePrompts",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8b0082f677ab",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedConfigurationConflictWaitsForUserDecision",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-73046c79e2e8",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testMatchingServerConflictCachesServerRecordWithoutAnotherSave",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-de00d5c13cdb",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationConflictAfterNewLocalEditRebasesAndRetries",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-41e05a733b69",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testStructurallyEquivalentSentConfigurationConflictWaitsForDecision",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a1be025f15f8",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUsingICloudResolvesConfigurationConflict",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-0baf8546dc58",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testKeepingThisDevicePreparesCurrentConfigurationForUpload",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1e815405e9b7",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testExplicitFetchedRecordPersistenceSurvivesStoreRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b38b63c218c4",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testBatchedAccountConflictsPersistCompletedStateAfterRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2da1cf930900",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSavedRecordSystemFieldsSurviveStoreRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c0ac781a5bcf",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnchangedRecordsAreNotPreparedAgainAfterSuccessfulSend",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c93e349547dc",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingStatisticsPayloadsSurviveBatchFailureAndCacheEviction",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b33bc4d96b35",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFailedPendingStateSavesPreserveRetryState",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7dd3da6dc800",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionAfterCacheEvictionPreservesHistory",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-70f061498f06",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnconfirmedRecordsRemainPreparedForRetry",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-6aab902ba777",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOnlyChangedConfigurationIsPreparedAfterBaseline",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2665522a4699",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testSynchronizedStatisticsAreExcludedFromLaterPreparation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-88413f9424f3",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testLegacyNilStatisticsSyncStateIsPreparedForReconciliation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-be7f15f3d841",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDirtyStatisticsSurviveRelaunchAndAreReconciledOnce",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-65aa2d428708",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletedStatisticsRemainPendingUntilCloudKitConfirmsDeletion",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8a965e45a3a3",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedRecordDoesNotOverridePendingLocalDeletion",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e8f31322809f",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testValidFetchedRecordsPersistWhenAnotherRecordIsInvalid",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-06d96626ff79",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudZoneMakesLocalStatisticsUploadableAgain",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2f372eb0ed38",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsCleanStatisticsAfterStoreRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-244defd5e76a",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionFindsPendingStatisticsDeletionAfterStoreRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-93ea323ec53b",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testNestedFailurePreservesSpecificOperation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3f977017a071",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedStatisticsBatchIsImportedIdempotently",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ff94c5e33ea5",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testPendingConfigurationConflictSurvivesStoreRecreation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-17d14081da2f",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInvalidPersistedConfigurationConflictFailsClosed",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-01fd28d86c74",
+      "identity": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDeletingCloudDataClearsInvalidPersistedConfigurationConflict",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-15a888b5f1d9",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPCallsExportOneRedactedSpanEventForEveryEndpointAndOutcome",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-80df4ea7d9d2",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testHTTPFallbackRecordsBothAttemptsWithoutLosingEndpoint",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d256301e1acf",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedHTTPEventIsIdempotentAndPreservesTransactionTimes",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c696541d9ecd",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testReviewedOperationsEncodeOnlyReviewedNamesAndAttributes",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-89c943bb024f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedTelemetryAuthenticationRequestSpansShareParentTrace",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a2404caefa7b",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBufferedChapterSpanExportsMeasurementsUnderBatchParent",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-75768ffc23c9",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTrackingBoundsUnmatchedStartsAndLogsLateTerminals",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-80b609ce7f3c",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitDuplicateStartEndsPreviousAndRefreshesInsertionOrder",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4ef6034e647a",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitTerminalOutcomesFreeCapacity",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-69426fee491f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitAbandonmentExportsReviewedReasonAndStage",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-6d611fa51ed0",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testCloudKitLifecycleProducesReviewedLogsAndSpan",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-154569cdda6b",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDownloadLifecycleProducesTypedCorrelatedLogs",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-745fc3aeca9a",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOutcomeEncodingNeverIncludesRawErrorText",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-472e1e65d2fd",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testChapterTranscriptionSpanEncodesReviewedInputMeasurements",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-dbf4aa7eea7b",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRetryCountsAreBounded",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-bc3f1340cc1f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceEncodingContainsOnlyStableTechnicalValues",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f7ee4f62f512",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceAcceptsIntegerAndDottedNumericBuilds",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-307de2519c72",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testResourceRejectsArbitraryOrUnboundedStrings",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d7cce980252f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRepresentativeEncodingContainsNoSensitiveValues",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-01b281728b51",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testDefaultCollectionPolicyMatchesReviewedBounds",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ccdc828e390c",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testInactiveTracerProducesNoExportableSpan",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7d116cea237c",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPipelineBatchesReviewedSpansWithExactResource",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1060a907a5ea",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpansStartedDuringAsynchronousInitializationAreExported",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-41541b050474",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testFailedExportIsRetainedAndDrainedAfterRelaunch",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-96c8bf9344f9",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistencePrunesExpiredAndCorruptBatches",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-fe6c1563882f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceNeverExceedsConfiguredByteLimit",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a94eed087c9d",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testByteLimitEvictsOnlyTheOldestRequiredSpans",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-9b99ec1d6cc0",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceStoresOnlySpanDataAndHasNoCountCap",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-2b4a621ed503",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testPersistenceDrainsOldestSpanFirstAfterRelaunch",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1e9aa6d77526",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testOversizedBatchDropsOldestSpansWithoutExceedingLimit",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-16666ed36d72",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testSpanEndDoesNotWaitForBlockedDownstreamExport",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-60389bc3423f",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundStyleFlushReturnsAtItsDeadline",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-d34b8b97583b",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testBackgroundFlushAttemptsOneDrainWhileBackgrounded",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-06c82d898015",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalStopsNewSpansAndPurgesRetainedData",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-58e512a1a89a",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testWithdrawalDuringActiveSpanCannotExportWithdrawnGeneration",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c1568e470a63",
+      "identity": "Tests/BleatCoreTests/RemoteTelemetryTests.swift::testRapidReenableExportsOnlyCleanGeneration",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-6eb57317a29e",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-678c51275088",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-62a807d8a7f9",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f6412d58b622",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-802d5e8c75e7",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-649777a733d1",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e3bcc8f04e2a",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::duplicateCompletionEventsCountOneHistoricalRuntime",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b0cc8b593727",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ff51f6e83296",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f77b245155f9",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeResetDiscardsGrowingSegmentAfterCheckpoint",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-889fed942d8b",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-48e494ceeb80",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-132673c0d236",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a2015d208b1c",
+      "identity": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::stored250000SlicesArchiveResetAndCachedRelaunch",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c0601eae9bad",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityDoesNotRefresh",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-79ef3ae76f4b",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCachedTokenAvailabilityPreservesFailureCause",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4ab2eb4cdee4",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConsentEnablementIsLazyAndFirstTokenEnrolls",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c2451c078e69",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testUnsupportedAttesterPerformsNoWork",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-cb9e45d776ba",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testStoredEnrollmentSurvivesRelaunchWhileTokensRemainMemoryOnly",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-0d32f0a6395f",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTokenWithinRefreshWindowIsRenewedWithoutReenrollment",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-5bac7dd18dbe",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testConcurrentRefreshIsSingleFlight",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-480e213752a1",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testCancellingOneWaiterPreservesRefreshForConcurrentWaiter",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "telemetry_response_gate",
+        "reviewed_source_revision": "112f1a62b0afd97632c19276cd4813939df4ffdf",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#telemetry-response-gate-2026-10-19",
+        "scope_and_limits": "Specific rule9/source disposition records awaited admission, one cancelled waiter/surviving waiter, controlled response and focused/repeated/signed evidence. Does not certify all other telemetry callers.",
+        "current_input_rationale": "Selected function and entire FakeTelemetryTransport-plus-following-helpers suffix byte-identical to112f1a6; later28d7df0 changes three other test bodies.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a6cfb7fbe187",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidStoredKeyClearsEnrollmentAndRestartsOnce",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-209bc374d591",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testServerRejectionDoesNotReplaceDisabledInstallation",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-217934e152d4",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testEnrollmentRejectionStopsRetriesUntilReenabled",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-53733a1d9d46",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testInvalidationOnlyClearsTheTokenThatWasRejected",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-7d663c56da45",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testTransientFailureAppliesBoundedLazyBackoff",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-ea6e2749a2f1",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testRateLimitRetryAfterDelaysTheNextChallengeAttempt",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-40d6ae552559",
+      "identity": "Tests/BleatCoreTests/TelemetryAuthenticationTests.swift::testErrorsContainNoChallengeKeyOrTokenMaterial",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-40543b1a986d",
+      "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::awaitsCleanupAfterSuccess",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-3b353d2dd913",
+      "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::awaitsCleanupAfterOperationFailure",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-34816be6714a",
+      "identity": "Tests/BleatCoreTests/TestCleanupTests.swift::propagatesCleanupFailure",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-f29ffe5bf5be",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testWebVTTUsesWholeBookTimestampsAndEscapesCueText",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-bab38a07afd8",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testSubRipSortsSegmentsAndUsesSequentialCueIdentifiers",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-466c5cfc8596",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testWebVTTSeparatesAdjacentCueBlocks",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-58ecda45c7f6",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testPartialCanonicalTranscriptCanBeExported",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-11487369c41d",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testCueTextCannotTerminateItsOwnCueWithBlankLines",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4f78a13042d4",
+      "identity": "Tests/BleatCoreTests/TranscriptExportTests.swift::testExportRejectsMissingAndInvalidSegments",
+      "queue": "core-helper-context",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-a017e10de0b1",
+      "identity": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::ownedDefaultsAreRemovedOnSuccessAndThrowingExit",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "owned_defaults_contract",
+        "reviewed_source_revision": "44e5ef47bc6f5a8f54a25b6815f8ad6fdcd647ec",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-defaults-lifecycle-issue-372",
+        "scope_and_limits": "Dedicated new nine-rule contract for actual defaults-owner success/throw/partial-allocation cleanup, exact sentinels and focused/owner/signed receipts. Other migration/root-cleanup findings are not closed by it.",
+        "current_input_rationale": "Selected contract function unchanged; OwnedDefaultsDomains remains the specific dependency. Later process isolation changes the separate read-only migration scenario.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-123269793fde",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::actualHelperContracts",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1c2a84768573",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::injectedReportFaultsCannotPass",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8f7e51ea6a50",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::launchFailureClosesOwnedHandles",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-9d22fd27853d",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::partialSetupClosesBothPipeEnds",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-e530609f4515",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::deadlineReapsBeforeCleanup",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-c76533cb7e14",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::alreadyCancelledDoesNotLaunch",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-caa667e5adf2",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::injectedLaunchCancellationIsLatched",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1e2bc81ec2b6",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::cancellationAcrossPhasesIsDrained",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-8498053cc394",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::uncertainExitPreservesAllResources",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-22d3afb8db9a",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::uncertainIOPreservesOwnedResources",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-b77073ec6e72",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::operationAndCleanupFailuresRemainSeparate",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-62103a3109c2",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::typedReportGrammarRejectsAmbiguousAndUnboundedInput",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-954a7d3c47a0",
+      "identity": "Tests/BleatCoreTests/ReadOnlyMigrationChildTests.swift::xmlGrammarRejectsUntrustedAndAmbiguousReports",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "read_only_migration_process_contracts",
+        "reviewed_source_revision": "5021833349c6af330b924395d2791f96d38aa78c",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#bounded-parent-diagnostic-write-review-correction",
+        "scope_and_limits": "Thirteen explicit scenario-specific nine-rule keep records; initial13-contract evidence at410e926 was refreshed by final15-focused/36-owner/592-signed correction. Process.run and bounded Foundation/filesystem synchronous boundaries remain explicit; uncertain exits/IO preserve resources.",
+        "current_input_rationale": "Both ReadOnlyMigrationChildTests.swift and ReadOnlyMigrationChild.swift byte-identical to corrected review source. Each record links the scoped process-boundary receipt; root metadata links the correction.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-1d38787cb25c",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testWaitingWebSessionFactoryRetiresExistingAndLateSessions",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_overlap_and_private_contracts",
+        "reviewed_source_revision": "bc97af72af464ed9939e0d08d2e2fc99cf9f364e",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372",
+        "scope_and_limits": "Explicit primary per-record current rules and root exact identity list; four focused identities/owner21/signed605 and mutation evidence cover this scoped lifecycle/retirement review. No whole native/worker drainage.",
+        "current_input_rationale": "Later #456 changes only the separate unexpected-browser-error subcase plus audit/evidence; these selected bodies and private lifecycle helpers remain unchanged.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-C-4369c0dc90f0",
+      "identity": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers",
+      "queue": "core-helper-context",
+      "status": "completed_scoped_review",
+      "evidence": {
+        "group": "openid_overlap_and_private_contracts",
+        "reviewed_source_revision": "bc97af72af464ed9939e0d08d2e2fc99cf9f364e",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-caller-outcomes-and-private-fixture-retirement-issue-372",
+        "scope_and_limits": "Explicit primary per-record current rules and root exact identity list; four focused identities/owner21/signed605 and mutation evidence cover this scoped lifecycle/retirement review. No whole native/worker drainage.",
+        "current_input_rationale": "Later #456 changes only the separate unexpected-browser-error subcase plus audit/evidence; these selected bodies and private lifecycle helpers remain unchanged.",
+        "reviewed_revision_is_ancestor_of_current_main": true
+      },
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-f3103614053f",
+      "identity": "AppModelTests/testRemotePlaybackProgressSyncEmitsOneTypedAttempt",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-bc8dafa98b06",
+      "identity": "AppModelTests/testDownloadHTTPMetricsAreRecordedOffMainActorWithoutCacheHits",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-39aacc88949c",
+      "identity": "AppModelTests/testTranscriptDeletionWaitsForLateTranscriptSave",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-8bf36adc353e",
+      "identity": "AppModelTests/testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-b85cd230fc25",
+      "identity": "AppModelTests/testRestoredDownloadCallbacksMissingAccountKeepTypedStageAndBytes",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-09f8cb1a6760",
+      "identity": "AppModelTests/testRereadClearsPinnedCompletionEvenWhenPlanFails",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-b2f0a730936e",
+      "identity": "AppModelTests/testLocalCompletionWaitsForInFlightAutomaticWork",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-d61e73ebc315",
+      "identity": "AppModelTests/testTransportFailureWaitsForNetworkAndDropsTransientProgress",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-569fea29b3dc",
+      "identity": "AppModelTests/testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "OS background completion after durable retry state; not full original semantic review",
+          "revision": "4b5829d2def2d4cc4dd707e1e87d1b917a677dea",
+          "included_in_snapshot": false,
+          "evidence": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22",
+          "audit_field": "backgroundCompletionFollowup",
+          "disposition": {
+            "status": "source_reviewed",
+            "oracle": "While existing retry gate holds future sleep, require OS completion after durable retry state; retain network-loss/no-retry/pause-reset assertions.",
+            "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
+          }
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-ba0ed7ec9377",
+      "identity": "AppModelTests/testRetryAfterHeaderDelaysRetryableServerReplacement",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-b041657601bb",
+      "identity": "AppModelTests/testPauseIntentPrecedesConcurrentTerminalCallback",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-f0514d112a2a",
+      "identity": "AppModelTests/testPauseStorageFailureIsVisibleAndDoesNotResume",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-2fa08ca018dc",
+      "identity": "AppModelTests/testLateCancelledTaskCallbackDoesNotFailContinuedDownload",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-ca76784a5b3d",
+      "identity": "AppModelTests/testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-d1de5310f4fd",
+      "identity": "AppModelTests/testLargeCellularDownloadsPreserveEveryPendingConfirmation",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-d43571547741",
+      "identity": "AppModelTests/testMediaServicesResetRestoresPlayingAndPausedIntent",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-33ceeeb3bdc8",
+      "identity": "AppModelTests/testNaturalBookEndClearsPlayerPresentationAndSystemNowPlaying",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-9befbe3000a2",
+      "identity": "AppModelTests/testNaturalStreamedBookEndSyncsAndClosesSession",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-5f79d3db78e9",
+      "identity": "AppModelTests/testNaturalCompletionWaitsForPendingSyncBeforeFinalPositionAndClose",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-237119884166",
+      "identity": "AppModelTests/testRestartAndAccountSwitchSkipSyncOfNaturallyClosedSessions",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-0aed5c2b14d5",
+      "identity": "AppModelTests/testMediaServicesResetRebuildsAcrossAudioFileBoundary",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-a13faa56de0e",
+      "identity": "AppModelTests/testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-c4f49c0f4d1f",
+      "identity": "AppModelTests/testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-ce1f0f16dbaa",
+      "identity": "AppModelTests/testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-6b0a476a5592",
+      "identity": "AppModelTests/testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-787d21d32791",
+      "identity": "AppModelTests/testPendingLocalSessionUploadDoesNotBlockLaunch",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-d2d7bfd79563",
+      "identity": "AppModelTests/testFetchedCallbackTimeoutKeepsRetryBlockedUntilDrain",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-dc6beab0fb21",
+      "identity": "AppModelTests/testLiveProgressPatchesOneItemWithoutReloadingBrowsing",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-8a47ca94b5e9",
+      "identity": "AppModelTests/testLiveProgressRefreshesOnlyAffectedOpenDetail",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-bd4b54bd4c5e",
+      "identity": "AppModelTests/testLiveRefreshStaysSuspendedAcrossBackgroundNetworkRecovery",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-654080a16eac",
+      "identity": "AppModelTests/testLiveRefreshCancelsQueuedCatalogChangeOnBackground",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-2141873a17d4",
+      "identity": "AppModelTests/testLiveRefreshStopsInFlightCatalogCascadeOnBackground",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-d9e021518ef2",
+      "identity": "AppModelTests/testLiveProgressDoesNotReplaceNewlySelectedDetail",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-65d7c7511b86",
+      "identity": "AppModelTests/testLiveProgressDoesNotCancelInFlightCatalogRefresh",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-484af081983b",
+      "identity": "AppModelTests/testLiveProgressInsertsReordersAndHidesContinueListeningItem",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-ab2f845cdf79",
+      "identity": "AppModelTests/testLiveProgressFetchesOnlyMissingItemToCreateContinueListening",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-920b114f84af",
+      "identity": "AppModelTests/testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-277cf7888de6",
+      "identity": "AppModelTests/testLiveProgressClearsRemovedProgressFromOpenDetail",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-6eff52d3f3e7",
+      "identity": "AppModelTests/testLiveProgressEchoDoesNotRefreshStreamedPlayback",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "negative-refresh P2: consumed event plus synchronous scheduling-count oracle",
+          "revision": "b6c42e8a8316a525d4bb1e5d02a70b7d85e7f762",
+          "included_in_snapshot": true,
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+          "audit_field": "p2_resolution",
+          "disposition": {
+            "status": "resolved",
+            "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-a80d9b215ad7",
+      "identity": "AppModelTests/testLiveProgressSuppressionIsScopedToPlaybackAccount",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-693a1222ca6d",
+      "identity": "AppModelTests/testLiveProgressUpdatesFinishedStateImmediately",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "negative-refresh P2: consumed event plus synchronous scheduling-count oracle",
+          "revision": "b6c42e8a8316a525d4bb1e5d02a70b7d85e7f762",
+          "included_in_snapshot": true,
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
+          "audit_field": "p2_resolution",
+          "disposition": {
+            "status": "resolved",
+            "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-e8184fe3c7ce",
+      "identity": "AppModelTests/testSeriesDownloadPreparationLoadsEveryPage",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-2e12f7b1c501",
+      "identity": "AppModelTests/testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-bc8b4cc2cb00",
+      "identity": "AppModelTests/testConfirmedSeriesSerializeSharedBookHandoffPerAccount",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-73a4d8363725",
+      "identity": "AppModelTests/testBookDeletionSupersedesInFlightFailedPlaybackRetry",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-da1186522406",
+      "identity": "AppModelTests/testSetFinishedNewerCommitRejectsOlderDetailReconciliation",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-9fa0913e9070",
+      "identity": "AppModelTests/testSetFinishedReconciliationDoesNotRestoreObsoleteSearch",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-bc10091ed6c9",
+      "identity": "AppModelTests/testCompletedReconciliationDoesNotCancelLaterUserSearch",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-ac2df8b20a9f",
+      "identity": "AppModelTests/testCancelledReconciliationSearchPreservesLoadedResults",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-9c5db95498ea",
+      "identity": "AppModelTests/testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-8dcf64c2a7f7",
+      "identity": "AppModelTests/testSetFinishedUsesRemoteOnlyDetailReconciliation",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-6908581917ff",
+      "identity": "AppModelTests/testSetFinishedReconciliationFailuresRecordTypedDiagnostics",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-a15fb8f11595",
+      "identity": "AppModelTests/testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-8f0895b3561b",
+      "identity": "AppModelTests/testCarPlayCellularReconnectAndDelayedPresentationKeepDecision",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-fa60d78c388b",
+      "identity": "AppModelTests/testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-0c89695330fa",
+      "identity": "AppModelTests/testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-c09810d447f5",
+      "identity": "AppModelTests/testCarPlaySearchNativeRowsSurviveCapacityChanges",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-fd64d5faa505",
+      "identity": "AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "#393 fixed three neighboring author fixture identities; evidence explicitly leaves this gated case and callback synchronization open",
+          "revision": "f13bc476124cd752f024380a1089d07bc3556e8b",
+          "included_in_snapshot": true,
+          "evidence": "docs/release-evidence/test-reliability-app-followups.md",
+          "disposition": "explicitly remains open; no queue subtraction"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-cff890f0aac9",
+      "identity": "AppModelTests/testCarPlaySearchRetryAndNoMatchesRemainExplicit",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-8840b87e0c05",
+      "identity": "AppModelTests/testCarPlaySearchRapidQueriesSupersedeDebounceWithoutRequests",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-fa2c3526c02c",
+      "identity": "AppModelTests/testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-de3733d19aea",
+      "identity": "AppModelTests/testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-b77c9b0aea98",
+      "identity": "AppModelTests/testCarPlayCompletedDownloadIsPreferredOnline",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-aacdb75106c2",
+      "identity": "FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "actual hosted Xcode test through runner, not retired-KVO callback completion review",
+          "revision": "7f05e2bd003c0b6ccb1d8883d9ec3b74a5354588",
+          "evidence": "docs/release-evidence/test-runner-verification.md",
+          "outcome": "one exact identity passed; platform/runtime limitations retained"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-6b4f6fa35042",
+      "identity": "NetworkPathTests/testStaleProbeCannotPromoteEndpointOrReviveStoppedSubscription",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-538fef482652",
+      "identity": "NetworkPathTests/testNetworkDiagnosticsContainOnlyTypedReasonAndStage",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": null
+    },
+    {
+      "id": "AUD-A-1221dc516879",
+      "identity": "ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
+          "revision": "e3e4f9a3ece1c75402520d05ed3254126fec697b",
+          "tested_revision": "4542700bc9c9f6e84017403630aa18afbcb904b7",
+          "evidence": "docs/release-evidence/secret-leakage.md#revalidation-2026-10-21-362",
+          "outcome": "all nine native identities passed; 667 files final scan zero prohibited findings; owned resources absent"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-5f9c3a84dbe8",
+      "identity": "ReleaseSecretLeakageTests/testCaptureRotatedTokens",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
+          "revision": "e3e4f9a3ece1c75402520d05ed3254126fec697b",
+          "tested_revision": "4542700bc9c9f6e84017403630aa18afbcb904b7",
+          "evidence": "docs/release-evidence/secret-leakage.md#revalidation-2026-10-21-362",
+          "outcome": "all nine native identities passed; 667 files final scan zero prohibited findings; owned resources absent"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-c87e9af3f187",
+      "identity": "ReleaseSecretLeakageTests/testRemovePrivateCapture",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
+          "revision": "e3e4f9a3ece1c75402520d05ed3254126fec697b",
+          "tested_revision": "4542700bc9c9f6e84017403630aa18afbcb904b7",
+          "evidence": "docs/release-evidence/secret-leakage.md#revalidation-2026-10-21-362",
+          "outcome": "all nine native identities passed; 667 files final scan zero prohibited findings; owned resources absent"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-104c5ff3f088",
+      "identity": "ReleaseSecretLeakageTests/testLogoutRemovedSessionCredentials",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
+          "revision": "e3e4f9a3ece1c75402520d05ed3254126fec697b",
+          "tested_revision": "4542700bc9c9f6e84017403630aa18afbcb904b7",
+          "evidence": "docs/release-evidence/secret-leakage.md#revalidation-2026-10-21-362",
+          "outcome": "all nine native identities passed; 667 files final scan zero prohibited findings; owned resources absent"
+        }
+      ]
+    },
+    {
+      "id": "AUD-A-31533ae4f845",
+      "identity": "ReleaseSecretLeakageTests/testPrivateCaptureRemainsRemovedAfterLogout",
+      "queue": "app-semantic",
+      "status": "current_context_review_pending",
+      "evidence": null,
+      "partialEvidence": [
+        {
+          "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
+          "revision": "e3e4f9a3ece1c75402520d05ed3254126fec697b",
+          "tested_revision": "4542700bc9c9f6e84017403630aa18afbcb904b7",
+          "evidence": "docs/release-evidence/secret-leakage.md#revalidation-2026-10-21-362",
+          "outcome": "all nine native identities passed; 667 files final scan zero prohibited findings; owned resources absent"
+        }
+      ]
+    }
+  ]
+}
