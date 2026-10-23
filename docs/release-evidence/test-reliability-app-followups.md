@@ -669,3 +669,57 @@ source hashes, command exits and verification records alongside them. Independen
 four-file source review found no actionable issues. Exact-head publication/CI
 and final merge remain the coordinator's responsibility. No signed macOS,
 live-server or physical-device evidence is added; #374/#362 remain open.
+
+
+## Single incomplete-track recovery fixture (2026-10-23)
+
+`AppModelTests/testNetworkRecoveryReplacesStaleBackgroundTransfer` failed in
+PR #458's original CI run `39930304040` at dependency-only head
+`6c8c5561081eff5e22b667b9f7604d166410a44e`. One test identity failed four
+assertions: track 0 was scheduled instead of track 1, with range offset 0 and
+length 4 instead of offset 5 and length 3, and the authorized request targeted
+track 0. The dependency update did not establish a causal connection to this
+failure. The original CI log and server-side iOS result artifact are retained.
+
+The fixture left both tracks incomplete. Plan recovery prioritizes the partial
+second track, while native cancellation recovery legitimately selects the first
+incomplete track. A controlled diagnostic held the recovery planner at its
+existing gate, admitted the real native cancellation callback at the existing
+callback checkpoint, awaited callback completion and then released the planner.
+Both modes reproduced the same four failures: one executed identity, eight
+assertion failures, with every gate-entry/completion check passing. This is a
+fixture assumption defect, not evidence of a production scheduling defect.
+
+The final correction commits track 0's four synthetic bytes through
+`DownloadStorage`, then asserts that track 1 is the only incomplete track and
+the next manual-recovery identity. The shared interrupted-download helper is
+unchanged. Every original postcondition remains: both startup and network-change
+recovery, native cancellation completion, off-actor repeated retired callback,
+exactly one new transfer ID for track 1's remaining three-byte suffix, five
+retained bytes, one active admission and authorized request, empty pending
+recovery, no model failure and final descriptor cleanup. Temporary gates/tasks
+are absent from the final test. Existing teardown ownership and bounded waits
+are unchanged. No production source changes or timing sleeps are added.
+
+On Xcode 27.1 / iOS 26.5 Simulator, three unconditional native repetitions of
+the corrected test passed (one unique identity, two recovery modes per
+repetition), with zero failures, skips, expected failures or runtime warnings.
+The supported `scripts/xctest.sh -c Debug -t BleatAppTests` owning run
+passed all **641 distinct identities**, including this test, with zero failures,
+skips, expected failures or runtime warnings. The runner verified native results
+against built discovery. The Swift source SHA-256 remained
+`233a2c51068218c1c4442e8e5a1107e167bedc529fa9c67854e536a70bbffe4a`
+through both final runs. The focused log retains three Xcode host build-version
+metadata diagnostics; the owning log retains nine. Neither final log contains
+compiler warnings. These diagnostics are separate from structured runtime
+warnings. Strict Swift lint, documentation and scoped audit consistency checks
+passed. Independent review of the final correction/audit/evidence found no
+actionable issues.
+
+Retained artifacts are `.build/ctutils-recovery-order-baseline.xcresult`,
+`.build/ctutils-recovery-fixture-focused.xcresult`,
+`.build/ctutils-recovery-fixture-owning.xcresult`, their logs/execution receipts,
+and the diagnostic source/input hashes. The original CI failure remains distinct
+from the controlled diagnostic and corrected-source executions. This provides
+Simulator fixture/callback evidence, not live-server, signed-host or physical
+background-transfer acceptance. #362/#374 remain open.
