@@ -158,7 +158,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-c5fe015b40e3",
+        "currentDecision": "keep; no code change",
+        "assessment": "Exact identities, active selection/snapshot, removal and re-addition state; reconstructed actor shares the in-memory container.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testRejectsDuplicateRemoteUserOnSameNormalizedServer",
@@ -197,7 +208,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-1dc60179dabf",
+        "currentDecision": "keep; no code change",
+        "assessment": "Typed duplicate rejection after normalized server matching preserves the exact existing account.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testConnectionStateAndActiveSelectionPersistAcrossStoreActors",
@@ -236,7 +258,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-9d22308aa1ca",
+        "currentDecision": "keep; no code change",
+        "assessment": "Reauthentication state and selected identity survive reconstruction of a store actor over the same in-memory container.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testLegacyIdentityMigrationRekeysAccountAndStatistics",
@@ -275,7 +308,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-702ca0822f7e",
+        "currentDecision": "keep; no code change",
+        "assessment": "Legacy identity is removed; canonical account, statistics account ID and alias are checked.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testPendingRestoredAccountSurvivesRelaunchInactive",
@@ -314,7 +358,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-1d3b4961b1f2",
+        "currentDecision": "keep; no code change",
+        "assessment": "Pending restoration remains inactive across store actor reconstruction over the same in-memory container.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testContradictoryAliasIsTypedAndPreservesOriginal",
@@ -353,7 +408,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-d41ba54cfad5",
+        "currentDecision": "keep; no code change",
+        "assessment": "Typed contradictory-alias failure preserves the original canonical alias mapping.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testLocalServerPersistsWithoutChangingPrimaryIdentity",
@@ -392,7 +458,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-751894e965e5",
+        "currentDecision": "keep; no code change",
+        "assessment": "Local-server configuration is returned without changing primary identity.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testReplacingPrimaryServerRekeysExistingAccountData",
@@ -431,7 +508,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-cf716d4447e3",
+        "currentDecision": "keep; no code change",
+        "assessment": "Primary-server replacement checks new canonical identity, old absence and active selection.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testRemovingActiveAccountSelectsDeterministicReplacement",
@@ -470,7 +558,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-529f3734caf7",
+        "currentDecision": "keep; no code change",
+        "assessment": "Active-account removal selects the deterministic replacement, preserves exact survivors and returns false for repeated removal.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testMissingAccountOperationsRemainTyped",
@@ -509,7 +608,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-8186b6d8e60e",
+        "currentDecision": "keep; no code change",
+        "assessment": "Missing-account operations preserve typed accountNotFound errors and absent account/active state.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testCorruptStoredProfileIsRejectedWithoutLeakingPayload",
@@ -587,7 +697,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-c70121a484c2",
+        "currentDecision": "keep; no code change",
+        "assessment": "Valid account Codable round-trip, credential-field/marker exclusions, invalid identity/schema errors and OpenID capability flags; no real token-store privacy claim.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testLoginPersistsAccountAndCredentialsTransactionally",
@@ -626,7 +747,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-be639693d5e4",
+        "currentDecision": "keep; no code change",
+        "assessment": "Login returns canonical identity, stores the active account and exact synthetic credentials, with zero deletions; failure rollback is a separate previously fixed test.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testDuplicateOnboardingRollsBackOnlyNewCredentials",
@@ -704,7 +836,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-f4b5abe85518",
+        "currentDecision": "keep; no code change",
+        "assessment": "Non-local onboarding returns the typed unavailable outcome before any transport call and leaves no account.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testOnboardingReportsCredentialRollbackFailure",
@@ -743,7 +886,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-ed66e20b6514",
+        "currentDecision": "keep; no code change",
+        "assessment": "Credential rollback failure preserves its typed cause, remaining synthetic credentials and the exact original account.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testPersistedSignOutAndRemovalUseStoredServerAndClearCredentials",
@@ -782,7 +936,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-654ca95d156e",
+        "currentDecision": "keep; no code change",
+        "assessment": "Sign-out/removal exercise the stored-account coordinator path and assert remote status, reauthentication, credential removal, logout token values and account removal. No explicit logout-host/prefix oracle is claimed.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testPersistedLifecycleRejectsUnknownAccountBeforeLogout",
@@ -821,7 +986,18 @@
       "classification": "Deterministic host persistence test using SwiftData in-memory fixture and local scripted fakes.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct semantic postconditions cover the requested state transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-28592b4c6004",
+        "currentDecision": "keep; no code change",
+        "assessment": "Unknown-account sign-out returns the typed missing-account outcome before transport; this case does not exercise the removal branch.",
+        "synchronizationAndOwnership": "Fresh current-schema in-memory StoreFixture; store/coordinator operations are awaited. Actor transport and credential fakes return immediate typed results and retain only local synthetic state; no held caller, delayed callback, timer or observer requires cancellation machinery.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/AudiobookshelfAPITests.swift::testListeningSessionsUseZeroIndexedPrefixedRouteAndPinnedShape",
@@ -9713,7 +9889,18 @@
       "classification": "Local Foundation configuration test; no network.",
       "compiler_skip": "No test-level compiler condition, opt-in variable, or skip applies.",
       "reason": "Direct route/state postconditions cover intended transition.",
-      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data."
+      "shared_helper_review": "StoreFixture owns a fresh current-schema in-memory container; actor-based onboarding fakes are deterministic; URLProtocolStub protects static handler access with a lock and test handler is reset after awaited operations; recorder helpers lock mutable callback data.",
+      "accountContextReview20261023": {
+        "base": "32bfe60226290c4cd9a784b9d9fa6b65e1f9b148",
+        "catalogID": "AUD-C-996b8e3c1d6b",
+        "currentDecision": "keep; no code change",
+        "assessment": "Fresh default ephemeral OpenID transport has zero cookies before and after awaited empty clearing. No request, nonempty clear, browser or provider termination is exercised.",
+        "synchronizationAndOwnership": "Fresh ephemeral configuration; no send or URLProtocol handler is installed. Nonthrowing expectations preserve the awaited empty clear even after an assertion failure; constructor failure precedes an owned transport.",
+        "rules": "Semantic typed/state postconditions reviewed (1); immediate awaited completion (2,4); playback/time tolerance inapplicable (3); independent local fixtures (5); host/framework boundary explicitly limited (6); no retries/wait changes (7); caller-located typed assertions, no timed wait to diagnose (8); execution receipts below distinguish fresh focused checks and reused unchanged-input owning/signed checks (9).",
+        "historicalCohortMember": true,
+        "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#account-store-and-default-openid-context-review-372",
+        "historicalAssessment": "Original fields and revision-bound evidence are retained. This annotation completes the selected current helper-context recheck only."
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/IdentifiersTests.swift::testRawValueAndDescriptionArePreserved",
