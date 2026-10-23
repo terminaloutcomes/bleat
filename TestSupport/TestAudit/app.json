@@ -3297,6 +3297,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-f3103614053f",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Starts a streamed preparation backed by local CAF; Pause initiates sync; exact one-span equality checks remote source/no retry/succeeded.",
+        "reviewedOriginalOwnership": "Fixture defaults/files deferred; explicit stop awaited; no throwing operation after start before normal stop.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Synthetic service and tracer; no real server metrics; subsequent Stop is intentionally outside the one-attempt oracle.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -3374,6 +3387,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-bc8dafa98b06",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Detached call submits two decoded transaction batches; exact three network spans require302/cancelled/cannotFindHost and correct download endpoint.",
+        "reviewedOriginalOwnership": "No tasks resumed or session created by this test; only telemetry work, awaited via exact resulting span count.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Exercises decoded metrics-recording boundary, not actual URLSessionTaskMetrics collection/cache behavior.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -6438,6 +6464,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-39aacc88949c",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Held save gate precedes deletion task; .deleting admission must precede zero-deletion assertion; final persistence order saved then deleted plus cache absence.",
+        "reviewedOriginalOwnership": "No throwing operation after gate entry; nonthrowing assertion failures still reach release/join; deletion task uses finite fake service after release.",
+        "currentCorrection": null,
+        "scopeAndLimits": "No filesystem transcript deletion/native speech-engine proof; task.value has no independent test deadline but is not a guessed drain.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -7305,6 +7344,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-8bf36adc353e",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Creates finalized automatic-cache second track; while transcriber held, requires cleanup evaluation acknowledged and both record/file retained; after success requires record removed.",
+        "reviewedOriginalOwnership": "Defaults/root deferred; gate released after nonthrowing assertions; terminal outcome and cache removal observe pin release; no explicit global task-graph drain.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Injected transcriber with local media; no actual speech-service result; terminal/cache waits bounded.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -9383,6 +9435,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-b85cd230fc25",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Native ephemeral URLProtocol delivers206suffix or401 off actor; wait on presented local-context missing-account; exact stage/cause/status plus retained5or7bytes.",
+        "reviewedOriginalOwnership": "Root deferred, but session invalidation/model.removeAll are normal-tail only after throwing partialByteLength read.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Native local URLProtocol callback; no live-server auth or physical daemon claim.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -10282,6 +10347,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-09f8cb1a6760",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Pinned after-book completed cache remains complete during ordinary progress, then explicit unfinished/reread clears date, deferred cleanup count0, pin release retains record and persisted nil.",
+        "reviewedOriginalOwnership": "Defaults/root deferred; pin released on normal path; no throwing operation between pin acquisition and release.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Failure is injected plan503; checks metadata/pin cleanup intent, not background-download network.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -10383,6 +10461,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-b2f0a730936e",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "For finished and unfinished cases, hold plan lookup, start progress and completion; waiter count1 proves admission; unchanged old date before release and exact new date in model/storage after joins.",
+        "reviewedOriginalOwnership": "No throwing operations between task start and gate release; both joins precede persisted read and deferred cleanup.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Controlled service failure after release; joined caller operations, not unrelated queues.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -11032,6 +11123,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-d61e73ebc315",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Observe7displayed bytes, terminal off-line callback completion+pending identity, require durable5/no tasks/typed offline telemetry; network recovery yields one track1 replacement.",
+        "reviewedOriginalOwnership": "Root deferred, but session/model cleanup only at tail; activeRecord/waitingRecord unwraps after session creation can throw before invalidation.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Manual delegate calls for progress/terminal, fake requests; not physical network or daemon evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -11307,6 +11411,19 @@
         "status": "source_reviewed",
         "oracle": "While existing retry gate holds future sleep, require OS completion after durable retry state; retain network-loss/no-retry/pause-reset assertions.",
         "execution": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22"
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-569fea29b3dc",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Hold retry sleeper, require OS handoff on iOS while held, count1; set unavailable, release, require callback completion; no descriptors, exact pending ID, waiting state and Pause count0.",
+        "reviewedOriginalOwnership": "Gate always released before throwing record unwraps; ephemeral session/model invalidation remains tail-only after those unwraps.",
+        "currentCorrection": null,
+        "scopeAndLimits": "PR447 partial evidence covers OS handoff only; explicit callback/fake sleep, no real timer/network recovery.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -11461,6 +11578,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-ba0ed7ec9377",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Native503URLProtocol with120s Retry-After; exact delay/count/typed telemetry; reconstructed model has persisted deadline/no task; network recovery cannot bypass deadline; released gate leads one durable-offset replacement at primary URL.",
+        "reviewedOriginalOwnership": "No registered gate/session/model teardown; retryEvent XCTUnwrap can throw while retry sleeper held, before release.",
+        "currentCorrection": "Release retry gate and invalidate ephemeral session on every exit; bounded actual callback return before model/root cleanup; bounded gate admission with caller diagnostics.",
+        "scopeAndLimits": "Reconstruction shares same filesystem; does not simulate real elapsed120seconds, server or process restart.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -11970,6 +12100,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-b041657601bb",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Pause task held at checkpoint; actual ephemeral terminal-failure callback acknowledged before checking paused intent/no failure; release joins Pause and final manifest paused.",
+        "reviewedOriginalOwnership": "Two teardown blocks both release/join Pause and remove model; second also invalidates callback session; registered before resuming callback.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Real native callback delivery through URLProtocol, injected pause checkpoint; no physical transfer claim.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -12267,6 +12410,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-f0514d112a2a",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Injected commit completes final track then throws persistenceFailed; exact storageUnavailable/failed manifest/complete finalized entry/no paused intent/no descriptors; new model remains failed; remove result exact.",
+        "reviewedOriginalOwnership": "Root deferred; native model cleanup only normal tail; first record XCTUnwrap after initial start can throw while model owns scheduled transfer.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Controlled persistence failure; finalized entry state/placement asserted but not separate byte-content comparison.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -13034,6 +13190,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-2fa08ca018dc",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Pause/continue establish new transfer ID; real old-task URLProtocol callback processed; exact retained new transferID/count1/downloading/no failure/no recovery/partial5/no finalizedfile.",
+        "reviewedOriginalOwnership": "Late ephemeral session has teardown invalidation; background model.removeAll is tail-only and post-start descriptor/record unwraps may exit earlier.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Native old callback delivery with synthetic response; no real OS resume/physical background evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -13760,6 +13929,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-ca76784a5b3d",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Start with offline plan failure and no descriptor; register service path observer; switch plan then emit path; require one replacement track1 at durable offset5.",
+        "reviewedOriginalOwnership": "Root deferred; downloads.removeAll only normal tail after descriptor unwrap, and network/live observer shutdown is not established.",
+        "currentCorrection": null,
+        "scopeAndLimits": "AppModel wiring through fake path stream, no real NWPathMonitor/daemon.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -14504,6 +14686,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-d1de5310f4fd",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Above-threshold plan queuesfirst/second; automatic work cannot bypass; cancel promotessecond; reset clears; later confirm registersone record before duplicate trigger and leaves no extra pending decision.",
+        "reviewedOriginalOwnership": "Teardown cancels pending decision and calls removeAllForLocalDataReset; defaults/root deferred; no throwing operation after confirmation task start.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Guard returns when policy selection unsupported; credit semantic assertions only on supported iOS, not a counted macOS acceptance pass.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -16291,6 +16486,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-d43571547741",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Native CAF readiness established before reset; playing and paused branches require item ready, timeControlStatus/rate appropriate and exact1.35 preference/two activation calls.",
+        "reviewedOriginalOwnership": "Fixture defaults/files deferred; model lifetime scope ends after branch; no explicit stop/OS shared-session teardown claimed.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Calls production reset handler directly; fake audio-session activation. Not actual media-daemon reset or physical output.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -16420,6 +16628,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-33ceeeb3bdc8",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Both ordinary/paused-then-resumed scenarios establish readiness; real local playback reaches ended/duration; exact flags and injected NowPlaying info/state clear plus canonical final position.",
+        "reviewedOriginalOwnership": "Explicit stop awaited on normal nonthrowing tail; private fixture defaults/files deferred.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Actual local AVPlayer natural end; injected system-info publisher, no physical lock-screen visibility proof.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -16547,6 +16768,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-9befbe3000a2",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Local CAF presented as streamed session; readiness then ended+close positive witness; synced contains session, exact one close; after Stop sync sequence unchanged and still one close.",
+        "reviewedOriginalOwnership": "No throwing operation after startup before stop; fixture deferred and stop awaited.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Fake service proves orchestration, not remote-server session acceptance or network completion.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -16690,6 +16924,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-5f79d3db78e9",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Held first sync admitted after Pause; resume to actual end; before release close listempty and sync count1; after release close plus exactlytwo positions with final duration and one close.",
+        "reviewedOriginalOwnership": "No throwing operation while gate held; release precedes later XCTUnwrap; normal Stop awaited.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Local AVPlayer + controlled service sync; does not prove real server ordering.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -16813,6 +17060,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-237119884166",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Two native completions require matching close counts and selected session; second start leaves prior sync list unchanged; account-switch stop adds no sync and leaves idle.",
+        "reviewedOriginalOwnership": "Final stopForAccountSwitch awaited; no throwing operation after starts except fixture setup before them.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Same synthetic account/session service; explicit closing identity/count test, not physical account switch.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -17393,6 +17653,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-0aed5c2b14d5",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Two local tracks; establish ready, await seek to second boundary, reset, require requested playback/currentTime within0.1 plus ready/playing and fileindex1.",
+        "reviewedOriginalOwnership": "Fixture deferred; boundary XCTUnwrap can throw while native playback remains active; no explicit stop registered.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Direct reset handler and fake activation, local native queue; no media-daemon reset evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -18164,6 +18437,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-a13faa56de0e",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Unique defaults/store retains session; initial started/completed/observer events and one request; success result/path event leads second started/completed and empty pendingstore/exact2requests.",
+        "reviewedOriginalOwnership": "Defaults/root deferred; fake path stream/observer retirement not proven; no held test gate.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Source-reviewed app wiring and durable local state; no actual network/remote sync claim.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -18296,6 +18582,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-c4f49c0f4d1f",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Establish initial/recovery sync completions and subscriber; emit100qualitychanges + finalspecificstate marker; exact pendingstate and accounts/library/sync/start/stop counts unchanged.",
+        "reviewedOriginalOwnership": "Unique defaults; normal setLiveUpdatesActive(false); no full network-observer stream termination/async graph drain claimed.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Bounded app-handler scope; no real NWPathMonitor/load/physical network evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -18578,6 +18877,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-ce1f0f16dbaa",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Emit exact localfailed + primaryauthenticated attempts; four consumed markers precede exacttwo structured spans; pending third attempt consumed then owner restart synchronously cancels its span.",
+        "reviewedOriginalOwnership": "defer disables live updates; no held gate; native endpoint/path observer task-graph shutdown not certified.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Synthetic live-events service/tracer, not socket/collector/server; no string matching.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -18801,6 +19113,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-6b0a476a5592",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Signals consumed eachconstrained/available/expensive/unavailable transition; exact lifecycle counts/subscriber and paused playback identity/time/rate/state/chapter; REST count increments; recovery finishes catchup exactlyonce.",
+        "reviewedOriginalOwnership": "defer disables liveupdates; normal playback.stop; fixture removal; broad AppModel observer graph drainage not established.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Fake path/REST/live service, local AVPlayer; no physical cellular/LowDataMode or audible route proof.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -18909,6 +19234,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-787d21d32791",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Launch-task expectation2s requires signedIn before gated upload completion; uploadstarted + gateentry; pendingexactID/request1; release then sync-completed event and launch join.",
+        "reviewedOriginalOwnership": "Pending-store try read occurs while syncGate held; no registered release/cancel/join; error bypasses release and leaves upload task waiting.",
+        "currentCorrection": "Register gate-release and actual launch/upload terminal settlement before resource cleanup; retain launch budget and exact pending upload assertions.",
+        "scopeAndLimits": "Controlled service upload; no real network stall/transport timeout proof.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -19350,6 +19688,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-d2d7bfd79563",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Startup timeout entersdrain; stopping typedtimeout/cannotcancel; retry keepsrequestcount1; cancellation admission requests2 while held must remainunfinished; releasejoinscancel and finaltypedfailedtimeout.",
+        "reviewedOriginalOwnership": "Early guard failure returns before releasing drainGate; no teardown releases gate/joins cancellation on failure.",
+        "currentCorrection": "Release held private-cloud drain on early exit; bounded request admission and cancellation return; retain typed timeout, stopping and blocked retry assertions.",
+        "scopeAndLimits": "Synthetic CloudKit callback/drain service, not real CloudKit/device.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21093,6 +21444,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-dc6beab0fb21",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Three duplicate updates produce exact target/other finished flags, unchanged page/search, one shelf removal and exactly one extra progress request.",
+        "reviewedOriginalOwnership": "The loaded-shelves guard returns before the trailing setLiveUpdatesActive(false); startLiveRefreshTest installs no teardown. The liveUpdatesTask retains the model across its AsyncStream loop.",
+        "currentCorrection": "Disable live updates on all method exits including guarded shelf return; retain exact state/request deltas.",
+        "scopeAndLimits": "Three emitted updates are a synthetic stream/coalescing scenario, not a live-server or physical subscription test.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21197,6 +21561,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-8a47ca94b5e9",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Unrelated item adds only one progress request; target duplicates update the exact loaded detail and last progress-request item, preserving other request counts.",
+        "reviewedOriginalOwnership": "No throwing operation or early guard follows live startup; final live disable remains reached after assertion failures.",
+        "currentCorrection": null,
+        "scopeAndLimits": "No real socket/server or account persistence claim.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21304,6 +21681,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-bd4b54bd4c5e",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Background path application leaves all request counters unchanged and no subscriber; foreground activation adds exactly one libraries/allProgress/page/shelves refresh.",
+        "reviewedOriginalOwnership": "No held gate or early return after startup; final disable runs.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Background is model lifecycle injection, not OS suspension or physical network evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21387,6 +21777,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-654080a16eac",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Consumed catalog event and same-stream authentication marker precede backgrounding; cancelled refresh completion leaves full request-count tuple unchanged.",
+        "reviewedOriginalOwnership": "No gate or throwing operation after startup; inactive transition is exercised within the test.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Completion proves the queued batch returned; not arbitrary task-graph drainage.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21462,6 +21865,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-2141873a17d4",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Held all-progress request is entered, then background/release completes the batch; only allProgress count increases, excluding downstream catalog cascade.",
+        "reviewedOriginalOwnership": "No throwing operation between gate entry and release; false assertions continue to release/fulfillment.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Injected service cascade only; no live server.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21550,6 +21966,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-d9e021518ef2",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Hold old-item progress refresh, select different exact detail, release old work, and require the new detail unchanged.",
+        "reviewedOriginalOwnership": "After gate entry all service/model calls are nonthrowing; release and final live disable are reached.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Does not assert new-selection network latency or every item field independently beyond structural detail equality.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21650,6 +22079,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-65d7c7511b86",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Progress consumed while all-progress catalog work is held does not cancel it; final libraries/pages/shelves/progress deltas each match the intended merge.",
+        "reviewedOriginalOwnership": "Gate is explicitly released and no throwing action follows entry; final live disable.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Merge/coalescing scope, not all refresh scheduling cases.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21766,6 +22208,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-484af081983b",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "First progress inserts item ahead of other and increments shelf total; hidden-progress update removes it; request tuple adds exactly two progress fetches.",
+        "reviewedOriginalOwnership": "Both loaded-shelf guards return before the final live-update disable; helper does not register failure teardown.",
+        "currentCorrection": "Disable live updates on every method exit; retain exact insertion/order/hide and request assertions.",
+        "scopeAndLimits": "First shelf total2 is checked; second removal checks items, not a broader server shelf protocol.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21885,6 +22340,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-ab2f845cdf79",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Known empty page plus progress creates continue-listening shelf from exact detail summary with only one additional detail and one progress request.",
+        "reviewedOriginalOwnership": "An unconditional defer disables live updates before the later loaded-shelves guard; no held gate.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Synthetic missing-item recovery, not live-server/API compatibility.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -21989,6 +22457,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-920b114f84af",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Progress entering notStarted filter removes item with one page refresh; subsequent progress movement only adds progress fetch, not a second page request.",
+        "reviewedOriginalOwnership": "No guard/throw after startup; final disable.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One progress filter and one membership transition, not all filter modes.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -22073,6 +22554,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-277cf7888de6",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "An event with absent fetched progress replaces exact open detail with progress nil.",
+        "reviewedOriginalOwnership": "No early guard/throw after startup; final disable.",
+        "currentCorrection": null,
+        "scopeAndLimits": "This intentionally tests missing progress, not corruption or every progress field.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -22192,6 +22686,19 @@
       "p2_resolution": {
         "status": "resolved",
         "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-6eff52d3f3e7",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Prepared streamed same-account book suppresses session-matching and paused same-item echoes: no new refresh schedules or request deltas; local shelf retains item.",
+        "reviewedOriginalOwnership": "The local-shelves guard can return before pause, live disable and awaited stop; fixture defer only removes files/defaults and does not stop model/player.",
+        "currentCorrection": "Register owned player stop/live cancellation before fixture file/default cleanup via LIFO blocks; preserve consumed-echo no-refresh assertions.",
+        "scopeAndLimits": "Prepared-state witness is not physical advancing-audio/route evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -22287,6 +22794,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-a80d9b215ad7",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Same item playing under other account must not suppress browsing-account progress refresh; exact counter tuple adds progress1 and playback ownership remains other account.",
+        "reviewedOriginalOwnership": "No post-start throwing guards; live disable and awaited player stop reached.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One cross-account suppression boundary, with in-memory fake service and generated media.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -22686,6 +23206,19 @@
       "p2_resolution": {
         "status": "resolved",
         "evidence": "Resolved negative-refresh P2 by asserting synchronous scheduling count before debounce. Six focused outcomes and all598 owning identities passed."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-693a1222ca6d",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Current account/item echo and finished event do not fetch/schedule; finished flag updates while selected book, position, rate, state and chapter stay unchanged and paused.",
+        "reviewedOriginalOwnership": "No throwing guards after playback start; live disable and awaited stop reached; fixture defer removes owned temp files.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Paused snapshot comparison uses .01seconds/.001rate; does not establish advancing clock, server or hardware behavior.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -27600,6 +28133,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-e8184fe3c7ce",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Three one-item pages yield exact ordered three-book list, accumulated page2/limit1/total3 and page-request suffix0,1,2.",
+        "reviewedOriginalOwnership": "No spawned held gate or media; guard occurs after awaited initial page, with fake providers.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Pagination/accumulation scope only; does not execute download transfers.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -27910,6 +28456,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-2e12f7b1c501",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Duplicate preparation rejected; second completed series stays presented while first finishes, then cancellation exposes first and empties queue.",
+        "reviewedOriginalOwnership": "Both provider gates released before terminal assertions; no throwing action after gate entry.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One-second modal predicates are bounded state waits; no real transfer or global OS queue proof.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -28088,6 +28647,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-bc8b4cc2cb00",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Two series sharing one book issue one detail request while first is held; explicit predecessor-wait event confirms second admission, and second detail gate enters only after first release.",
+        "reviewedOriginalOwnership": "Test ends immediately after secondDetailGate.release(), without observing final submission completion or cancelling/joining its model-owned task; post-release service/download work may outlive the test.",
+        "currentCorrection": "Release both gates on early exit and acknowledge both awaited series submissions via active-key retirement; preserve exact serialized handoff assertions.",
+        "scopeAndLimits": "Current assertions establish admission serialization, not completed downstream download handoff or failure cleanup.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -30732,6 +31304,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-73a4d8363725",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Initial playback starts, failed retry is held during close, deletion starts, competing start and retry return superseded; final player idle/mini hidden and every opened session closes in the expected order.",
+        "reviewedOriginalOwnership": "No throwing action after retry/deletion tasks start; close gate released before joins; generated-media fixture cleanup is deferred.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One/two opens are explicitly allowed race paths and matched by exact corresponding close lists; does not prove a unique open cardinality or physical playback.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -31734,6 +32319,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-da1186522406",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Older finished reconciliation held while newer not-finished commit/reconciliation proceeds; after both completions model and loaded detail cannot regain finished status.",
+        "reviewedOriginalOwnership": "Only unreleased old gate is released on the nonthrowing path; loaded-detail guard occurs after both completions.",
+        "currentCorrection": null,
+        "scopeAndLimits": "False-or-nil progress is accepted intentionally by oracle; proves rejection of obsolete finished state, not preservation of every progress field.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -31810,6 +32408,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-9fa0913e9070",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Hold reconciliation home refresh, issue new user search, release and complete; exact query list stays Old,New and current query New.",
+        "reviewedOriginalOwnership": "No throwing operation after held gate; release precedes completion/observations.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Query ownership/count scope, not every search-result field or network cancellation mechanism.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -31902,6 +32513,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-bc10091ed6c9",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "First reconciliation finishes; user search enters gate; second reconciliation enters final detail gate; user search completes before final reconciliation and remains loaded/User afterward.",
+        "reviewedOriginalOwnership": "Search task is awaited after gate release; final detail gate released before final guard; redundant release in failure guard is safe.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Loaded search and query are checked, not exact full result content.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -31998,6 +32622,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-ac2df8b20a9f",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "After initial exact search results, held reconciliation search is superseded by a denied newer update; final query/results equal initial and permissionDenied is retained.",
+        "reviewedOriginalOwnership": "Initial guard is before creating held work; later release precedes observation; no throwing operation after gate entry.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Synthetic403 and cancelled older reconciliation; not all operational errors or live search transports.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -32238,6 +32875,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-9c5db95498ea",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "After local finished commit, catalog/home refresh503 failures cannot reverse finished state or publish bookProgressFailure before/after acknowledged reconciliation.",
+        "reviewedOriginalOwnership": "Refresh gate released before final completion; no throwing post-start branches.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Checks committed bit and mutation failure channel, not all possible failure presenters.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -32342,6 +32992,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-8dcf64c2a7f7",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "One remote-only refreshed-detail503 leaves committed loaded finished detail and no mutation failure, and emits typed loadBook/bookUnavailable diagnostic.",
+        "reviewedOriginalOwnership": "No held gate; loaded-detail failure guard is after work completion.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Remote-only fetch count is1; diagnostic containment is existence, not an exactly-once log assertion.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -32602,6 +33265,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-6908581917ff",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Detail503 and search503 reconciliation emit distinct loadBook/bookUnavailable and search/serverUnavailable events while committed finished detail and loaded prior search survive.",
+        "reviewedOriginalOwnership": "No retained gates; guards occur after completion.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Checks loaded search state, not exact prior search payload; logs are required-presence rather than exclusivity.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -38025,6 +38701,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-a15fb8f11595",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "First off-actor Cancel advances exact request; stale phone queue finish preserves second; direct old-ID APIs cannot change second; next modal identity differs and cancellation dismisses it.",
+        "reviewedOriginalOwnership": "withCarPlayCellularQueue disconnects/resets downloads on both return and throw, so cleanup itself is credited.",
+        "currentCorrection": "DEBUG exact +2 actual stale action returns before negative request-state oracle.",
+        "scopeAndLimits": "The helper can disconnect before late Tasks run, invalidating them and masking an adapter regression; no physical CarPlay claim.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -38327,6 +39016,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-8f0895b3561b",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Disconnect retains pending request; reconnect replaces alert; late presentation completion/old Cancel should preserve replacement; unmetered path eventually creates2records and dismisses alert.",
+        "reviewedOriginalOwnership": "Shared helper guarantees disconnect and local download reset on normal/throwing paths.",
+        "currentCorrection": "DEBUG exact +1 actual old Cancel return before replacement decision oracle.",
+        "scopeAndLimits": "Synchronous presentation callback generation handling is partly checked; later success does not uniquely acknowledge the stale action return or transient clobbering.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -38509,6 +39211,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-fa60d78c388b",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Account download removal empties queue/records and dismisses alert; then old Download/Cancel callbacks must not recreate them.",
+        "reviewedOriginalOwnership": "withCarPlayCellularQueue resets owned downloads/disconnects on throw/success.",
+        "currentCorrection": "DEBUG exact +2 actual stale action returns before empty state oracle.",
+        "scopeAndLimits": "Does not establish that late registered adapters rejected work before teardown generation invalidation.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -38746,6 +39461,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-0c89695330fa",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Disabled Search preserves3browse tabs and no pushed keyboard; enabled mode preserves browsing and requires4thSearch/push only on iOS27 with capacity4, else3/no push.",
+        "reviewedOriginalOwnership": "Disconnect is bottom-only and can be bypassed by throwing native unwraps. More concretely, positive iOS27 branch registers `opened` XCTest expectation, sets overfulfill, but never fulfills or waits for it.",
+        "currentCorrection": "Remove unwired expectation; disconnect native coordinators and disable live updates on every exit; retain positive native template push witness.",
+        "scopeAndLimits": "Positive iOS27 branch was NOT executed in this review; no runtime failure or native27 acceptance is claimed. The source-level unwaited expectation is the finding.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -39178,6 +39906,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-c09810d447f5",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Retained row survives capacity0\u21922 selection and invokes play exactly once; shared results list has no sections when capacity returns0.",
+        "reviewedOriginalOwnership": "Controller invalidated after all queued operations complete on normal path; no held provider gate.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Native templates under injected limits, not hardware head-unit capability or every row kind.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -39277,6 +40018,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-fd64d5faa505",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Author load held; navigation pop completes selection before response; late author response must not refill removed list.",
+        "reviewedOriginalOwnership": "A throwing XCTUnwrap(pushed.last as CPListTemplate) occurs after non-cancellable gate entry; no teardown releases gate or invalidates controller on that failure path.",
+        "currentCorrection": "Preserve early public completion; DEBUG acknowledge actual selected task return before late negative oracle. Failure cleanup distinguishes outer adapter rejection from admitted inner task via callback/admission counters.",
+        "scopeAndLimits": "Early pop-completion behavior is proven; post-response suppression and failure cleanup are not fully established.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -39809,6 +40563,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-cff890f0aac9",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Enabled retry row from503 reruns same exact title query, then renders explicit No title or author matches after empty success; exact requests title,title.",
+        "reviewedOriginalOwnership": "No retained provider gate; invalidate after completion on normal path.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One typed retry/empty path; no live-server or hardware search evidence.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -39951,6 +40718,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-8840b87e0c05",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Three rapid a,ab,ab callbacks plus clearing all return empty; exactly3 rapid completions and no service request.",
+        "reviewedOriginalOwnership": "All callbacks complete before final counter check/invalidate; no held gate.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Proves cancellation before debounce sends requests for these inputs, not every arrival timing or physical keyboard behavior.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -40070,6 +40850,19 @@
           "outcome": "follow_up",
           "reason": "The intended CarPlay queue/search behavior is asserted, but stale callback/drain completion is not established by the current yield/sleep synchronization."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-fa2c3526c02c",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Both detail-held and stream-held selection invalidation complete callback once, clear target, finish superseded, leave playback unrequested; stream-opened path closes exactsession.",
+        "reviewedOriginalOwnership": "No throw after gate entry; gate released before terminal outcome wait; player explicitly stopped per iteration and fixture cleanup deferred.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Unlike author-pop negative case, terminal outcome changes fromnil tosuperseded after release. Not physical CarPlay/audio routing.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -40786,6 +41579,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-de3733d19aea",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Initial image2x2 actually installed, same-context refresh retains identical row object/image, library switch replaces row identity while seeding exact cached image dimensions.",
+        "reviewedOriginalOwnership": "Fake fetch returns generated PNG; no held fetch gate; coordinator disconnects on normal path and diskCapacity0 loader avoids persistent cover writes.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Dimensions/identity prove install/reuse, not pixel identity or physical visual contrast; bottom-only disconnect is a cleanup limitation, not a newly demonstrated leaked held task.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -43569,6 +44375,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-b77c9b0aea98",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Seeded complete local record selected from online CarPlay Home invokes callback, opens zero streamed sessions and pushes shared NowPlaying template.",
+        "reviewedOriginalOwnership": "Root temp directory has defer; explicit stop and disconnect after completed selection; no retained provider gate.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Local preference/navigation scope; does not prove physical playback, every verified byte or offline network behavior.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -44558,6 +45377,19 @@
           "outcome": "follow_up",
           "reason": "Replace drain-marker ordering with an explicit completion contract for retired queued callbacks; current code can pass before callback delivery."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-aacdb75106c2",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Real AVPlayer volume mutation in detached task delivers exact observed player through PlaybackObservation.handler to isolated MainActor.",
+        "reviewedOriginalOwnership": "Player has no media item, so no audio; observation invalidated after callback; no throwing operation after creation.",
+        "currentCorrection": null,
+        "scopeAndLimits": "One real volume KVO boundary, not all player keys, removal races or physical outputs.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -46190,6 +47022,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-6b4f6fa35042",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "fix completed; test-only correction",
+        "semanticAssessment": "Old successful probe after newer failing path/stop must leave routerprimary, stopped streamnil and no subscriptionReconnect event.",
+        "reviewedOriginalOwnership": "Teardown registered after subscription task creation releases all probes, stops service and joins subscription; input stream has defer. Cleanup is credited.",
+        "currentCorrection": "DEBUG actual probe-processing returns +1/+2 are acknowledged before stale/stopped negative state assertions; original Release scenario remains.",
+        "scopeAndLimits": "A schedule where path2/stop occurs before subscription enters endpoint wait lets subscription return before oldprobe processes. This is a test-oracle gap, not an observed endpoint promotion bug.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -46547,6 +47392,19 @@
         "evidence": "docs/release-evidence/test-reliability-app-followups.md#follow-on-source-batch-2026-10-16",
         "note": "The current diff changes this test body in the app timing/event batch. Its historical source-review decision is preserved; no execution is claimed while the owning app suite is pending.",
         "execution_evidence": "All 598 app identities passed with zero skips in .build/post-extraction-app-owning.xcresult. Existing review findings remain open."
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-538fef482652",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "One typed qualityOnly/pathClassification event survives Codable round-trip structurally, retains exact reason/stage and renders expected typed keys without IP prefix.",
+        "reviewedOriginalOwnership": "No external resource/owned task.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Factory only accepts typed reason/stage, confirmed in Diagnostics.swift494. This is not adversarial payload redaction or all diagnostic-production coverage.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Fresh Debug owning identity passed; controlled stale-adapter witness is verified separately; fresh Release fixture compilation passed; no new Release runtime execution."
       }
     },
     {
@@ -46870,6 +47728,19 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-1221dc516879",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Exactlyone session credential is decoded; replacement retains refresh token and swaps access for unique rejected marker; TokenVault save plus initial manifest preserve three scanner canaries.",
+        "reviewedOriginalOwnership": "Cross-invocation state intentionally persists. Supported gate EXIT/signal trap deletes owned Simulator/private root and stops broker/servers; per-test cleanup would break protocol.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Enabled only BLEAT_RELEASE_SECRET_SCAN&&iOS; alone prepares invalidation rather than independently proving refresh. Existing accepted full Release execution remains credited, not rerun.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Release-only source review; absent by configuration from fresh Debug run. Earlier ordered Release execution is historical; fresh Release fixture compilation passed; no new Release runtime execution. Controlled stale-adapter witness is a separate Debug scenario."
       }
     },
     {
@@ -46935,6 +47806,19 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-5f9c3a84dbe8",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "After required refresh journey, exactlyone credential has both access and refresh values different from initial manifest; writes rotated canaries.",
+        "reviewedOriginalOwnership": "Capture retained until outer extraction/removal and final scanner; failure cleanup belongs to owned disposable workflow.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Stateful protocol case, not arbitrary-order independent test or generic token-validation proof; accepted Release execution preserved.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Release-only source review; absent by configuration from fresh Debug run. Earlier ordered Release execution is historical; fresh Release fixture compilation passed; no new Release runtime execution. Controlled stale-adapter witness is a separate Debug scenario."
       }
     },
     {
@@ -46985,6 +47869,19 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-c87e9af3f187",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "Idempotently removes capture directory and asserts absence; outer workflow copies both required manifests immediately before this invocation, establishing positive prior capture.",
+        "reviewedOriginalOwnership": "Outer gate trap removes owned Simulator/private root on failure; no per-test credential destruction before logout.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Standalone test could pass for already-absent directory; it is reviewed KEEP only in supported ordered Release gate.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Release-only source review; absent by configuration from fresh Debug run. Earlier ordered Release execution is historical; fresh Release fixture compilation passed; no new Release runtime execution. Controlled stale-adapter witness is a separate Debug scenario."
       }
     },
     {
@@ -47030,6 +47927,19 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-104c5ff3f088",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "After outer logout UI journey, queryall session-service Keychain items returns empty, including synchronizable-any match.",
+        "reviewedOriginalOwnership": "Dedicated disposable Simulator/real test Keychain owned by release gate, deleted by its exit/signal trap.",
+        "currentCorrection": null,
+        "scopeAndLimits": "No independent logout action here; checks session tokens only, not every credential class or native-login retention policy.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Release-only source review; absent by configuration from fresh Debug run. Earlier ordered Release execution is historical; fresh Release fixture compilation passed; no new Release runtime execution. Controlled stale-adapter witness is a separate Debug scenario."
       }
     },
     {
@@ -47079,6 +47989,19 @@
           "outcome": "follow_up",
           "reason": "Follow up with deferred gate/task cleanup or ordered secret-lifecycle protection identified in this record."
         }
+      },
+      "appContextReview20261023": {
+        "catalogID": "AUD-A-31533ae4f845",
+        "reviewedOriginalSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+        "correctedSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "currentDecision": "keep; no code change",
+        "semanticAssessment": "After explicit capture removal and later logout journey, capture directory remains absent across intervening app invocations.",
+        "reviewedOriginalOwnership": "Private capture/Keychain lifetime is bounded by outer owned Simulator/private-root teardown; prior accepted cleanup receipt is separate runtime evidence.",
+        "currentCorrection": null,
+        "scopeAndLimits": "Conditional stateful Release-only test; no standard-suite execution or newly performed scan is claimed.",
+        "historicalContext": "Original fields, findings and revision-bound execution remain preserved; this annotation supplies the current scoped decision. It does not certify complete native/task-graph drainage.",
+        "executionEvidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "executionBoundary": "Release-only source review; absent by configuration from fresh Debug run. Earlier ordered Release execution is historical; fresh Release fixture compilation passed; no new Release runtime execution. Controlled stale-adapter witness is a separate Debug scenario."
       }
     },
     {
@@ -51670,5 +52593,11 @@
     "scope": "Two new native declarations plus an enhanced existing service-failure control; historical counts and every prior record retained.",
     "evidence": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23",
     "boundary": "Deletes trusted alias artwork roots after successful account removal; does not claim indirect alias-record reclamation, denied-delete recovery or physical system-artwork assurance."
+  },
+  "currentContextReview20261023": {
+    "historicalStatusPreserved": true,
+    "currentScopedReview": "All 71 fixed historical app identities reviewed: 58 bounded KEEP and 13 corrected test gaps. The earlier root status and per-record fields are historical; current scoped decisions are appended to each selected record.",
+    "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+    "runtimeBoundary": "66 selected Debug identities passed; five Release-only cases source-reviewed. Controlled witness verified; fresh Release fixture compilation passed; no new Release runtime execution. This does not close whole-epic or physical acceptance."
   }
 }

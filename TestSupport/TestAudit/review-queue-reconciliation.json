@@ -5,22 +5,22 @@
     374
   ],
   "historicalSnapshotRevision": "58223214dba2e401d5d24e64f0b81b3c910e1061",
-  "reconciledSourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+  "reconciledSourceRevision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
   "definition": "Fixed historical review-candidate identities, not all repository tests, defects, missing tests, execution counts or physical acceptance tasks. A completed scoped review is bounded by its evidence; partial cleanup/finding or passing execution alone is not full current-context review. Original audit fields remain historical.",
   "counts": {
     "historicalCandidates": 312,
     "coreCandidates": 241,
     "appCandidates": 71,
-    "completedBeforeThisSlice": 214,
-    "completedByThisSlice": 27,
-    "completedScopedReviews": 241,
+    "completedBeforeThisSlice": 241,
+    "completedByThisSlice": 71,
+    "completedScopedReviews": 312,
     "pendingCore": 0,
-    "pendingApp": 71,
-    "pendingTotal": 71
+    "pendingApp": 0,
+    "pendingTotal": 0
   },
   "limits": [
     "Nine core records retain historical cleanup-only partial evidence; current scoped reviews are now complete and explicitly preserve their limits.",
-    "Two app pending records have earlier narrow P2 fixes and one has a later background-completion review; all three still lack full current semantic rechecks.",
+    "Three app records retain earlier narrow findings/execution as partial evidence; their current scoped reviews are complete with explicit limits. Completion of the fixed cohort is distinct from whole-epic and physical acceptance.",
     "Configured Release, physical/device and other accepted executions remain credited independently; no such acceptance is reopened by this ledger.",
     "The #438/#458 app fixes and the #459 stream case are outside these fixed cohorts and are not subtracted.",
     "No repository-wide security clearance is claimed; pre-existing zip advisories remain separate."
@@ -3271,72 +3271,126 @@
       "id": "AUD-A-f3103614053f",
       "identity": "AppModelTests/testRemotePlaybackProgressSyncEmitsOneTypedAttempt",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synthetic service and tracer; no real server metrics; subsequent Stop is intentionally outside the one-attempt oracle.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-bc8dafa98b06",
       "identity": "AppModelTests/testDownloadHTTPMetricsAreRecordedOffMainActorWithoutCacheHits",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Exercises decoded metrics-recording boundary, not actual URLSessionTaskMetrics collection/cache behavior.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-39aacc88949c",
       "identity": "AppModelTests/testTranscriptDeletionWaitsForLateTranscriptSave",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "No filesystem transcript deletion/native speech-engine proof; task.value has no independent test deadline but is not a guessed drain.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-8bf36adc353e",
       "identity": "AppModelTests/testAutomaticChapterFileIsPinnedUntilTranscriptionCompletes",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Injected transcriber with local media; no actual speech-service result; terminal/cache waits bounded.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-b85cd230fc25",
       "identity": "AppModelTests/testRestoredDownloadCallbacksMissingAccountKeepTypedStageAndBytes",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Native local URLProtocol callback; no live-server auth or physical daemon claim.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-09f8cb1a6760",
       "identity": "AppModelTests/testRereadClearsPinnedCompletionEvenWhenPlanFails",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Failure is injected plan503; checks metadata/pin cleanup intent, not background-download network.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-b2f0a730936e",
       "identity": "AppModelTests/testLocalCompletionWaitsForInFlightAutomaticWork",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Controlled service failure after release; joined caller operations, not unrelated queues.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-d61e73ebc315",
       "identity": "AppModelTests/testTransportFailureWaitsForNetworkAndDropsTransientProgress",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Manual delegate calls for progress/terminal, fake requests; not physical network or daemon evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-569fea29b3dc",
       "identity": "AppModelTests/testTransportRetryDoesNotScheduleAfterNetworkDropsDuringBackoff",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "PR447 partial evidence covers OS handoff only; explicit callback/fake sleep, no real timer/network recovery.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "OS background completion after durable retry state; not full original semantic review",
@@ -3356,240 +3410,420 @@
       "id": "AUD-A-ba0ed7ec9377",
       "identity": "AppModelTests/testRetryAfterHeaderDelaysRetryableServerReplacement",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Reconstruction shares same filesystem; does not simulate real elapsed120seconds, server or process restart.",
+        "current_correction": "Release retry gate and invalidate ephemeral session on every exit; bounded actual callback return before model/root cleanup; bounded gate admission with caller diagnostics.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-b041657601bb",
       "identity": "AppModelTests/testPauseIntentPrecedesConcurrentTerminalCallback",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Real native callback delivery through URLProtocol, injected pause checkpoint; no physical transfer claim.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-f0514d112a2a",
       "identity": "AppModelTests/testPauseStorageFailureIsVisibleAndDoesNotResume",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Controlled persistence failure; finalized entry state/placement asserted but not separate byte-content comparison.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-2fa08ca018dc",
       "identity": "AppModelTests/testLateCancelledTaskCallbackDoesNotFailContinuedDownload",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Native old callback delivery with synthetic response; no real OS resume/physical background evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-ca76784a5b3d",
       "identity": "AppModelTests/testNetworkPathUpdateResumesInterruptedDownloadAfterOfflineRelaunch",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "AppModel wiring through fake path stream, no real NWPathMonitor/daemon.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-d1de5310f4fd",
       "identity": "AppModelTests/testLargeCellularDownloadsPreserveEveryPendingConfirmation",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Guard returns when policy selection unsupported; credit semantic assertions only on supported iOS, not a counted macOS acceptance pass.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-d43571547741",
       "identity": "AppModelTests/testMediaServicesResetRestoresPlayingAndPausedIntent",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Calls production reset handler directly; fake audio-session activation. Not actual media-daemon reset or physical output.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-33ceeeb3bdc8",
       "identity": "AppModelTests/testNaturalBookEndClearsPlayerPresentationAndSystemNowPlaying",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Actual local AVPlayer natural end; injected system-info publisher, no physical lock-screen visibility proof.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-9befbe3000a2",
       "identity": "AppModelTests/testNaturalStreamedBookEndSyncsAndClosesSession",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Fake service proves orchestration, not remote-server session acceptance or network completion.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-5f79d3db78e9",
       "identity": "AppModelTests/testNaturalCompletionWaitsForPendingSyncBeforeFinalPositionAndClose",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Local AVPlayer + controlled service sync; does not prove real server ordering.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-237119884166",
       "identity": "AppModelTests/testRestartAndAccountSwitchSkipSyncOfNaturallyClosedSessions",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Same synthetic account/session service; explicit closing identity/count test, not physical account switch.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-0aed5c2b14d5",
       "identity": "AppModelTests/testMediaServicesResetRebuildsAcrossAudioFileBoundary",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Direct reset handler and fake activation, local native queue; no media-daemon reset evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-a13faa56de0e",
       "identity": "AppModelTests/testNetworkPathUpdateRetriesPendingLocalSessionsWithoutBlockingLaunch",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Source-reviewed app wiring and durable local state; no actual network/remote sync claim.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-c4f49c0f4d1f",
       "identity": "AppModelTests/testQualityOnlyAndDuplicatePathsDoNotScheduleModelRecovery",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Bounded app-handler scope; no real NWPathMonitor/load/physical network evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-ce1f0f16dbaa",
       "identity": "AppModelTests/testLiveConnectionAttemptsTraceEndpointRoleRetryAndOutcome",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synthetic live-events service/tracer, not socket/collector/server; no string matching.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-6b0a476a5592",
       "identity": "AppModelTests/testConstrainedPathControlsLiveUpdateLifecycleWithoutBlockingREST",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Fake path/REST/live service, local AVPlayer; no physical cellular/LowDataMode or audible route proof.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-787d21d32791",
       "identity": "AppModelTests/testPendingLocalSessionUploadDoesNotBlockLaunch",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Controlled service upload; no real network stall/transport timeout proof.",
+        "current_correction": "Register gate-release and actual launch/upload terminal settlement before resource cleanup; retain launch budget and exact pending upload assertions.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-d2d7bfd79563",
       "identity": "AppModelTests/testFetchedCallbackTimeoutKeepsRetryBlockedUntilDrain",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synthetic CloudKit callback/drain service, not real CloudKit/device.",
+        "current_correction": "Release held private-cloud drain on early exit; bounded request admission and cancellation return; retain typed timeout, stopping and blocked retry assertions.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-dc6beab0fb21",
       "identity": "AppModelTests/testLiveProgressPatchesOneItemWithoutReloadingBrowsing",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Three emitted updates are a synthetic stream/coalescing scenario, not a live-server or physical subscription test.",
+        "current_correction": "Disable live updates on all method exits including guarded shelf return; retain exact state/request deltas.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-8a47ca94b5e9",
       "identity": "AppModelTests/testLiveProgressRefreshesOnlyAffectedOpenDetail",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "No real socket/server or account persistence claim.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-bd4b54bd4c5e",
       "identity": "AppModelTests/testLiveRefreshStaysSuspendedAcrossBackgroundNetworkRecovery",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Background is model lifecycle injection, not OS suspension or physical network evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-654080a16eac",
       "identity": "AppModelTests/testLiveRefreshCancelsQueuedCatalogChangeOnBackground",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Completion proves the queued batch returned; not arbitrary task-graph drainage.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-2141873a17d4",
       "identity": "AppModelTests/testLiveRefreshStopsInFlightCatalogCascadeOnBackground",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Injected service cascade only; no live server.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-d9e021518ef2",
       "identity": "AppModelTests/testLiveProgressDoesNotReplaceNewlySelectedDetail",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Does not assert new-selection network latency or every item field independently beyond structural detail equality.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-65d7c7511b86",
       "identity": "AppModelTests/testLiveProgressDoesNotCancelInFlightCatalogRefresh",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Merge/coalescing scope, not all refresh scheduling cases.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-484af081983b",
       "identity": "AppModelTests/testLiveProgressInsertsReordersAndHidesContinueListeningItem",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "First shelf total2 is checked; second removal checks items, not a broader server shelf protocol.",
+        "current_correction": "Disable live updates on every method exit; retain exact insertion/order/hide and request assertions.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-ab2f845cdf79",
       "identity": "AppModelTests/testLiveProgressFetchesOnlyMissingItemToCreateContinueListening",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synthetic missing-item recovery, not live-server/API compatibility.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-920b114f84af",
       "identity": "AppModelTests/testLiveProgressRefreshesFilteredPagesOnlyWhenMembershipChanges",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One progress filter and one membership transition, not all filter modes.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-277cf7888de6",
       "identity": "AppModelTests/testLiveProgressClearsRemovedProgressFromOpenDetail",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "This intentionally tests missing progress, not corruption or every progress field.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-6eff52d3f3e7",
       "identity": "AppModelTests/testLiveProgressEchoDoesNotRefreshStreamedPlayback",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Prepared-state witness is not physical advancing-audio/route evidence.",
+        "current_correction": "Register owned player stop/live cancellation before fixture file/default cleanup via LIFO blocks; preserve consumed-echo no-refresh assertions.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "negative-refresh P2: consumed event plus synchronous scheduling-count oracle",
@@ -3608,16 +3842,28 @@
       "id": "AUD-A-a80d9b215ad7",
       "identity": "AppModelTests/testLiveProgressSuppressionIsScopedToPlaybackAccount",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One cross-account suppression boundary, with in-memory fake service and generated media.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-693a1222ca6d",
       "identity": "AppModelTests/testLiveProgressUpdatesFinishedStateImmediately",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Paused snapshot comparison uses .01seconds/.001rate; does not establish advancing clock, server or hardware behavior.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "negative-refresh P2: consumed event plus synchronous scheduling-count oracle",
@@ -3636,136 +3882,238 @@
       "id": "AUD-A-e8184fe3c7ce",
       "identity": "AppModelTests/testSeriesDownloadPreparationLoadsEveryPage",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Pagination/accumulation scope only; does not execute download transfers.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-2e12f7b1c501",
       "identity": "AppModelTests/testConcurrentSeriesPreparationsQueueGlobalConfirmationsByCompletion",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One-second modal predicates are bounded state waits; no real transfer or global OS queue proof.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-bc8b4cc2cb00",
       "identity": "AppModelTests/testConfirmedSeriesSerializeSharedBookHandoffPerAccount",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Current assertions establish admission serialization, not completed downstream download handoff or failure cleanup.",
+        "current_correction": "Release both gates on early exit and acknowledge both awaited series submissions via active-key retirement; preserve exact serialized handoff assertions.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-73a4d8363725",
       "identity": "AppModelTests/testBookDeletionSupersedesInFlightFailedPlaybackRetry",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One/two opens are explicitly allowed race paths and matched by exact corresponding close lists; does not prove a unique open cardinality or physical playback.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-da1186522406",
       "identity": "AppModelTests/testSetFinishedNewerCommitRejectsOlderDetailReconciliation",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "False-or-nil progress is accepted intentionally by oracle; proves rejection of obsolete finished state, not preservation of every progress field.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-9fa0913e9070",
       "identity": "AppModelTests/testSetFinishedReconciliationDoesNotRestoreObsoleteSearch",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Query ownership/count scope, not every search-result field or network cancellation mechanism.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-bc10091ed6c9",
       "identity": "AppModelTests/testCompletedReconciliationDoesNotCancelLaterUserSearch",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Loaded search and query are checked, not exact full result content.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-ac2df8b20a9f",
       "identity": "AppModelTests/testCancelledReconciliationSearchPreservesLoadedResults",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synthetic403 and cancelled older reconciliation; not all operational errors or live search transports.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-9c5db95498ea",
       "identity": "AppModelTests/testSetFinishedReconciliationFailureDoesNotReverseCommitOrAlert",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Checks committed bit and mutation failure channel, not all possible failure presenters.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-8dcf64c2a7f7",
       "identity": "AppModelTests/testSetFinishedUsesRemoteOnlyDetailReconciliation",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Remote-only fetch count is1; diagnostic containment is existence, not an exactly-once log assertion.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-6908581917ff",
       "identity": "AppModelTests/testSetFinishedReconciliationFailuresRecordTypedDiagnostics",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Checks loaded search state, not exact prior search payload; logs are required-presence rather than exclusivity.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-a15fb8f11595",
       "identity": "AppModelTests/testCarPlayCellularCancelAndLateCallbacksPreserveNextRequest",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "The helper can disconnect before late Tasks run, invalidating them and masking an adapter regression; no physical CarPlay claim.",
+        "current_correction": "DEBUG exact +2 actual stale action returns before negative request-state oracle.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-8f0895b3561b",
       "identity": "AppModelTests/testCarPlayCellularReconnectAndDelayedPresentationKeepDecision",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Synchronous presentation callback generation handling is partly checked; later success does not uniquely acknowledge the stale action return or transient clobbering.",
+        "current_correction": "DEBUG exact +1 actual old Cancel return before replacement decision oracle.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-fa60d78c388b",
       "identity": "AppModelTests/testCarPlayCellularAccountRemovalDismissesAndRejectsOldActions",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Does not establish that late registered adapters rejected work before teardown generation invalidation.",
+        "current_correction": "DEBUG exact +2 actual stale action returns before empty state oracle.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-0c89695330fa",
       "identity": "AppModelTests/testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Positive iOS27 branch was NOT executed in this review; no runtime failure or native27 acceptance is claimed. The source-level unwaited expectation is the finding.",
+        "current_correction": "Remove unwired expectation; disconnect native coordinators and disable live updates on every exit; retain positive native template push witness.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-c09810d447f5",
       "identity": "AppModelTests/testCarPlaySearchNativeRowsSurviveCapacityChanges",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Native templates under injected limits, not hardware head-unit capability or every row kind.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-fd64d5faa505",
       "identity": "AppModelTests/testCarPlaySearchAuthorPopCompletesUncooperativeLoad",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Early pop-completion behavior is proven; post-response suppression and failure cleanup are not fully established.",
+        "current_correction": "Preserve early public completion; DEBUG acknowledge actual selected task return before late negative oracle. Failure cleanup distinguishes outer adapter rejection from admitted inner task via callback/admission counters.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "#393 fixed three neighboring author fixture identities; evidence explicitly leaves this gated case and callback synchronization open",
@@ -3780,48 +4128,84 @@
       "id": "AUD-A-cff890f0aac9",
       "identity": "AppModelTests/testCarPlaySearchRetryAndNoMatchesRemainExplicit",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One typed retry/empty path; no live-server or hardware search evidence.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-8840b87e0c05",
       "identity": "AppModelTests/testCarPlaySearchRapidQueriesSupersedeDebounceWithoutRequests",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Proves cancellation before debounce sends requests for these inputs, not every arrival timing or physical keyboard behavior.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-fa2c3526c02c",
       "identity": "AppModelTests/testCarPlaySearchInvalidationCancelsDelayedDetailAndStreamPlayback",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Unlike author-pop negative case, terminal outcome changes fromnil tosuperseded after release. Not physical CarPlay/audio routing.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-de3733d19aea",
       "identity": "AppModelTests/testCarPlayPresentationRetainsItemsAndSeedsReplacementArtwork",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Dimensions/identity prove install/reuse, not pixel identity or physical visual contrast; bottom-only disconnect is a cleanup limitation, not a newly demonstrated leaked held task.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-b77c9b0aea98",
       "identity": "AppModelTests/testCarPlayCompletedDownloadIsPreferredOnline",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Local preference/navigation scope; does not prove physical playback, every verified byte or offline network behavior.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-aacdb75106c2",
       "identity": "FrameworkCallbackTests/testActualPlayerKVOCallbackRunsOffMainActor",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "One real volume KVO boundary, not all player keys, removal races or physical outputs.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "actual hosted Xcode test through runner, not retired-KVO callback completion review",
@@ -3835,24 +4219,42 @@
       "id": "AUD-A-6b4f6fa35042",
       "identity": "NetworkPathTests/testStaleProbeCannotPromoteEndpointOrReviveStoppedSubscription",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "A schedule where path2/stop occurs before subscription enters endpoint wait lets subscription return before oldprobe processes. This is a test-oracle gap, not an observed endpoint promotion bug.",
+        "current_correction": "DEBUG actual probe-processing returns +1/+2 are acknowledged before stale/stopped negative state assertions; original Release scenario remains.",
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-538fef482652",
       "identity": "NetworkPathTests/testNetworkDiagnosticsContainOnlyTypedReasonAndStage",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Factory only accepts typed reason/stage, confirmed in Diagnostics.swift494. This is not adversarial payload redaction or all diagnostic-production coverage.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": null
     },
     {
       "id": "AUD-A-1221dc516879",
       "identity": "ReleaseSecretLeakageTests/testCaptureInitialTokensAndForceRefresh",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Enabled only BLEAT_RELEASE_SECRET_SCAN&&iOS; alone prepares invalidation rather than independently proving refresh. Existing accepted full Release execution remains credited, not rerun.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
@@ -3867,8 +4269,14 @@
       "id": "AUD-A-5f9c3a84dbe8",
       "identity": "ReleaseSecretLeakageTests/testCaptureRotatedTokens",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Stateful protocol case, not arbitrary-order independent test or generic token-validation proof; accepted Release execution preserved.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
@@ -3883,8 +4291,14 @@
       "id": "AUD-A-c87e9af3f187",
       "identity": "ReleaseSecretLeakageTests/testRemovePrivateCapture",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Standalone test could pass for already-absent directory; it is reviewed KEEP only in supported ordered Release gate.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
@@ -3899,8 +4313,14 @@
       "id": "AUD-A-104c5ff3f088",
       "identity": "ReleaseSecretLeakageTests/testLogoutRemovedSessionCredentials",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "No independent logout action here; checks session tokens only, not every credential class or native-login retention policy.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
@@ -3915,8 +4335,14 @@
       "id": "AUD-A-31533ae4f845",
       "identity": "ReleaseSecretLeakageTests/testPrivateCaptureRemainsRemovedAfterLogout",
       "queue": "app-semantic",
-      "status": "current_context_review_pending",
-      "evidence": null,
+      "status": "completed_scoped_review",
+      "evidence": {
+        "reviewed_source_revision": "59b414e3069e73687f57027e620f2e4c74cd0b6f",
+        "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
+        "scope_and_limits": "Conditional stateful Release-only test; no standard-suite execution or newly performed scan is claimed.",
+        "current_correction": null,
+        "current_input_rationale": "Original source/helper review plus the bounded current correction review; execution credit is configuration-specific and does not imply physical acceptance."
+      },
       "partialEvidence": [
         {
           "scope": "configured end-to-end Release native-auth scan and successful cleanup; does not recertify each original failure-cleanup finding",
@@ -3988,6 +4414,21 @@
         "pendingTotal": 98
       },
       "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372"
+    },
+    {
+      "sourceRevision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
+      "counts": {
+        "historicalCandidates": 312,
+        "coreCandidates": 241,
+        "appCandidates": 71,
+        "completedBeforeThisSlice": 214,
+        "completedByThisSlice": 27,
+        "completedScopedReviews": 241,
+        "pendingCore": 0,
+        "pendingApp": 71,
+        "pendingTotal": 71
+      },
+      "evidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372"
     }
   ],
   "identityResolution": "identity is the fixed historical cohort identity; optional currentIdentity names a renamed current declaration. Stable IDs and historical identities are preserved."

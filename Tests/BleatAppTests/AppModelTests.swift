@@ -7688,7 +7688,9 @@ final class AppModelTests: XCTestCase {
                 "BleatRetryAfter-\(UUID().uuidString)",
                 isDirectory: true
             )
-        defer { try? FileManager.default.removeItem(at: root) }
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: root)
+        }
         let account = try fixtureAccount()
         let detail = fixtureBookDetail(
             item: fixtureBook(
@@ -7762,6 +7764,23 @@ final class AppModelTests: XCTestCase {
             range: range,
             validator: nil
         ).encode()
+        let callbackCleanupBaseline = model
+            .taskCompletionProcessingSequenceForTesting
+        addTeardownBlock { @MainActor in
+            await retryDelayGate.release()
+            session.invalidateAndCancel()
+            await assertEventually(
+                "owned Retry-After callback settlement",
+                timeout: .seconds(30),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting
+                        > callbackCleanupBaseline
+                })
+            await model.removeAll()
+        }
         task.resume()
 
         await retryDelayGate.waitUntilEntered()
@@ -7780,6 +7799,21 @@ final class AppModelTests: XCTestCase {
             backgroundSessionIdentifier:
                 "bleat.tests.retry-after-relaunch.\(UUID().uuidString)"
         )
+        addTeardownBlock { @MainActor in
+            await retryDelayGate.release()
+            session.invalidateAndCancel()
+            await assertEventually(
+                "original Retry-After callback returned before shared-store cleanup",
+                timeout: .seconds(30),
+                observed: {
+                    "completion sequence=\(model.taskCompletionProcessingSequenceForTesting)"
+                },
+                condition: {
+                    model.taskCompletionProcessingSequenceForTesting
+                        > callbackCleanupBaseline
+                })
+            await relaunched.removeAll()
+        }
         await relaunched.start(accounts: [account])
         let relaunchedDescriptors =
             await relaunched.scheduledTransferDescriptorsForTesting()
@@ -13651,13 +13685,15 @@ final class AppModelTests: XCTestCase {
     func testPendingLocalSessionUploadDoesNotBlockLaunch() async throws {
         let suiteName = "PendingLocalSessionUpload.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "BleatHungLocalSessionSync-\(UUID().uuidString)",
                 isDirectory: true
             )
-        defer {
+        addTeardownBlock {
             try? FileManager.default.removeItem(at: root)
         }
         let account = try fixtureAccount()
@@ -13687,9 +13723,36 @@ final class AppModelTests: XCTestCase {
         )
         let uploadStarted = operations.expectation(
             for: .localSessionSyncStarted(account.id))
+        let launchReturned = Mutex(false)
         let launchTask = Task { @MainActor in
             await model.start()
+            launchReturned.withLock { $0 = true }
             launchFinished.fulfill()
+        }
+
+        addTeardownBlock { @MainActor in
+            await syncGate.release()
+            launchTask.cancel()
+            await assertEventually(
+                "owned launch task settlement", timeout: .seconds(30),
+                observed: { "returned=\(launchReturned.withLock { $0 })" },
+                condition: { launchReturned.withLock { $0 } })
+            if launchReturned.withLock({ $0 }) {
+                await launchTask.value
+            }
+            await assertEventually(
+                "admitted local-session upload settlement",
+                timeout: .seconds(30),
+                observed: {
+                    "started=\(operations.count(of: .localSessionSyncStarted(account.id))); "
+                        + "completed=\(operations.count(of: .localSessionSyncCompleted(account.id)))"
+                },
+                condition: {
+                    operations.count(of: .localSessionSyncCompleted(account.id))
+                        >= operations.count(
+                            of: .localSessionSyncStarted(account.id))
+                })
+            model.setLiveUpdatesActive(false)
         }
 
         await fulfillment(of: [launchFinished], timeout: 2)
@@ -13708,7 +13771,9 @@ final class AppModelTests: XCTestCase {
             for: .localSessionSyncCompleted(account.id))
         await syncGate.release()
         await fulfillment(of: [uploadCompleted], timeout: 30)
-        await launchTask.value
+        if launchReturned.withLock({ $0 }) {
+            await launchTask.value
+        }
     }
 
     func testStartWithoutSavedAccountShowsLogin() async {
@@ -13838,6 +13903,21 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(service: service)
 
+        addTeardownBlock { @MainActor in
+            await drainGate.release()
+            if await drainGate.hasEntered {
+                await assertEventually(
+                    "timed-out fetched callback leaves stopping state",
+                    timeout: .seconds(30),
+                    observed: { "state=\(model.privateCloudState)" },
+                    condition: {
+                        if case .stopping = model.privateCloudState {
+                            return false
+                        }
+                        return true
+                    })
+            }
+        }
         await model.start()
         await drainGate.waitUntilEntered()
         guard case .stopping(let presented) = model.privateCloudState else {
@@ -13852,17 +13932,37 @@ final class AppModelTests: XCTestCase {
             await service.privateCloudSynchronizationRequestCount()
         XCTAssertEqual(requestCount, 1)
 
-        var cancellationFinished = false
+        let cancellationFinished = Mutex(false)
         let cancellation = Task { @MainActor in
             await model.cancelPrivateCloudSynchronization()
-            cancellationFinished = true
+            cancellationFinished.withLock { $0 = true }
+        }
+        addTeardownBlock { @MainActor in
+            await drainGate.release()
+            cancellation.cancel()
+            await assertEventually(
+                "owned CloudKit cancellation settlement", timeout: .seconds(30),
+                observed: {
+                    "returned=\(cancellationFinished.withLock { $0 })"
+                },
+                condition: { cancellationFinished.withLock { $0 } })
+            if cancellationFinished.withLock({ $0 }) {
+                await cancellation.value
+            }
         }
         await service.waitForPrivateCloudDrainRequests(2)
-        XCTAssertFalse(cancellationFinished)
+        XCTAssertFalse(cancellationFinished.withLock { $0 })
 
         await drainGate.release()
-        await cancellation.value
-        XCTAssertTrue(cancellationFinished)
+        await assertEventually(
+            "CloudKit cancellation returns after drain release",
+            timeout: .seconds(30),
+            observed: { "returned=\(cancellationFinished.withLock { $0 })" },
+            condition: { cancellationFinished.withLock { $0 } })
+        if cancellationFinished.withLock({ $0 }) {
+            await cancellation.value
+        }
+        XCTAssertTrue(cancellationFinished.withLock { $0 })
         guard case .failed(let final) = model.privateCloudState else {
             return XCTFail("Expected timeout after callback drainage")
         }
@@ -14584,6 +14684,7 @@ final class AppModelTests: XCTestCase {
             service: service,
             operationObserver: { operations.record($0) }
         )
+        defer { model.setLiveUpdatesActive(false) }
         try await startLiveRefreshTest(
             model, service: service, operations: operations)
         await model.search(query: "Book")
@@ -14923,6 +15024,7 @@ final class AppModelTests: XCTestCase {
             service: service,
             operationObserver: { operations.record($0) }
         )
+        defer { model.setLiveUpdatesActive(false) }
         try await startLiveRefreshTest(
             model, service: service, operations: operations)
         let baseline = await service.liveRefreshRequestCounts()
@@ -15097,7 +15199,7 @@ final class AppModelTests: XCTestCase {
 
     func testLiveProgressEchoDoesNotRefreshStreamedPlayback() async throws {
         let fixture = try playbackRecoveryFixture()
-        defer { fixture.cleanUp() }
+        addTeardownBlock { @MainActor in fixture.cleanUp() }
         let account = try fixtureAccount()
         let service = TestAppService(
             activeAccount: .success(account),
@@ -15114,6 +15216,10 @@ final class AppModelTests: XCTestCase {
             service: service,
             operationObserver: { operations.record($0) }
         )
+        addTeardownBlock { @MainActor in
+            model.setLiveUpdatesActive(false)
+            await model.playback.stop()
+        }
         try await startLiveRefreshTest(
             model, service: service, operations: operations)
         await model.loadBookDetail(fixture.detail.summary)
@@ -18404,6 +18510,23 @@ final class AppModelTests: XCTestCase {
             name: "Second Series"
         )
 
+        addTeardownBlock { @MainActor in
+            await firstDetailGate.release()
+            await secondDetailGate.release()
+            await assertEventually(
+                "owned series submission settlement", timeout: .seconds(30),
+                observed: {
+                    "firstActive=\(model.isSeriesDownloadActive(firstDestination, accountID: account.id)); "
+                        + "secondActive=\(model.isSeriesDownloadActive(secondDestination, accountID: account.id))"
+                },
+                condition: {
+                    !model.isSeriesDownloadActive(
+                        firstDestination, accountID: account.id)
+                        && !model.isSeriesDownloadActive(
+                            secondDestination, accountID: account.id)
+                })
+            model.setLiveUpdatesActive(false)
+        }
         await model.loadSeries(firstDestination)
         XCTAssertTrue(
             model.beginSeriesDownloadPreparation(
@@ -18441,6 +18564,19 @@ final class AppModelTests: XCTestCase {
         let requestsAfterRelease = await service.bookDetailRequests()
         XCTAssertEqual(requestsAfterRelease.count, 2)
         await secondDetailGate.release()
+        await assertEventually(
+            "both serialized series submissions complete",
+            timeout: .seconds(30),
+            observed: {
+                "firstActive=\(model.isSeriesDownloadActive(firstDestination, accountID: account.id)); "
+                    + "secondActive=\(model.isSeriesDownloadActive(secondDestination, accountID: account.id))"
+            },
+            condition: {
+                !model.isSeriesDownloadActive(
+                    firstDestination, accountID: account.id)
+                    && !model.isSeriesDownloadActive(
+                        secondDestination, accountID: account.id)
+            })
     }
 
     func testLocalResetRejectsSeriesWorkStartedAfterCancellationSnapshot()
@@ -25581,10 +25717,28 @@ final class AppModelTests: XCTestCase {
                 phone.reconcile([.cellular(second)])
                 phone.finish(oldPhoneEntry)
                 XCTAssertEqual(phone.active?.alert, .cellular(second))
+                #if DEBUG
+                    let staleActionBaseline = coordinator
+                        .cellularActionCompletionSequenceForTesting
+                #endif
                 (try cellularActions(first))[0].handler(
                     (try cellularActions(first))[0])
                 (try cellularActions(first))[1].handler(
                     (try cellularActions(first))[1])
+                #if DEBUG
+                    await assertEventually(
+                        "stale cellular action adapters returned",
+                        timeout: .seconds(30),
+                        observed: {
+                            "sequence=\(coordinator.cellularActionCompletionSequenceForTesting); "
+                                + "expected=\(staleActionBaseline + 2)"
+                        },
+                        condition: {
+                            coordinator
+                                .cellularActionCompletionSequenceForTesting
+                                == staleActionBaseline + 2
+                        })
+                #endif
                 await assertEventually(
                     "late cellular callbacks finish without changing queued request",
                     timeout: .seconds(2),
@@ -25714,8 +25868,26 @@ final class AppModelTests: XCTestCase {
                 let replacement = try XCTUnwrap(
                     presenter.presented)
                 completion(.succeeded)
+                #if DEBUG
+                    let staleActionBaseline = coordinator
+                        .cellularActionCompletionSequenceForTesting
+                #endif
                 (try cellularActions(old))[1].handler(
                     (try cellularActions(old))[1])
+                #if DEBUG
+                    await assertEventually(
+                        "stale cellular action adapters returned",
+                        timeout: .seconds(30),
+                        observed: {
+                            "sequence=\(coordinator.cellularActionCompletionSequenceForTesting); "
+                                + "expected=\(staleActionBaseline + 1)"
+                        },
+                        condition: {
+                            coordinator
+                                .cellularActionCompletionSequenceForTesting
+                                == staleActionBaseline + 1
+                        })
+                #endif
                 await assertEventually(
                     "late presentation callback leaves replacement visible",
                     timeout: .seconds(2),
@@ -25797,10 +25969,28 @@ final class AppModelTests: XCTestCase {
                     presenter.presented == nil
                 }
                 XCTAssertTrue(dismissed)
+                #if DEBUG
+                    let staleActionBaseline = coordinator
+                        .cellularActionCompletionSequenceForTesting
+                #endif
                 (try cellularActions(alert))[0].handler(
                     (try cellularActions(alert))[0])
                 (try cellularActions(alert))[1].handler(
                     (try cellularActions(alert))[1])
+                #if DEBUG
+                    await assertEventually(
+                        "stale cellular action adapters returned",
+                        timeout: .seconds(30),
+                        observed: {
+                            "sequence=\(coordinator.cellularActionCompletionSequenceForTesting); "
+                                + "expected=\(staleActionBaseline + 2)"
+                        },
+                        condition: {
+                            coordinator
+                                .cellularActionCompletionSequenceForTesting
+                                == staleActionBaseline + 2
+                        })
+                #endif
                 await assertEventually(
                     "late account-removed actions are rejected",
                     timeout: .seconds(2),
@@ -25845,10 +26035,12 @@ final class AppModelTests: XCTestCase {
                     activeAccount: .success(account),
                     libraries: .success([library]),
                     firstPage: .success(fixturePage(libraryID: library.id))))
+            defer { model.setLiveUpdatesActive(false) }
             await model.start()
             let presenter = TestCarPlayPresenter()
             let disabled = CarPlayCoordinator(
                 model: model, searchEnabled: { false })
+            defer { disabled.disconnect() }
             disabled.connect(presenter)
             await disabled.waitForLibraryLoad()
             disabled.openSearch()
@@ -25861,6 +26053,7 @@ final class AppModelTests: XCTestCase {
             disabled.disconnect()
             let enabled = CarPlayCoordinator(
                 model: model, searchEnabled: { true })
+            defer { enabled.disconnect() }
             enabled.connect(presenter)
             await enabled.waitForLibraryLoad()
             let enabledRoot = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
@@ -25873,9 +26066,6 @@ final class AppModelTests: XCTestCase {
                     enabledRoot.templates.last as? CPGridTemplate)
                 XCTAssertEqual(search.tabTitle, "")
                 XCTAssertNotNil(search.tabImage)
-                let opened = expectation(
-                    description: "Search tab opens keyboard")
-                opened.assertForOverFulfill = true
                 enabledRoot.select(search)
                 enabled.tabBarTemplate(enabledRoot, didSelect: search)
                 await assertEventually(
@@ -26124,6 +26314,46 @@ final class AppModelTests: XCTestCase {
                 coordinator: LibrarySearchCoordinator(debounceDuration: .zero),
                 isCurrent: { true }, maximumItems: { 5 },
                 push: { pushed.append($0) }, play: { _ in })
+            #if DEBUG
+                let selectionCompletionBaseline = controller
+                    .selectionTaskCompletionSequenceForTesting
+                let selectionAdmissionBaseline = controller
+                    .selectionTaskAdmissionSequenceForTesting
+                let selectionInvoked = Mutex(false)
+                let selectionCallbackReturned = Mutex(false)
+            #endif
+            addTeardownBlock { @MainActor in
+                await gate.release()
+                controller.invalidate()
+                #if DEBUG
+                    if selectionInvoked.withLock({ $0 }) {
+                        await assertEventually(
+                            "owned author selection callback returned",
+                            timeout: .seconds(30),
+                            observed: {
+                                "callback returned=\(selectionCallbackReturned.withLock { $0 })"
+                            },
+                            condition: {
+                                selectionCallbackReturned.withLock { $0 }
+                            })
+                        let admitted =
+                            controller
+                            .selectionTaskAdmissionSequenceForTesting
+                            - selectionAdmissionBaseline
+                        await assertEventually(
+                            "owned author selection task returned",
+                            timeout: .seconds(30),
+                            observed: {
+                                "sequence=\(controller.selectionTaskCompletionSequenceForTesting)"
+                            },
+                            condition: {
+                                controller
+                                    .selectionTaskCompletionSequenceForTesting
+                                    == selectionCompletionBaseline + admitted
+                            })
+                    }
+                #endif
+            }
             let rows = await carPlaySearchRows(controller, query: "Author")
             let selected = expectation(
                 description: "Pop completes before response")
@@ -26131,8 +26361,14 @@ final class AppModelTests: XCTestCase {
             controller.searchTemplate(
                 controller.template, selectedResult: try XCTUnwrap(rows.first)
             ) {
+                #if DEBUG
+                    selectionCallbackReturned.withLock { $0 = true }
+                #endif
                 selected.fulfill()
             }
+            #if DEBUG
+                selectionInvoked.withLock { $0 = true }
+            #endif
             let entered = await gate.waitUntilEntered(timeout: .seconds(2))
             XCTAssertTrue(entered)
             let list = try XCTUnwrap(pushed.last as? CPListTemplate)
@@ -26142,6 +26378,19 @@ final class AppModelTests: XCTestCase {
                 })
             await fulfillment(of: [selected], timeout: 2)
             await gate.release()
+            #if DEBUG
+                await assertEventually(
+                    "late author selection processing returned",
+                    timeout: .seconds(30),
+                    observed: {
+                        "sequence=\(controller.selectionTaskCompletionSequenceForTesting); "
+                            + "expected=\(selectionCompletionBaseline + 1)"
+                    },
+                    condition: {
+                        controller.selectionTaskCompletionSequenceForTesting
+                            == selectionCompletionBaseline + 1
+                    })
+            #endif
             await assertEventually(
                 "late author response remains suppressed after navigation pop",
                 timeout: .seconds(2),
@@ -29563,8 +29812,6 @@ private actor TestAppService: AppServicing {
     private let privateCloudSyncGate: AsyncGate?
     private let privateCloudDrainGate: AsyncGate?
     private var privateCloudDrainRequests = 0
-    private var privateCloudDrainWaiters:
-        [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private let accountsGate: AsyncGate?
     private let activeAccountGate: AsyncGate?
     private let bookmarksGate: AsyncGate?
@@ -30208,21 +30455,22 @@ private actor TestAppService: AppServicing {
 
     func waitForPrivateCloudSynchronizationDrain() async {
         privateCloudDrainRequests += 1
-        let ready = privateCloudDrainWaiters.filter {
-            privateCloudDrainRequests >= $0.count
-        }
-        privateCloudDrainWaiters.removeAll {
-            privateCloudDrainRequests >= $0.count
-        }
-        for waiter in ready { waiter.continuation.resume() }
         await privateCloudDrainGate?.enterAndWait()
     }
 
-    func waitForPrivateCloudDrainRequests(_ count: Int) async {
-        if privateCloudDrainRequests >= count { return }
-        await withCheckedContinuation {
-            privateCloudDrainWaiters.append((count, $0))
-        }
+    func privateCloudDrainRequestCount() -> Int {
+        privateCloudDrainRequests
+    }
+
+    func waitForPrivateCloudDrainRequests(
+        _ count: Int, file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        await assertEventually(
+            "private CloudKit drain request admission", timeout: .seconds(30),
+            observed: {
+                "requests=\(await self.privateCloudDrainRequestCount()); expected>=\(count)"
+            }, file: file, line: line,
+            condition: { await self.privateCloudDrainRequestCount() >= count })
     }
 
     func setPrivateCloudSyncEnabled(
@@ -31480,28 +31728,27 @@ private actor GatedClosePlaybackDiagnosticRecorder: DiagnosticRecording {
 
 private actor RetryDelayGate {
     private var delay: Duration?
-    private var enteredContinuations: [CheckedContinuation<Void, Never>] = []
     private var releaseContinuations: [CheckedContinuation<Void, Never>] = []
     private var released = false
 
     func recordAndWait(_ duration: Duration) async {
         delay = duration
-        let continuations = enteredContinuations
-        enteredContinuations.removeAll()
-        for continuation in continuations {
-            continuation.resume()
-        }
         guard !released else { return }
         await withCheckedContinuation { continuation in
             releaseContinuations.append(continuation)
         }
     }
 
-    func waitUntilEntered() async {
-        guard delay == nil else { return }
-        await withCheckedContinuation { continuation in
-            enteredContinuations.append(continuation)
-        }
+    func waitUntilEntered(
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        await assertEventually(
+            "Retry-After sleeper admission", timeout: .seconds(30),
+            observed: {
+                "delay=\(String(describing: await self.observedDelay()))"
+            },
+            file: file, line: line,
+            condition: { await self.observedDelay() != nil })
     }
 
     func observedDelay() -> Duration? {

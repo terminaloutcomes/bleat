@@ -157,6 +157,10 @@ final class NetworkPathTests: XCTestCase {
         let probe = NetworkProbeGate()
         let (service, account) = try await serviceFixture(
             input: input.stream, recorder: recorder, probe: probe)
+        #if DEBUG
+            let probeCompletionBaseline =
+                await service.networkProbeProcessingSequenceForTesting
+        #endif
         input.continuation.yield(state())
         await assertEventually(
             "first local endpoint probe entry",
@@ -191,11 +195,35 @@ final class NetworkPathTests: XCTestCase {
         await fulfillment(of: [classified], timeout: 5)
         await service.stopLiveUpdates(for: account.id)
         await probe.release(2, success: false)
+        #if DEBUG
+            await assertEventually(
+                "newer endpoint probe processing returns while old probe is held",
+                timeout: .seconds(5),
+                observed: {
+                    "completed probes=\(await service.networkProbeProcessingSequenceForTesting)"
+                },
+                condition: {
+                    await service.networkProbeProcessingSequenceForTesting
+                        == probeCompletionBaseline + 1
+                })
+        #endif
         let optionalRouter = await service.serverEndpointRouter()
         let router = try XCTUnwrap(optionalRouter)
         try await waitForAvailability(
             .temporarilyUnavailable, router: router, account: account)
         await probe.release(1, success: true)
+        #if DEBUG
+            await assertEventually(
+                "retired endpoint probe processing returns before stale-result assertions",
+                timeout: .seconds(5),
+                observed: {
+                    "completed probes=\(await service.networkProbeProcessingSequenceForTesting)"
+                },
+                condition: {
+                    await service.networkProbeProcessingSequenceForTesting
+                        == probeCompletionBaseline + 2
+                })
+        #endif
         let stream = await subscription.value
         var iterator = stream.makeAsyncIterator()
         let update = await iterator.next()
