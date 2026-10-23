@@ -11045,6 +11045,12 @@
       "name": "instances_and_existing_sentinel_are_isolated",
       "line": 307,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testDiskPreparationFailureIsReportedWithoutLosingOnlineArtwork",
+      "line": 538,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

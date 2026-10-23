@@ -6,6 +6,7 @@ import XCTest
 @testable import Bleat
 
 #if os(iOS)
+    import Darwin
     import UIKit
 
     // Network delivery is controlled by continuations. The three-second budgets
@@ -532,6 +533,54 @@ import XCTest
                 XCTAssertNil(
                     otherSize, "The durable watermark covers every size")
             }
+        }
+
+        func testDiskPreparationFailureIsReportedWithoutLosingOnlineArtwork()
+            async throws
+        {
+            let root = root().appendingPathComponent("synthetic-private-cache")
+            let parent = root.deletingLastPathComponent()
+            try FileManager.default.createDirectory(
+                at: parent, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: parent) }
+            let marker = Data("synthetic-private-cache-marker".utf8)
+            try marker.write(to: root)
+            let url = try url(item: "synthetic-private-book")
+            let data = try image(3)
+            let revisionFailure = expectation(
+                description: "revision directory failure is reported")
+            let variantFailure = expectation(
+                description: "variant directory failure is reported")
+            let loader = BookCoverImageLoader(
+                observe: { event in
+                    guard case .diskFailure(let stage, let cause) = event else {
+                        return
+                    }
+                    XCTAssertEqual(cause, .posix(code: ENOTDIR))
+                    let diagnostic = String(describing: event)
+                    XCTAssertFalse(diagnostic.contains("synthetic-private"))
+                    switch stage {
+                    case .prepareRevisionDirectory:
+                        revisionFailure.fulfill()
+                    case .prepareVariantDirectory:
+                        variantFailure.fulfill()
+                    case .writeRevision, .encodeVariant, .writeVariant:
+                        XCTFail("Unexpected failure stage: \(stage.rawValue)")
+                    }
+                }, cacheRoot: root,
+                fetch: { request in try response(data, request) })
+            let online = await loader.image(for: url, accountID: account)
+            XCTAssertEqual(online?.size.width, 3)
+            XCTAssertEqual(try Data(contentsOf: root), marker)
+            await fulfillment(
+                of: [revisionFailure, variantFailure], timeout: 3)
+            let restarted = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { _ in throw URLError(.notConnectedToInternet) })
+            let offline = await restarted.image(
+                for: url, accountID: account, policy: .cacheOnly)
+            XCTAssertNil(offline)
+            XCTAssertEqual(try Data(contentsOf: root), marker)
         }
 
         func testCorruptVariantRecoversAndTemporaryWriteIsNeverRead()

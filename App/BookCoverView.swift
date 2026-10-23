@@ -109,8 +109,59 @@ private struct LoadedBookCover: @unchecked Sendable {
     let image: PlatformImage
 }
 
+enum BookCoverDiskFailureStage: String, Sendable {
+    case prepareRevisionDirectory = "prepare_revision_directory"
+    case prepareVariantDirectory = "prepare_variant_directory"
+    case writeRevision = "write_revision"
+    case encodeVariant = "encode_variant"
+    case writeVariant = "write_variant"
+}
+
+enum BookCoverDiskFailureCause: Equatable, Sendable {
+    case cocoa(code: Int)
+    case posix(code: Int32)
+    case unclassified
+
+    init(error: any Error) {
+        var current = error as NSError
+        var visited: Set<ObjectIdentifier> = []
+        var cocoaCode: Int?
+        while visited.insert(ObjectIdentifier(current)).inserted {
+            if current.domain == NSPOSIXErrorDomain,
+                let code = Int32(exactly: current.code)
+            {
+                self = .posix(code: code)
+                return
+            }
+            if current.domain == NSCocoaErrorDomain {
+                cocoaCode = current.code
+            }
+            guard
+                let underlying = current.userInfo[NSUnderlyingErrorKey]
+                    as? NSError
+            else { break }
+            current = underlying
+        }
+        if let cocoaCode {
+            self = .cocoa(code: cocoaCode)
+        } else {
+            self = .unclassified
+        }
+    }
+
+    var diagnosticCode: String {
+        switch self {
+        case .cocoa(let code): "cocoa_\(code)"
+        case .posix(let code): "posix_\(code)"
+        case .unclassified: "unclassified"
+        }
+    }
+}
+
 enum BookCoverCacheEvent: Sendable {
     case joined, committed, obsoleteCompletion
+    case diskFailure(
+        stage: BookCoverDiskFailureStage, cause: BookCoverDiskFailureCause)
 }
 
 protocol BookCoverImageLoading: Sendable {
@@ -619,14 +670,16 @@ actor BookCoverImageLoader: BookCoverImageLoading {
         _ timestamp: Int64, for resource: BookCoverResource
     ) {
         guard let directory = resourceDirectory(for: resource) else { return }
+        var stage = BookCoverDiskFailureStage.prepareRevisionDirectory
         do {
             try FileManager.default.createDirectory(
                 at: directory, withIntermediateDirectories: true)
+            stage = .writeRevision
             try Data(String(timestamp).utf8).write(
                 to: directory.appendingPathComponent(".revision"),
                 options: .atomic)
         } catch {
-            return
+            reportDiskFailure(error, stage: stage)
         }
     }
 
@@ -640,24 +693,38 @@ actor BookCoverImageLoader: BookCoverImageLoading {
         else {
             return
         }
+        var stage = BookCoverDiskFailureStage.prepareVariantDirectory
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
+            stage = .encodeVariant
             let persisted = try JSONEncoder().encode(
                 PersistedBookCover(timestamp: timestamp, data: data))
             // Advance the watermark before publishing payload bytes. If an
             // interrupted write leaves an older payload, it must not become
             // eligible through an older saved metadata snapshot after restart.
+            stage = .writeRevision
             try Data(String(timestamp).utf8).write(
                 to: url.deletingLastPathComponent().appendingPathComponent(
                     ".revision"), options: .atomic)
+            stage = .writeVariant
             try persisted.write(to: url, options: .atomic)
             pruneDiskCache()
         } catch {
-            return
+            reportDiskFailure(error, stage: stage)
         }
+    }
+
+    private func reportDiskFailure(
+        _ error: any Error, stage: BookCoverDiskFailureStage
+    ) {
+        let cause = BookCoverDiskFailureCause(error: error)
+        observe(.diskFailure(stage: stage, cause: cause))
+        Self.logger.error(
+            "cover_disk_failure stage=\(stage.rawValue, privacy: .public) cause=\(cause.diagnosticCode, privacy: .public)"
+        )
     }
 
     private func diskURL(for key: BookCoverCacheKey) -> URL? {
