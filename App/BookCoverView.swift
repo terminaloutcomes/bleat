@@ -116,6 +116,7 @@ enum BookCoverDiskFailureStage: String, Sendable {
     case encodeVariant = "encode_variant"
     case writeVariant = "write_variant"
     case removeCacheRoot = "remove_cache_root"
+    case pruneDiskEntry = "prune_disk_entry"
 }
 
 enum BookCoverDiskFailureCause: Equatable, Sendable, Codable {
@@ -855,7 +856,17 @@ actor BookCoverImageLoader: BookCoverImageLoading {
             return
         }
         for file in files.sorted(by: { $0.modifiedAt < $1.modifiedAt }) {
-            try? FileManager.default.removeItem(at: file.url)
+            do {
+                try FileManager.default.removeItem(at: file.url)
+            } catch let error as NSError
+                where error.domain == NSCocoaErrorDomain
+                && error.code == NSFileNoSuchFileError
+            {
+                // An entry already removed by the OS no longer consumes bytes.
+            } catch {
+                reportDiskFailure(error, stage: .pruneDiskEntry)
+                continue
+            }
             totalSize -= min(file.size, totalSize)
             if totalSize <= Int64(diskCapacity) {
                 break

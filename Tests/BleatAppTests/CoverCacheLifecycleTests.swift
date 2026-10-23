@@ -565,7 +565,7 @@ import XCTest
                     case .prepareVariantDirectory:
                         variantFailure.fulfill()
                     case .writeRevision, .encodeVariant, .writeVariant,
-                        .removeCacheRoot:
+                        .removeCacheRoot, .pruneDiskEntry:
                         XCTFail("Unexpected failure stage: \(stage.rawValue)")
                     }
                 }, cacheRoot: root,
@@ -582,6 +582,127 @@ import XCTest
                 for: url, accountID: account, policy: .cacheOnly)
             XCTAssertNil(offline)
             XCTAssertEqual(try Data(contentsOf: root), marker)
+        }
+
+        func testFailedPruneDeletionDoesNotConsumeDiskBudget() async throws {
+            let parent = root()
+            let cacheRoot = parent.appendingPathComponent("BookCovers")
+            try FileManager.default.createDirectory(
+                at: parent, withIntermediateDirectories: true)
+            addTeardownBlock { try? FileManager.default.removeItem(at: parent) }
+            let outside = parent.appendingPathComponent("outside-cache.bin")
+            let sentinel = Data([9, 8, 7])
+            try sentinel.write(to: outside)
+            let data = try image(3)
+            let urls = try ["oldest", "middle", "newest"].map {
+                try url(item: $0, timestamp: 0)
+            }
+            func visiblePayloads() throws -> [URL] {
+                let entries = try XCTUnwrap(
+                    FileManager.default.enumerator(
+                        at: cacheRoot,
+                        includingPropertiesForKeys: [
+                            .isRegularFileKey, .fileSizeKey,
+                        ],
+                        options: [.skipsHiddenFiles]))
+                var files: [URL] = []
+                for case let file as URL in entries {
+                    if try file.resourceValues(forKeys: [.isRegularFileKey])
+                        .isRegularFile == true
+                    {
+                        files.append(file)
+                    }
+                }
+                return files
+            }
+            let seed = BookCoverImageLoader(
+                cacheRoot: cacheRoot,
+                fetch: { request in try response(data, request) })
+            var knownFiles: Set<URL> = []
+            var payloads: [URL] = []
+            for url in urls {
+                let seeded = await seed.image(for: url, accountID: account)
+                XCTAssertEqual(seeded?.size.width, 3)
+                let files = Set(try visiblePayloads())
+                let added = files.subtracting(knownFiles)
+                XCTAssertEqual(
+                    added.count, 1, "one committed payload per distinct item")
+                payloads.append(try XCTUnwrap(added.first))
+                knownFiles = files
+            }
+            XCTAssertEqual(knownFiles.count, 3)
+            let sizes = try payloads.map {
+                try XCTUnwrap(
+                    $0.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+            }
+            let length = try XCTUnwrap(sizes.first)
+            XCTAssertGreaterThan(length, 0)
+            XCTAssertEqual(
+                Set(sizes).count, 1, "identical encoded images have equal costs"
+            )
+            for (index, payload) in payloads.enumerated() {
+                try FileManager.default.setAttributes(
+                    [
+                        .modificationDate: Date(
+                            timeIntervalSince1970: Double(index + 1))
+                    ],
+                    ofItemAtPath: payload.path)
+            }
+            let protectedDirectory = payloads[0].deletingLastPathComponent()
+            // This teardown runs before the parent removal registered above.
+            addTeardownBlock {
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o700],
+                    ofItemAtPath: protectedDirectory.path)
+            }
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o555],
+                ofItemAtPath: protectedDirectory.path)
+            let failureReported = expectation(
+                description: "failed prune reports its precise safe cause")
+            let limited = BookCoverImageLoader(
+                diskCapacity: 2 * length,
+                observe: { event in
+                    guard
+                        case .diskFailure(
+                            stage: .pruneDiskEntry, cause: let cause) =
+                            event
+                    else { return }
+                    XCTAssertEqual(cause, .posix(code: EACCES))
+                    failureReported.fulfill()
+                }, cacheRoot: cacheRoot,
+                fetch: { request in try response(data, request) })
+
+            let online = await limited.image(for: urls[2], accountID: account)
+
+            await fulfillment(of: [failureReported], timeout: 3)
+            XCTAssertEqual(online?.size.width, 3)
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: payloads[0].path))
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: payloads[1].path),
+                "failed removal of the oldest payload cannot consume its cost")
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: payloads[2].path))
+            let retainedBytes = try visiblePayloads().reduce(0) { total, file in
+                total
+                    + (try XCTUnwrap(
+                        file.resourceValues(forKeys: [.fileSizeKey]).fileSize))
+            }
+            XCTAssertLessThanOrEqual(retainedBytes, 2 * length)
+            let cold = BookCoverImageLoader(
+                cacheRoot: cacheRoot,
+                fetch: { _ in throw URLError(.notConnectedToInternet) })
+            let oldest = await cold.image(
+                for: urls[0], accountID: account, policy: .cacheOnly)
+            let middle = await cold.image(
+                for: urls[1], accountID: account, policy: .cacheOnly)
+            let newest = await cold.image(
+                for: urls[2], accountID: account, policy: .cacheOnly)
+            XCTAssertEqual(oldest?.size.width, 3)
+            XCTAssertNil(middle)
+            XCTAssertEqual(newest?.size.width, 3)
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
         }
 
         func testCorruptVariantRecoversAndTemporaryWriteIsNeverRead()

@@ -51442,6 +51442,37 @@
         "#if os(iOS)"
       ],
       "execution": "docs/cover-cache-lifecycle.md#reset-local-data-artwork-ownership-2026-10-23"
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testFailedPruneDeletionDoesNotConsumeDiskBudget",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 587
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Failed cache-file deletion cannot consume the disk budget or prevent eviction of other eligible covers.",
+        "purpose": "Use three real encoded payloads, an actual owned permission fault and a measured2-payload budget; retain current online artwork and outside-root data.",
+        "ruleAssessments": {
+          "1": "Assert protectedold/newestpayloads retained, eligiblemiddle removed, actual visible bytes within measured2Lcap, online3px and coldold/newest3px with coldmiddlemiss, exact EACCES prune event and unchanged outside sentinel.",
+          "2": "Await actual loader operations and explicit failure event; the3second expectation is a failure budget. No sleep, racing writer or retry-to-green.",
+          "3": "Fixed file modification timestamps order eviction candidates deterministically; equal positive encoded costs are measured, not approximated with wall-clock waits or a new product limit.",
+          "4": "Own one unique temporary parent, protect only its oldest resource directory, restore0700 before parent cleanup, keep outside sentinel outside the prunedroot; no real user data.",
+          "5": "Existing cacheRoot/diskCapacity/observe/fetch seams exercise real loader/Foundation persistence and deletion; tiny localPNG and actual files, no new production seam.",
+          "6": "Native Simulator storage failure and cold-cache behavior; does not certify physical file protection, durable audio migration or an always-achievable cap if all entries are unremovable.",
+          "7": "Original native exactcase failed3functional assertions with1359actualbytes against906configured; all positive controls passed. Fixed exactcase preserves every functional assertion and adds precise failure reporting.",
+          "8": "prune_disk_entry with typed POSIX EACCES distinguishes deletion failure; shared diagnostics emit stage/numeric cause without filenames, paths, URLs or private payloads.",
+          "9": "Focused1/1 and owningCoverCacheLifecycle12/12 passed, zero failures/skips/expected failures/runtimewarnings; source hashes unchanged. Original RED bundle retained; published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Reproduces an actual cache accounting defect and proves continued eligible eviction plus safe failure observability without changing capacity or retained-asset policy."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#failed-prune-accounting-2026-10-23"
     }
   ],
   "decisionCounts": {
@@ -51555,5 +51586,12 @@
     "focused": "Five unique native cases passed; zero failures/skips/expected failures/runtime warnings.",
     "boundaries": "Synthetic fixtures only; no real app reset, physical protection claim or cover account-migration fix.",
     "owner": "638 unique native app tests passed, zero failures/skips/expected failures/runtime warnings; source hashes unchanged and runner/guard exit0; first zero-test Simulator launch refusal retained."
+  },
+  "coverPruneFailureReview": {
+    "scope": "One new controlled native prune-accounting/failure regression only.",
+    "evidence": "docs/cover-cache-lifecycle.md#failed-prune-accounting-2026-10-23",
+    "baseline": "1failed exactidentity,3accounting/coldmiddleassertions,1359retainedvs906fixturecap;0skip/runtimewarning.",
+    "focused": "1pass; owning12unique pass;0fail/skip/expected/runtimewarning;sourceunchanged.",
+    "boundary": "Existing visible-payload budget and eviction order unchanged; not a universalcap guarantee or new durable-data eviction policy."
   }
 }
