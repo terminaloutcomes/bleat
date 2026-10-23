@@ -1,7 +1,9 @@
 # Test reliability audit
 
-Source review is complete for **1,552 test declarations**, plus the shell cases
-and shared runners listed below. Issue
+The historical 16 October audit covered **1,552 test declarations**, plus the shell cases
+and shared runners listed below. Current bounded reconciliation is recorded in
+[the 85-entry repair](#known-85-entry-reconciliation-369) and
+[the current checkpoint](test-reliability-current-status.md). Issue
 [#362](https://github.com/terminaloutcomes/bleat/issues/362) remains open for the
 explicit reliability follow-ups and missing execution evidence. Source review
 does not mean full compliance. Rules and the required per-test record are in
@@ -13,8 +15,8 @@ Audit date: 2026-10-16. Source-review decisions below do not imply execution.
 The parallel audit records are
 [`app.json`](../../TestSupport/TestAudit/app.json),
 [`core.json`](../../TestSupport/TestAudit/core.json), and
-[`other.json`](../../TestSupport/TestAudit/other.json). All 1,542 JSON records are source-reviewed; the ten gate tests are recorded
-individually below. No source-review records remain pending. Read the
+[`other.json`](../../TestSupport/TestAudit/other.json). At that historical baseline, 1,542 JSON records were marked source-reviewed; the ten gate tests are recorded
+individually below. Those labels do not certify current per-record/helper review: the separate 71 app / 241 core queue remains explicit. Read the
 [runner and shell-case review](test-reliability-runners.md) alongside them;
 source-function discovery alone omits shell scenarios.
 
@@ -32,7 +34,7 @@ zero missing and zero unexpected. This is discovery evidence only; no tests
 were executed by that command. An upstream OpenTelemetry manifest emitted a
 deprecated watchOS minimum warning.
 
-The portable [source index](../../TestSupport/TestAudit/source-index.json) has
+At that historical baseline, the portable [source index](../../TestSupport/TestAudit/source-index.json) has
 1,552 unique path/function pairs: 603 app, 557 core, five transcription, 124 UI,
 21 core-live, 97 API, 112 scripts (including six Python), 11 `Tests/ScriptTests`,
 and 22 test-support
@@ -59,7 +61,7 @@ execution or remove opt-in prerequisites.
 | UI/live/tooling JSON | 368 | 11 | 8 | 387 |
 | Gate cases below | 5 | 5 (including four added regressions) | 0 | 10 |
 
-The 140 follow-up decisions remain explicitly open. A fixed decision records a concrete change; it does not erase shared-helper
+The 140 follow-up decisions in this table are historical labels, not a current implementation backlog; the current checkpoint credits later delivered fixes and retains remaining concerns separately. A fixed decision records a concrete change; it does not erase shared-helper
 or configuration evidence gaps. A keep decision means the inspected scenario
 can remain, not that every real-system configuration was run.
 
@@ -1033,3 +1035,69 @@ three-second cleanup owner; prior unbounded-command findings remain historical.
 The 35-function parity snapshot above is also revision-bound: the checker derives
 current source counts rather than enforcing that historical count. Broader
 subprocess/platform evidence and integration CI remain separate.
+
+## Known 85-entry reconciliation (#369)
+
+At current source `82e3fdf`, a fresh comparison reproduced the known omission
+list exactly: **25 app, six UI and 54 Rust functions** existed uniquely but had
+neither a navigation row nor a primary audit row. This repair adds those 85
+source-index rows and 85 primary records. It adds no tests or application
+implementation. [#443](https://github.com/terminaloutcomes/bleat/pull/443) only
+clarified documentation; it did not add these records.
+
+| Ledger | Existing rows preserved | Added rows | Current rows |
+| --- | ---: | ---: | ---: |
+| `app.json.methods` | 602 | 25 | 627 |
+| `other.json.tests` | 500 | 60 (six UI, 54 Rust) | 560 |
+| `core.json.tests` | 610 | 0 | 610 |
+| `source-index.json.declarations` | 1,722 | 85 | 1,807 |
+
+The ten app gate declarations remain separately reviewed in this document,
+so 627 app records plus ten gates, 610 core/transcription and 560 other records
+account for the current 1,807 navigation pairs. This is ledger reconciliation,
+not a new claim of exhaustive compiler discovery, parameter multiplicities,
+macro-generated declarations or complete semantic compliance.
+
+Each added body and relevant helpers were inspected, with individual purpose,
+setup, action/postcondition, waits/budgets, cleanup, enablement and nine-rule
+assessments. New decisions are **60 keep and 25 follow-up** (21 app, four UI).
+A keep preserves the inspected scenario; it does not certify every reliability
+rule. Follow-ups retain source concerns, including failure-path gate/task
+retirement, shared state isolation and interaction readiness; they do not
+establish 25 new bugs. Rust records also retain their subprocess/cleanup limits.
+The separate existing-record queue of **71 app and 241 core rechecks** remains
+open under [#369](https://github.com/terminaloutcomes/bleat/issues/369).
+
+Historical execution is credited where a valid receipt exists, including
+[cover-save editor ownership](../cover-cache-lifecycle.md#editor-completion-ownership),
+[signing-fixture cleanup](test-reliability-other-followups.md#issue-378-fixture-validation-2026-10-18)
+and [runner verification](test-runner-verification.md#validation).
+Those results retain their original revisions, exact selections and failures;
+adding rows does not relabel them as fresh executions. No app, UI, API/server,
+signed macOS or physical-device tests were run for this record repair.
+Already accepted physical evidence and waivers, including the original closed
+[#33](https://github.com/terminaloutcomes/bleat/issues/33) background scenarios,
+remain accepted within their recorded scope; no physical session is inferred.
+
+Validation for this documentation/JSON change:
+
+- A structural comparison against `82e3fdf` verified all 85 exact source pairs,
+  unique current function declarations and exact new line numbers, all nine
+  rule keys, valid other-record profiles and unique IDs. All 602 prior app rows,
+  500 prior other rows and 1,722 prior index rows remain structurally unchanged.
+  The index now has 1,807 unique pairs; the known omission list has zero remaining.
+- `cargo test --locked --package scripts --test test_audit_inventory` executed
+  **eight tests: eight passed, zero failed/ignored/filtered**. These test audit
+  parity/rejection behavior, not the 85 underlying scenarios.
+- `cargo run --quiet --locked --package scripts --bin validate-test-audit -- --root .`
+  passed: **609 host functions and 46 scoped Rust functions**. Its limited
+  coverage is separate from the exact 85-pair structural comparison above.
+- `cargo run --quiet --locked --package scripts --bin check-documentation`
+  verified documentation references; `git diff --check` passed.
+
+The installed stable rustup toolchain was selected for the validation command
+because the default Homebrew compiler cannot load its configured LLVM/Z3
+library. An existing Cargo target cache was reused without copying artifacts;
+no toolchain installation or persistent configuration change was made. The
+broader [current checkpoint](test-reliability-current-status.md) retains unknowns
+and configuration requirements. This repair does not close #369 or the epic.
