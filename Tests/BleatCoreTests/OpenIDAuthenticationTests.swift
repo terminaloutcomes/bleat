@@ -649,9 +649,10 @@ final class OpenIDAuthenticationTests {
         }
 
         let transport = OpenIDTestTransport()
+        let store = OpenIDCredentialStore()
         let coordinator = AuthCoordinator(
             transport: transport,
-            credentialStore: OpenIDCredentialStore()
+            credentialStore: store
         )
         await assertThrowsErrorAsync(
             try await coordinator.loginWithOpenID(
@@ -663,6 +664,12 @@ final class OpenIDAuthenticationTests {
         ) { error in
             #expect(error as? OpenIDAuthenticationError == .browserFailed)
         }
+        let clearCount = await transport.clearCount()
+        let hasCookieSession = await transport.hasCookieSession()
+        let saveCount = await store.saveCount()
+        #expect(clearCount == 2)
+        #expect(!(hasCookieSession))
+        #expect(saveCount == 0)
     }
 
     @Test

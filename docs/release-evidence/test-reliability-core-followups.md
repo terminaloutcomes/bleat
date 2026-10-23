@@ -2348,3 +2348,65 @@ the original `.stopping` assertion; that compile-only attempt is retained, not
 counted as coverage. Existing upstream watchOS deprecation, native toolchain and
 intentional storage/cleanup-fixture diagnostics remain in the raw logs; no broad
 warning-free or physical CloudKit acceptance claim is made.
+
+
+## OpenID browser failure helper-context review (#372)
+
+This slice starts from main `f564e367912c644444f8962bca78a8f0e1466d88`.
+It rechecks exactly four members of the historical 241-record core
+helper-context snapshot at `58223214`. None had a later per-record current
+annotation; the delivered OpenID caller-lifecycle changes covered different
+bodies. The historical queue is a review snapshot, not 241 present defects.
+
+| Stable record | Existing test | Current disposition |
+| --- | --- | --- |
+| AUD-C-f87b4159e6a7 | `testSystemBrowserFactoryMapsProviderCompletions` | Keep: three synchronous success/cancel/failure mapping cases and actual native session construction. Anchor/browser construction does not assert anchor delivery or provider presentation. |
+| AUD-C-7eed9f01bd1b | `testSystemBrowserSessionMapsCancellationAndFailure` | Keep: four immediate completion/refused-start behaviors preserve exact typed error results, including callback-then-refused-start. No held session is used. |
+| AUD-C-78c4d96ca21d | `testBrowserCancellationAndFailureCleanUp` | Keep after one subcase assertion fix: four typed failures already checked cleanup; the existing unexpected-error subcase now retains its credential actor and also checks two clears, no cookie session and zero saves. Exact error mapping remains. |
+| AUD-C-48b9ad8348a7 | `testExchangeFailuresNeverPersistAndAlwaysCleanUp` | Keep: six exchange status/JSON/token failures retain exact typed errors, two clears and zero saves. |
+
+Reviewed dependencies are the locked completion recorder, native completion mapper
+and factory, MainActor fake session factory, immediate `OpenIDTestBrowser`, actor
+`OpenIDTestTransport`/`OpenIDCredentialStore`, and source-located
+`assertThrowsErrorAsync`. The fake transport's clear operation resets its cookie
+flag before returning. Inputs and actor state are fresh per case; no network,
+personal browser session, Keychain or durable account data is involved. No
+`.wait` browser gate, cancellation-ignoring operation or detached test caller is
+introduced. The factory's start-notification tasks do not establish complete
+internal task drainage. Current annotations narrow the old generic helper and
+anchor claims while preserving every historical field and receipt.
+
+The measured slice is four records reviewed: three no-change conclusions and one
+missing cleanup-oracle fix. There are zero unresolved records within this selected
+scope after delivery. This does not recalculate the global remaining review
+count: the other historical members may have later evidence and must not be
+called current defects or blindly subtracted. #455 separately rechecked three
+CloudKit records, only one of which belongs to that original helper-context
+subset; its other two were historical follow-ups. The two slices therefore
+identify five distinct reviewed subset members, not seven queue removals.
+
+On Xcode 27.1 / macOS, all four exact selected identities passed in three
+independent fixed runs. The owning OpenID suite passed 21/21 and the complete
+signed host gate passed all 609 unique inventory identities with zero skips;
+the four selected identities were present and passed. Logs, exact identity
+verification and execution receipts are retained under
+`.build/openid-browser-review-*`, with signed XML in `.build/host-results/tests.xml`.
+The 3 GiB active guard remained enabled; the signed run used 11.85 GiB free before
+and 11.76 GiB afterward. Strict changed-file Swift formatting, audit/index parity
+(609 host / 46 scoped Rust functions), documentation and diff checks passed.
+Existing upstream/native toolchain and deliberate storage/cleanup-fixture
+diagnostics remain retained; no broad warning-free claim is added.
+
+The controlled negative witness temporarily isolated only the existing unexpected
+browser-error subcase and made its actor fake ignore the post-failure second
+clear. With that identical fake fault, the prior error-only oracle passed one
+selected identity; the improved oracle failed one identity with exactly two
+issues at the caller (clear count 1 instead of 2, and retained cookie state).
+This checks the cleanup oracle, not a production cookie leak, actual browser
+presentation or a passing whole-case matrix. Normal runs separately cover the
+zero-save assertion. All temporary case isolation and fake edits were restored
+byte-for-byte before repeated/owning/signed validation; production source was
+never modified. Independent source and full-diff reviews found no actionable
+issues, and local exact outcomes were verified before publication. Published-head
+CI is a separate gate. This changes no shared helper, declares no new test, and
+closes neither #372 nor #362.

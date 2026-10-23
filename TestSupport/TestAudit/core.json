@@ -12994,7 +12994,28 @@
       "classification": "Local AuthenticationServices object/factory integration; no system browser launched.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Direct error/result, request-count, cleanup and persistence postconditions are checked.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "openid_failure_helper_context_review": {
+        "date": "2026-10-23",
+        "baseline": "f564e367912c644444f8962bca78a8f0e1466d88",
+        "record_id": "AUD-C-f87b4159e6a7",
+        "historical_queue": "Selected member of the 241-record helper-context snapshot at 58223214; this is a current source recheck, not a claim that 241 current defects or remaining tasks exist.",
+        "decision": "keep",
+        "action_postconditions": "Three synchronous mapper success/cancel/failure outcomes and actual native session construction; anchor/browser construction is exercised, but anchor delivery is not asserted.",
+        "dependencies": "Locked OpenIDCompletionRecorder; production completion mapper/system factory; fresh authorization/callback URLs and ASPresentationAnchor. No system browser session is started.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "rules": {
+          "1": "Three synchronous mapper success/cancel/failure outcomes and actual native session construction; anchor/browser construction is exercised, but anchor delivery is not asserted.",
+          "2": "Operations return/throw immediately through controlled fakes; await the API result. No arbitrary sleep/yield, timeout wrapper or added cancellation machinery.",
+          "3": "No playback, seek or elapsed-position assertion.",
+          "4": "No held/cancellation-ignoring browser or detached test caller is created. Factory start-notification tasks are not evidence of complete internal task drainage.",
+          "5": "Local URLs, locked recorder and fresh actor state; no personal cookies, credentials, server or durable store.",
+          "6": "Synthetic mapping/state/cleanup evidence and native session construction only; no real provider browser presentation or Keychain claim.",
+          "7": "No blind retries or tolerance changes. The controlled fixture negative witness is recorded separately; no production leak/defect is inferred.",
+          "8": "Inline typed/state/count assertions and source-located missing-throw helper; no asynchronous wait budget is introduced.",
+          "9": "Focused identities and owning/signed results are recorded in the linked source-bound receipt after verification."
+        }
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionCompletesAndConfiguresSession",
@@ -13111,7 +13132,28 @@
       "classification": "Deterministic adapter boundary test.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Direct error/result, request-count, cleanup and persistence postconditions are checked.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "openid_failure_helper_context_review": {
+        "date": "2026-10-23",
+        "baseline": "f564e367912c644444f8962bca78a8f0e1466d88",
+        "record_id": "AUD-C-7eed9f01bd1b",
+        "historical_queue": "Selected member of the 241-record helper-context snapshot at 58223214; this is a current source recheck, not a claim that 241 current defects or remaining tasks exist.",
+        "decision": "keep",
+        "action_postconditions": "Four immediate factory completion/refused-start variants return the expected typed browser error, including callback-then-refused-start.",
+        "dependencies": "Fresh MainActor fake factory/session/browser for each case; no .wait behavior, held browser gate, live provider or network.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "rules": {
+          "1": "Four immediate factory completion/refused-start variants return the expected typed browser error, including callback-then-refused-start.",
+          "2": "Operations return/throw immediately through controlled fakes; await the API result. No arbitrary sleep/yield, timeout wrapper or added cancellation machinery.",
+          "3": "No playback, seek or elapsed-position assertion.",
+          "4": "No held/cancellation-ignoring browser or detached test caller is created. Factory start-notification tasks are not evidence of complete internal task drainage.",
+          "5": "Local URLs, locked recorder and fresh actor state; no personal cookies, credentials, server or durable store.",
+          "6": "Synthetic mapping/state/cleanup evidence and native session construction only; no real provider browser presentation or Keychain claim.",
+          "7": "No blind retries or tolerance changes. The controlled fixture negative witness is recorded separately; no production leak/defect is inferred.",
+          "8": "Inline typed/state/count assertions and source-located missing-throw helper; no asynchronous wait budget is introduced.",
+          "9": "Focused identities and owning/signed results are recorded in the linked source-bound receipt after verification."
+        }
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testSystemBrowserSessionRejectsASecondActiveSession",
@@ -13438,7 +13480,28 @@
       "classification": "Deterministic error mapping/lifecycle test.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Direct error/result, request-count, cleanup and persistence postconditions are checked.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "openid_failure_helper_context_review": {
+        "date": "2026-10-23",
+        "baseline": "f564e367912c644444f8962bca78a8f0e1466d88",
+        "record_id": "AUD-C-78c4d96ca21d",
+        "historical_queue": "Selected member of the 241-record helper-context snapshot at 58223214; this is a current source recheck, not a claim that 241 current defects or remaining tasks exist.",
+        "decision": "keep_after_test_fix",
+        "action_postconditions": "All four typed browser errors and the existing unexpected error retain exact mapped errors, two session clears, no cookie session and zero credential saves; only the previously missing unexpected-case cleanup assertions were added.",
+        "dependencies": "Fresh actor OpenIDTestTransport/OpenIDCredentialStore/AuthCoordinator per case; immediate OpenIDTestBrowser errors; assertThrowsErrorAsync awaits operation and preserves missing-throw caller location.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "rules": {
+          "1": "All four typed browser errors and the existing unexpected error retain exact mapped errors, two session clears, no cookie session and zero credential saves; only the previously missing unexpected-case cleanup assertions were added.",
+          "2": "Operations return/throw immediately through controlled fakes; await the API result. No arbitrary sleep/yield, timeout wrapper or added cancellation machinery.",
+          "3": "No playback, seek or elapsed-position assertion.",
+          "4": "No held/cancellation-ignoring browser or detached test caller is created. Factory start-notification tasks are not evidence of complete internal task drainage.",
+          "5": "Local URLs, locked recorder and fresh actor state; no personal cookies, credentials, server or durable store.",
+          "6": "Synthetic mapping/state/cleanup evidence and native session construction only; no real provider browser presentation or Keychain claim.",
+          "7": "No blind retries or tolerance changes. The controlled fixture negative witness is recorded separately; no production leak/defect is inferred.",
+          "8": "Inline typed/state/count assertions and source-located missing-throw helper; no asynchronous wait budget is introduced.",
+          "9": "Focused identities and owning/signed results are recorded in the linked source-bound receipt after verification."
+        }
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testInvalidBrowserCallbacksNeverReachExchange",
@@ -13609,7 +13672,28 @@
       "classification": "Deterministic response matrix.",
       "compiler_skip": "No test-level compiler guard, skip, or opt-in.",
       "reason": "Direct error/result, request-count, cleanup and persistence postconditions are checked.",
-      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose."
+      "shared_helper_review": "OpenIDTestTransport and OpenIDCredentialStore are actor fakes; test browser returns constructed callback and deterministic random bytes are locally generated. OpenIDWebSessionFactory.waitUntilSessionStarts polls with unbounded Task.yield; OpenIDBrowserGate.waitUntilEntered also waits on unchecked/unbounded continuation. Static callbackURL is initialized with try! on a literal known-valid URL; if the literal changes invalidly it traps before tests can diagnose.",
+      "openid_failure_helper_context_review": {
+        "date": "2026-10-23",
+        "baseline": "f564e367912c644444f8962bca78a8f0e1466d88",
+        "record_id": "AUD-C-48b9ad8348a7",
+        "historical_queue": "Selected member of the 241-record helper-context snapshot at 58223214; this is a current source recheck, not a claim that 241 current defects or remaining tasks exist.",
+        "decision": "keep",
+        "action_postconditions": "All six existing exchange status/JSON/token failures retain their exact typed errors, two session clears and zero credential saves.",
+        "dependencies": "Fresh actor transport/store/coordinator per case, versioned bundled login fixture and immediate successful browser. Fake clearSession clears its cookie flag before returning; no network/Keychain or held gate.",
+        "evidence": "docs/release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372",
+        "rules": {
+          "1": "All six existing exchange status/JSON/token failures retain their exact typed errors, two session clears and zero credential saves.",
+          "2": "Operations return/throw immediately through controlled fakes; await the API result. No arbitrary sleep/yield, timeout wrapper or added cancellation machinery.",
+          "3": "No playback, seek or elapsed-position assertion.",
+          "4": "No held/cancellation-ignoring browser or detached test caller is created. Factory start-notification tasks are not evidence of complete internal task drainage.",
+          "5": "Local URLs, locked recorder and fresh actor state; no personal cookies, credentials, server or durable store.",
+          "6": "Synthetic mapping/state/cleanup evidence and native session construction only; no real provider browser presentation or Keychain claim.",
+          "7": "No blind retries or tolerance changes. The controlled fixture negative witness is recorded separately; no production leak/defect is inferred.",
+          "8": "Inline typed/state/count assertions and source-located missing-throw helper; no asynchronous wait budget is introduced.",
+          "9": "Focused identities and owning/signed results are recorded in the linked source-bound receipt after verification."
+        }
+      }
     },
     {
       "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testAuthorizationAndPersistenceFailuresRemainTyped",
