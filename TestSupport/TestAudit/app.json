@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "complete; all 593 in-scope test bodies individually source reviewed; unresolved source findings are tracked in docs/release-evidence/test-reliability-app-followups.md",
-  "methodCount": 593,
+  "status": "627 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
+  "methodCount": 627,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -50062,11 +50062,1205 @@
         "#if os(iOS)"
       ],
       "execution": "docs/release-evidence/callback-cancellation-audit.md#explicit-stop-retirement-2026-10-22"
+    },
+    {
+      "identifier": "AppModelTests/testAppFailuresPreserveTypedPresentation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 9883
+      },
+      "compilerAndSkipConditions": [
+        "Symbol resolution assertion only: #if os(iOS); remaining value assertions unconditional."
+      ],
+      "setupAndDependencies": [
+        "four AppFailureCause cases (authentication required, permission denied, inaccessible library, rate limited); value-only table and fresh failure value per iteration."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Keep typed failure causes distinct in user-facing title, symbol and nonempty message.",
+        "purpose": "Presentation unit test; UIKit symbol resolution is conditional on os(iOS), no rendered UI or device claim.",
+        "actionPostconditions": [
+          {
+            "action": "Map each typed cause through its presentation properties.",
+            "postcondition": "Exact title and systemImage strings; nonempty message; on iOS, UIImage(systemName:) must resolve the chosen symbol."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Synchronous values; no asynchronous waits or timeout. N/A: no playback or elapsed-time assertions.",
+        "ruleAssessments": {
+          "1": "Map each typed cause through its presentation properties. Exact title and systemImage strings; nonempty message; on iOS, UIImage(systemName:) must resolve the chosen symbol.",
+          "2": "Synchronous values; no asynchronous waits or timeout.",
+          "3": "N/A: no playback or elapsed-time assertions.",
+          "4": "N/A: no tasks, observers or storage.",
+          "5": "Local table values only.",
+          "6": "Presentation unit test; UIKit symbol resolution is conditional on os(iOS), no rendered UI or device claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest assertion lines retain exact title/symbol/value mismatch; missing UIImage message includes the symbol. No asynchronous budget or attached UI tree applies.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Preserve the exact semantic assertions and scenario; source review does not establish fresh runtime coverage."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Value presentation accessors asserted by the body; conditional UIKit UIImage(systemName:) validation."
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testDownloadFailuresPreserveTypedPresentation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 9906
+      },
+      "compilerAndSkipConditions": [
+        "Symbol resolution assertion only: #if os(iOS); remaining value assertions unconditional."
+      ],
+      "setupAndDependencies": [
+        "thirteen DownloadModelFailure cases covering storage, stored-entry, account context, preparation, repair, capacity, transfer, transport and HTTP rejection; value-only table and fresh failure value per iteration."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Keep typed failure causes distinct in user-facing title, symbol and nonempty message.",
+        "purpose": "Presentation unit test; UIKit symbol resolution is conditional on os(iOS), no rendered UI or device claim.",
+        "actionPostconditions": [
+          {
+            "action": "Map each typed cause through its presentation properties.",
+            "postcondition": "Exact title and systemImage strings; nonempty message; on iOS, UIImage(systemName:) must resolve the chosen symbol."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Synchronous values; no asynchronous waits or timeout. N/A: no playback or elapsed-time assertions.",
+        "ruleAssessments": {
+          "1": "Map each typed cause through its presentation properties. Exact title and systemImage strings; nonempty message; on iOS, UIImage(systemName:) must resolve the chosen symbol.",
+          "2": "Synchronous values; no asynchronous waits or timeout.",
+          "3": "N/A: no playback or elapsed-time assertions.",
+          "4": "N/A: no tasks, observers or storage.",
+          "5": "Local table values only.",
+          "6": "Presentation unit test; UIKit symbol resolution is conditional on os(iOS), no rendered UI or device claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest assertion lines retain exact title/symbol/value mismatch; missing UIImage message includes the symbol. No asynchronous budget or attached UI tree applies.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Preserve the exact semantic assertions and scenario; source review does not establish fresh runtime coverage."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Value presentation accessors asserted by the body; conditional UIKit UIImage(systemName:) validation."
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testEndOfChapterSleepRearmsAfterForwardSeek",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11345
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "assertChapterSleepAfterSeek(0.5 -> 4.5, chapterIndex:2, seekWhilePlaying:True); eight-second silent CAF with four two-second chapters, fake audio activation and per-fixture defaults."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "End-of-chapter sleep follows the selected chapter and stops at its natural boundary.",
+        "purpose": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start at initialTime, pause and arm current chapter; resume and seek.",
+            "postcondition": "Timer initially names original chapter, then chapter index 2; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line. Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+        "ruleAssessments": {
+          "1": "Start at initialTime, pause and arm current chapter; resume and seek. Timer initially names original chapter, then chapter index 2; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1).",
+          "2": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line.",
+          "3": "Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+          "4": "Fixture defer removes CAF/defaults; awaited stop is only after polling. Task.sleep can throw before stop, and no async teardown stops the player on that path.",
+          "5": "Unique CAF root/defaults; fake activation and nonregistering NowPlayingCoordinator; no personal media.",
+          "6": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Exact timer, intent/state and chapter-bound position assertions retain helper source line. Shared chapter helper does not forward caller file/line or supply rich observed-state timeout diagnostics.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain natural-boundary coverage; helper cancellation cleanup and caller-specific timeout diagnostics remain source-review caveats, not a reproduced product defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::assertChapterSleepAfterSeek",
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testEndOfChapterSleepRearmsAfterBackwardSeek",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11350
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "assertChapterSleepAfterSeek(4.5 -> 0.5, chapterIndex:0, seekWhilePlaying:True); eight-second silent CAF with four two-second chapters, fake audio activation and per-fixture defaults."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "End-of-chapter sleep follows the selected chapter and stops at its natural boundary.",
+        "purpose": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start at initialTime, pause and arm current chapter; resume and seek.",
+            "postcondition": "Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line. Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+        "ruleAssessments": {
+          "1": "Start at initialTime, pause and arm current chapter; resume and seek. Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1).",
+          "2": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line.",
+          "3": "Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+          "4": "Fixture defer removes CAF/defaults; awaited stop is only after polling. Task.sleep can throw before stop, and no async teardown stops the player on that path.",
+          "5": "Unique CAF root/defaults; fake activation and nonregistering NowPlayingCoordinator; no personal media.",
+          "6": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Exact timer, intent/state and chapter-bound position assertions retain helper source line. Shared chapter helper does not forward caller file/line or supply rich observed-state timeout diagnostics.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain natural-boundary coverage; helper cancellation cleanup and caller-specific timeout diagnostics remain source-review caveats, not a reproduced product defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::assertChapterSleepAfterSeek",
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testEndOfChapterSleepRearmsAtExactChapterStart",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11355
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "assertChapterSleepAfterSeek(0.5 -> 2, chapterIndex:1, seekWhilePlaying:True); eight-second silent CAF with four two-second chapters, fake audio activation and per-fixture defaults."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "End-of-chapter sleep follows the selected chapter and stops at its natural boundary.",
+        "purpose": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start at initialTime, pause and arm current chapter; resume and seek.",
+            "postcondition": "Timer initially names original chapter, then chapter index 1; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line. Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+        "ruleAssessments": {
+          "1": "Start at initialTime, pause and arm current chapter; resume and seek. Timer initially names original chapter, then chapter index 1; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1).",
+          "2": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line.",
+          "3": "Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+          "4": "Fixture defer removes CAF/defaults; awaited stop is only after polling. Task.sleep can throw before stop, and no async teardown stops the player on that path.",
+          "5": "Unique CAF root/defaults; fake activation and nonregistering NowPlayingCoordinator; no personal media.",
+          "6": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Exact timer, intent/state and chapter-bound position assertions retain helper source line. Shared chapter helper does not forward caller file/line or supply rich observed-state timeout diagnostics.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain natural-boundary coverage; helper cancellation cleanup and caller-specific timeout diagnostics remain source-review caveats, not a reproduced product defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::assertChapterSleepAfterSeek",
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testChapterSeekPreservesDurationAndCancelledSleepTimers",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11360
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "playbackRecoveryFixture, local silent CAF, unique defaults and fake activation."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Seeking preserves a duration timer and does not resurrect a cancelled timer.",
+        "purpose": "App-hosted local AVPlayer integration, no real five-minute wait or hardware claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start downloaded audio, pause, arm five-minute duration timer, await seek0.5; cancel timer then await seek0.25.",
+            "postcondition": "Exact duration timer equality across first seek; sleepTimer nil after cancellation and second seek."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start and seeks; no condition polling or elapsed-time dependency. Five-minute value is timer configuration, not a test delay. Pause precedes seeks; assertions concern timer identity, not exact playback position.",
+        "ruleAssessments": {
+          "1": "Start downloaded audio, pause, arm five-minute duration timer, await seek0.5; cancel timer then await seek0.25. Exact duration timer equality across first seek; sleepTimer nil after cancellation and second seek.",
+          "2": "Await start and seeks; no condition polling or elapsed-time dependency. Five-minute value is timer configuration, not a test delay.",
+          "3": "Pause precedes seeks; assertions concern timer identity, not exact playback position.",
+          "4": "defer removes fixture/defaults; start/seek/stop are awaited; no throwing test operation follows start.",
+          "5": "Unique CAF/defaults and isolated player fixture.",
+          "6": "App-hosted local AVPlayer integration, no real five-minute wait or hardware claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest locations and exact timer/image/nil assertions identify the failed semantic result; throwing filesystem/fixture setup reports errors. No asynchronous-wait diagnostics or universal screenshots are supplied.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Preserve the exact semantic assertions and scenario; source review does not establish fresh runtime coverage."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testEndOfChapterSleepRearmsWhilePaused",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11382
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "assertChapterSleepAfterSeek(4.5 -> 0.5, chapterIndex:0, seekWhilePlaying:False); eight-second silent CAF with four two-second chapters, fake audio activation and per-fixture defaults."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "End-of-chapter sleep follows the selected chapter and stops at its natural boundary.",
+        "purpose": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start at initialTime, pause and arm current chapter; seek while paused, then resume.",
+            "postcondition": "Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line. Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+        "ruleAssessments": {
+          "1": "Start at initialTime, pause and arm current chapter; seek while paused, then resume. Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1).",
+          "2": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line.",
+          "3": "Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+          "4": "Fixture defer removes CAF/defaults; awaited stop is only after polling. Task.sleep can throw before stop, and no async teardown stops the player on that path.",
+          "5": "Unique CAF root/defaults; fake activation and nonregistering NowPlayingCoordinator; no personal media.",
+          "6": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Exact timer, intent/state and chapter-bound position assertions retain helper source line. Shared chapter helper does not forward caller file/line or supply rich observed-state timeout diagnostics.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain natural-boundary coverage; helper cancellation cleanup and caller-specific timeout diagnostics remain source-review caveats, not a reproduced product defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::assertChapterSleepAfterSeek",
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testEndOfChapterSleepExpiresOnNaturalChapterChange",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 11387
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "assertChapterSleepAfterSeek(0.5 -> 0.5, chapterIndex:0, seekWhilePlaying:True); eight-second silent CAF with four two-second chapters, fake audio activation and per-fixture defaults."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "End-of-chapter sleep follows the selected chapter and stops at its natural boundary.",
+        "purpose": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+        "actionPostconditions": [
+          {
+            "action": "Start at initialTime, pause and arm current chapter; resume without another seek.",
+            "postcondition": "Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line. Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+        "ruleAssessments": {
+          "1": "Start at initialTime, pause and arm current chapter; resume without another seek. Timer initially names original chapter, then chapter index 0; requested state matches seek mode; finally timer nil, intent false, paused state and position within [chapter.end, chapter.end+1).",
+          "2": "Await start/seek; ContinuousClock deadline eight seconds, poll timer at20ms; explicit final state assertions. Budget covers <=2second remaining chapter plus native scheduling, not a guessed sleep barrier. Helper assertions do not forward the calling test file/line.",
+          "3": "Native local playback is intentionally advancing; final paused model position is bounded to chapter end plus one second; no exact advancing-position equality.",
+          "4": "Fixture defer removes CAF/defaults; awaited stop is only after polling. Task.sleep can throw before stop, and no async teardown stops the player on that path.",
+          "5": "Unique CAF root/defaults; fake activation and nonregistering NowPlayingCoordinator; no personal media.",
+          "6": "App-hosted AVPlayer integration with synthetic chapters, no physical routes or audible-output claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Exact timer, intent/state and chapter-bound position assertions retain helper source line. Shared chapter helper does not forward caller file/line or supply rich observed-state timeout diagnostics.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain natural-boundary coverage; helper cancellation cleanup and caller-specific timeout diagnostics remain source-review caveats, not a reproduced product defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::assertChapterSleepAfterSeek",
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/PlaybackRecoveryFixture.model/cleanUp"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testLiveCoverChangeOutsideSelectedLibraryRefreshesOnlyActiveArtwork",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 14687
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "Unique playback fixture/defaults, other browsing library, TestAppService, AppModelOperationEventProbe; startLiveRefreshTest establishes observer/initial refresh/subscription."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A live cover event for the active audio outside the browsed library refreshes artwork without reloading browsing.",
+        "purpose": "Injected live stream plus local AVPlayer; no WebSocket server or real system artwork acceptance.",
+        "actionPostconditions": [
+          {
+            "action": "Pause downloaded playback at0.25; emit active-item event, then unrelated-item event in same nonselected library.",
+            "postcondition": "First consumed event changes coverURL while paused intent/position and request counts remain; unrelated event preserves refreshed URL."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Register lifecycle expectations before emitted events; await liveUpdateConsumed30s, helper network/refresh30s and subscription3s. Budgets are failure bounds, no legacy400ms helper branch on this caller. Await paused seek; exact position0.25 uses0.001 numeric tolerance; no advancing equality.",
+        "ruleAssessments": {
+          "1": "Pause downloaded playback at0.25; emit active-item event, then unrelated-item event in same nonselected library. First consumed event changes coverURL while paused intent/position and request counts remain; unrelated event preserves refreshed URL.",
+          "2": "Register lifecycle expectations before emitted events; await liveUpdateConsumed30s, helper network/refresh30s and subscription3s. Budgets are failure bounds, no legacy400ms helper branch on this caller.",
+          "3": "Await paused seek; exact position0.25 uses0.001 numeric tolerance; no advancing equality.",
+          "4": "Stop live updates and await playback.stop at end; fixture cleanup is deferred. Cancellation during throwing helper setup is not a joined observer teardown.",
+          "5": "Unique CAF/defaults for injected stores; service data synthetic. Other AppModel default stores are not comprehensively isolated by this body.",
+          "6": "Injected live stream plus local AVPlayer; no WebSocket server or real system artwork acceptance.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Semantic consumer acknowledgement is present; retain helper cancellation/store-isolation limits for broader audit without asserting a demonstrated defect."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::startLiveRefreshTest/playbackRecoveryFixture/TestAppService",
+          "Tests/BleatAppTests/TestAsyncGates.swift::AppModelOperationEventProbe"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testNetworkRecoveryRefreshesPausedDownloadedSystemArtworkInBackground",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19342
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "Thirty-second silent CAF, unique injected defaults, fake network path stream, diskCapacity0 loader with synthetic3px image and isolated NowPlaying publisher."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Network recovery refreshes system artwork for paused downloaded playback while catalog refresh remains suspended.",
+        "purpose": "Actual app model, NowPlaying coordinator and local player with injected network/image service; not physical background/Lock Screen/network transition evidence.",
+        "actionPostconditions": [
+          {
+            "action": "Observe network subscription, apply unavailable path, start/pause/seek5; apply satisfied constrained path with live updates disabled.",
+            "postcondition": "Cache-only/no initial artwork becomes allowNetwork and3px artwork in same path application turn; pause position, player identity, queued items and rate remain unchanged."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Pre-register network-state, fetch and publication expectations; fulfillment3s tracks actual operations. Pause and awaited seek precede exact5position check; compare native identity/rate snapshot, no advancing time equality.",
+        "ruleAssessments": {
+          "1": "Observe network subscription, apply unavailable path, start/pause/seek5; apply satisfied constrained path with live updates disabled. Cache-only/no initial artwork becomes allowNetwork and3px artwork in same path application turn; pause position, player identity, queued items and rate remain unchanged.",
+          "2": "Pre-register network-state, fetch and publication expectations; fulfillment3s tracks actual operations.",
+          "3": "Pause and awaited seek precede exact5position check; compare native identity/rate snapshot, no advancing time equality.",
+          "4": "defer clears publisher callback and disables live updates; awaited playback.stop on normal path; fixture defer removes media/defaults. No explicit join of all model observers.",
+          "5": "Unique media/defaults; in-memory response and synthetic account. Remaining AppModel default stores not comprehensively isolated.",
+          "6": "Actual app model, NowPlaying coordinator and local player with injected network/image service; not physical background/Lock Screen/network transition evidence.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Keep explicit path/publication semantics; broader observer/store teardown and native readiness remain outside what this body proves."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/TestAppService/TestNowPlayingInfoPublisher/artworkTestImage",
+          "Tests/BleatAppTests/TestAsyncGates.swift::AppModelOperationEventProbe"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19451
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "Independent30second playback fixture per normal/retry loop, TestAppService,2px old/3px new cover fetch by revision, isolated NowPlaying publisher."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Initial cover save and failed-upload retry refresh current system artwork without replacing or interrupting audio.",
+        "purpose": "Local native AVPlayer and system-artwork adapter; no physical Lock Screen/CarPlay acceptance.",
+        "actionPostconditions": [
+          {
+            "action": "Await real playing readiness; normal save remains playing, retry scenario pauses/seeks5 and observes paused readiness; save, optionally recover failed upload then retry; attempt unrelated-book/account refresh.",
+            "postcondition": "Artwork/URL change to new image, allowNetwork; native player/item queue/rate/item status and model state retained; unrelated refreshes leave URL; retry position exact, playing progress nonnegative and bounded by elapsed+0.5s."
+          }
+        ],
+        "timeoutAndToleranceRationale": "assertEventually readiness5s observes item readyToPlay/rate/time-control; waitForNowPlayingArtwork polls100x10ms for actual artwork with caller failure. Paused retry baseline uses exact position after seek; playing scenario permits measured elapsed+0.5s for periodic sampling at rate1.",
+        "ruleAssessments": {
+          "1": "Await real playing readiness; normal save remains playing, retry scenario pauses/seeks5 and observes paused readiness; save, optionally recover failed upload then retry; attempt unrelated-book/account refresh. Artwork/URL change to new image, allowNetwork; native player/item queue/rate/item status and model state retained; unrelated refreshes leave URL; retry position exact, playing progress nonnegative and bounded by elapsed+0.5s.",
+          "2": "assertEventually readiness5s observes item readyToPlay/rate/time-control; waitForNowPlayingArtwork polls100x10ms for actual artwork with caller failure.",
+          "3": "Paused retry baseline uses exact position after seek; playing scenario permits measured elapsed+0.5s for periodic sampling at rate1.",
+          "4": "Normal path awaits stop each loop; fixture defer cleans media/defaults; later throwing fixtureAccount call can bypass explicit stop.",
+          "5": "Unique CAF/defaults each branch; disk disabled and fake service; other AppModel defaults remain outside complete isolation proof.",
+          "6": "Local native AVPlayer and system-artwork adapter; no physical Lock Screen/CarPlay acceptance.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "Historical source84840c1: three focused normal/retry executions and624/624 app owner, zero failures/skips/runtime warnings, recorded in docs/cover-cache-lifecycle.md#editor-completion-ownership. Original owning item-status failure retained with root cause unproven. This repair performs no new native execution and does not establish current-head/device acceptance."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve strengthened readiness and historical passes; exception-path player cleanup remains a source-review caveat."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::playbackRecoveryFixture/TestAppService/TestNowPlayingInfoPublisher/waitForNowPlayingArtwork/artworkTestImage",
+          "Tests/BleatAppTests/TestAsyncGates.swift::assertEventually"
+        ]
+      },
+      "execution": "Historical source84840c1: three focused normal/retry executions and624/624 app owner, zero failures/skips/runtime warnings, recorded in docs/cover-cache-lifecycle.md#editor-completion-ownership. Original owning item-status failure retained with root cause unproven. This repair performs no new native execution and does not establish current-head/device acceptance.",
+      "existingEvidence": "docs/cover-cache-lifecycle.md#editor-completion-ownership"
+    },
+    {
+      "identifier": "AppModelTests/testLatestArtworkRejectsOlderImageCompletion",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19604
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "AsyncGate holds old2px image; new3px response immediate; disk disabled; isolated NowPlaying publisher/coordinator."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An old image completion cannot replace artwork for a newer published snapshot.",
+        "purpose": "Real NowPlaying coordinator with controlled fetch; no system hardware rendering claim.",
+        "actionPostconditions": [
+          {
+            "action": "Publish old URL, await gate entry, publish new URL; observe new artwork, release old completion, await both completions.",
+            "postcondition": "New dimensions before and after old completion; artworkCompletionSequenceForTesting exactly2."
+          }
+        ],
+        "timeoutAndToleranceRationale": "AsyncGate asserted30s admission; artwork polling100x10ms; assertEventually3s for completion count. No yields as completion witness. N/A: artwork snapshots have metadata time only; no AVPlayer clock.",
+        "ruleAssessments": {
+          "1": "Publish old URL, await gate entry, publish new URL; observe new artwork, release old completion, await both completions. New dimensions before and after old completion; artworkCompletionSequenceForTesting exactly2.",
+          "2": "AsyncGate asserted30s admission; artwork polling100x10ms; assertEventually3s for completion count. No yields as completion witness.",
+          "3": "N/A: artwork snapshots have metadata time only; no AVPlayer clock.",
+          "4": "defer coordinator.clear; gate released normal path; no throwing test operation after gate starts. Gate ownership is indirect through coordinator.",
+          "5": "In-memory old/new image data, no disk or service; nil account snapshot.",
+          "6": "Real NowPlaying coordinator with controlled fetch; no system hardware rendering claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Preserve the exact semantic assertions and scenario; source review does not establish fresh runtime coverage."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::TestNowPlayingInfoPublisher/waitForNowPlayingArtwork/nowPlayingSnapshot/artworkTestImage",
+          "Tests/BleatAppTests/TestAsyncGates.swift::AsyncGate/assertEventually"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testCoverRetryCannotPublishAfterOwnershipChangesDuringInvalidation",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19873
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "Fresh TestAppService/models/accounts/gates per two-case loop; first cover upload deliberately fails, then retry succeeds through controlled suspension."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Retired cover retry completions preserve current account, editor and selection ownership.",
+        "purpose": "App-model unit/injected service boundary; no real upload or artwork rendering.",
+        "actionPostconditions": [
+          {
+            "action": "Hold retry invalidation; reset editor or switch account; release and join retry.",
+            "postcondition": "Account matches chosen branch, editor idle, selectedBookID/bookDetail equal post-retirement snapshots."
+          }
+        ],
+        "timeoutAndToleranceRationale": "entryExpectation registered before Task; fulfillment3s bounds gate admission; release then await Task.value (join has no independent timeout). N/A: editor ownership, no playback clock.",
+        "ruleAssessments": {
+          "1": "Hold retry invalidation; reset editor or switch account; release and join retry. Account matches chosen branch, editor idle, selectedBookID/bookDetail equal post-retirement snapshots.",
+          "2": "entryExpectation registered before Task; fulfillment3s bounds gate admission; release then await Task.value (join has no independent timeout).",
+          "3": "N/A: editor ownership, no playback clock.",
+          "4": "All started retry tasks are released/joined on the normal path. Neither body throws after launching its tasks; XCTest assertions do not throw. No registered cancellation teardown owns gates or independent deadline bounds task joins, so cancellation/stuck-operation cleanup remains a source-review limitation rather than a demonstrated failure.",
+          "5": "Synthetic model/service/accounts, but AppModel uses shared default stores; no per-test store namespace supplied.",
+          "6": "App-model unit/injected service boundary; no real upload or artwork rendering.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain exact ownership assertions; shared-store isolation and exceptional gate/task retirement remain audit caveats, not confirmed implementation bugs."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::TestAppService/fixtureAccount/fixtureBookDetail",
+          "Tests/BleatAppTests/TestAsyncGates.swift::AsyncGate"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testCoverRetrySelectionChangeRetiresBusyStateWithoutClearingNewerRetry",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 19919
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "Fresh TestAppService/models/accounts/gates per two-case loop; first cover upload deliberately fails, then retry succeeds through controlled suspension."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Retired cover retry completions preserve current account, editor and selection ownership.",
+        "purpose": "App-model unit/injected service boundary; no real upload or artwork rendering.",
+        "actionPostconditions": [
+          {
+            "action": "Hold old retry in service or invalidation; select next detail; release old service path or keep old invalidation while starting held newer retry; release old then new.",
+            "postcondition": "Navigation immediately retires old busy state; typed metadataSavedCoverFailed preserved; old completion cannot clear newer saving/detail/selection; new completion publishes coverSaved(next)."
+          }
+        ],
+        "timeoutAndToleranceRationale": "entryExpectation registered before Task; fulfillment3s bounds gate admission; release then await Task.value (join has no independent timeout). N/A: editor ownership, no playback clock.",
+        "ruleAssessments": {
+          "1": "Hold old retry in service or invalidation; select next detail; release old service path or keep old invalidation while starting held newer retry; release old then new. Navigation immediately retires old busy state; typed metadataSavedCoverFailed preserved; old completion cannot clear newer saving/detail/selection; new completion publishes coverSaved(next).",
+          "2": "entryExpectation registered before Task; fulfillment3s bounds gate admission; release then await Task.value (join has no independent timeout).",
+          "3": "N/A: editor ownership, no playback clock.",
+          "4": "All started retry tasks are released/joined on the normal path. Neither body throws after launching its tasks; XCTest assertions do not throw. No registered cancellation teardown owns gates or independent deadline bounds task joins, so cancellation/stuck-operation cleanup remains a source-review limitation rather than a demonstrated failure.",
+          "5": "Synthetic model/service/accounts, but AppModel uses shared default stores; no per-test store namespace supplied.",
+          "6": "App-model unit/injected service boundary; no real upload or artwork rendering.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Retain exact ownership assertions; shared-store isolation and exceptional gate/task retirement remain audit caveats, not confirmed implementation bugs."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::TestAppService/fixtureAccount/fixtureBookDetail",
+          "Tests/BleatAppTests/TestAsyncGates.swift::AsyncGate"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "AppModelTests/testCarPlayRejectsCompletionFromPreviousCoverGeneration",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 26156
+      },
+      "compilerAndSkipConditions": [
+        "#if canImport(CarPlay) && !os(macOS)"
+      ],
+      "setupAndDependencies": [
+        "TestCarPlayArtworkCompletion returns old image once and calls BookCoverRefresh.shared.refresh before completion; coordinator/presenter and synthetic account/URL."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "CarPlay rejects image bytes accepted before a cover replacement generation changes.",
+        "purpose": "CarPlay template/coordinator boundary under canImport(CarPlay)&&!os(macOS); no head-unit/device claim.",
+        "actionPostconditions": [
+          {
+            "action": "Connect, request artwork and await returned task; issue second request after fake has no image.",
+            "postcondition": "One completed fake load; neither list item has stale image; initialArtwork is not the old image for either request."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await exact returned Task.value; fake beforeReturn controls generation ordering; no guessed delay or polling. N/A: CarPlay artwork only, no playback clock.",
+        "ruleAssessments": {
+          "1": "Connect, request artwork and await returned task; issue second request after fake has no image. One completed fake load; neither list item has stale image; initialArtwork is not the old image for either request.",
+          "2": "Await exact returned Task.value; fake beforeReturn controls generation ordering; no guessed delay or polling.",
+          "3": "N/A: CarPlay artwork only, no playback clock.",
+          "4": "defer disconnect registered before requests; awaited owned artwork tasks; no held continuations.",
+          "5": "Fake loader/presenter isolated, but fixed account/resource mutates shared BookCoverRefresh with no explicit reset.",
+          "6": "CarPlay template/coordinator boundary under canImport(CarPlay)&&!os(macOS); no head-unit/device claim.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Exact generation rejection is covered; shared refresh-generation isolation remains a source-review caveat."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/AppModelTests.swift::TestCarPlayArtworkCompletion/TestCarPlayPresenter/fixtureAccount"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testColdStartRevalidatesBeforeReturningAndPersistsUnchangedTimestampReplacement",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 45
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Cold-start online lookup revalidates disk bytes and persists same-timestamp replacement.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Seed old disk bytes; hold cold online fetch, read cache-only while held, release fresh bytes and reopen offline.",
+            "postcondition": "Online task has not returned before fetch release; old cache-only2px remains while validating; online3px and restarted/older-metadata/failed-online fallback3px."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Seed old disk bytes; hold cold online fetch, read cache-only while held, release fresh bytes and reopen offline. Online task has not returned before fetch release; old cache-only2px remains while validating; online3px and restarted/older-metadata/failed-online fallback3px.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Temporary root removed by defer; in-flight tasks normally released and awaited. CoverDeliveryGate stores checked continuations and has no cancellation handler; release(data:) can throw while building response before clearing pending, and no teardown drains it on failure.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testConfirmedReplacementInvalidatesEveryVariantAndRejectsLateResponse",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 97
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Confirmed item replacement invalidates all variants while preserving other items/accounts.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Seed small/large/unrelated and other account; hold old small request, invalidate by large URL, write replacement through separate loader, release stale response and reopen offline.",
+            "postcondition": "Stale task nil, current small3px, retired large nil, unrelated item and other account still2px."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Seed small/large/unrelated and other account; hold old small request, invalidate by large URL, write replacement through separate loader, release stale response and reopen offline. Stale task nil, current small3px, retired large nil, unrelated item and other account still2px.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Temporary root removed by defer; in-flight tasks normally released and awaited. CoverDeliveryGate stores checked continuations and has no cancellation handler; release(data:) can throw while building response before clearing pending, and no teardown drains it on failure.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testRefreshCoalescesAndAccountRemovalCannotBeRepopulated",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 150
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Account removal retires coalesced callers and prevents memory/disk repopulation.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Hold first request; observe second join; remove account cache; release response, join both and reopen offline.",
+            "postcondition": "Both results nil, fetch count1, same-loader and restarted cache-only nil."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Hold first request; observe second join; remove account cache; release response, join both and reopen offline. Both results nil, fetch count1, same-loader and restarted cache-only nil.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Temporary root removed by defer; in-flight tasks normally released and awaited. CoverDeliveryGate stores checked continuations and has no cancellation handler; release(data:) can throw while building response before clearing pending, and no teardown drains it on failure.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testExternalRefreshRetiresVariantsAndChangedTimestampCannotReuseObsoleteBytes",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 191
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "External revalidation and observed timestamp prevent obsolete variants resurfacing.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Seed two sizes old, switch mutable response fresh, revalidate; observe newer timestamp cache-only before online fetch and older metadata afterwards.",
+            "postcondition": "Small3px, retired large nil, newer prefetch nil, new online3px and older URL resolves latest3px."
+          }
+        ],
+        "timeoutAndToleranceRationale": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Seed two sizes old, switch mutable response fresh, revalidate; observe newer timestamp cache-only before online fetch and older metadata afterwards. Small3px, retired large nil, newer prefetch nil, new online3px and older URL resolves latest3px.",
+          "2": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Unique temporary root removed by defer; mutable response calls awaited, no held task in this body.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest locations and exact timer/image/nil assertions identify the failed semantic result; throwing filesystem/fixture setup reports errors. No asynchronous-wait diagnostics or universal screenshots are supplied.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testCoalescedRefreshReturnsCommittedReplacementToEveryWaiter",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 224
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "All coalesced revalidation waiters receive committed fresh bytes.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Seed old disk; hold first revalidation; explicitly observe second join; release fresh and join callers.",
+            "postcondition": "Both results3px, subsequent cache3px, exactly one controlled fetch."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Seed old disk; hold first revalidation; explicitly observe second join; release fresh and join callers. Both results3px, subsequent cache3px, exactly one controlled fetch.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Temporary root removed by defer; in-flight tasks normally released and awaited. CoverDeliveryGate stores checked continuations and has no cancellation handler; release(data:) can throw while building response before clearing pending, and no teardown drains it on failure.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testNewTimestampRetiresOlderVariantInFlight",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 261
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; red2px/3px PNG dimensions identify byte generations; synthetic HTTPS URL and account, controlled BookCoverImageLoader fetch."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Timestamp promotion and forced revision retire pending obsolete variants and notify correct refresh generations.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Hold old timestamp while requesting newer size; hold canonical revision while fetching forced refresh; restore zero-timestamp disk image before a newer timestamp.",
+            "postcondition": "Old held response nil; old cache-only nil then current3px; generation replacement index changes on promotion; refresh-only changes generation0 without replacement generation1; forced old response nil; zero timestamp counts as known and replacement generation changes."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Hold old timestamp while requesting newer size; hold canonical revision while fetching forced refresh; restore zero-timestamp disk image before a newer timestamp. Old held response nil; old cache-only nil then current3px; generation replacement index changes on promotion; refresh-only changes generation0 without replacement generation1; forced old response nil; zero timestamp counts as known and replacement generation changes.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Temporary root removed by defer; in-flight tasks normally released and awaited. CoverDeliveryGate stores checked continuations and has no cancellation handler; release(data:) can throw while building response before clearing pending, and no teardown drains it on failure.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testLegacyOfflineArtworkSurvivesUpgradeButCannotResurrectAfterInvalidation",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 371
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; synthetic2px PNG stored under SHA256 account/URL legacy paths for200px and600px requested variants. Offline failure and unchanged validation responses are injected."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Legacy hashed cover bytes remain available offline until authoritative invalidation.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Write old account/URL-hash files for two sizes; read offline, validate unchanged bytes, invalidate and reopen offline.",
+            "postcondition": "Legacy2px, unchanged sibling2px retained, invalidated restarted lookup nil."
+          }
+        ],
+        "timeoutAndToleranceRationale": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Write old account/URL-hash files for two sizes; read offline, validate unchanged bytes, invalidate and reopen offline. Legacy2px, unchanged sibling2px retained, invalidated restarted lookup nil.",
+          "2": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Unique temporary root removed by defer; loader calls awaited, no held task in this body.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest locations and exact timer/image/nil assertions identify the failed semantic result; throwing filesystem/fixture setup reports errors. No asynchronous-wait diagnostics or universal screenshots are supplied.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testSystemArtworkRevalidatesSameURLAfterUnrelatedAccountNotification",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 417
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor, diskCapacity0 loader, synthetic image bytes, CoverMutableResponse and isolated CoverArtworkPublisher/NowPlayingCoordinator with remote commands disabled."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Same-URL system-artwork revalidation retains old usable pixels until fresh bytes arrive after unrelated-account notification.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Disk disabled mutable2px response, isolated publisher/coordinator; observe initial and unrelated publication; hold recovered3px fetch then refresh current account.",
+            "postcondition": "Before release retained artwork2px; afterward3px; elapsed metadata42 and paused publisher state retained."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline. Metadata snapshot time42 and paused publisher state, not AVPlayer advancement.",
+        "ruleAssessments": {
+          "1": "Disk disabled mutable2px response, isolated publisher/coordinator; observe initial and unrelated publication; hold recovered3px fetch then refresh current account. Before release retained artwork2px; afterward3px; elapsed metadata42 and paused publisher state retained.",
+          "2": "Registered XCTest admission/join/publication expectations use3s failure budgets; fetch order is controlled by checked continuations; direct loader calls and task values are awaited, with no independent outer completion deadline.",
+          "3": "Metadata snapshot time42 and paused publisher state, not AVPlayer advancement.",
+          "4": "defer coordinator.clear() retires owned artwork/observation; publisher and loader are local, disk disabled. Held CoverDeliveryGate is released on normal path; release(data:) can throw before draining continuations, and no failure teardown drains pending fetches.",
+          "5": "Local publisher/loader and diskCapacity0 avoid retained disk payloads; fixed account/resource identifiers still mutate BookCoverRefresh.shared without an explicit reset, so independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "XCTest retains assertion lines and named gate/publication expectations; exact typed/image/timer results provide context. No universal screenshot/accessibility or elapsed-state attachment is supplied by this body.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation and failure-path continuation retirement remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testObservedNewerMetadataSurvivesFailedRefreshAndOfflineRestart",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 501
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; separate unique temporary cache root for each allowNetwork/cacheOnly scenario; synthetic2px PNG seeds two variants and failing fetch models newer timestamp unavailability."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Newer observed cover metadata remains authoritative across failed refresh and offline restart.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "For allowNetwork/cacheOnly create separate roots; seed two old variants, observe newer timestamp with failing fetch then reopen offline.",
+            "postcondition": "Newer lookup nil and both old-size cache-only lookups nil after restart for each policy."
+          }
+        ],
+        "timeoutAndToleranceRationale": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "For allowNetwork/cacheOnly create separate roots; seed two old variants, observe newer timestamp with failing fetch then reopen offline. Newer lookup nil and both old-size cache-only lookups nil after restart for each policy.",
+          "2": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Unique temporary root removed by defer; loader calls awaited, no held task in this body.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest locations and exact timer/image/nil assertions identify the failed semantic result; throwing filesystem/fixture setup reports errors. No asynchronous-wait diagnostics or universal screenshots are supplied.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testCorruptVariantRecoversAndTemporaryWriteIsNeverRead",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 537
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "setupAndDependencies": [
+        "iOS MainActor XCTest; unique temporary cache root removed with defer; synthetic3px PNG, URL and account; direct controlled fetch. Corruption and revision bytes are written deliberately into test-owned files."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Corrupt/uncommitted payloads miss and newer durable revision prevents old payload resurrection.",
+        "purpose": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+        "actionPostconditions": [
+          {
+            "action": "Seed files; corrupt all regular payloads and create.uncommitted; reopen, recover, overwrite.revision to2 simulating interrupted revision-first commit, reopen and repair at timestamp2.",
+            "postcondition": "Cache-only corrupt nil; online recovered3px; old payload under advanced revision nil; repaired current3px."
+          }
+        ],
+        "timeoutAndToleranceRationale": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline. N/A: image dimensions and cache state; no advancing playback clock.",
+        "ruleAssessments": {
+          "1": "Seed files; corrupt all regular payloads and create.uncommitted; reopen, recover, overwrite.revision to2 simulating interrupted revision-first commit, reopen and repair at timestamp2. Cache-only corrupt nil; online recovered3px; old payload under advanced revision nil; repaired current3px.",
+          "2": "All async loader operations awaited; no timing sleep/poll or tolerance. Direct await has no test-owned deadline.",
+          "3": "N/A: image dimensions and cache state; no advancing playback clock.",
+          "4": "Unique temporary root removed by defer; loader calls awaited, no held task in this body.",
+          "5": "Unique filesystem root avoids disk collisions, but fixed account/resource identifiers use BookCoverRefresh.shared without an explicit reset; independent shared-generation state is not proved.",
+          "6": "Deterministic image-cache/filesystem and selected framework integration; no real network, device artwork or server contract.",
+          "7": "Source-only review adds no retries, drops no assertions and changes no waits. Recorded caveats are not reproduced failures. Historical unsuccessful attempts, where linked, remain retained.",
+          "8": "Direct XCTest locations and exact timer/image/nil assertions identify the failed semantic result; throwing filesystem/fixture setup reports errors. No asynchronous-wait diagnostics or universal screenshots are supplied.",
+          "9": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+        },
+        "decision": {
+          "outcome": "follow_up",
+          "reason": "Preserve byte-generation/account/variant semantics; shared refresh-generation isolation remain bounded source-review questions. No failing test or product defect is inferred."
+        }
+      },
+      "reviewEvidence": {
+        "revision": "82e3fdf",
+        "kind": "source inspection of named body and referenced helpers; no native execution",
+        "helpers": [
+          "Tests/BleatAppTests/CoverCacheLifecycleTests.swift::CoverDeliveryGate/CoverMutableResponse/CoverArtworkPublisher"
+        ]
+      },
+      "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
     }
   ],
   "decisionCounts": {
-    "keep": 512,
-    "follow_up": 77,
+    "keep": 525,
+    "follow_up": 98,
     "fix": 4
   },
   "startupClockNeighborReview": {
@@ -50086,7 +51280,7 @@
   },
   "coverInitialSaveOwnership": {
     "baseline": "90e12073c39480e06d578c8996a28dabd2cf860a",
-    "scope": "One new four-scenario app test plus shared initial/retry editor ownership; historical audit counts above are retained baseline counts, not a new repository-wide acceptance claim.",
+    "scope": "One new four-scenario app test plus shared initial/retry editor ownership; historicalAuditCounts retains baseline counts, not a new repository-wide acceptance claim.",
     "rules": {
       "1": "Held old invalidation, retired editor ownership, held newer upload, then old completion: newer saving state/account/selection/detail must survive; newer completion alone publishes saved; two exact account-scoped upload payloads required.",
       "2": "Register entry and return expectations before tasks; actual invalidation/upload admission and caller return establish ordering. No sleep or guessed yield.",
@@ -50130,18 +51324,36 @@
   },
   "backgroundCompletionReview": {
     "baseline": "d8670295ef69c0d0f8ccdf58dc6f4869c6ed8283",
-    "scope": "Two new iOS-only declarations and one extended backoff case. Historical methodCount and decisionCounts above retain their original audit scope.",
+    "scope": "Two new iOS-only declarations and one extended backoff case. historicalAuditCounts retains their original audit scope.",
     "evidence": "docs/release-evidence/download-recovery.md#background-event-completion-ordering-2026-10-22",
     "execution": "629 owning app identities passed, including both new cases and extended retry case; isolated durability regression passed. Original-ordering corrected control failed as expected."
   },
   "audioInterruptionReview": {
     "baseline": "4b5829d2def2d4cc4dd707e1e87d1b917a677dea",
-    "scope": "One new iOS-only policy regression. Historical methodCount/decisionCounts retain their original scope.",
+    "scope": "One new iOS-only policy regression. historicalAuditCounts retains their original scope.",
     "evidence": "docs/release-evidence/callback-cancellation-audit.md#audio-interruption-intent-2026-10-22"
   },
   "audioStopReview": {
     "baseline": "8c0b5ffa6c881dc1e39a1161e066c79513a012ab",
-    "scope": "Two new iOS-only Stop regressions; original audit counts remain historical scope. Direct policy/silent player evidence does not complete physical #341 protocols.",
+    "scope": "Two new iOS-only Stop regressions; historicalAuditCounts retains original scope. Direct policy/silent player evidence does not complete physical #341 protocols.",
     "evidence": "docs/release-evidence/callback-cancellation-audit.md#explicit-stop-retirement-2026-10-22"
+  },
+  "historicalAuditCounts": {
+    "methodCount": 593,
+    "decisionCounts": {
+      "keep": 512,
+      "follow_up": 77,
+      "fix": 4
+    },
+    "scope": "Original 593-method audit snapshot; later records are counted by current methodCount/decisionCounts. Prior per-record decisions have not been globally re-reviewed by this repair."
+  },
+  "missingEntryRepair369": {
+    "revision": "82e3fdf",
+    "addedMethodCount": 25,
+    "sourceReview": "Individual bodies and their referenced fixture/gate/publisher helpers inspected. Keep/follow_up decisions preserve explicit source caveats; no implementation changes or new bugs asserted.",
+    "execution": "No new native tests executed for these entries. Cover-save historical focused/owner evidence linked individually; other historical suite evidence remains revision-specific without newly verified per-identity outcomes.",
+    "existingRecordSemanticRechecks": 71,
+    "evidence": "docs/release-evidence/test-reliability-current-status.md",
+    "scope": "App rows only; async-gate test declarations remain separately excluded and reviewed in parent audit."
   }
 }

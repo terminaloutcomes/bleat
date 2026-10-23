@@ -10535,6 +10535,516 @@
       "name": "testStopCompletionDoesNotRetireNewerSelection",
       "line": 11995,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testAppFailuresPreserveTypedPresentation",
+      "line": 9883,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testDownloadFailuresPreserveTypedPresentation",
+      "line": 9906,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEndOfChapterSleepRearmsAfterForwardSeek",
+      "line": 11345,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEndOfChapterSleepRearmsAfterBackwardSeek",
+      "line": 11350,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEndOfChapterSleepRearmsAtExactChapterStart",
+      "line": 11355,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testChapterSeekPreservesDurationAndCancelledSleepTimers",
+      "line": 11360,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEndOfChapterSleepRearmsWhilePaused",
+      "line": 11382,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testEndOfChapterSleepExpiresOnNaturalChapterChange",
+      "line": 11387,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testLiveCoverChangeOutsideSelectedLibraryRefreshesOnlyActiveArtwork",
+      "line": 14687,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testNetworkRecoveryRefreshesPausedDownloadedSystemArtworkInBackground",
+      "line": 19342,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCoverSaveRefreshesActivePlaybackArtworkIncludingRetry",
+      "line": 19451,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testLatestArtworkRejectsOlderImageCompletion",
+      "line": 19604,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCoverRetryCannotPublishAfterOwnershipChangesDuringInvalidation",
+      "line": 19873,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCoverRetrySelectionChangeRetiresBusyStateWithoutClearingNewerRetry",
+      "line": 19919,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCarPlayRejectsCompletionFromPreviousCoverGeneration",
+      "line": 26156,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testColdStartRevalidatesBeforeReturningAndPersistsUnchangedTimestampReplacement",
+      "line": 45,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testConfirmedReplacementInvalidatesEveryVariantAndRejectsLateResponse",
+      "line": 97,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testRefreshCoalescesAndAccountRemovalCannotBeRepopulated",
+      "line": 150,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testExternalRefreshRetiresVariantsAndChangedTimestampCannotReuseObsoleteBytes",
+      "line": 191,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testCoalescedRefreshReturnsCommittedReplacementToEveryWaiter",
+      "line": 224,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testNewTimestampRetiresOlderVariantInFlight",
+      "line": 261,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testLegacyOfflineArtworkSurvivesUpgradeButCannotResurrectAfterInvalidation",
+      "line": 371,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testSystemArtworkRevalidatesSameURLAfterUnrelatedAccountNotification",
+      "line": 417,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testObservedNewerMetadataSurvivesFailedRefreshAndOfflineRestart",
+      "line": 501,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testCorruptVariantRecoversAndTemporaryWriteIsNeverRead",
+      "line": 537,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedHomeFailureWithoutDownloads",
+      "line": 1484,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedHomeFailureKeepsDownloads",
+      "line": 1497,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedLibraryFailure",
+      "line": 1511,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedCategoryFailureKeepsRetry",
+      "line": 1525,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedSearchFailure",
+      "line": 1544,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testTypedBookDetailFailureKeepsRetry",
+      "line": 1562,
+      "language": "swift"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "initializes_new_and_empty_destinations_with_expected_metadata",
+      "line": 403,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_modified_or_augmented_checkout_scaffold_without_mutation",
+      "line": 435,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_unowned_missing_and_malformed_manifests_without_mutation",
+      "line": 464,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "shrinks_repeats_and_preserves_unrelated_entries_and_template",
+      "line": 487,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_collisions_and_modified_owned_resources_before_mutation",
+      "line": 515,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_symlink_destinations_books_files_and_markers",
+      "line": 545,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "invalid_counts_and_generation_failures_preserve_existing_data",
+      "line": 598,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_interrupted_expansion_when_retry_uses_old_or_smaller_count",
+      "line": 622,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/large_library.rs",
+      "name": "rejects_concurrent_generator_before_media_or_mutation",
+      "line": 670,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "seed_requires_persisted_scenario_and_absent_receipt",
+      "line": 286,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "seed_missing_fails_with_a_bounded_typed_state",
+      "line": 315,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "http_bounds_a_server_that_accepts_but_never_replies",
+      "line": 330,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "http_retries_status_and_returns_the_actual_body",
+      "line": 364,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "driver_log_removes_paths_urls_identifiers_and_sensitive_lines",
+      "line": 399,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "driver_log_redacts_bare_bearer_credentials",
+      "line": 408,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "artifact_cleanup_preserves_other_runs",
+      "line": 418,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/runner_readiness.rs",
+      "name": "http_deadline_includes_response_body",
+      "line": 439,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner.rs",
+      "name": "configured_skip_requires_an_exact_identity_in_the_selected_inventory",
+      "line": 719,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner.rs",
+      "name": "required_macos_configuration_rejects_empty_values",
+      "line": 740,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner.rs",
+      "name": "package_resolution_is_invoked_as_an_xcodebuild_option",
+      "line": 749,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner.rs",
+      "name": "test_runner_checks_built_inventory_against_missing_and_extra_results",
+      "line": 792,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/fixed_runner_verification.rs",
+      "name": "download_runner_accepts_exact_results_without_literal_tab_matching",
+      "line": 88,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/fixed_runner_verification.rs",
+      "name": "download_runner_rejects_missing_duplicate_and_wrong_target_results",
+      "line": 102,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/fixed_runner_verification.rs",
+      "name": "performance_runner_rejects_extra_failed_skipped_and_unknown_results",
+      "line": 121,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/fixed_runner_verification.rs",
+      "name": "landscape_runner_checks_names_not_only_the_passing_count",
+      "line": 151,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/large_library_cli.rs",
+      "name": "large_library_wrapper_forwards_count_output_and_repository_override",
+      "line": 9,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/large_library_cli.rs",
+      "name": "large_library_cli_rejects_invalid_counts_without_creating_output",
+      "line": 102,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/release_version_check.rs",
+      "name": "upload_rejects_version_override_before_building",
+      "line": 11,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "verifies_exact_xctest_and_swift_testing_selections",
+      "line": 58,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_unexpected_or_unknown_observation_identities",
+      "line": 87,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_duplicate_observation_records",
+      "line": 116,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_missing_observations_and_partial_dual_runner_output",
+      "line": 130,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_all_skipped_results_even_when_each_skip_is_allowlisted",
+      "line": 167,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "accepts_an_allowed_skip_when_another_test_passes",
+      "line": 182,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "live_runner_allowlist_is_exact_and_does_not_leak_to_telemetry_runner",
+      "line": 198,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_failed_and_unexpected_skipped_observations",
+      "line": 242,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "rejects_nonzero_or_inconsistent_aggregate_counts",
+      "line": 264,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "accepts_empty_auxiliary_swift_testing_suites",
+      "line": 333,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/swift_test_results.rs",
+      "name": "ignores_neighboring_observation_artifacts",
+      "line": 361,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "genuine_xcode_repetitions_verify_each_child_and_discovery_identity",
+      "line": 23,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "failed_unknown_skipped_and_wrong_repetition_children_fail_closed",
+      "line": 47,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "missing_extra_duplicate_and_malformed_discovery_are_rejected",
+      "line": 115,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "cli_supports_offline_json_and_rejects_duplicate_expectations",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/tests/test_results.rs",
+      "name": "xcresult_summary_requires_zero_failures_expected_failures_and_runtime_warnings",
+      "line": 228,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/http_api.rs",
+      "name": "production_router_cleanup_failure_retains_signing_configuration_cause",
+      "line": 172,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "configuration_failure_cleans_fixture",
+      "line": 175,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "database_failure_cleans_fixture",
+      "line": 179,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "router_failure_cleans_fixture",
+      "line": 183,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "success_and_unexpected_success_clean_before_assertion",
+      "line": 188,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "cancellation_joins_operation_then_cleans_fixture",
+      "line": 202,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "unwinding_retains_original_payload_after_cleanup",
+      "line": 224,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "cleanup_failure_fails_successful_work",
+      "line": 298,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "cleanup_failure_preserves_operation_failure",
+      "line": 302,
+      "language": "rust"
+    },
+    {
+      "path": "bleat-api/tests/support/signing_fixture.rs",
+      "name": "instances_and_existing_sentinel_are_isolated",
+      "line": 307,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [
@@ -10555,5 +11065,14 @@
         "evidence": "docs/release-evidence/test-reliability-audit.md#build-helper-dependency-isolation-2026-10-16"
       }
     }
-  ]
+  ],
+  "issue369KnownOmissionRepair": {
+    "revision": "82e3fdf",
+    "addedDeclarations": 85,
+    "app": 25,
+    "ui": 6,
+    "rust": 54,
+    "evidence": "docs/release-evidence/test-reliability-audit.md#known-85-entry-reconciliation-369",
+    "assurance": "Navigation rows only; individual review and execution limits remain in app.json and other.json. The baseline is historical, not refreshed for unchanged rows."
+  }
 }

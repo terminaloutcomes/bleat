@@ -8,7 +8,7 @@ An unchecked historical bullet is not itself an unfixed bug.
 
 ## Revision and counting
 
-Application/test source checkpoint: `f59a7629cd3156ca8086690f2bbc4a4169e01608`
+Historical application/test execution checkpoint: `f59a7629cd3156ca8086690f2bbc4a4169e01608`
 (merged #442). Its tree matches reviewed/tested
 `fd40daca480a0ef1be6aeb817c95a361c8bfaf7f`. #431's SwiftProtobuf update,
 #440/#441's Release repairs/receipt, and #442's original #375 caller diagnostics
@@ -24,19 +24,19 @@ Count different units separately:
 | --- | --- |
 | Proven unresolved implementation bugs | 0 currently confirmed after the bounded fixes and focused investigation. This is not a claim that the app is bug-free. |
 | Unresolved observed validation failures | iPad accessibility remains one active investigation: transient null frame queries are demonstrated; the corrected geometry assertion passed Bold Text, while Increase Contrast later failed to present Now Playing. See below. |
-| Important implementation remainder | The demonstrated multi-query geometry assertion is corrected in this change; the later Increase Contrast presentation failure remains unresolved. #375 and the full Release gate remain delivered. |
-| Known missing structured audit/index entries | 85 existing declarations: 25 app, 6 UI, 54 Rust. Both navigation-index rows and primary per-test audit rows are absent for this known list; tests themselves exist. See the counting/assurance boundary below. |
+| Important implementation remainder | The demonstrated multi-query geometry assertion was corrected in merged #444; the later Increase Contrast presentation failure remains unresolved. #375 and the full Release gate remain delivered. |
+| Known missing structured audit/index entries | 0 remaining in the bounded 85-entry list: this repair adds 25 app, 6 UI and 54 Rust primary records plus 85 navigation rows at source `82e3fdf`. Source concerns and historical execution limits remain explicit. This does not certify global coverage or close the separate review queue. |
 | Existing-record review queue | 71 app semantic rechecks and 241 core helper-context rechecks retained from the bounded prior reconciliation. These overlap source concerns and are not implementation-task counts. |
 | Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
 | Optional/unproven source concerns | 20 residual groups after #442 delivered UI-1/UI-7 and the required caller attribution. These are backlogged concerns, not confirmed defects or an implementation queue. |
-| Configuration/device acceptance | G4 and G5 are complete. Five groups remain active (G1/G2/G6/G7/G8); G3 signed macOS acceptance is explicitly deferred. These are validation groups, not five code defects. |
+| Configuration/device acceptance | G4 and G5 are complete. Four groups remain active (G1/G2/G6/G7); G8's original background-download acceptance was already user-accepted under closed #33, with explicit evidence waivers. G3 signed macOS acceptance is explicitly deferred. These are validation groups, not code-defect counts. |
 
 The previous 19-PR backlog (#417–#429, #432–#437) is merged, as are #438–#442.
 Do not report those PRs, the old 140 follow-up labels, or navigation line drift as
 remaining code work. Full audit compliance still requires the record review
 and configuration dispositions; this checkpoint does not certify it.
 
-## What the 85 missing entries mean
+## What the 85-entry repair establishes
 
 This is a known documentation-coverage list, not 85 missing tests, 85 failing
 tests, or 85 demonstrated implementation fixes. The preserved source-declaration
@@ -47,7 +47,7 @@ functions still exist uniquely in source. #442 added the two existing
 download-status entries, so the known list fell from 87 to 85. This bounded
 recheck is not a new repository-wide discovery or semantic audit.
 
-For those 85 pairs, the primary per-test rows are also absent from
+Before this repair, those 85 pairs also lacked primary per-test rows in
 `app.json`'s `methods` or `other.json`'s `tests`, as applicable. They are not merely
 rows with a stale line number. Some have review or execution evidence elsewhere:
 for example, the cover-save/artwork case is mentioned in another app-review
@@ -69,7 +69,7 @@ cleanup, compiler/skip conditions, applicable rules and a reasoned keep/fix/
 follow-up disposition. Filling the gap means inspecting the relevant body and
 helpers, linking valid existing review/execution, and adding or linking an honest
 record plus index row. A template or name match cannot certify the nine rules;
-no 85-row bulk repair or semantic review was performed by this status refresh.
+the original #443 status refresh performed no 85-row repair or semantic review. The [current reconciliation](test-reliability-audit.md#known-85-entry-reconciliation-369) now supplies source-specific records after inspecting those bodies and relevant helpers; it does not execute the underlying tests or certify complete compliance.
 
 The original [#362 scope](https://github.com/terminaloutcomes/bleat/issues/362)
 requested a per-test audit across targets. The JSON/index format was the chosen
@@ -88,7 +88,7 @@ These are issue counts, not three newly discovered bugs.
 
 | Issue | Landed source/evidence | Current disposition |
 | --- | --- | --- |
-| #369 | #417 adds the five host and nine build-helper records, moved-path history and parity checker. #418 and #437 reconcile reviewed command-owner records. The eight checker regressions and preservation checks are retained in [the audit](test-reliability-audit.md#missing-audit-entry-repair-369). | The old 14-record repair is delivered. Keep comprehensive inventory/semantic reconciliation open; retain the 85 known omissions and the distinct existing-record review queue explicitly. |
+| #369 | #417 adds the five host and nine build-helper records, moved-path history and parity checker. #418 and #437 reconcile reviewed command-owner records. The eight checker regressions and preservation checks are retained in [the audit](test-reliability-audit.md#missing-audit-entry-repair-369). | The old 14-record repair and this 85-record/index repair are delivered in source. Keep comprehensive inventory/semantic reconciliation open; the distinct 71 app / 241 core queue, per-row follow-ups and configuration dispositions remain explicit. |
 | #370 | The small `build-scripts` package, caller-environment/dependency/sandbox regressions and workflow consumers are present. #418 bounds the three build-helper regression commands. Actual Xcode build-for-testing without compiler/SDK overrides is retained in [build-helper evidence](test-reliability-audit.md#build-helper-dependency-isolation-2026-10-16); current app CI continues to build using it. | Closed after reconciliation: all four bounded extraction acceptance items have implementation/execution evidence. Later independent subprocess hardening is a separate optional concern. |
 | #371 | Exact native identities, multiplicities and skip policy are verified by the current runners. #419/#425/#427–#429 own runner/report commands, #420 rejects malformed children, #426 supplies legacy-summary audit records, #432 preserves repository-root results, #435 preserves typed paid-build failures, and #439 handles driver cancellation. See [runner evidence](test-runner-verification.md). | Closed after reconciliation: all four selection/parser/execution acceptance items are delivered. Retained JSON/schema replay is distinct from fresh native execution. Further aggregate/nested-owner hardening is not a demonstrated selection defect. |
 | #372 | Account/transport/telemetry/callback/observer fixes through #434 are merged. Specific original semantics, focused repetitions and signed owners are retained in [core follow-ups](test-reliability-core-followups.md), #437 and #439. | Delivered changed fixtures are credited; broad per-record/helper audit remains in #369. Keep formal acceptance open rather than certify every host helper from one passing suite. |
@@ -199,7 +199,7 @@ G3 signed macOS app/authentication and its five implementation groups remain
 explicitly deferred, not completed. Host tests or compilation do not substitute
 for that app/authentication/relaunch acceptance.
 
-Five groups remain active after G5's screenshot matrix. Available tools are not
+Four groups remain active after G5's screenshot matrix and reconciliation of the already accepted #33/G8 evidence. The [accepted remaining checklist](https://github.com/terminaloutcomes/bleat/issues/369#issuecomment-6341177157) preserves the physical-evidence boundaries and waivers; this record repair adds no physical validation. Available tools are not
 passing evidence; unrun configurations are not reported as blocked merely
 because they are unrun. The earlier 22 October no-build preflight established
 local prerequisites. Subsequent native screenshot execution and the lossless
@@ -208,12 +208,12 @@ acceptance groups.
 
 | Group | Already evidenced | Executable here / remaining prerequisite |
 | --- | --- | --- |
-| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The single-frame width-query correction merged in #444; the later Increase Contrast tap/presentation observation remains inconclusive (diagnostics below). | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix; the later bounded result is recorded below. Tree automation does not establish spoken VoiceOver output/gesture usability; those require a manual assistive-technology session. |
+| G1 Accessibility/layout/VoiceOver | Partial Bold Text/Increase Contrast matrix and historical Dynamic Type/landscape/VoiceOver selections. One configured iPhone primary journey passed at `fd40daca`; one diagnostic iPad playback case passed at private `137fae4`. The single-frame width-query correction merged in #444; the later Increase Contrast tap/presentation observation remains inconclusive (diagnostics below). | Remaining selected Simulator configurations can run with the installed runtime and owned fixtures. iPad Bold Text did not run in the original matrix; the later bounded result is recorded below. Closed [#39](https://github.com/terminaloutcomes/bleat/issues/39) retains the maintainer's manual VoiceOver sign-off; it is not reopened. Remaining K1–K3 keyboard checks are specified in the accepted checklist, separately from the inconclusive iPad presentation observation. |
 | G2 Opt-in performance/large library | App 10k/cache and the 250k-slice Release benchmark retain revision-specific [measurements](../statistics-validation.md); they are not new runs. The [current-stable 2.37.0 live unit](performance-baseline.md#current-stable-setup-readiness-correction-2026-10-22) now passed one exact native identity, zero skips: root/prefix each loaded and cached all 10,000 books under unchanged limits. The original setup failure and bounded correction remain separately recorded. | The selected executable live unit is complete, with independently verified owned cleanup. Historical host, AppModel, Release UI and 250k measurements retain their original sources. Physical-device energy remains separately tracked in [#95](https://github.com/terminaloutcomes/bleat/issues/95); this run cannot establish energy or broader device behavior. |
 | G5 Release screenshots — complete | The [Rust migration receipt](release-screenshots-rust.md#full-matrix-and-orientation-correction) records eight exact native passes and 80 visually reviewed PNGs across both devices, appearances and orientations. Original files are retained. The observed EXIF/XMP orientation defect is corrected losslessly with separate capture/export provenance. | Default matrix, file/manifest validation and independently verified owned cleanup are evidenced. Optional video was not run. This does not substitute for G1 manual accessibility or physical-device groups. |
-| G6 Physical CarPlay | App/CarPlay semantics and #377's specific artwork phone observation remain revision-specific evidence. | Needs a user-operated compatible iPhone and actual CarPlay head unit/scenario observations. No such session was performed; Simulator/phone artwork evidence does not replace it. |
-| G7 Physical audio routes | Simulator readiness/rate/position coverage remains useful within its scope. | Needs a suitable installed device build, applicable Bluetooth/AirPlay/headphone hardware, interruptions and observed route changes. This pass did not establish hardware availability or request installation/pairing access. |
-| G8 Physical background transfer | Simulator recovery and completion assertions retain their source-bound outcomes. | Needs a user-operated physical iOS device, owned server/transfer and background/termination/relaunch observations. Simulator recovery does not prove OS background execution. No physical session was performed. |
+| G6 Physical CarPlay | Original [#24](https://github.com/terminaloutcomes/bleat/issues/24) and [#331](https://github.com/terminaloutcomes/bleat/issues/331) head-unit acceptance remains credited, alongside #377's specific artwork phone evidence. | Only the later C1–C5 native Search/input gaps in the accepted checklist remain; original acceptance is not reopened. This record repair performed no head-unit session. |
+| G7 Physical audio routes | [#341](https://github.com/terminaloutcomes/bleat/issues/341) retains the user-reported 12 October Play → Pause → force-quit → AirPods Play pass. Simulator readiness/rate/position evidence remains separate. | R1–R2 cross-app handoff/reconnect/interruption checks remain in the accepted checklist. Optional tracing is not a prerequisite for crediting the accepted pass. This repair performed no route session. |
+| G8 Physical background transfer — accepted original scope | The original four background-download scenarios were user-accepted in closed [#33](https://github.com/terminaloutcomes/bleat/issues/33); explicit evidence waivers remain in the [accepted checklist](https://github.com/terminaloutcomes/bleat/issues/369#issuecomment-6341177157). | Preserve that acceptance. This audit-record repair performed no physical session and does not upgrade Simulator results to physical evidence or broaden the accepted scenarios. |
 
 ### Latest bounded iPad acceptance unit
 

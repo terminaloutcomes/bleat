@@ -6,13 +6,10 @@ All follow-ups are owned by the Bleat maintainers; bounded remediation issues
 are linked where created. The per-test source evidence is recorded in
 `TestSupport/TestAudit/app.json`.
 
-The app source audit is complete: all 593 in-scope test bodies have individual
-purpose, setup, action/postcondition, synchronization, nine-rule, compiler/skip,
-and decision assessments in `TestSupport/TestAudit/app.json` (510 keep, 4 fix,
-79 follow-up). The 10 async-gate
+The original 593-record source audit is historical. The [#369 known-entry repair](test-reliability-audit.md#known-85-entry-reconciliation-369) adds 25 missing primary records after individual body/helper review, bringing `app.json` to 627 current records (602 already existed). New records retain specific rule assessments and follow-ups; they do not certify complete compliance or fresh execution. The separate 71 app semantic rechecks remain open, and new source concerns are not additional demonstrated bugs. The 10 async-gate
 test declarations in `TestAsyncGateTests.swift` are excluded here and are covered
 by the parent audit; shared gate helpers live in `TestAsyncGates.swift`. Open
-items below are specific reliability defects that remain after source review.
+items below are historical findings and their current dispositions after source review.
 
 ## Open items
 

@@ -1,6 +1,6 @@
 # Tests outside core and app model
 
-Tracked by [issue #362](https://github.com/terminaloutcomes/bleat/issues/362). Owner for these follow-ups: Bleat maintainers. `TestSupport/TestAudit/other.json` records source-specific cases and shared rule profiles; its pending count is authoritative for unreviewed bodies. No full-suite compliance or execution claim is made.
+Tracked by [issue #362](https://github.com/terminaloutcomes/bleat/issues/362). Owner for these follow-ups: Bleat maintainers. `TestSupport/TestAudit/other.json` records source-specific cases and shared rule profiles; the [current checkpoint](test-reliability-current-status.md) and individual row limitations qualify its historical status labels. The [#369 repair](test-reliability-audit.md#known-85-entry-reconciliation-369) adds 54 Rust and 6 UI records after body/helper inspection; it does not infer complete compliance or new runtime execution. No full-suite compliance or execution claim is made.
 
 ## Actionable follow-ups
 
