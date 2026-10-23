@@ -51256,6 +51256,37 @@
         ]
       },
       "execution": "No fresh native execution performed for this record repair. Historical owner/CI results in docs/release-evidence/test-reliability-current-status.md retain their original revision/scope; per-identity linkage has not been reverified here. Rule9 individual/owner repetitions and order/configuration variation remain unestablished by this source review."
+    },
+    {
+      "identifier": "CoverCacheLifecycleTests/testDiskPreparationFailureIsReportedWithoutLosingOnlineArtwork",
+      "source": {
+        "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+        "line": 538
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Report cover persistence directory failures without sacrificing fetched artwork or exposing private filesystem values.",
+        "purpose": "Exercise actual Foundation directory failure through the existing owned cacheRoot seam.",
+        "ruleAssessments": {
+          "1": "A regular-file cache root forces both real directory failures; assert exact stages/POSIX ENOTDIR, successful online pixels, untouched marker, cold offline miss and synthetic-marker nondisclosure.",
+          "2": "Await the real image operation and explicit observer events; three-second expectations are failure budgets, with no arbitrary sleeps or retry-to-green.",
+          "3": "No advancing clock or approximate ordering oracle; exact typed state and file bytes are intentional fixture identity checks.",
+          "4": "Own a unique temporary parent and remove it with defer; no shared cache/user files, network, system settings or credentials.",
+          "5": "Small local PNG, injected response closure and uniquely owned obstructing file; cache root and fetch are existing production seams.",
+          "6": "Native app-hosted loader and actual Foundation error chain; no physical storage-protection, production stale-cover or complete disk-fault-matrix claim.",
+          "7": "Original exact failed outcome and separate Xcode diagnostic-collector timeout retained; corrected exact identity passed without changing assertions/budgets.",
+          "8": "Named directory stages and typed causes distinguish failure location; observer/log contain no URLs, paths, descriptions or payloads.",
+          "9": "Corrected focused1/1 and owningCoverCacheLifecycle11/11 passed with zero failures/skips/expected failures/runtime warnings; exact identities and original native exit0 verified. Original failed native case and separate collector timeout retained; published-head CI is separate."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Proves precise safe diagnostics at the actual persistence failure boundary while preserving usable online artwork."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#typed-persistence-failure-reporting-2026-10-23"
     }
   ],
   "decisionCounts": {
@@ -51355,5 +51386,11 @@
     "existingRecordSemanticRechecks": 71,
     "evidence": "docs/release-evidence/test-reliability-current-status.md",
     "scope": "App rows only; async-gate test declarations remain separately excluded and reviewed in parent audit."
+  },
+  "coverPersistenceFailureReview": {
+    "baseline": "82e3fdfabbfe8b3e8c5797f528f2b2710e6bad7a",
+    "integrationBase": "5c46802a20104647ff67a8f3176106525da8b0b7",
+    "scope": "One new controlled iOS case; retain all #450 rows and historical audit counts. Only directory-preparation failures are fault-injected; write/encoding stages are source-reviewed.",
+    "evidence": "docs/cover-cache-lifecycle.md#typed-persistence-failure-reporting-2026-10-23"
   }
 }

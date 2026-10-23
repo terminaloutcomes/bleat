@@ -179,3 +179,15 @@ readiness changes. Original red/failed attempts remain retained in
 `.build/cover-initial-save-*`; final artifact/source-hash evidence is
 `.build/cover-initial-save-verification.json`. CI and physical acceptance remain
 separate from this local record.
+
+## Typed persistence failure reporting (2026-10-23)
+
+The controlled `CoverCacheLifecycleTests.testDiskPreparationFailureIsReportedWithoutLosingOnlineArtwork` fixture makes its owned cache root a regular file. Before this fix, Foundation rejected both revision- and variant-directory preparation, but neither failure was reported. The exact native case failed only on the two missing diagnostic events; fetched artwork remained usable, the synthetic obstruction remained unchanged and a fresh cache-only lookup missed.
+
+Persistence now emits `cover_disk_failure` with the specific preparation, encoding, revision-write or payload-write stage and the underlying typed POSIX or Cocoa numeric cause. The existing observer receives the same typed values. Paths, URLs, account/item identifiers, payloads, localized descriptions and NSError userInfo are not logged. A successful in-memory revalidation does not assert disk durability. Existing fetch ownership, offline fallback, atomic watermark-before-payload ordering and approved actor-owned filesystem boundary remain unchanged.
+
+The corrected exact native case passed with zero failures/skips/runtime warnings. It fault-injects the two directory-preparation stages and requires POSIX `ENOTDIR`; later encoding/write emissions have source review, not fault-injection coverage. The initial result and source patch remain in `.build/cache400-disk-before*`; corrected evidence is `.build/cache400-disk-after*`. Xcode's automatic failure sysdiagnose separately timed out after 600 seconds after the original test; its collector error and existing OS-build metadata diagnostics are retained, rather than counted as application runtime warnings. Owning-class and exact-head CI evidence are recorded with the delivery receipt.
+
+This is a persistence-diagnostics fix, not a diagnosis of the original device flicker, new physical-device evidence or complete disk-I/O assurance. Read/corruption, invalidation, pruning and deletion reporting, general legacy orphan/metadata bounds and the distinct #411 execution review retain their own dispositions.
+
+Owning `CoverCacheLifecycleTests` verification passed all 11 unique cases with zero failures, skips, expected failures or runtime warnings, including cold-start replacement, legacy offline preservation, timestamp fencing, corrupt-cache recovery, account-removal fencing and system-artwork revalidation. The outer tool wrapper disappeared while its original native driver continued; an event-based process wait observed that driver's exit 0, and the unchanged original bundle passed exact identity/outcome inspection. No replacement run was started. The owned disk guard was reattached to that driver; free space remained above the guard. Native evidence is `.build/cache400-disk-owner*`.
