@@ -12140,6 +12140,196 @@
           "reference": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
         }
       ]
+    },
+    {
+      "id": "BleatIPadKeyboardUITests::testCommandSearchFromBrowsingFocusesWithoutTap",
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "line": 32,
+      "purpose": "Native Cmd-F from browsing must reveal Search and allow typing without a focus tap.",
+      "review": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Strict native modified-key acceptance is unverified/blocked on the current Simulator. Retained failures are not passes or confirmed new app defects."
+      },
+      "profile": "ui_fixture",
+      "enablement": "iPad destination plus DEBUG/BLEAT_UI_TESTING silent fixture. Phone throws an explicit destination skip, enumerated among the five ordinary-runner allowed iPad skips. A configured iPad run must execute strict assertions; no expected-failure conversion.",
+      "setup_dependencies": "Fresh XCUIApplication launch with synthetic playback service and explicit skip/rate/download defaults. Calibration uses supported bleat://search?q=test; no personal server/data.",
+      "action_postconditions": "Native Cmd-F from browsing must reveal Search and allow typing without a focus tap.",
+      "synchronization_timeout": "Asserted five-second readiness/value/elapsed waits, and up to eight scroll attempts with caller failure; no arbitrary sleeps or repeated key-until-green.",
+      "cleanup": "After successful fixture creation, deferred app termination. Setup failure before caller defer relies on XCTest process-session lifecycle; no comprehensive storage-reset claim.",
+      "compilerAndSkipConditions": [
+        "iOS UI target; iPad UIDevice guard; five exact phone skip identities in Rust runner"
+      ],
+      "evidence": [
+        {
+          "kind": "blocked_native_acceptance",
+          "record": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+          "limit": "Raw modifier calibration fails with and without all new keyboard UI wiring. Registration/action-policy coverage does not replace delivery."
+        }
+      ],
+      "rules": {
+        "1": "Native Cmd-F from browsing must reveal Search and allow typing without a focus tap.",
+        "2": "Bounded observable UI conditions only; no sleep.",
+        "3": "Transport uses paused exact elapsed values and independent rate observations, retaining assertions. Other cases use exact strings/state.",
+        "4": "No test-owned asynchronous worker; deferred process termination as bounded above.",
+        "5": "Synthetic service, query and silent media; real native key APIs, without direct command invocation.",
+        "6": "Simulator keyboard injection is distinct from real hardware; native acceptance remains blocked.",
+        "7": "Retain original failures; do not rerun until green or weaken/expect-fail assertions.",
+        "8": "Shared wait/launch/scroll helpers forward caller source locations and retained screenshots are named; native failure attachments remain available.",
+        "9": "Failed native attempts are documented individually. No successful modified-key end-to-end claim."
+      }
+    },
+    {
+      "id": "BleatIPadKeyboardUITests::testCommandKeysControlPausedPlaybackPositionAndRate",
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "line": 48,
+      "purpose": "Native Cmd-P toggles playback; both configured skips and both featured speed directions have separate state assertions while paused.",
+      "review": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Strict native modified-key acceptance is unverified/blocked on the current Simulator. Retained failures are not passes or confirmed new app defects."
+      },
+      "profile": "ui_fixture",
+      "enablement": "iPad destination plus DEBUG/BLEAT_UI_TESTING silent fixture. Phone throws an explicit destination skip, enumerated among the five ordinary-runner allowed iPad skips. A configured iPad run must execute strict assertions; no expected-failure conversion.",
+      "setup_dependencies": "Fresh XCUIApplication launch with synthetic playback service and explicit skip/rate/download defaults. Calibration uses supported bleat://search?q=test; no personal server/data.",
+      "action_postconditions": "Native Cmd-P toggles playback; both configured skips and both featured speed directions have separate state assertions while paused.",
+      "synchronization_timeout": "Asserted five-second readiness/value/elapsed waits, and up to eight scroll attempts with caller failure; no arbitrary sleeps or repeated key-until-green.",
+      "cleanup": "After successful fixture creation, deferred app termination. Setup failure before caller defer relies on XCTest process-session lifecycle; no comprehensive storage-reset claim.",
+      "compilerAndSkipConditions": [
+        "iOS UI target; iPad UIDevice guard; five exact phone skip identities in Rust runner"
+      ],
+      "evidence": [
+        {
+          "kind": "blocked_native_acceptance",
+          "record": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+          "limit": "Raw modifier calibration fails with and without all new keyboard UI wiring. Registration/action-policy coverage does not replace delivery."
+        }
+      ],
+      "rules": {
+        "1": "Native Cmd-P toggles playback; both configured skips and both featured speed directions have separate state assertions while paused.",
+        "2": "Bounded observable UI conditions only; no sleep.",
+        "3": "Transport uses paused exact elapsed values and independent rate observations, retaining assertions. Other cases use exact strings/state.",
+        "4": "No test-owned asynchronous worker; deferred process termination as bounded above.",
+        "5": "Synthetic service, query and silent media; real native key APIs, without direct command invocation.",
+        "6": "Simulator keyboard injection is distinct from real hardware; native acceptance remains blocked.",
+        "7": "Retain original failures; do not rerun until green or weaken/expect-fail assertions.",
+        "8": "Shared wait/launch/scroll helpers forward caller source locations and retained screenshots are named; native failure attachments remain available.",
+        "9": "Failed native attempts are documented individually. No successful modified-key end-to-end claim."
+      }
+    },
+    {
+      "id": "BleatIPadKeyboardUITests::testCommandSearchFocusPreservesQueryAndTextEditingBlocksTransport",
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "line": 76,
+      "purpose": "Cmd-F must dismiss the player, focus/retain query, preserve native editing/caret behavior and block transport/rate; separate speed episodes prevent cancellation masking.",
+      "review": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Strict native modified-key acceptance is unverified/blocked on the current Simulator. Retained failures are not passes or confirmed new app defects."
+      },
+      "profile": "ui_fixture",
+      "enablement": "iPad destination plus DEBUG/BLEAT_UI_TESTING silent fixture. Phone throws an explicit destination skip, enumerated among the five ordinary-runner allowed iPad skips. A configured iPad run must execute strict assertions; no expected-failure conversion.",
+      "setup_dependencies": "Fresh XCUIApplication launch with synthetic playback service and explicit skip/rate/download defaults. Calibration uses supported bleat://search?q=test; no personal server/data.",
+      "action_postconditions": "Cmd-F must dismiss the player, focus/retain query, preserve native editing/caret behavior and block transport/rate; separate speed episodes prevent cancellation masking.",
+      "synchronization_timeout": "Asserted five-second readiness/value/elapsed waits, and up to eight scroll attempts with caller failure; no arbitrary sleeps or repeated key-until-green.",
+      "cleanup": "After successful fixture creation, deferred app termination. Setup failure before caller defer relies on XCTest process-session lifecycle; no comprehensive storage-reset claim.",
+      "compilerAndSkipConditions": [
+        "iOS UI target; iPad UIDevice guard; five exact phone skip identities in Rust runner"
+      ],
+      "evidence": [
+        {
+          "kind": "blocked_native_acceptance",
+          "record": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+          "limit": "Raw modifier calibration fails with and without all new keyboard UI wiring. Registration/action-policy coverage does not replace delivery."
+        }
+      ],
+      "rules": {
+        "1": "Cmd-F must dismiss the player, focus/retain query, preserve native editing/caret behavior and block transport/rate; separate speed episodes prevent cancellation masking.",
+        "2": "Bounded observable UI conditions only; no sleep.",
+        "3": "Transport uses paused exact elapsed values and independent rate observations, retaining assertions. Other cases use exact strings/state.",
+        "4": "No test-owned asynchronous worker; deferred process termination as bounded above.",
+        "5": "Synthetic service, query and silent media; real native key APIs, without direct command invocation.",
+        "6": "Simulator keyboard injection is distinct from real hardware; native acceptance remains blocked.",
+        "7": "Retain original failures; do not rerun until green or weaken/expect-fail assertions.",
+        "8": "Shared wait/launch/scroll helpers forward caller source locations and retained screenshots are named; native failure attachments remain available.",
+        "9": "Failed native attempts are documented individually. No successful modified-key end-to-end claim."
+      }
+    },
+    {
+      "id": "BleatIPadKeyboardUITests::testBookmarkModalBlocksCommandsUntilDismissal",
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "line": 145,
+      "purpose": "A bookmark editor must block transport/Search; cancellation must restore shortcuts, with independent speed-direction observations.",
+      "review": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Strict native modified-key acceptance is unverified/blocked on the current Simulator. Retained failures are not passes or confirmed new app defects."
+      },
+      "profile": "ui_fixture",
+      "enablement": "iPad destination plus DEBUG/BLEAT_UI_TESTING silent fixture. Phone throws an explicit destination skip, enumerated among the five ordinary-runner allowed iPad skips. A configured iPad run must execute strict assertions; no expected-failure conversion.",
+      "setup_dependencies": "Fresh XCUIApplication launch with synthetic playback service and explicit skip/rate/download defaults. Calibration uses supported bleat://search?q=test; no personal server/data.",
+      "action_postconditions": "A bookmark editor must block transport/Search; cancellation must restore shortcuts, with independent speed-direction observations.",
+      "synchronization_timeout": "Asserted five-second readiness/value/elapsed waits, and up to eight scroll attempts with caller failure; no arbitrary sleeps or repeated key-until-green.",
+      "cleanup": "After successful fixture creation, deferred app termination. Setup failure before caller defer relies on XCTest process-session lifecycle; no comprehensive storage-reset claim.",
+      "compilerAndSkipConditions": [
+        "iOS UI target; iPad UIDevice guard; five exact phone skip identities in Rust runner"
+      ],
+      "evidence": [
+        {
+          "kind": "blocked_native_acceptance",
+          "record": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+          "limit": "Raw modifier calibration fails with and without all new keyboard UI wiring. Registration/action-policy coverage does not replace delivery."
+        }
+      ],
+      "rules": {
+        "1": "A bookmark editor must block transport/Search; cancellation must restore shortcuts, with independent speed-direction observations.",
+        "2": "Bounded observable UI conditions only; no sleep.",
+        "3": "Transport uses paused exact elapsed values and independent rate observations, retaining assertions. Other cases use exact strings/state.",
+        "4": "No test-owned asynchronous worker; deferred process termination as bounded above.",
+        "5": "Synthetic service, query and silent media; real native key APIs, without direct command invocation.",
+        "6": "Simulator keyboard injection is distinct from real hardware; native acceptance remains blocked.",
+        "7": "Retain original failures; do not rerun until green or weaken/expect-fail assertions.",
+        "8": "Shared wait/launch/scroll helpers forward caller source locations and retained screenshots are named; native failure attachments remain available.",
+        "9": "Failed native attempts are documented individually. No successful modified-key end-to-end claim."
+      }
+    },
+    {
+      "id": "BleatIPadKeyboardUITests::testNativeCommandModifierEditingCalibration",
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "line": 11,
+      "purpose": "A real focused Search field opened through the supported synthetic deep link must replace test with x after native Cmd-A then x; baseline comparison currently produces testx.",
+      "review": {
+        "status": "reviewed",
+        "decision": "followup",
+        "reason": "Strict native modified-key acceptance is unverified/blocked on the current Simulator. Retained failures are not passes or confirmed new app defects."
+      },
+      "profile": "ui_fixture",
+      "enablement": "iPad destination plus DEBUG/BLEAT_UI_TESTING silent fixture. Phone throws an explicit destination skip, enumerated among the five ordinary-runner allowed iPad skips. A configured iPad run must execute strict assertions; no expected-failure conversion.",
+      "setup_dependencies": "Fresh XCUIApplication launch with synthetic playback service and explicit skip/rate/download defaults. Calibration uses supported bleat://search?q=test; no personal server/data.",
+      "action_postconditions": "A real focused Search field opened through the supported synthetic deep link must replace test with x after native Cmd-A then x; baseline comparison currently produces testx.",
+      "synchronization_timeout": "Asserted five-second readiness/value/elapsed waits, and up to eight scroll attempts with caller failure; no arbitrary sleeps or repeated key-until-green.",
+      "cleanup": "After successful fixture creation, deferred app termination. Setup failure before caller defer relies on XCTest process-session lifecycle; no comprehensive storage-reset claim.",
+      "compilerAndSkipConditions": [
+        "iOS UI target; iPad UIDevice guard; five exact phone skip identities in Rust runner"
+      ],
+      "evidence": [
+        {
+          "kind": "blocked_native_acceptance",
+          "record": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+          "limit": "Raw modifier calibration fails with and without all new keyboard UI wiring. Registration/action-policy coverage does not replace delivery."
+        }
+      ],
+      "rules": {
+        "1": "A real focused Search field opened through the supported synthetic deep link must replace test with x after native Cmd-A then x; baseline comparison currently produces testx.",
+        "2": "Bounded observable UI conditions only; no sleep.",
+        "3": "Transport uses paused exact elapsed values and independent rate observations, retaining assertions. Other cases use exact strings/state.",
+        "4": "No test-owned asynchronous worker; deferred process termination as bounded above.",
+        "5": "Synthetic service, query and silent media; real native key APIs, without direct command invocation.",
+        "6": "Simulator keyboard injection is distinct from real hardware; native acceptance remains blocked.",
+        "7": "Retain original failures; do not rerun until green or weaken/expect-fail assertions.",
+        "8": "Shared wait/launch/scroll helpers forward caller source locations and retained screenshots are named; native failure attachments remain available.",
+        "9": "Failed native attempts are documented individually. No successful modified-key end-to-end claim."
+      }
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -12386,5 +12576,11 @@
     "scope": "One new opt-in native UI declaration; only its exact standard-gate allowed-skip identity is added.",
     "evidence": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23",
     "boundary": "Actual app process and server update on Simulator; not physical Lock Screen/Control Center/CarPlay artwork."
+  },
+  "ipadKeyboardCandidateReview": {
+    "scope": "Five new strict iPad keyboard UI cases; no broad audit reconciliation.",
+    "status": "native modified-key acceptance blocked",
+    "evidence": "docs/release-evidence/ipad-keyboard-shortcuts.md",
+    "addedRecordCount": 5
   }
 }

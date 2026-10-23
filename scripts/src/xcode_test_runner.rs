@@ -306,6 +306,16 @@ fn run_core(root: &Path) -> Result<()> {
         "BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress".to_owned(),
         "BleatUITests/BleatLiveUITests/testLiveExternalCoverReplacementSurvivesProcessRelaunch"
             .to_owned(),
+        "BleatUITests/BleatIPadKeyboardUITests/testNativeCommandModifierEditingCalibration"
+            .to_owned(),
+        "BleatUITests/BleatIPadKeyboardUITests/testCommandSearchFromBrowsingFocusesWithoutTap"
+            .to_owned(),
+        "BleatUITests/BleatIPadKeyboardUITests/testCommandKeysControlPausedPlaybackPositionAndRate"
+            .to_owned(),
+        "BleatUITests/BleatIPadKeyboardUITests/testCommandSearchFocusPreservesQueryAndTextEditingBlocksTransport"
+            .to_owned(),
+        "BleatUITests/BleatIPadKeyboardUITests/testBookmarkModalBlocksCommandsUntilDismissal"
+            .to_owned(),
         "BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots".to_owned(),
         "BleatUITests/BleatLiveUITests/testReleaseSecretScanRefreshAfterTokenInvalidation"
             .to_owned(),

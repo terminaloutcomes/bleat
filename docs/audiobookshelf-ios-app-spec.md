@@ -2414,7 +2414,13 @@ wire schema must be re-audited before release as part of GitHub issue 68.
 - Keep primary navigation, login, browsing, and playback layouts usable in
   portrait and landscape on iPhone and iPad.
 - Provide keyboard shortcuts on iPad for play/pause, skip, speed, and search
-  ([GitHub issue #40](https://github.com/terminaloutcomes/bleat/issues/40)).
+  ([GitHub issue #40](https://github.com/terminaloutcomes/bleat/issues/40)):
+  Command-P toggles playback, Command-Left/Right Arrow use the configured skip
+  intervals, Command-Minus/Plus step through featured speeds, and Command-F
+  reveals Search with its retained query and text focus. Playback shortcuts
+  yield to text entry and are blocked behind another modal; Search can dismiss
+  the player but must not dismiss another sheet or confirmation. Bare Space and
+  arrow keys retain native text/focus behavior.
 - Format times and numbers with locale-aware APIs.
 - VoiceOver labels for statistics state the metric, value, selected range, account scope, and whether coverage is all-device, this-app-only, stale, or approximate.
 - All destructive actions require clear confirmation and identify the affected server/account.

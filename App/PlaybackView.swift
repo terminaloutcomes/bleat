@@ -416,6 +416,9 @@ struct NowPlaying: View {
     let retryPlayback: @MainActor () async -> PlaybackStartOutcome
     @Environment(\.dismiss) private var dismiss
     @State private var bookmarkDraft: BookmarkDraft?
+    #if os(iOS)
+        @Environment(\.ipadKeyboardScene) private var keyboardScene
+    #endif
     @State private var isRetrying = false
 
     @ColourSchemePreference private var colourScheme
@@ -833,7 +836,14 @@ struct NowPlaying: View {
             .toolbar {
                 playerToolbar
             }
-            .sheet(item: $bookmarkDraft) { draft in
+            .sheet(
+                item: $bookmarkDraft,
+                onDismiss: {
+                    #if os(iOS)
+                        keyboardScene?.refresh()
+                    #endif
+                }
+            ) { draft in
                 BookmarkEditorView(
                     playback: playback,
                     draft: draft
@@ -841,6 +851,9 @@ struct NowPlaying: View {
             }
         }
         .accessibilityIdentifier("player.screen").tint(colourScheme.color)
+        #if os(iOS)
+            .modifier(IPadPlayerKeyboardScope())
+        #endif
     }
 
     private var bookCover: some View {

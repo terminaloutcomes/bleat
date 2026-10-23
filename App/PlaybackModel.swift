@@ -4211,7 +4211,7 @@ final class PlaybackModel {
         )
     }
 
-    private var isPlaybackControlAvailable: Bool {
+    var isPlaybackControlAvailable: Bool {
         guard preparation != nil else {
             return false
         }
@@ -4221,6 +4221,13 @@ final class PlaybackModel {
         case .idle, .preparing, .ended, .failed:
             return false
         }
+    }
+
+    var isPlaybackToggleAvailable: Bool {
+        guard !isAccountSwitchShutdownInProgress else { return false }
+        if preparation != nil { return isPlaybackControlAvailable }
+        return state == .paused && resumeSelection != nil
+            && resumeSelectionHandler != nil
     }
 
     func handleRemoteCommand(

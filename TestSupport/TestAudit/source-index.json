@@ -11105,6 +11105,84 @@
       "name": "testLiveExternalCoverReplacementSurvivesProcessRelaunch",
       "line": 4549,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testAllShortcutsAreAvailableInActiveIPadPlayback",
+      "line": 12,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testTextEntryPreservesSearchAndBlocksPlaybackShortcuts",
+      "line": 20,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testShortcutsDoNotCrossDeviceAuthenticationSceneOrPresentationBoundaries",
+      "line": 29,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testSearchRemainsAvailableWithoutPlayableMedia",
+      "line": 50,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testRestoredSelectionCanToggleWithoutEnablingPreparedMediaCommands",
+      "line": 59,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testKeyboardSearchRevealsRootAndRequestsFocusWithoutDiscardingQuery",
+      "line": 125,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testPlayerSearchWaitsForDismissalAndRequestsFocusExactlyOnce",
+      "line": 151,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
+      "name": "testHostedScopeExposesPublicShortcutRegistrationAndGuardedSearch",
+      "line": 182,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "name": "testNativeCommandModifierEditingCalibration",
+      "line": 11,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "name": "testCommandSearchFromBrowsingFocusesWithoutTap",
+      "line": 32,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "name": "testCommandKeysControlPausedPlaybackPositionAndRate",
+      "line": 48,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "name": "testCommandSearchFocusPreservesQueryAndTextEditingBlocksTransport",
+      "line": 76,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatIPadKeyboardUITests.swift",
+      "name": "testBookmarkModalBlocksCommandsUntilDismissal",
+      "line": 145,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [
