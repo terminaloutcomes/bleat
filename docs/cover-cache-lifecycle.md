@@ -172,10 +172,11 @@ The residual groups in #400 remain distinct:
 
 - **C400-R1:** A cache-only artwork miss after account-ID canonicalization is
   permitted by the offline policy; automatic cross-ID image migration is not a
-  specified guarantee. The stronger device-free next check is whether canonical
-  account removal also purges its trusted legacy-alias artwork while preserving
-  unrelated accounts. Existing same-account raw-format fallback does not prove
-  that cleanup.
+  specified guarantee. The controlled account-removal witness below reproduced
+  retained trusted-alias artwork. The fix snapshots trusted reverse-transitive
+  ownership before removal and purges those artwork roots only after success,
+  while unrelated accounts survive. Same-account raw-format fallback is a
+  separate policy.
 - **C400-R2:** The existing account-removal/late-response regression already
   proves isolation. Generation/revision maps remain process-owned until full
   reset; no count cap or demonstrated user failure is established. Further
@@ -189,8 +190,10 @@ The residual groups in #400 remain distinct:
   reclamation needs an ownership/anti-resurrection policy before implementation.
 - **C400-R5:** Source backup/default-protection evidence is recorded above;
   actual file attributes and any required locked-device evidence remain separate.
-- **C400-R6:** Physical system-artwork evidence remains separate as below;
-  #377's accepted results and the bounded original observation are preserved.
+- **C400-R6:** The actual external-server edit and OS app-process relaunch
+  journey below passed on Simulator without an app refresh fix. Physical
+  system-artwork evidence remains separate; #377's accepted results and the
+  bounded original observation are preserved.
 
 ## Failed-prune accounting (2026-10-23)
 
@@ -297,3 +300,65 @@ The corrected exact native case passed with zero failures/skips/runtime warnings
 This is a persistence-diagnostics fix, not a diagnosis of the original device flicker, new physical-device evidence or complete disk-I/O assurance. Read/corruption, invalidation, pruning and deletion reporting, general legacy orphan/metadata bounds and the distinct #411 execution review retain their own dispositions.
 
 Owning `CoverCacheLifecycleTests` verification passed all 11 unique cases with zero failures, skips, expected failures or runtime warnings, including cold-start replacement, legacy offline preservation, timestamp fencing, corrupt-cache recovery, account-removal fencing and system-artwork revalidation. The outer tool wrapper disappeared while its original native driver continued; an event-based process wait observed that driver's exit 0, and the unchanged original bundle passed exact identity/outcome inspection. No replacement run was started. The owned disk guard was reattached to that driver; free space remained above the guard. Native evidence is `.build/cache400-disk-owner*`.
+
+## Trusted-alias removal and real-process relaunch (2026-10-23)
+
+The native `AppModelTests.testRemovingCanonicalAccountDeletesTrustedAliasArtwork`
+witness used actual AccountStore identity migration and LiveAppService removal,
+an injected loader confined to a unique temporary root, UUID-namespaced test
+credentials and an outside-root sentinel. Exactly one baseline test executed:
+canonical artwork/account/credentials were removed and unrelated controls passed,
+but a fresh cache-only loader still read the legacy artwork. The sole failing
+assertion and original result are retained. An earlier UI-helper actor-annotation
+compile error executed zero tests and is retained separately.
+
+The service now snapshots the canonical identity and reverse-transitive persisted
+trusted aliases before destructive removal, excluding identities owned by other
+current accounts. Traversal deduplicates visited identities. The app removes
+those artwork roots only after the existing account-removal service succeeds;
+lookup failure preserves its typed account-store cause and prevents removal.
+No ownership is inferred from directory names, remote URLs or untrusted IDs.
+The existing nonthrowing per-account filesystem-deletion policy is unchanged:
+this fix does not establish recovery from denied artwork deletion. It also does
+not reclaim indirect alias bookkeeping records or migrate cached images.
+
+Three focused cases passed with zero failures, skips, expected failures or runtime
+warnings: a real A→B→C alias chain plus unrelated X→Y artwork/account/credential
+preservation, typed lookup failure with no removal, and service-removal failure
+with no artwork deletion. The direct alias-removal control remains; residual
+indirect alias records are not claimed to be purged. Complete owning validation
+and final published-head CI are recorded separately in the delivery receipt.
+The first owning invocation had an invalid destination argument and executed
+zero tests; its distinct corrected invocation is retained.
+
+`BleatLiveUITests.testLiveExternalCoverReplacementSurvivesProcessRelaunch`
+passed on the existing dedicated iPhone 17 Pro Simulator against an owned pinned
+Audiobookshelf 2.37.0/Caddy harness. It externally uploads red JPEG artwork and
+verifies decoded bytes from the actual 360px endpoint, then verifies rendered
+red Home-card pixels. It terminates the actual app process and asserts
+`notRunning` before externally uploading blue, verifies a newer server timestamp
+and served blue bytes, then relaunches the same app installation/cache and
+requires blue pixels with less than 1% old red. Each bounded predicate samples a
+single screenshot; no sleep or retry-to-green is used. Both retained screenshots
+were visually inspected. Exactly one test passed, with zero skips, failures,
+expected failures or runtime warnings. No production refresh fix was needed.
+
+Reproduction requires a fresh **owned disposable** app installation, the supported
+`live-test-environment.sh` harness with a unique Compose project and synthetic
+credentials/media, and its CA installed only into the owned Simulator. Supply
+`BLEAT_LIVE_APP_URL`, `BLEAT_LIVE_USERNAME`, `BLEAT_LIVE_PASSWORD`, explicit
+loopback-only `BLEAT_LIVE_CONTROL_URL`, and a seeded `BLEAT_LIVE_COVER_ITEM_ID`
+to the UI runner's environment, then select only the named test. The control URL
+is the disposable server's HTTP prefix endpoint; app traffic remains trusted
+HTTPS. Existing build products may be reused with an owned copy of the generated
+xctestrun configuration. The configured check must execute and pass; only its
+exact identity may skip in the unconfigured standard UI gate. Never point this
+mutating test at a user's server.
+
+This adds actual process-relaunch evidence to the existing changed/unchanged
+timestamp, variant-invalidation and disk-reuse component evidence. It proves the
+controlled external-edit path on Simulator, not every physical artwork surface,
+locked-device file attributes or the original unreproduced startup flicker.
+Preserve accepted #377 protocols. Metadata/transcript caps and marker reclamation
+remain optional policy work; no new numeric limits or durable-data eviction are
+introduced.

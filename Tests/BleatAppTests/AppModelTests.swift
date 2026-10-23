@@ -24663,6 +24663,173 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(removedNativeLogin)
     }
 
+    #if os(iOS)
+        func testRemovingCanonicalAccountDeletesTrustedAliasArtwork()
+            async throws
+        {
+            let fixture = try await makeLocalDataLifecycleFixture()
+            let vault = fixture.makeCredentialStore()
+            addTeardownBlock { try await vault.deleteAllCredentials() }
+            let legacy = try fixtureAccount(
+                accountID: "legacy-artwork-\(UUID().uuidString)",
+                userID: "alias-artwork-reader",
+                username: "alias-reader",
+                server: "https://127.0.0.1:2"
+            )
+            let intermediateID = AccountID.canonical(
+                server: legacy.server, userID: legacy.user.id)
+            let migration = AccountIdentityMigration(
+                legacyID: legacy.id, canonicalID: intermediateID)
+            let store = AccountStore(modelContainer: fixture.modelContainer)
+            try await store.save(legacy, makeActive: false)
+            let migrations = try await store.legacyIdentityMigrations()
+            XCTAssertEqual(migrations, [migration])
+            try await store.applyIdentityMigrations(migrations)
+            let aliases = try await store.identityAliases()
+            XCTAssertEqual(aliases, [migration])
+            let replacementServer = try NormalizedServerURL(
+                "https://127.0.0.1:3")
+            let canonicalID = AccountID.canonical(
+                server: replacementServer, userID: legacy.user.id)
+            let canonical = try fixtureAccount(
+                accountID: canonicalID.rawValue,
+                userID: legacy.user.id.rawValue,
+                username: legacy.user.username,
+                server: replacementServer.url.absoluteString)
+            try await store.replaceAccountIdentity(
+                from: intermediateID, with: canonical)
+            let replacementMigration = AccountIdentityMigration(
+                legacyID: intermediateID, canonicalID: canonicalID)
+            let chain = try await store.identityAliases()
+            XCTAssertTrue(chain.contains(migration))
+            XCTAssertTrue(chain.contains(replacementMigration))
+            let unrelatedLegacy = try fixtureAccount(
+                accountID: "unrelated-legacy-\(UUID().uuidString)",
+                userID: "unrelated-alias-reader",
+                server: "https://127.0.0.1:4")
+            try await store.save(unrelatedLegacy, makeActive: false)
+            let unrelatedMigration = AccountIdentityMigration(
+                legacyID: unrelatedLegacy.id,
+                canonicalID: AccountID.canonical(
+                    server: unrelatedLegacy.server,
+                    userID: unrelatedLegacy.user.id))
+            try await store.applyIdentityMigrations([unrelatedMigration])
+            try await vault.save(
+                AuthenticationTokens(
+                    accessToken: "synthetic-alias-access",
+                    refreshToken: "synthetic-alias-refresh"),
+                nativeLogin: NativeLoginCredentials(
+                    userID: legacy.user.id, username: legacy.user.username,
+                    password: "synthetic-alias-password"),
+                for: canonicalID
+            )
+
+            let parent = FileManager.default.temporaryDirectory
+                .appendingPathComponent("alias-artwork-\(UUID().uuidString)")
+            let root = parent.appendingPathComponent("BookCovers")
+            try FileManager.default.createDirectory(
+                at: parent, withIntermediateDirectories: true)
+            addTeardownBlock { try? FileManager.default.removeItem(at: parent) }
+            let outside = parent.appendingPathComponent("outside-cache.bin")
+            let sentinel = Data([9, 8, 7])
+            try sentinel.write(to: outside)
+            let url = try XCTUnwrap(
+                URL(
+                    string:
+                        "https://127.0.0.1:2/api/items/alias-cover/cover?ts=0"))
+            let data = try XCTUnwrap(
+                artworkTestImage(edge: 3, colour: .blue).pngData())
+            let loader = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { request in
+                    (
+                        data,
+                        try XCTUnwrap(
+                            HTTPURLResponse(
+                                url: try XCTUnwrap(request.url),
+                                statusCode: 200,
+                                httpVersion: nil, headerFields: nil))
+                    )
+                })
+            let unrelated = fixture.accounts[1]
+            for accountID in [
+                legacy.id, intermediateID, canonicalID, unrelated.id,
+                unrelatedLegacy.id, unrelatedMigration.canonicalID,
+            ] {
+                let image = await loader.image(for: url, accountID: accountID)
+                XCTAssertEqual(image?.size.width, 3)
+            }
+            let service = try makeLocalDataLifecycleService(
+                modelContainer: fixture.modelContainer, credentialStore: vault)
+            let model = AppModel(
+                service: service,
+                downloadsStorageRootURL: fixture.downloadsURL,
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("alias-artwork-removal"),
+                removeBookCovers: { accountID in
+                    await loader.removeAll(for: accountID)
+                })
+            await model.start()
+            XCTAssertTrue(model.accounts.contains { $0.id == canonicalID })
+
+            let removed = await model.removeAccount(canonical)
+
+            XCTAssertTrue(removed)
+            let persistedStore = AccountStore(
+                modelContainer: fixture.modelContainer)
+            let remainingAccounts = try await persistedStore.accounts()
+            let remainingAliases = try await persistedStore.identityAliases()
+            XCTAssertFalse(remainingAccounts.contains { $0.id == canonicalID })
+            XCTAssertTrue(remainingAccounts.contains { $0.id == unrelated.id })
+            XCTAssertFalse(
+                remainingAliases.contains { $0 == replacementMigration })
+            XCTAssertTrue(
+                remainingAliases.contains { $0 == unrelatedMigration })
+            let removedTokens = try await vault.credentials(for: canonicalID)
+            let removedLogin = try await vault.nativeLoginCredentials(
+                for: canonicalID)
+            let retainedTokens = try await vault.credentials(for: unrelated.id)
+            let retainedLogin = try await vault.nativeLoginCredentials(
+                for: unrelated.id)
+            XCTAssertNil(removedTokens)
+            XCTAssertNil(removedLogin)
+            XCTAssertNotNil(retainedTokens)
+            XCTAssertNotNil(retainedLogin)
+
+            let unexpectedFetches = Mutex(0)
+            let freshLoader = BookCoverImageLoader(
+                cacheRoot: root,
+                fetch: { _ in
+                    unexpectedFetches.withLock { $0 += 1 }
+                    throw URLError(.notConnectedToInternet)
+                })
+            let canonicalImage = await freshLoader.image(
+                for: url, accountID: canonicalID, policy: .cacheOnly)
+            let legacyImage = await freshLoader.image(
+                for: url, accountID: legacy.id, policy: .cacheOnly)
+            let intermediateImage = await freshLoader.image(
+                for: url, accountID: intermediateID, policy: .cacheOnly)
+            let unrelatedImage = await freshLoader.image(
+                for: url, accountID: unrelated.id, policy: .cacheOnly)
+            let unrelatedLegacyImage = await freshLoader.image(
+                for: url, accountID: unrelatedLegacy.id, policy: .cacheOnly)
+            let unrelatedCanonicalImage = await freshLoader.image(
+                for: url, accountID: unrelatedMigration.canonicalID,
+                policy: .cacheOnly)
+            XCTAssertNil(canonicalImage)
+            XCTAssertNil(intermediateImage)
+            XCTAssertNil(
+                legacyImage,
+                "Removing the migrated account also removes its trusted alias artwork"
+            )
+            XCTAssertEqual(unrelatedImage?.size.width, 3)
+            XCTAssertEqual(unrelatedLegacyImage?.size.width, 3)
+            XCTAssertEqual(unrelatedCanonicalImage?.size.width, 3)
+            XCTAssertEqual(unexpectedFetches.withLock { $0 }, 0)
+            XCTAssertEqual(try Data(contentsOf: outside), sentinel)
+        }
+    #endif
+
     func testRemoveInactiveAccountKeepsBrowsingAccount() async throws {
         let active = try fixtureAccount()
         let inactive = try fixtureAccount(
@@ -24698,7 +24865,12 @@ final class AppModelTests: XCTestCase {
                 .accountRemoval(.logoutRequestFailed)
             )
         )
-        let model = AppModel(service: service)
+        let artworkRemovals = Mutex<[AccountID]>([])
+        let model = AppModel(
+            service: service,
+            removeBookCovers: { accountID in
+                artworkRemovals.withLock { $0.append(accountID) }
+            })
         await model.start()
 
         await model.removeAccount()
@@ -24709,6 +24881,35 @@ final class AppModelTests: XCTestCase {
             model.accountActionStatus,
             .failed(.accountRemovalFailed)
         )
+        XCTAssertTrue(artworkRemovals.withLock { $0.isEmpty })
+    }
+
+    func testArtworkIdentityLookupFailurePreventsAccountRemoval() async throws {
+        let account = try fixtureAccount()
+        let error = AppServiceError.accountStore(.persistenceFailed)
+        let service = TestAppService(
+            activeAccount: .success(account),
+            libraries: .success([]),
+            artworkAccountIDs: .failure(error))
+        let artworkRemovals = Mutex<[AccountID]>([])
+        let model = AppModel(
+            service: service,
+            removeBookCovers: { accountID in
+                artworkRemovals.withLock { $0.append(accountID) }
+            })
+        await model.start()
+
+        let removed = await model.removeAccount()
+
+        XCTAssertFalse(removed)
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.account, account)
+        XCTAssertEqual(
+            model.accountActionStatus,
+            .failed(AppFailure(operation: .removeAccount, serviceError: error)))
+        let removals = await service.removedAccounts()
+        XCTAssertTrue(removals.isEmpty)
+        XCTAssertTrue(artworkRemovals.withLock { $0.isEmpty })
     }
 
     func testConcurrentAccountRemovalIsIgnored() async throws {
@@ -29327,6 +29528,7 @@ private actor TestAppService: AppServicing {
     private let authorizedDownloadRequestGate: AsyncGate?
     private let primaryFallbackURL: URL?
     private var removeAccountResult: Result<Void, AppServiceError>
+    private let artworkAccountIDsResult: Result<[AccountID], AppServiceError>?
     private var localDataResetResult: Result<Void, AppServiceError>
     private var privateCloudSyncSettingResult: Result<Void, AppServiceError>
     private let loginGate: AsyncGate?
@@ -29586,6 +29788,7 @@ private actor TestAppService: AppServicing {
         authorizedDownloadRequestGate: AsyncGate? = nil,
         primaryFallbackURL: URL? = nil,
         removeAccount: Result<Void, AppServiceError> = .success(()),
+        artworkAccountIDs: Result<[AccountID], AppServiceError>? = nil,
         localDataReset: Result<Void, AppServiceError> = .success(()),
         privateCloudSyncSetting:
             Result<Void, AppServiceError> = .success(()),
@@ -29673,6 +29876,7 @@ private actor TestAppService: AppServicing {
         self.authorizedDownloadRequestGate = authorizedDownloadRequestGate
         self.primaryFallbackURL = primaryFallbackURL
         removeAccountResult = removeAccount
+        artworkAccountIDsResult = artworkAccountIDs
         localDataResetResult = localDataReset
         privateCloudSyncSettingResult = privateCloudSyncSetting
         self.loginGate = loginGate
@@ -30832,6 +31036,13 @@ private actor TestAppService: AppServicing {
             await progressUpdateGate.enterAndWait()
         }
         try value(from: progressUpdateResult)
+    }
+
+    func artworkAccountIDsForRemoval(
+        of accountID: AccountID
+    ) async throws(AppServiceError) -> [AccountID] {
+        guard let artworkAccountIDsResult else { return [accountID] }
+        return try value(from: artworkAccountIDsResult)
     }
 
     func removeAccount(

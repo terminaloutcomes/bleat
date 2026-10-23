@@ -304,6 +304,8 @@ fn run_core(root: &Path) -> Result<()> {
         "BleatUITests/BleatUITests/testAcceptsExternalURLConfirmationFromHost".to_owned(),
         "BleatUITests/BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload".to_owned(),
         "BleatUITests/BleatLiveUITests/testLiveOfflineCachedDownloadAndLocalProgress".to_owned(),
+        "BleatUITests/BleatLiveUITests/testLiveExternalCoverReplacementSurvivesProcessRelaunch"
+            .to_owned(),
         "BleatUITests/BleatReleaseScreenshotTests/testReleaseScreenshots".to_owned(),
         "BleatUITests/BleatLiveUITests/testReleaseSecretScanRefreshAfterTokenInvalidation"
             .to_owned(),

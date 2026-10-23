@@ -194,6 +194,10 @@ actor BookCoverImageLoader: BookCoverImageLoading {
         try await shared.removeAllForLocalDataReset()
     }
 
+    nonisolated static func removeShared(for accountID: AccountID) async {
+        await shared.removeAll(for: accountID)
+    }
+
     private static let maximumResponseBytes = 5 * 1_024 * 1_024
     private static let memoryCapacity = 32 * 1_024 * 1_024
     private static let diskCapacity = 128 * 1_024 * 1_024

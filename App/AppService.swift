@@ -669,6 +669,10 @@ protocol AppServicing: Sendable {
         update: BookProgressUpdate
     ) async throws(AppServiceError)
 
+    func artworkAccountIDsForRemoval(
+        of accountID: AccountID
+    ) async throws(AppServiceError) -> [AccountID]
+
     func removeAccount(
         _ account: ServerAccount
     ) async throws(AppServiceError)
@@ -1042,6 +1046,12 @@ extension AppServicing {
         accountID: AccountID,
         itemID: LibraryItemID
     ) async throws(AppServiceError) {}
+
+    func artworkAccountIDsForRemoval(
+        of accountID: AccountID
+    ) async throws(AppServiceError) -> [AccountID] {
+        [accountID]
+    }
 
     func removeAccountFromThisDevice(
         _ account: ServerAccount,
@@ -3362,6 +3372,32 @@ actor LiveAppService: AppServicing {
             )
         } catch let error {
             throw .progress(error)
+        }
+    }
+
+    func artworkAccountIDsForRemoval(
+        of accountID: AccountID
+    ) async throws(AppServiceError) -> [AccountID] {
+        do {
+            let otherAccounts = Set(
+                try await accountStore.accounts().map(\.id)
+            ).subtracting([accountID])
+            let aliases = try await accountStore.identityAliases()
+            var owned: Set<AccountID> = [accountID]
+            var pending = [accountID]
+            while let current = pending.popLast() {
+                for alias in aliases
+                where alias.canonicalID == current
+                    && !otherAccounts.contains(alias.legacyID)
+                {
+                    if owned.insert(alias.legacyID).inserted {
+                        pending.append(alias.legacyID)
+                    }
+                }
+            }
+            return owned.sorted { $0.rawValue < $1.rawValue }
+        } catch let error {
+            throw .accountStore(error)
         }
     }
 
