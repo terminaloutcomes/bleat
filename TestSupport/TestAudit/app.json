@@ -51473,6 +51473,68 @@
         "#if os(iOS)"
       ],
       "execution": "docs/cover-cache-lifecycle.md#failed-prune-accounting-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testRemovingCanonicalAccountDeletesTrustedAliasArtwork",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24667
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Canonical account removal deletes artwork belonging to its persisted trusted alias chain while unrelated account data survives.",
+        "purpose": "Canonical account removal deletes artwork belonging to its persisted trusted alias chain while unrelated account data survives.",
+        "ruleAssessments": {
+          "1": "Actual AccountStore A\u2192B\u2192C migration and LiveAppService removal; cold owned-loader misses for A/B/C, unrelated X\u2192Y artwork/account/credentials and outside sentinel retained, direct B\u2192C alias removed; no network fetch for cache-only checks.",
+          "2": "Await actual owner operations and final state; no sleep or retry-to-green.",
+          "3": "Exact image dimensions and typed identity comparisons; no freely advancing time oracle.",
+          "4": "Unique temporary artwork/download roots and UUID-namespaced credentials; explicit credential teardown and outside-root sentinel. Existing SQLite lifetime follows the process-owned lifecycle fixture.",
+          "5": "Actual AppModel/LiveAppService/AccountStore plus injected owned-root cover loader; lookup failure uses existing fake service. No user app-data reset.",
+          "6": "Native iOS Simulator storage/account lifecycle evidence, not physical backup/protection or system-artwork acceptance.",
+          "7": "Original single-hop native witness failed only retained legacy artwork; all positive controls passed. First UI annotation build error executed zero tests and is retained separately.",
+          "8": "Ownership lookup preserves typed accountStore failure; existing removal failure preserves artwork. No private paths/credentials logged by production diagnostics.",
+          "9": "Three focused cases passed, zero failures/skips/expected failures/runtime warnings; full owning and exact published-head CI recorded separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercise actual trusted-alias artwork ownership and failure ordering without migrating images or changing retention policy."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "#if os(iOS)"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testArtworkIdentityLookupFailurePreventsAccountRemoval",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 24887
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A typed alias-ownership lookup failure prevents account and artwork removal.",
+        "purpose": "A typed alias-ownership lookup failure prevents account and artwork removal.",
+        "ruleAssessments": {
+          "1": "Exact typed account-store failure, signed-in account retained, zero service account-removal calls and zero artwork-removal calls.",
+          "2": "Await actual owner operations and final state; no sleep or retry-to-green.",
+          "3": "Exact typed lookup failure, retained account and zero recorded removal calls; no image or clock oracle in this fake-service control.",
+          "4": "TestAppService and a Mutex callback recorder; AppModel uses its normal test-container defaults. This case creates no artwork fixture, credential namespace or outside sentinel and invokes no actual account/artwork removal.",
+          "5": "Actual AppModel error handling with TestAppService supplying a typed account-store failure and an injected artwork-removal call recorder; not a real LiveAppService/AccountStore/storage oracle.",
+          "6": "Native iOS Simulator storage/account lifecycle evidence, not physical backup/protection or system-artwork acceptance.",
+          "7": "This new lookup-failure control was introduced with the fix and passed in the three-case focused batch. The separate real alias-artwork baseline and zero-test UI compilation attempt are not runtime proof for this control.",
+          "8": "Ownership lookup preserves typed accountStore failure; existing removal failure preserves artwork. No private paths/credentials logged by production diagnostics.",
+          "9": "Three focused cases passed, zero failures/skips/expected failures/runtime warnings; full owning and exact published-head CI recorded separately."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercise actual trusted-alias artwork ownership and failure ordering without migrating images or changing retention policy."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "AppModelTests native app target"
+      ],
+      "execution": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
     }
   ],
   "decisionCounts": {
@@ -51593,5 +51655,10 @@
     "baseline": "1failed exactidentity,3accounting/coldmiddleassertions,1359retainedvs906fixturecap;0skip/runtimewarning.",
     "focused": "1pass; owning12unique pass;0fail/skip/expected/runtimewarning;sourceunchanged.",
     "boundary": "Existing visible-payload budget and eviction order unchanged; not a universalcap guarantee or new durable-data eviction policy."
+  },
+  "coverAliasRemovalReview": {
+    "scope": "Two new native declarations plus an enhanced existing service-failure control; historical counts and every prior record retained.",
+    "evidence": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23",
+    "boundary": "Deletes trusted alias artwork roots after successful account removal; does not claim indirect alias-record reclamation, denied-delete recovery or physical system-artwork assurance."
   }
 }

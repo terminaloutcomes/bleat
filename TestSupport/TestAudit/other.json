@@ -99,6 +99,20 @@
         "8": "Applicable: named Swift Testing expectations and failures; no artifact retention needed for deterministic host assertions.",
         "9": "Not executed in this audit; no repetition claim."
       }
+    },
+    "live_cover_process": {
+      "scope": "One actual live UI cover-edit/process-relaunch check against a disposable seeded Audiobookshelf server; no in-app fixture service.",
+      "rules": {
+        "1": "Separate served JPEG pixels and rendered card pixels establish actual replacement; actual process notRunning and retained installation/login establish restart context.",
+        "2": "Await async HTTP requests; asserted UI readiness and bounded30second single-screenshot pixel predicate; no arbitrary sleeps.",
+        "3": "Exact red/blue fractions, strictly increasing server timestamp and typed app state; no playback clock assertion.",
+        "4": "Owned test-server account/media and dedicated Simulator; deferred app termination, harness teardown separately verified.",
+        "5": "Explicit fresh owned installation before invocation, same installation/cache retained across its internal process restart. Synthetic live configuration is required.",
+        "6": "Real pinned server and HTTPS app path; direct loopback test control uses HTTP; no trust bypass or production-server mutation.",
+        "7": "Baseline passed without app refresh fix; final rebuilt-input invocation is separate validation, not a rerun to hide failure.",
+        "8": "Named retained screenshots and exact XCTest identity; no credential/URL/body dump in helper failures.",
+        "9": "Exact configured case passed with0fail/skip/expected/runtimewarning; physical artwork, disk-hit provenance and unchanged-timestamp UI behavior remain separate."
+      }
     }
   },
   "tests": [
@@ -12102,6 +12116,30 @@
         "8": "Ordinary XCTest assertions retain their body line. launch/tabButton do not forward caller location or attach full per-failure screenshot/tree diagnostics for these cases.",
         "9": "No fresh execution or repetition performed for this record-only repair. Historical broader iOS results remain revision-specific in the current-status document; no exact identity execution receipt was replayed for these six rows."
       }
+    },
+    {
+      "id": "BleatUITests::testLiveExternalCoverReplacementSurvivesProcessRelaunch",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 4549,
+      "purpose": "External synthetic server cover replacement remains fresh after actual app-process termination and relaunch with persistent cache retained.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Real server bytes and rendered pixel fractions are separate oracles; app is notRunning during the blue edit, preventing live-update cache refresh from hiding a startup defect."
+      },
+      "profile": "live_cover_process",
+      "enablement": "Opt-in actual live UI path: configured owned loopback BLEAT_LIVE_CONTROL_URL, synthetic BLEAT_LIVE_COVER_ITEM_ID, BLEAT_LIVE_APP_URL/USERNAME/PASSWORD. Absent configuration skips only in unconfigured standard UI gate; configured focused execution must run and pass.",
+      "setup_dependencies": "Disposable pinned Audiobookshelf/Caddy harness with synthetic account/media; task-owned Simulator trusts only harness CA; fresh app installation at test start, same installation/cache across its own restart; no fixture service or user-server mutations.",
+      "action_postconditions": "Externally upload red and decode served360px JPEG to >95%red/<1%blue; render red in target Home card; terminate and assert notRunning; upload blue with strictly newer server timestamp and verify served blue pixels; relaunch signed-in and render >95%blue/<1%red. Retain both screenshots.",
+      "synchronization_timeout": "Asserted10/30second existence waits and bounded30second pixel predicates; each observation samples one screenshot. No sleeps or rerun-until-green.",
+      "cleanup": "Deferred app termination; root-owned harness/simulator cleanup is separately verified. Server/cache retained during the restart itself. No assertion of comprehensive physical-device cleanup.",
+      "evidence": [
+        {
+          "kind": "native_simulator",
+          "result": "Exact one identity passed, zero failures/skips/expected failures/runtime warnings; before/after screenshots visually inspected.",
+          "reference": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
+        }
+      ]
     }
   ],
   "issue371_smoke_runner_lifecycle": {
@@ -12343,5 +12381,10 @@
     "sourceReview": "All 60 bodies and relevant helpers inspected; nine-rule assessments are per-row. Keep preserves the scenario, not complete compliance.",
     "execution": "No new runtime execution of these 60 cases is claimed by this repair. Linked historical results retain their original revisions, prerequisites and outcomes. Audit-check regressions are separately evidenced.",
     "evidence": "docs/release-evidence/test-reliability-audit.md#known-85-entry-reconciliation-369"
+  },
+  "coverProcessRelaunchReview": {
+    "scope": "One new opt-in native UI declaration; only its exact standard-gate allowed-skip identity is added.",
+    "evidence": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23",
+    "boundary": "Actual app process and server update on Simulator; not physical Lock Screen/Control Center/CarPlay artwork."
   }
 }

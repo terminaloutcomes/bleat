@@ -11087,6 +11087,24 @@
       "name": "testFailedPruneDeletionDoesNotConsumeDiskBudget",
       "line": 587,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testRemovingCanonicalAccountDeletesTrustedAliasArtwork",
+      "line": 24667,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testArtworkIdentityLookupFailurePreventsAccountRemoval",
+      "line": 24887,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testLiveExternalCoverReplacementSurvivesProcessRelaunch",
+      "line": 4549,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

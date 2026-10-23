@@ -1527,6 +1527,7 @@ extension PrivateCloudSyncFailure {
 final class AppModel {
     private let service: any AppServicing
     private let invalidateBookCover: @Sendable (URL, AccountID) async -> Void
+    private let removeBookCovers: @Sendable (AccountID) async -> Void
     private let resetBookCovers:
         @Sendable () async throws(BookCoverCacheResetFailure) -> Void
     private var nearbyServerDiscovery: (any NearbyServerDiscovering)?
@@ -1951,11 +1952,15 @@ final class AppModel {
         resetBookCovers:
             @escaping @Sendable () async throws(BookCoverCacheResetFailure) ->
             Void =
-            BookCoverImageLoader.resetSharedLocalData
+            BookCoverImageLoader.resetSharedLocalData,
+        removeBookCovers:
+            @escaping @Sendable (AccountID) async -> Void =
+            BookCoverImageLoader.removeShared(for:)
     ) {
         self.service = service
         self.invalidateBookCover = invalidateBookCover
         self.resetBookCovers = resetBookCovers
+        self.removeBookCovers = removeBookCovers
         self.cloudStorageNoticeDefaults = cloudStorageNoticeDefaults
         cloudStorageUpgradeNoticePending = CloudStorageUpgradeNotice.isPending(
             in: cloudStorageNoticeDefaults)
@@ -7310,6 +7315,9 @@ final class AppModel {
         }
 
         do {
+            let artworkAccountIDs =
+                try await service.artworkAccountIDsForRemoval(
+                    of: account.id)
             let deleteStatistics = statisticsDisposition == .delete
             if scope == .allDevices {
                 try await service.deletePrivateCloudAccount(
@@ -7331,7 +7339,9 @@ final class AppModel {
             }
             await downloads.removeAll(for: account.id)
             playback.removeLocalData(for: account.id)
-            await BookCoverImageLoader.shared.removeAll(for: account.id)
+            for artworkAccountID in artworkAccountIDs {
+                await removeBookCovers(artworkAccountID)
+            }
             playbackPositionStore.clearLastPlaying(accountID: account.id)
             accounts.removeAll { $0.id == account.id }
             pendingLocalSessionSyncAccounts[account.id] = nil

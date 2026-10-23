@@ -4538,6 +4538,240 @@ final class BleatLiveUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    private enum LiveCoverFailure: Error {
+        case transport
+        case unexpectedStatus(Int)
+        case malformedResponse
+        case invalidImage
+    }
+
+    @MainActor
+    func testLiveExternalCoverReplacementSurvivesProcessRelaunch() async throws
+    {
+        let environment = try await liveEnvironment()
+        let configuration = ProcessInfo.processInfo.environment
+        guard let rawControl = configuration["BLEAT_LIVE_CONTROL_URL"],
+            let control = URL(string: rawControl),
+            control.scheme == "http",
+            ["127.0.0.1", "localhost", "::1"].contains(control.host ?? ""),
+            let itemID = configuration["BLEAT_LIVE_COVER_ITEM_ID"],
+            !itemID.isEmpty,
+            itemID.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" })
+        else {
+            throw XCTSkip(
+                "Requires the disposable loopback cover-replacement harness")
+        }
+
+        var login = URLRequest(url: control.appendingPathComponent("login"))
+        login.httpMethod = "POST"
+        login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        login.httpBody = try JSONSerialization.data(withJSONObject: [
+            "username": environment.username, "password": environment.password,
+        ])
+        let loginData = try await liveCoverResponse(login)
+        guard
+            let payload = try JSONSerialization.jsonObject(with: loginData)
+                as? [String: Any], let user = payload["user"] as? [String: Any],
+            let token = user["accessToken"] as? String, !token.isEmpty
+        else { throw LiveCoverFailure.malformedResponse }
+
+        let itemURL = control.appendingPathComponent("api/items/\(itemID)")
+        let redTimestamp = try await replaceLiveCover(
+            at: itemURL, token: token, color: .red)
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        app.launchArguments = [
+            "-bleat.downloads.automaticLookahead.v1", "0",
+            "--release-screenshot-disable-nearby-server-discovery",
+        ]
+        app.launch()
+        XCTAssertTrue(
+            app.textFields["login.server"].waitForExistence(timeout: 10))
+        let server = app.textFields["login.server"]
+        server.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        server.typeText(environment.server)
+        let username = app.textFields["login.username"]
+        username.tap()
+        username.typeText(environment.username)
+        let password = app.secureTextFields["login.password"]
+        password.tap()
+        password.typeText(environment.password)
+        app.buttons["login.submit"].tap()
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 30))
+        dismissSavePasswordPromptIfNeeded(app: app)
+
+        let card = app.buttons["home.book.\(itemID)"].firstMatch
+        try await assertLiveCover(
+            card, blue: false, name: "External red cover before termination")
+        // Termination discards the app process and its in-memory loader while
+        // deliberately retaining the same installation and persistent cache.
+        app.terminate()
+        XCTAssertEqual(app.state, .notRunning)
+        let blueTimestamp = try await replaceLiveCover(
+            at: itemURL, token: token, color: .blue)
+        XCTAssertGreaterThan(blueTimestamp, redTimestamp)
+        app.launch()
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.textFields["login.server"].exists)
+        try await assertLiveCover(
+            card, blue: true, name: "External blue cover after process relaunch"
+        )
+    }
+
+    @MainActor
+    private func liveCoverResponse(_ request: URLRequest) async throws -> Data {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch { throw LiveCoverFailure.transport }
+        guard let http = response as? HTTPURLResponse else {
+            throw LiveCoverFailure.malformedResponse
+        }
+        guard http.statusCode == 200 else {
+            throw LiveCoverFailure.unexpectedStatus(http.statusCode)
+        }
+        return data
+    }
+
+    @MainActor
+    private func replaceLiveCover(
+        at itemURL: URL, token: String, color: UIColor
+    ) async throws -> Int64 {
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: 96, height: 96))
+        let jpeg = renderer.jpegData(withCompressionQuality: 1) { context in
+            color.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
+        }
+        let boundary = "Bleat-live-cover-\(UUID().uuidString)"
+        var upload = URLRequest(url: itemURL.appendingPathComponent("cover"))
+        upload.httpMethod = "POST"
+        upload.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        upload.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type")
+        var body = Data(
+            ("--\(boundary)\r\n"
+                + "Content-Disposition: form-data; name=\"cover\"; filename=\"cover.jpg\"\r\n"
+                + "Content-Type: image/jpeg\r\n\r\n").utf8)
+        body.append(jpeg)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        upload.httpBody = body
+        let uploaded = try await liveCoverResponse(upload)
+        guard
+            let result = try JSONSerialization.jsonObject(with: uploaded)
+                as? [String: Any], result["success"] as? Bool == true,
+            let cover = result["cover"] as? String, !cover.isEmpty
+        else { throw LiveCoverFailure.malformedResponse }
+
+        var detail = URLRequest(url: itemURL)
+        detail.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let metadata = try await liveCoverResponse(detail)
+        guard
+            let item = try JSONSerialization.jsonObject(with: metadata)
+                as? [String: Any],
+            let timestamp = item["updatedAt"] as? NSNumber
+        else { throw LiveCoverFailure.malformedResponse }
+        var components = try XCTUnwrap(
+            URLComponents(
+                url: itemURL.appendingPathComponent("cover"),
+                resolvingAgainstBaseURL: false))
+        components.queryItems = [
+            URLQueryItem(name: "width", value: "360"),
+            URLQueryItem(name: "height", value: "360"),
+            URLQueryItem(name: "format", value: "jpeg"),
+            URLQueryItem(name: "ts", value: timestamp.stringValue),
+        ]
+        var fetch = URLRequest(url: try XCTUnwrap(components.url))
+        fetch.cachePolicy = .reloadIgnoringLocalCacheData
+        fetch.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let bytes = try await liveCoverResponse(fetch)
+        let image = try XCTUnwrap(UIImage(data: bytes))
+        let fractions = try liveCoverFractions(image)
+        if color == .blue {
+            XCTAssertGreaterThan(fractions.blue, 0.95)
+            XCTAssertLessThan(fractions.red, 0.01)
+        } else {
+            XCTAssertGreaterThan(fractions.red, 0.95)
+            XCTAssertLessThan(fractions.blue, 0.01)
+        }
+        return timestamp.int64Value
+    }
+
+    @MainActor
+    private func assertLiveCover(
+        _ card: XCUIElement, blue: Bool, name: String
+    ) async throws {
+        XCTAssertTrue(card.waitForExistence(timeout: 30))
+        XCTAssertTrue(card.isHittable)
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                guard card.exists, card.frame.width >= 140,
+                    card.frame.height >= card.frame.width,
+                    let fractions = try? self.liveCoverFractions(
+                        card.screenshot().image, cropCard: true)
+                else { return false }
+                return blue
+                    ? fractions.blue > 0.95 && fractions.red < 0.01
+                    : fractions.red > 0.95 && fractions.blue < 0.01
+            }, object: nil)
+        let result = await XCTWaiter.fulfillment(of: [ready], timeout: 30)
+        let screenshot = card.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertEqual(result, .completed, name)
+        let fractions = try liveCoverFractions(screenshot.image, cropCard: true)
+        XCTAssertGreaterThan(blue ? fractions.blue : fractions.red, 0.95, name)
+        XCTAssertLessThan(blue ? fractions.red : fractions.blue, 0.01, name)
+    }
+
+    private func liveCoverFractions(
+        _ image: UIImage, cropCard: Bool = false
+    ) throws -> (red: Double, blue: Double) {
+        var source = try XCTUnwrap(image.cgImage)
+        if cropCard {
+            // ShelfBookCard starts with a square cover. Its central upper
+            // half excludes rounded corners, text, and the lower-right play
+            // control; the screenshot includes the rendered sibling cover.
+            guard source.width >= 140, source.height >= source.width else {
+                throw LiveCoverFailure.invalidImage
+            }
+            let side = CGFloat(source.width)
+            source = try XCTUnwrap(
+                source.cropping(
+                    to: CGRect(
+                        x: side * 0.2, y: side * 0.15,
+                        width: side * 0.6, height: side * 0.5)))
+        }
+        guard source.width > 0, source.height > 0 else {
+            throw LiveCoverFailure.invalidImage
+        }
+        let size = 32
+        var pixels = [UInt8](repeating: 0, count: size * size * 4)
+        let context = try XCTUnwrap(
+            CGContext(
+                data: &pixels, width: size, height: size, bitsPerComponent: 8,
+                bytesPerRow: size * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(source, in: CGRect(x: 0, y: 0, width: size, height: size))
+        let offsets = stride(from: 0, to: pixels.count, by: 4)
+        let red = offsets.count {
+            pixels[$0] > 180 && pixels[$0 + 1] < 70 && pixels[$0 + 2] < 70
+        }
+        let blue = offsets.count {
+            pixels[$0] < 70 && pixels[$0 + 1] < 70 && pixels[$0 + 2] > 180
+        }
+        return (
+            Double(red) / Double(size * size),
+            Double(blue) / Double(size * size)
+        )
+    }
+
     #if BLEAT_STATISTICS_VALIDATION
         @MainActor
         func testStatisticsValidationRun() async throws {
