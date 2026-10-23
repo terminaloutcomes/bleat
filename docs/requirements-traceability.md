@@ -1129,3 +1129,12 @@ return before consuming task values, and release/cancel/observe owned callers
 on every exit. Existing typed causes, exact count and retry-order assertions
 remain; no production CloudKit or whole-task-graph termination claim is added.
 See [the scoped source review and validation](release-evidence/test-reliability-core-followups.md#cloudkit-cancellation-caller-completion-372).
+
+
+### OpenID browser failure helper context (#372)
+
+Four existing records now have current source/helper rechecks: three retain
+unchanged implementations and one adds the existing typed-case cleanup oracle
+to its unexpected-browser-error subcase. Error mapping remains typed; no
+production or native provider/Keychain assurance is inferred. See the
+[per-record dispositions, controlled witness and scope accounting](release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372).
