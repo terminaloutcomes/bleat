@@ -1,8 +1,8 @@
 # iPad keyboard shortcut candidate (#40)
 
-Status: **unmerged; native modified-key delivery is an acceptance blocker**.
+Status: **draft [#457](https://github.com/terminaloutcomes/bleat/pull/457); corrected Now Playing position shortcuts await physical retest**.
 This candidate does not close #40 or the keyboard/focus acceptance group in #369.
-No physical keyboard pass is claimed.
+Only the individual physical observations below are credited; the complete keyboard acceptance remains open.
 
 ## Scope
 
@@ -21,7 +21,42 @@ player dismissal. Bare Space/arrows and native editing priority are preserved.
 There is no custom first-responder takeover, presentation delegate replacement,
 arbitrary sleep, or production diagnostic/readiness overlay.
 
-## Retained evidence (2026-10-23)
+## Physical findings and bounded correction (2026-10-23)
+
+The operator tested the installed original candidate `5da616d` with a physical
+keyboard and reported:
+
+- Position shortcuts work in Book view but fail in Now Playing.
+- Speed shortcuts work in a Search field, while position shortcuts are suppressed;
+  the operator explicitly accepts this behavior.
+- Switching in and out of views does not break the controls.
+
+These observations do not establish unreported play/pause, Command-F, bookmark
+modal, or all-checklist acceptance. The prior Simulator modifier calibration
+failure remains a tooling limitation, separate from this observed app defect.
+
+The hosted regression now prepares synthetic silent playback, checks both arrow
+bindings in the root, then presents the real `NowPlaying` view and inspects only
+its controller subtree. It never follows responder `next` links back to the root.
+On the unchanged production scope, the root assertions and skip admission passed,
+but both player-local arrow registrations failed (`keyboard-player-baseline.xcresult`:
+one executed identity failed, zero skipped). The sheet had only a passive anchor;
+the native shortcut buttons were registered exclusively below the root.
+
+The correction registers the same guarded command host in the player sheet,
+sharing the root scene/model/navigation context. It adds no responder takeover or
+new presentation lifecycle. The explicit policy permits prepared speed changes
+while editing and continues to suppress position/play-pause commands there.
+Other modal presentations still block every command. All **eight unique keyboard
+app-test identities passed**, with zero failures, skips, expected failures or
+runtime warnings (`keyboard-player-fixed.xcresult`); the strengthened hosted
+player/root registration identity is included. This proves registration and
+admission, not physical delivery. Independent review found no actionable source
+or test findings. The native Search test
+retains strict text/position/toggle assertions and positive independent rate
+observations, aligned with the accepted behavior. Physical retest remains required.
+
+## Retained original evidence (2026-10-23)
 
 Environment: Xcode 27.1 (27A9275), iPad Pro 13-inch (M5) Simulator,
 iOS 26.5 (23F77). Only this iOS runtime is installed; no runtime download,
@@ -46,9 +81,10 @@ result bundles, activity/hierarchy attachments and execution receipts remain in
 the reused task build directory. Sanitized summaries are retained in the task's
 `ipad-keyboard-evidence` directory; raw setup/configuration traces are not published.
 
-## Owning validation
+## Original candidate owning validation (`5da616d`)
 
-The supported `scripts/xctest.sh -t BleatAppTests -d id=<owned-iPad> -r <result>`
+This historical run covers the original candidate, not the subsequent player-sheet
+correction. The supported `scripts/xctest.sh -t BleatAppTests -d id=<owned-iPad> -r <result>`
 run completed with **649 unique exact identities passed**, including all eight
 new app cases: zero failures, skips, expected failures or runtime warnings.
 The runner and disk guard both exited 0. All 426 recorded build/test input
@@ -65,7 +101,8 @@ Independent review found no additional demonstrated production-source defect or
 owned-resource cleanup issue. Its readiness decision is to **preserve this
 candidate unmerged** until a modified-key path succeeds on a working input
 setup. Public registration and direct guarded action coverage cannot replace
-that boundary. No PR, merge, auto-merge or deployment is represented as completed.
+that boundary. The candidate is preserved in draft #457 and was installed for operator testing.
+No merge or auto-merge is authorized for this keyboard candidate.
 
 The five new UI cases require an iPad destination. Their phone-only skips are
 explicitly enumerated by the ordinary UI runner; that disposition cannot count
@@ -82,8 +119,8 @@ Use an agreed test iPad with a real keyboard, or a working Simulator input setup
    dismissal followed by focus.
 3. With the synthetic silent playback fixture, verify Command-P, both configured
    skips while paused, and both speed directions as separate observations.
-4. Verify native caret movement and text entry consume editing shortcuts without
-   playback changes. A bookmark editor must block transport/Search, and commands
+4. Verify native caret movement and position/play-pause shortcuts yield to text
+   entry, while speed shortcuts still change the prepared playback rate. A bookmark editor must block transport/Search, and commands
    must recover after cancellation. Check recovery after a root text-entry sheet
    as well; that path remains unverified.
 

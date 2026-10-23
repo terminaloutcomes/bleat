@@ -37,8 +37,9 @@ and Command-Right Arrow to skip by your configured intervals, and
 Command-Minus and Command-Plus to move through the featured playback speeds.
 Command-F opens Search, retains your query, and focuses its text field.
 
-Playback shortcuts leave text editing to the focused field and are unavailable
-behind other sheets or confirmations. Command-F works while editing Search,
+Position and play/pause shortcuts leave text editing to the focused field; speed
+shortcuts remain available while editing. All shortcuts are unavailable behind
+other sheets or confirmations. Command-F works while editing Search,
 but does not dismiss another sheet or confirmation. Standard text-entry keys,
 including Space and arrow keys, keep their usual meaning.
 

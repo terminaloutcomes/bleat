@@ -11121,37 +11121,37 @@
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testShortcutsDoNotCrossDeviceAuthenticationSceneOrPresentationBoundaries",
-      "line": 29,
+      "line": 34,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testSearchRemainsAvailableWithoutPlayableMedia",
-      "line": 50,
+      "line": 54,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testRestoredSelectionCanToggleWithoutEnablingPreparedMediaCommands",
-      "line": 59,
+      "line": 64,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testKeyboardSearchRevealsRootAndRequestsFocusWithoutDiscardingQuery",
-      "line": 125,
+      "line": 130,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testPlayerSearchWaitsForDismissalAndRequestsFocusExactlyOnce",
-      "line": 151,
+      "line": 155,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
       "name": "testHostedScopeExposesPublicShortcutRegistrationAndGuardedSearch",
-      "line": 182,
+      "line": 186,
       "language": "swift"
     },
     {

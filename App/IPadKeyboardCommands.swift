@@ -25,6 +25,9 @@
             if action == .togglePlayback {
                 return !isEditingText && isToggleAvailable
             }
+            if action == .slower || action == .faster {
+                return isPlaybackAvailable
+            }
             return !isEditingText && isPlaybackAvailable
         }
     }
@@ -116,7 +119,16 @@
         static let defaultValue: IPadKeyboardScene? = nil
     }
 
+    private struct IPadKeyboardContextKey: EnvironmentKey {
+        static let defaultValue: IPadKeyboardContext? = nil
+    }
+
     extension EnvironmentValues {
+        var ipadKeyboardContext: IPadKeyboardContext? {
+            get { self[IPadKeyboardContextKey.self] }
+            set { self[IPadKeyboardContextKey.self] = newValue }
+        }
+
         var ipadKeyboardScene: IPadKeyboardScene? {
             get { self[IPadKeyboardSceneKey.self] }
             set { self[IPadKeyboardSceneKey.self] = newValue }
@@ -169,6 +181,7 @@
                         .accessibilityHidden(true)
                 }
                 .environment(\.ipadKeyboardScene, scene)
+                .environment(\.ipadKeyboardContext, context)
                 .overlay(alignment: .topLeading) {
                     // Register native shortcuts in this scene without adding
                     // invisible focus targets or changing the content layout.
@@ -217,16 +230,29 @@
 
     struct IPadPlayerKeyboardScope: ViewModifier {
         @Environment(\.ipadKeyboardScene) private var scene
+        @Environment(\.ipadKeyboardContext) private var context
 
         func body(content: Content) -> some View {
-            content.background {
-                if let scene {
-                    IPadKeyboardAnchor(scene: scene, isPlayer: true)
-                        .frame(width: 0, height: 0)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
+            content
+                .background {
+                    if let scene {
+                        IPadKeyboardAnchor(scene: scene, isPlayer: true)
+                            .frame(width: 0, height: 0)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                 }
-            }
+                .overlay(alignment: .topLeading) {
+                    if let context {
+                        // A presented player has its own shortcut host. Reuse
+                        // the root scene's guards and actions in that subtree.
+                        IPadKeyboardButtons(context: context)
+                            .frame(width: 0, height: 0)
+                            .clipped()
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
     }
 

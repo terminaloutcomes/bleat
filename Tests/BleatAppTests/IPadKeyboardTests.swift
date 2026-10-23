@@ -21,9 +21,13 @@
             let availability = availability(isEditingText: true)
 
             XCTAssertTrue(availability.allows(.search))
-            for action in transportActions {
+            for action in [
+                IPadKeyboardAction.togglePlayback, .skipBackward, .skipForward,
+            ] {
                 XCTAssertFalse(availability.allows(action), "\(action)")
             }
+            XCTAssertTrue(availability.allows(.slower))
+            XCTAssertTrue(availability.allows(.faster))
         }
 
         func
@@ -194,7 +198,7 @@
                 .appendingPathComponent(suite, isDirectory: true)
             try FileManager.default.createDirectory(
                 at: root, withIntermediateDirectories: true)
-            let service = UITestAppService(scenario: .signedIn)
+            let service = UITestAppService(scenario: .playback)
             let serviceRoot = await service.downloadsStorageRootURL
             let model = AppModel(
                 service: service,
@@ -253,6 +257,10 @@
             let ready = expectation(
                 description: "owned keyboard scope appeared")
             var captured: IPadKeyboardScene?
+            let presentation = KeyboardPresentationProbe()
+            let playerReady = expectation(
+                description: "presented player scope appeared")
+            var capturedPlayer = false
             let content = KeyboardSceneCaptureView { keyboardScene in
                 guard captured == nil,
                     keyboardScene.window === window,
@@ -261,6 +269,30 @@
                 else { return }
                 captured = keyboardScene
                 ready.fulfill()
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { presentation.showsPlayer },
+                    set: { presentation.showsPlayer = $0 }
+                )
+            ) {
+                NowPlaying(
+                    playback: model.playback, retryPlayback: { .superseded }
+                )
+                .background {
+                    KeyboardSceneCaptureView { keyboardScene in
+                        guard !capturedPlayer,
+                            keyboardScene.playerAnchor?.window === window,
+                            let presented = window.rootViewController?
+                                .presentedViewController,
+                            !presented.isBeingPresented,
+                            keyboardScene.playerAnchor?.isDescendant(
+                                of: presented.view) == true
+                        else { return }
+                        capturedPlayer = true
+                        playerReady.fulfill()
+                    }
+                }
             }
             .modifier(IPadKeyboardScope(model: model, navigation: navigation))
             let host = UIHostingController(rootView: content)
@@ -326,12 +358,54 @@
             XCTAssertEqual(
                 navigation.keyboardSearchFocusRequest,
                 initialFocus + (isPad ? 1 : 0))
+
+            let account = try XCTUnwrap(model.account)
+            let detail = try await service.bookDetail(
+                for: account, libraryID: LibraryID(rawValue: "ui-library"),
+                itemID: LibraryItemID(rawValue: "ui-book"))
+            let outcome = await model.startPlayback(
+                detail: detail, account: account)
+            guard case .started = outcome else {
+                return XCTFail("Synthetic playback failed: \(outcome)")
+            }
+            model.playback.pause()
+            XCTAssertTrue(model.playback.isPlaybackControlAvailable)
+            keyboardScene.refresh()
+            // Book/root registrations must remain available before presentation.
+            assertPositionCommands(
+                publicKeyboardCommands(in: window), isPad: isPad)
+            presentation.showsPlayer = true
+            await fulfillment(of: [playerReady], timeout: 3)
+            let presented = try XCTUnwrap(host.presentedViewController)
+            XCTAssertTrue(context.allows(.skipForward) == isPad)
+            // Deliberately do not traverse next/presenting responders: root
+            // bindings cannot satisfy the player-local registration witness.
+            assertPositionCommands(
+                publicKeyboardCommands(in: presented, followNext: false),
+                isPad: isPad)
         }
 
-        private func publicKeyboardCommands(in window: UIWindow)
+        private func assertPositionCommands(
+            _ commands: [(UIResponder, UIKeyCommand)], isPad: Bool,
+            file: StaticString = #filePath, line: UInt = #line
+        ) {
+            for input in [
+                UIKeyCommand.inputLeftArrow, UIKeyCommand.inputRightArrow,
+            ] {
+                XCTAssertEqual(
+                    commands.contains {
+                        $0.1.input == input && $0.1.modifierFlags == .command
+                    }, isPad, "Position command \(input)", file: file,
+                    line: line)
+            }
+        }
+
+        private func publicKeyboardCommands(
+            in root: UIResponder, followNext: Bool = true
+        )
             -> [(UIResponder, UIKeyCommand)]
         {
-            var pending: [UIResponder] = [window]
+            var pending: [UIResponder] = [root]
             var visited: Set<ObjectIdentifier> = []
             var commands: [(UIResponder, UIKeyCommand)] = []
             while let responder = pending.popLast() {
@@ -341,7 +415,9 @@
                     contentsOf: (responder.keyCommands ?? []).map {
                         (responder, $0)
                     })
-                if let next = responder.next { pending.append(next) }
+                if followNext, let next = responder.next {
+                    pending.append(next)
+                }
                 if let view = responder as? UIView {
                     pending.append(contentsOf: view.subviews)
                 }
@@ -385,6 +461,12 @@
                 isPlaybackAvailable: isPlaybackAvailable,
                 isToggleAvailable: isToggleAvailable ?? isPlaybackAvailable)
         }
+    }
+
+    @MainActor
+    @Observable
+    private final class KeyboardPresentationProbe {
+        var showsPlayer = false
     }
 
     @MainActor

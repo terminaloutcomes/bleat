@@ -51575,10 +51575,10 @@
       },
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "Text editing admits Search and rejects each transport/rate action independently.",
-        "purpose": "Text editing admits Search and rejects each transport/rate action independently.",
+        "intendedBehavior": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
+        "purpose": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
         "ruleAssessments": {
-          "1": "Text editing admits Search and rejects each transport/rate action independently.",
+          "1": "Text editing admits Search and prepared speed changes; position and play/pause remain blocked independently.",
           "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
           "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
           "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
@@ -51602,7 +51602,7 @@
       "identifier": "IPadKeyboardTests/testShortcutsDoNotCrossDeviceAuthenticationSceneOrPresentationBoundaries",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 29
+        "line": 34
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -51633,7 +51633,7 @@
       "identifier": "IPadKeyboardTests/testSearchRemainsAvailableWithoutPlayableMedia",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 50
+        "line": 54
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -51664,7 +51664,7 @@
       "identifier": "IPadKeyboardTests/testRestoredSelectionCanToggleWithoutEnablingPreparedMediaCommands",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 59
+        "line": 64
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -51695,7 +51695,7 @@
       "identifier": "IPadKeyboardTests/testKeyboardSearchRevealsRootAndRequestsFocusWithoutDiscardingQuery",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 125
+        "line": 130
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -51726,7 +51726,7 @@
       "identifier": "IPadKeyboardTests/testPlayerSearchWaitsForDismissalAndRequestsFocusExactlyOnce",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 151
+        "line": 155
       },
       "manualReview": {
         "status": "source_reviewed",
@@ -51757,14 +51757,14 @@
       "identifier": "IPadKeyboardTests/testHostedScopeExposesPublicShortcutRegistrationAndGuardedSearch",
       "source": {
         "path": "Tests/BleatAppTests/IPadKeyboardTests.swift",
-        "line": 182
+        "line": 186
       },
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "An owned native window hosts the actual scope, exposes eligible Cmd-F metadata/selector capability, and exercises guarded Search; this is not injected-key or physical delivery evidence.",
-        "purpose": "An owned native window hosts the actual scope, exposes eligible Cmd-F metadata/selector capability, and exercises guarded Search; this is not injected-key or physical delivery evidence.",
+        "intendedBehavior": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
+        "purpose": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
         "ruleAssessments": {
-          "1": "An owned native window hosts the actual scope, exposes eligible Cmd-F metadata/selector capability, and exercises guarded Search; this is not injected-key or physical delivery evidence.",
+          "1": "An owned native window hosts the actual scope and guarded Search, then prepares synthetic silent playback and verifies both arrow bindings separately in root and presented NowPlaying subtrees without following root responders. Registration/admission is not native key delivery.",
           "2": "Policy/navigation cases are synchronous. Hosted scope uses an asserted three-second actual appearance/window predicate; no sleep or retry-until-green.",
           "3": "Exact booleans, identities, path/focus counts and typed remote-command result. No advancing playback/time oracle.",
           "4": "Cold restore owns isolated defaults and a fake NowPlaying publisher. Hosted scope owns its UUID defaults/window/temporary roots and stops model/service work, restores key window and checks storage absence. Other cases create only value/coordinator objects.",
