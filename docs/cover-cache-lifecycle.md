@@ -74,8 +74,12 @@ HTTP requests bypass local URLCache. No bearer token is added to cover URLs.
   readable offline until their resource is validated; no bulk upgrade purge is
   performed. Invalid or oversized entries are misses. Temporary files are never
   lookup targets. Cache failure does not fail playback.
-- Limits remain 5 MiB per response, 32 MiB/256 images in NSCache and 128 MiB of
-  disk files, pruned by last use. The OS may remove cache files. Account removal
+- Limits remain 5 MiB per response, configured 32 MiB/256-image NSCache limits
+  and a 128 MiB budget for nonhidden regular payload files, pruned by last use.
+  Hidden revision/tombstone files and directory bookkeeping are outside that
+  payload total. A failed deletion is reported and does not count as freed
+  bytes; pruning continues through other eligible entries. If none can be
+  removed, the budget cannot be guaranteed. The OS may remove cache files. Account removal
   retires requests before deleting its cache; item deletion invalidates artwork.
   Sign-out/account lifecycle cleanup retains existing account ownership rules.
 - Stable OSLog events record hits, joining, revalidation start/commit/fallback,
@@ -131,22 +135,91 @@ No physical-device reset or real user-data reset is claimed.
 
 | Asset / owner | Identity, authority and persistence | Freshness, integrity, limits and cleanup |
 | --- | --- | --- |
-| Browse metadata / `LibraryRepository`, `LibraryCache` | Account + library/query/item; remote DTOs mapped to domain snapshots in SwiftData | Remote-first with cache fallback; explicit refresh remote-only. Cached snapshots support unavailable servers. No universal TTL or image eviction policy; account lifecycle deletes owned records. Cached metadata alone cannot prove image freshness. |
+| Browse metadata / `LibraryRepository`, `LibraryCache` | Account + library/query/item; remote DTOs mapped to domain snapshots in SwiftData | Remote-first with cache fallback; explicit refresh remote-only. Cached snapshots support unavailable servers. No enforced global persistent byte/count cap or universal TTL; replacement/invalidation removes superseded pages and account removal/reset deletes owned records. Cached metadata alone cannot prove image freshness. |
 | Saved offline detail / download records | Account + item/download manifest; snapshot accompanies verified local tracks | Audio preparation uses the saved snapshot without requiring the server. Cover freshness is independent. Do not replace verified audio to update a picture. Older persisted shapes have their own typed reconciliation rules. |
 | Explicit downloaded audio / `DownloadModel`, `DownloadStorageLayout`, manifest | Account + item/track inode/transfer identity; app-owned media and structured records | Staging, expected byte lengths, validated manifests and atomic finalization; partial/corrupt files require repair. Explicit removal/account removal, never cover TTL or automatic completion eviction. Playing/transcription-pinned files retain existing protection. |
 | Automatic audio cache / same owners | Separate `automaticCache` purpose and rolling track window | Window/completion policy, durable local completion timestamp and pin-aware cleanup; default 24 hours after local completion. Valid finalized bytes remain usable offline to window end. No timestamp reset on startup. Explicit downloads are excluded. |
 | Ranged-transfer partials / background download adapter and storage | Owned account/track plus expected offset, inode and transfer identity | Bounded chunks and durable byte checkpoints; retire obsolete transfers before replacement. Invalid legacy state is quarantined; late callbacks cannot mutate replacement transfers. Disposable temporary transfer data is distinct from finalized offline media. |
 | Playback sessions and temporary streaming / playback engine and session controller | Account/session-scoped remote media routes | Server-session lifetime; close when owned playback ends. These bearer-like routes are never cover-cache keys or persisted diagnostic values. AVFoundation owns its buffering; no new indiscriminate media purge. |
-| Transcripts / `ChapterTranscriptCache`, transcription model | Account/item/chapter and source identity; SwiftData segments and job/task state | Reconcile source identity and resumable task state; derived transcript data supports local search/offline presentation. Cancel jobs before owned account/book deletion. No image TTL; retention/storage-budget work is separable. |
+| Transcripts / `ChapterTranscriptCache`, transcription model | Account/item/chapter and source identity; SwiftData segments and job/task state | Reconcile source identity and resumable task state; completed transcript/job/task records persist without an enforced global byte/count cap. Explicit transcript/book/account deletion cancels owned jobs before scoped removal; full reset deletes all persisted transcript/job/task record types. Presentation memory has five-minute idle expiry and inactive-book memory-pressure eviction; durable records remain. An image TTL does not apply. |
 | Local positions, preferences, bookmarks, sessions and history / their stores | Account-scoped durable user state and outboxes | These are user records, not disposable asset caches. Preserve ordering, ambiguous mutation state and local position authority. Account removal follows its history-retention choice. Never clear them to refresh artwork. |
 | Telemetry retry storage / `RemoteTelemetryRuntime` | Consent-owned storage generation; bounded redacted spans | Bounded retention/export, withdrawal cancels exports and purges the previous generation. Independent of server cover freshness. |
 
+## Storage audit dispositions (2026-10-23)
+
+The inventory records actual retention rather than introducing new limits.
+Specification sections 4.4 and 4.5.1 preserve downloaded audio and completed
+transcripts; artwork is cache-only offline and may fall back to a placeholder.
+No numeric persistent metadata/transcript cap is specified. Adding one would be
+a separate product-policy decision, not a missing value to invent for this audit.
+Existing `LibraryCacheTests.testInvalidationAndAccountRemovalAreScoped` and
+`ChapterTranscriptCacheTests.testRemovingAccountDeletesOnlyItsTranscripts` /
+`testRemovingBookDeletesTranscriptAndTaskStateOnlyForExactScope` cover scoped
+structured-record cleanup. Sign-out intentionally retains offline data.
+
+Production cover storage uses `Library/Caches/BookCovers`; only test fixtures
+override the root. Apple's [file-system guide](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html)
+excludes the Caches directory from backup. Cover writes do not override Data
+Protection; Apple's [platform-security guide](https://support.apple.com/guide/security/data-protection-classes-secb010e978a/web)
+documents Protected Until First User Authentication as the default for third-party
+app data without another assigned class. This supports the expected policy for
+an unmodified iOS container; it does not measure actual upgraded-device file
+attributes or locked-device access. Downloaded media separately sets backup
+exclusion and complete-until-first-user-authentication protection in
+`DownloadStorage`. No security-setting change is justified by this source review.
+
+The residual groups in #400 remain distinct:
+
+- **C400-R1:** A cache-only artwork miss after account-ID canonicalization is
+  permitted by the offline policy; automatic cross-ID image migration is not a
+  specified guarantee. The stronger device-free next check is whether canonical
+  account removal also purges its trusted legacy-alias artwork while preserving
+  unrelated accounts. Existing same-account raw-format fallback does not prove
+  that cleanup.
+- **C400-R2:** The existing account-removal/late-response regression already
+  proves isolation. Generation/revision maps remain process-owned until full
+  reset; no count cap or demonstrated user failure is established. Further
+  lifetime measurement is a possible follow-up, not an additional proven bug.
+- **C400-R3:** Failed-prune accounting has a reproduced regression and the
+  correction below. Replacement invalidation and per-account deletion still
+  need their own best-effort-versus-reportable failure dispositions; this is
+  not a demand for an invented exhaustive fault matrix.
+- **C400-R4:** Current persistent retention and visible-payload limits are now
+  explicit. Automatic legacy-hash, hidden-tombstone and empty-directory
+  reclamation needs an ownership/anti-resurrection policy before implementation.
+- **C400-R5:** Source backup/default-protection evidence is recorded above;
+  actual file attributes and any required locked-device evidence remain separate.
+- **C400-R6:** Physical system-artwork evidence remains separate as below;
+  #377's accepted results and the bounded original observation are preserved.
+
+## Failed-prune accounting (2026-10-23)
+
+The controlled native regression
+`CoverCacheLifecycleTests.testFailedPruneDeletionDoesNotConsumeDiskBudget`
+seeded three equal, real encoded cover payloads and denied deletion only in the
+oldest payload's owned resource directory. Unchanged production code counted
+that failed deletion as freed bytes and stopped at an actual 1,359 bytes against
+the fixture's 906-byte budget. The exact native case failed only its removable
+middle-entry, byte-budget and cold-middle-cache assertions; online pixels,
+protected/newest artwork and an outside-root sentinel remained valid.
+
+Pruning now subtracts only successful or already-absent removals, reports genuine
+deletion failures through `prune_disk_entry` with the safe typed cause, and
+continues the existing oldest-first scan. The corrected exact case passed with
+an actual EACCES diagnostic; all 12 owning cover-lifecycle cases passed with zero
+failures, skips, expected failures or runtime warnings. Source hashes remained
+unchanged. Original RED and corrected native bundles remain in
+`.build/cache400-prune-*`; published-head CI is separate. Capacity, hidden-marker
+handling and durable offline-asset policies are unchanged. If every eligible
+entry is unremovable, the cache cannot guarantee the configured budget.
+
 ## Remaining bounded work and acceptance
 
-The original launch glitch needs a recording or controlled device reproduction
-with exact build, edit origin, network/download state, request revision and
-provenance. Do not describe the confirmed cache mechanism as that device's
-proven root cause. Physical Lock Screen/Control Center and CarPlay head-unit
+Diagnosing the original launch glitch would require a recording or controlled
+device reproduction with exact build, edit origin, network/download state,
+request revision and provenance. It remains explicitly bounded and unproven;
+a new recording is useful if it recurs, not a prerequisite to crediting the
+confirmed cache fixes. Physical Lock Screen/Control Center and CarPlay head-unit
 acceptance at the new tested revision remain separate from simulator tests;
 #377's prior user acceptance is retained.
 

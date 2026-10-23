@@ -11081,6 +11081,12 @@
       "name": "testArtworkCleanupFailureReportsPartialResetAndCanRetry",
       "line": 24276,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/CoverCacheLifecycleTests.swift",
+      "name": "testFailedPruneDeletionDoesNotConsumeDiskBudget",
+      "line": 587,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [
