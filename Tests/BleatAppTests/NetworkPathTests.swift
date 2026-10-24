@@ -61,7 +61,10 @@ final class NetworkPathTests: XCTestCase {
                 cloudKitDatabase: .none))
         let service = try LiveAppService(
             diagnostics: recorder, networkPathUpdates: input.stream,
-            modelContainer: container, privateCloudAvailable: false,
+            modelContainer: container,
+            credentialStore: TokenVault(
+                service: "BleatNetworkTests.\(UUID().uuidString)"),
+            privateCloudAvailable: false,
             openIDBrowserProvider: { NetworkTestBrowser() })
         let updates = await service.networkPathUpdates()
         let delivered = expectation(
@@ -422,7 +425,10 @@ final class NetworkPathTests: XCTestCase {
                 }
             },
             networkPathEvaluation: networkPathEvaluation,
-            modelContainer: container, privateCloudAvailable: false,
+            modelContainer: container,
+            credentialStore: TokenVault(
+                service: "BleatNetworkTests.\(UUID().uuidString)"),
+            privateCloudAvailable: false,
             openIDBrowserProvider: { NetworkTestBrowser() })
         _ = try await service.accounts()
         return (service, account)

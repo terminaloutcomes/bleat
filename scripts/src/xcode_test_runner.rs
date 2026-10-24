@@ -335,23 +335,19 @@ fn run_macos(root: &Path) -> Result<()> {
         }
     })?;
     let team = required_environment_value("BLEAT_DEVELOPMENT_TEAM", team)?;
-    let bundle_id = std::env::var("BLEAT_BUNDLE_ID").map_err(|_| {
-        XcodeRunnerError::MissingEnvironmentVariable {
-            name: "BLEAT_BUNDLE_ID".to_owned(),
-        }
-    })?;
-    let bundle_id = required_environment_value("BLEAT_BUNDLE_ID", bundle_id)?;
     let mut settings = build_settings();
     set_setting(&mut settings, "DEVELOPMENT_TEAM", team);
-    set_setting(&mut settings, "CODE_SIGN_STYLE", "Automatic".to_owned());
-    set_setting(&mut settings, "PRODUCT_BUNDLE_IDENTIFIER", bundle_id);
+    set_setting(&mut settings, "CODE_SIGN_STYLE", "Manual".to_owned());
+    // Keep the production identity out of the unit-test process.
+    set_setting(&mut settings, "BLEAT_CLOUDKIT_MODE", "disabled".to_owned());
+    set_setting(&mut settings, "BLEAT_APP_ATTEST_MODE", "disabled".to_owned());
     set_setting(&mut settings, "BLEAT_CARPLAY_MODE", "disabled".to_owned());
     run_test_gate(
         root,
         TestGateRequest {
             build: XcodeBuildConfig::new(
                 "BleatMac",
-                Some("Debug"),
+                Some("MacTesting"),
                 "platform=macOS",
                 ".build/macos-signed",
                 settings,
@@ -523,9 +519,6 @@ fn xcodebuild_base(
         .args(["-project", "Bleat.xcodeproj", "-scheme", &build.scheme]);
     if build.quiet {
         command.arg("-quiet");
-    }
-    if build.scheme == "BleatMac" {
-        command.arg("-allowProvisioningUpdates");
     }
     if let Some(configuration) = &build.configuration {
         command.args(["-configuration", configuration]);
