@@ -26066,7 +26066,9 @@ final class AppModelTests: XCTestCase {
                     enabledRoot.templates.last as? CPGridTemplate)
                 XCTAssertEqual(search.tabTitle, "")
                 XCTAssertNotNil(search.tabImage)
-                enabledRoot.select(search)
+                XCTAssertTrue(presenter.select(search, in: enabledRoot))
+                XCTAssertTrue(
+                    presenter.selectedTemplate(in: enabledRoot) === search)
                 enabled.tabBarTemplate(enabledRoot, didSelect: search)
                 await assertEventually(
                     "CarPlay search tab pushes search template",
@@ -26085,6 +26087,116 @@ final class AppModelTests: XCTestCase {
             }
             enabled.disconnect()
         }
+
+        #if DEBUG
+            func testCarPlaySearchSelectionRejectsChangedAndRetiredRoots()
+                async throws
+            {
+                let account = try fixtureAccount()
+                let library = fixtureLibrary()
+                let model = AppModel(
+                    service: TestAppService(
+                        activeAccount: .success(account),
+                        libraries: .success([library]),
+                        firstPage: .success(fixturePage(libraryID: library.id)))
+                )
+                defer { model.setLiveUpdatesActive(false) }
+                await model.start()
+                let presenter = TestCarPlayPresenter()
+                let coordinator = CarPlayCoordinator(
+                    model: model, searchEnabled: { true })
+                defer { coordinator.disconnect() }
+                coordinator.connect(presenter)
+                await coordinator.waitForLibraryLoad()
+                let root = try XCTUnwrap(presenter.root as? CPTabBarTemplate)
+                guard #available(iOS 27.0, *),
+                    CPTabBarTemplate.maximumTabCount >= 4
+                else {
+                    XCTAssertEqual(root.templates.count, 3)
+                    coordinator.openSearch()
+                    XCTAssertTrue(presenter.pushed.isEmpty)
+                    return
+                }
+                let search = try XCTUnwrap(
+                    root.templates.last as? CPGridTemplate)
+                let home = try XCTUnwrap(root.templates.first)
+                XCTAssertTrue(presenter.select(search, in: root))
+                var baseline = coordinator
+                    .searchSelectionCompletionSequenceForTesting
+                coordinator.tabBarTemplate(root, didSelect: search)
+                XCTAssertTrue(presenter.select(home, in: root))
+                await assertEventually(
+                    "changed selection callback completed",
+                    timeout: .seconds(2),
+                    observed: {
+                        "completed=\(coordinator.searchSelectionCompletionSequenceForTesting); expected=\(baseline + 1); pushed=\(presenter.pushed.count)"
+                    },
+                    condition: {
+                        coordinator.searchSelectionCompletionSequenceForTesting
+                            == baseline + 1
+                    })
+                XCTAssertTrue(presenter.pushed.isEmpty)
+
+                XCTAssertTrue(presenter.select(search, in: root))
+                baseline =
+                    coordinator.searchSelectionCompletionSequenceForTesting
+                coordinator.tabBarTemplate(root, didSelect: search)
+                coordinator.disconnect()
+                await assertEventually(
+                    "disconnected selection callback completed",
+                    timeout: .seconds(2),
+                    observed: {
+                        "completed=\(coordinator.searchSelectionCompletionSequenceForTesting); expected=\(baseline + 1); pushed=\(presenter.pushed.count)"
+                    },
+                    condition: {
+                        coordinator.searchSelectionCompletionSequenceForTesting
+                            == baseline + 1
+                    })
+                XCTAssertTrue(presenter.pushed.isEmpty)
+
+                coordinator.connect(presenter)
+                await coordinator.waitForLibraryLoad()
+                let replacement = try XCTUnwrap(
+                    presenter.root as? CPTabBarTemplate)
+                let replacementSearch = try XCTUnwrap(
+                    replacement.templates.last as? CPGridTemplate)
+                XCTAssertFalse(root === replacement)
+                XCTAssertTrue(
+                    presenter.select(replacementSearch, in: replacement))
+                baseline =
+                    coordinator.searchSelectionCompletionSequenceForTesting
+                coordinator.tabBarTemplate(root, didSelect: search)
+                await assertEventually(
+                    "retired root callback completed", timeout: .seconds(2),
+                    observed: {
+                        "completed=\(coordinator.searchSelectionCompletionSequenceForTesting); expected=\(baseline + 1); pushed=\(presenter.pushed.count)"
+                    },
+                    condition: {
+                        coordinator.searchSelectionCompletionSequenceForTesting
+                            == baseline + 1
+                    })
+                XCTAssertTrue(presenter.pushed.isEmpty)
+
+                baseline =
+                    coordinator.searchSelectionCompletionSequenceForTesting
+                let delivery = TestCarPlaySelectionDelivery(
+                    coordinator: coordinator, root: replacement,
+                    selected: replacementSearch)
+                await Task.detached { delivery.deliver() }.value
+                await assertEventually(
+                    "current off-actor selection callback completed",
+                    timeout: .seconds(2),
+                    observed: {
+                        "completed=\(coordinator.searchSelectionCompletionSequenceForTesting); expected=\(baseline + 1); pushed=\(presenter.pushed.count)"
+                    },
+                    condition: {
+                        coordinator.searchSelectionCompletionSequenceForTesting
+                            == baseline + 1
+                    })
+                XCTAssertEqual(presenter.pushed.count, 1)
+                XCTAssertTrue(presenter.pushed.last is CPSearchTemplate)
+            }
+        #endif
 
         func testCarPlaySearchReconcilesRemovedKeyboard() async throws {
             let account = try fixtureAccount()
@@ -27053,7 +27165,8 @@ final class AppModelTests: XCTestCase {
             let model = AppModel(service: service)
             await model.start()
             let presenter = TestCarPlayPresenter()
-            let coordinator = CarPlayCoordinator(model: model)
+            let coordinator = CarPlayCoordinator(
+                model: model, searchEnabled: { false })
 
             coordinator.connect(presenter)
             await coordinator.waitForLibraryLoad()
@@ -29524,14 +29637,43 @@ private struct PlaybackRecoveryFixture {
         }
     }
 
+    // Immutable framework handles cross the executor only to invoke the actual
+    // nonisolated delegate adapter; no UI state is read on that executor.
+    private struct TestCarPlaySelectionDelivery: @unchecked Sendable {
+        let coordinator: CarPlayCoordinator
+        let root: CPTabBarTemplate
+        let selected: CPTemplate
+
+        func deliver() {
+            coordinator.tabBarTemplate(root, didSelect: selected)
+        }
+    }
+
     @MainActor
     private final class TestCarPlayPresenter: CarPlayPresenting {
         private(set) var root: CPTemplate?
         private(set) var pushed: [CPTemplate] = []
         private(set) var presented: CPTemplate?
+        private var selection: CPTemplate?
 
         func setRoot(_ template: CPTemplate) {
             root = template
+            selection = (template as? CPTabBarTemplate)?.templates.first
+        }
+
+        func selectedTemplate(in tabBar: CPTabBarTemplate) -> CPTemplate? {
+            guard root === tabBar else { return nil }
+            return selection
+        }
+
+        @discardableResult
+        func select(_ template: CPTemplate, in tabBar: CPTabBarTemplate) -> Bool
+        {
+            guard root === tabBar,
+                tabBar.templates.contains(where: { $0 === template })
+            else { return false }
+            selection = template
+            return true
         }
 
         func push(_ template: CPTemplate) {

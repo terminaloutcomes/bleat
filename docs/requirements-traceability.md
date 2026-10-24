@@ -1138,3 +1138,12 @@ unchanged implementations and one adds the existing typed-case cleanup oracle
 to its unexpected-browser-error subcase. Error mapping remains typed; no
 production or native provider/Keychain assurance is inferred. See the
 [per-record dispositions, controlled witness and scope accounting](release-evidence/test-reliability-core-followups.md#openid-browser-failure-helper-context-review-372).
+
+
+## iOS 27 CarPlay/audio compatibility repair (#362, #369)
+
+The [focused repair receipt](release-evidence/ios27-carplay-audio.md) records
+matched baseline failures, explicit browsing capability, presenter-owned
+selection, and unchanged stale-callback admission. Focused three-case and
+owning 53-case unit results are separate from audio-session migration and
+physical CarPlay acceptance. Historical completed audit cohorts remain credited.

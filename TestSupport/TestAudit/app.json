@@ -52468,6 +52468,37 @@
         "AppModelTests native app target"
       ],
       "execution": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
+    },
+    {
+      "identifier": "AppModelTests/testCarPlaySearchSelectionRejectsChangedAndRetiredRoots",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 26092
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Current selected-root callbacks admit Search, while changed selection and retired connections/roots reject queued callbacks.",
+        "purpose": "Preserve actual callback admission while modeling native selection ownership faithfully.",
+        "ruleAssessments": {
+          "1": "Assert queued selection changes, disconnect and old root produce no pushes; a current off-actor callback pushes exactly one native Search template.",
+          "2": "Await the actual delegate processing sequence in the original two-second budget, then assert semantic pushed-template state; no sleep/yield oracle.",
+          "3": "No playback, rate, media position or seek occurs in this fixture.",
+          "4": "Deferred coordinator disconnect and live-update retirement; immutable framework handles cross executor only to call the real nonisolated identity adapter.",
+          "5": "A synthetic service/account/library and presenter-owned root/selection establish state explicitly. The presenter rejects templates outside its installed root.",
+          "6": "iOS 27 native-template unit fixture, not physical CarPlay or real CPInterfaceController evidence. Lower runtime checks unsupported Search state and three browsing tabs.",
+          "7": "Two original failures reproduced at both base and prior head; no timeout increase or retries to green. Corrected focused three cases and owning 53 cases are separately retained.",
+          "8": "Caller-local XCTAssert/assertEventually diagnostics include actual/expected completion sequence and push count.",
+          "9": "Focused 3/3 passes with zero warnings; owning 53/53 passes retains three audio warnings pending the separate migration in this same repair."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises actual delegate adapter and semantic navigation with explicit external-boundary state."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "iOS + CarPlay + DEBUG; native Search assertions require iOS27 and four-tab capacity; older runtime asserts the unsupported path, without skipping."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
     }
   ],
   "decisionCounts": {
@@ -52599,5 +52630,14 @@
     "currentScopedReview": "All 71 fixed historical app identities reviewed: 58 bounded KEEP and 13 corrected test gaps. The earlier root status and per-record fields are historical; current scoped decisions are appended to each selected record.",
     "evidence": "docs/release-evidence/test-reliability-app-followups.md#fixed-app-context-review-and-observable-returns-374",
     "runtimeBoundary": "66 selected Debug identities passed; five Release-only cases source-reviewed. Controlled witness verified; fresh Release fixture compilation passed; no new Release runtime execution. This does not close whole-epic or physical acceptance."
+  },
+  "ios27CarPlayRepair": {
+    "newMethods": 1,
+    "updatedMethods": [
+      "AppModelTests/testCarPlaySearchVersionAndCapabilityGatePreservesBrowsing",
+      "AppModelTests/testCarPlaySignedInRootHasHomeLibraryAndDownloads"
+    ],
+    "evidence": "docs/release-evidence/ios27-carplay-audio.md",
+    "scope": "Historical review decisions/counts remain preserved; only this observed iOS27 compatibility repair is recorded."
   }
 }

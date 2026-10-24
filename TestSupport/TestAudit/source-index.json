@@ -11105,6 +11105,12 @@
       "name": "testLiveExternalCoverReplacementSurvivesProcessRelaunch",
       "line": 4549,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCarPlaySearchSelectionRejectsChangedAndRetiredRoots",
+      "line": 26092,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [
