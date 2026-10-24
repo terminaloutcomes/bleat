@@ -52517,9 +52517,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52548,9 +52548,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52579,9 +52579,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52610,9 +52610,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52641,9 +52641,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52672,9 +52672,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52703,9 +52703,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52734,9 +52734,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52765,9 +52765,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",
@@ -52796,9 +52796,9 @@
           "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
           "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
           "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
-          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case run retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
           "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
-          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+          "9": "Implementation head 7871adc: focused15/15 and full discovered654/654, zero skips/failures/expected failures/runtime warnings; host71/71 and unsigned macOS Release pass. Receipt-only changes do not change implementation; final-head CI evidence is reported separately."
         },
         "decision": {
           "outcome": "keep",

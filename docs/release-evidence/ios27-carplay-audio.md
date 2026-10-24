@@ -23,7 +23,7 @@ The initial new-test compilation attempt executed zero tests because four
 wait calls omitted the helper's required observation diagnostic; those calls
 were corrected without changing budgets or assertions.
 
-Audio migration is in progress. The original complete compatibility run retained
+At the initial CarPlay repair commit, audio migration was still pending. The original complete compatibility run retained
 103 AVAudioSession activation/deactivation warnings and nine SessionCore warnings.
 Apple supplies native async activation/deactivation from iOS 27. The maintainer
 explicitly approved the unavoidable synchronous iOS 26 setActive calls and
@@ -68,5 +68,30 @@ requires the current item, active playback intent and non-retired state, then an
 awaited final Stop. Seven adapter cases passed, including native iOS27 activation
 and release, off-actor/duplicate callbacks, FIFO cancellation drainage, rejected
 release recovery and stale-lease exclusion. Compilation-only attempts before this
-run executed zero tests and are not counted as coverage. Final verification is
-pending; intermediate Xcode diagnostic collection is retained separately.
+run executed zero tests and are not counted as coverage. The intermediate Xcode diagnostic collector reached its 600-second timeout after test execution; its failed result and logs are retained separately. Final verification follows.
+
+
+## Verified repair execution
+
+On implementation head `7871adc5215dffe7c0ae521e12543be12825974e`, the corrected
+focused selection executed all 15 expected audio/CarPlay identities: 15 passed,
+zero failures, skips, expected failures or runtime warnings. It includes both
+original CarPlay failures, current/retired callbacks, interruption resume, native
+callback and duplicate completion adapters, cancellation/FIFO, stale leases,
+pause/stop/replacement races, typed release failure and real system activation.
+
+The supported complete app and UI smoke lane independently discovered and
+verified **654 passed, zero skipped** on iOS 27.0. The xcresult summary confirms
+654 passes, zero failures/expected failures/runtime warnings, including both UI
+smoke journeys and the three Swift Testing exporter cases. The original 103
+AVAudioSession and nine SessionCore runtime warnings do not occur in this result.
+No XCTest timeout or failure budget was increased. Existing interruption-resume
+assertions now await actual asynchronous activation before checking its count.
+
+Existing host diagnostic/route suites passed all 71 tests; the unsigned macOS
+Release build passed. Strict Swift lint, documentation links, audit/index parity
+and diff whitespace checks passed. This receipt-only update changes no tested
+implementation. Exact final-head CI and its iOS26 runtime evidence are reported
+in the PR, separately from local iOS27 execution. iOS26 is not installed locally;
+no local iOS26 execution is claimed. Physical-route, energy, physical CarPlay,
+and signed macOS authentication/relaunch acceptance remain unverified.
