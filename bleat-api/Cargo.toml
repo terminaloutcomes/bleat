@@ -11,7 +11,7 @@ base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 ciborium = "0.2.2"
 clap = { version = "4.6.6", features = ["derive", "env"] }
-compact_jwt = { version = "0.5.7", default-features = false }
+compact_jwt = { version = "0.6.0", default-features = false }
 getrandom = "0.4.3"
 governor = { version = "0.10.4", default-features = false, features = ["std"] }
 ipnet = "2.11.0"
@@ -35,7 +35,7 @@ opentelemetry_sdk = { version = "0.32.1", default-features = false, features = [
     "logs",
     "internal-logs",
 ] }
-p256 = { version = "0.13.2", default-features = false, features = [
+p256 = { version = "0.14.0", default-features = false, features = [
     "ecdsa",
     "pkcs8",
 ] }
