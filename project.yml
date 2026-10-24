@@ -202,7 +202,7 @@ schemes:
         BleatAppTests:
           - test
     run:
-      config: MacTesting
+      config: Debug
     test:
       config: MacTesting
       gatherCoverageData: true

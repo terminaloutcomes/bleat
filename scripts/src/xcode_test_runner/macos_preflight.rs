@@ -418,6 +418,32 @@ mod tests {
     }
 
     #[test]
+    fn scheme_runs_the_application_and_confines_isolation_to_tests() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("repository root");
+        let scheme = fs::read_to_string(
+            root.join("Bleat.xcodeproj/xcshareddata/xcschemes/BleatMac.xcscheme"),
+        )
+        .expect("generated macOS scheme");
+        let document = roxmltree::Document::parse(&scheme).expect("scheme XML");
+        let action = |name| {
+            document
+                .descendants()
+                .find(|node| node.has_tag_name(name))
+                .expect("scheme action")
+        };
+        assert_eq!(
+            action("LaunchAction").attribute("buildConfiguration"),
+            Some("Debug")
+        );
+        assert_eq!(
+            action("TestAction").attribute("buildConfiguration"),
+            Some("MacTesting")
+        );
+    }
+
+    #[test]
     fn rejects_empty_and_multiple_test_configurations() {
         for count in [0, 2] {
             let mut manifest = plist::Dictionary::new();

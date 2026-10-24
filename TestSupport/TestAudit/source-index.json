@@ -11261,6 +11261,12 @@
       "name": "prepared_run_owns_a_copy_and_injects_only_its_fixture_root",
       "line": 323,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "scheme_runs_the_application_and_confines_isolation_to_tests",
+      "line": 421,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [
