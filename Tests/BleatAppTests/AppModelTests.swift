@@ -575,22 +575,120 @@ final class AppModelTests: XCTestCase {
         let activation = ThrowingTestAudioSessionActivation()
         let playback = PlaybackModel(
             service: TestAppService(activeAccount: .success(nil)),
-            audioSessionActivation: {
-                try activation.activate()
-            })
+            audioSession: PlaybackAudioSession(
+                activate: { () async throws(AudioSessionFailure) in
+                    try await activation.activate()
+                }, deactivate: {}))
         await playback.startDownloaded(
             detail: fixture.detail, trackURLs: [fixture.audioURL],
             accountID: AccountID(rawValue: "activation-test"), account: nil)
         playback.pause()
         let before = activation.callCount
         activation.reject = true
-        XCTAssertEqual(playback.handleRemoteCommand(.play), .invalid)
+        XCTAssertEqual(playback.handleRemoteCommand(.play), .accepted)
+        let completed = await waitUntil(timeout: .seconds(2)) {
+            if case .failed = playback.state { return true }
+            return false
+        }
+        XCTAssertTrue(completed)
         XCTAssertEqual(activation.callCount, before + 1)
         XCTAssertEqual(
             playback.state,
-            .failed(AppFailure(.openPlayback, .audioSessionActivationFailed)))
+            .failed(
+                AppFailure(
+                    .openPlayback,
+                    .audioSession(
+                        AudioSessionFailure(
+                            operation: .activation,
+                            cause: .native(domain: .osStatus, code: 1))))))
         XCTAssertFalse(playback.isPlaybackRequested)
         await playback.stop()
+    }
+
+    func testPauseDuringAudioActivationRejectsLateResume() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let probe = TestPendingAudioSession()
+        let playback = PlaybackModel(
+            service: fixture.service, audioSession: probe.session())
+        await playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID, account: nil)
+        playback.pause()
+        let resume = Task { await playback.play() }
+        await probe.gate.waitUntilEntered()
+        playback.pause()
+        await probe.gate.release()
+        await resume.value
+        XCTAssertEqual(playback.state, .paused)
+        XCTAssertFalse(playback.isPlaybackRequested)
+        XCTAssertEqual(playback.runtimeSnapshotForTesting.playerRate, 0)
+        XCTAssertEqual(probe.events, ["activate-1", "activate-2", "release"])
+        await playback.stop()
+    }
+
+    func testStopDuringRemoteAudioActivationPreservesReplacement() async throws
+    {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let probe = TestPendingAudioSession()
+        let playback = PlaybackModel(
+            service: fixture.service, audioSession: probe.session())
+        await playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID, account: nil)
+        playback.pause()
+        XCTAssertEqual(playback.handleRemoteCommand(.play), .accepted)
+        await probe.gate.waitUntilEntered()
+        let stopped = Task { await playback.stop() }
+        await assertEventually(
+            "stop retires presentation before audio drain",
+            timeout: .seconds(2),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: { playback.state == .idle })
+        let replacement = Task {
+            await playback.startDownloaded(
+                detail: fixture.detail, trackURLs: [fixture.audioURL],
+                accountID: fixture.accountID, account: nil, initialTime: 0.25)
+        }
+        await assertEventually(
+            "replacement preparation", timeout: .seconds(2),
+            observed: { self.playbackDiagnostic(playback) },
+            condition: { playback.state == .preparing })
+        await probe.gate.release()
+        await stopped.value
+        await replacement.value
+        XCTAssertEqual(playback.itemID, fixture.detail.id)
+        XCTAssertEqual(probe.activations, 3)
+        XCTAssertTrue(playback.isPlaybackRequested)
+        XCTAssertNotEqual(playback.state, .idle)
+        XCTAssertNotEqual(playback.state, .preparing)
+        await playback.stop()
+        XCTAssertEqual(playback.state, .idle)
+    }
+
+    func testStopPreservesTypedAudioReleaseFailureWhileIdle() async throws {
+        let fixture = try playbackRecoveryFixture()
+        defer { fixture.cleanUp() }
+        let failure = AudioSessionFailure(
+            operation: .deactivation, cause: .rejected)
+        let playback = PlaybackModel(
+            service: fixture.service,
+            audioSession: PlaybackAudioSession(
+                activate: {},
+                deactivate: { () async throws(AudioSessionFailure) in
+                    throw failure
+                }))
+        await playback.startDownloaded(
+            detail: fixture.detail, trackURLs: [fixture.audioURL],
+            accountID: fixture.accountID, account: nil)
+        await playback.stop()
+        XCTAssertEqual(playback.state, .idle)
+        XCTAssertFalse(playback.isPlaybackRequested)
+        XCTAssertEqual(playback.audioSessionFailure, failure)
+        XCTAssertEqual(
+            playback.audioSessionFailure?.diagnosticStage,
+            .audioSessionDeactivation)
     }
 
     func testLastPlayingExplicitPlayUsesVerifiedDownloadOffline() async throws {
@@ -1254,9 +1352,10 @@ final class AppModelTests: XCTestCase {
         let activation = TestAudioSessionActivation()
         let playback = PlaybackModel(
             service: TestAppService(activeAccount: .success(nil)),
-            audioSessionActivation: {
-                activation.activate()
-            },
+            audioSession: PlaybackAudioSession(
+                activate: {
+                    await activation.activate()
+                }, deactivate: {}),
             remoteTelemetryTracer: tracer
         )
 
@@ -3881,7 +3980,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             appModel.playback.runtimeSnapshotForTesting.playerRate, 0)
         XCTAssertFalse(appModel.playback.isPlaybackRequested)
-        appModel.playback.play()
+        await appModel.playback.play()
         await assertEventually(
             "downloaded playback resumes after transcript deletion",
             timeout: .seconds(3),
@@ -4127,7 +4226,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(coordinator.isWorking(for: bookKey))
 
         playback.pause()
-        playback.play()
+        await playback.play()
         try await Task.sleep(for: .milliseconds(400))
         XCTAssertTrue(playback.isPlaybackRequested)
         XCTAssertTrue(coordinator.isWorking(for: bookKey))
@@ -11476,7 +11575,7 @@ final class AppModelTests: XCTestCase {
             playback.sleepTimer,
             .endOfChapter(chapters[initialTime < 2 ? 0 : 2]))
 
-        if seekWhilePlaying { playback.play() }
+        if seekWhilePlaying { await playback.play() }
         if initialTime != target {
             await playback.seek(to: target)
         }
@@ -11486,7 +11585,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(playback.isPlaybackRequested, seekWhilePlaying)
         if !seekWhilePlaying {
             XCTAssertEqual(playback.state, .paused)
-            playback.play()
+            await playback.play()
         }
         let deadline = ContinuousClock().now.advanced(by: .seconds(8))
         while playback.sleepTimer != nil, ContinuousClock().now < deadline {
@@ -11954,6 +12053,18 @@ final class AppModelTests: XCTestCase {
                         .shouldResume
                         .rawValue)
                 let shouldResume = subsequentPause == "none"
+                if shouldResume {
+                    await assertEventually(
+                        "interruption activation completed",
+                        timeout: .seconds(2),
+                        observed: {
+                            "activationCount=\(activation.callCount), \(self.playbackDiagnostic(playback))"
+                        },
+                        condition: {
+                            activation.callCount == 2
+                                && playback.isPlaybackRequested
+                        })
+                }
                 XCTAssertEqual(
                     playback.isPlaybackRequested, shouldResume, subsequentPause)
                 XCTAssertEqual(
@@ -12036,7 +12147,7 @@ final class AppModelTests: XCTestCase {
                     typeValue: AVAudioSession.InterruptionType.ended.rawValue,
                     optionsValue: AVAudioSession.InterruptionOptions
                         .shouldResume.rawValue)
-                playback.play()
+                await playback.play()
                 XCTAssertFalse(playback.isPlaybackRequested, context)
                 XCTAssertEqual(
                     playback.runtimeSnapshotForTesting.playerRate, 0, context)
@@ -12252,7 +12363,7 @@ final class AppModelTests: XCTestCase {
                     })
             }
             let playbackStartedAt = ContinuousClock.now
-            playback.play()
+            await playback.play()
             await assertEventually(
                 "natural end of downloaded playback",
                 timeout: .seconds(10),
@@ -12303,7 +12414,7 @@ final class AppModelTests: XCTestCase {
             service: service
         )
         await playback.start(detail: fixture.detail, account: account)
-        playback.play()
+        await playback.play()
         await assertEventually(
             "streamed AVPlayer readiness before natural completion",
             timeout: .seconds(5),
@@ -12372,7 +12483,7 @@ final class AppModelTests: XCTestCase {
             service: service
         )
         await playback.start(detail: fixture.detail, account: account)
-        playback.play()
+        await playback.play()
         await assertEventually(
             "streamed AVPlayer readiness before gated completion sync",
             timeout: .seconds(5),
@@ -12388,7 +12499,7 @@ final class AppModelTests: XCTestCase {
         playback.pause()
         let syncStarted = await syncGate.waitUntilEntered(timeout: .seconds(2))
         XCTAssertTrue(syncStarted)
-        playback.play()
+        await playback.play()
         let playbackStartedAt = ContinuousClock.now
         await assertEventually(
             "natural playback end while final sync is gated",
@@ -12454,7 +12565,7 @@ final class AppModelTests: XCTestCase {
         for (index, sessionID) in sessionIDs.enumerated() {
             let syncedBeforeStart = await service.playbackSyncSessionIDs()
             await playback.start(detail: fixture.detail, account: account)
-            playback.play()
+            await playback.play()
             await assertEventually(
                 "AVPlayer readiness before restart natural completion",
                 timeout: .seconds(5),
@@ -12569,7 +12680,7 @@ final class AppModelTests: XCTestCase {
         await playback.previousChapter()
         await playback.nextChapter()
         playback.setRate(1.25)
-        playback.play()
+        await playback.play()
         await playback.stop()
 
         let playbackRequests = await service.playbackOpenRequests()
@@ -22438,7 +22549,7 @@ final class AppModelTests: XCTestCase {
 
         model.playback.setSleepTimerToEndOfChapter()
         XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[0]))
-        model.playback.play()
+        await model.playback.play()
         await model.playback.seek(to: 1.25)
         XCTAssertEqual(model.playback.sleepTimer, .endOfChapter(chapters[1]))
         XCTAssertTrue(model.playback.isPlaybackRequested)
@@ -22523,7 +22634,7 @@ final class AppModelTests: XCTestCase {
         model.playback.setResumeRewind(.off)
         model.playback.pause()
         XCTAssertEqual(model.playback.state, .paused)
-        model.playback.play()
+        await model.playback.play()
 
         let retried = expectation(
             description:
@@ -22645,7 +22756,7 @@ final class AppModelTests: XCTestCase {
             when: model.playback,
             reaches: .inactive
         )
-        model.playback.play()
+        await model.playback.play()
         await fulfillment(of: [continuationFinished], timeout: 2)
         XCTAssertGreaterThanOrEqual(model.playback.currentTime, 0.99)
         XCTAssertTrue(model.playback.isPlaybackRequested)
@@ -22709,7 +22820,7 @@ final class AppModelTests: XCTestCase {
         )
         let playback = PlaybackModel(
             service: service,
-            audioSessionActivation: {}
+            audioSession: PlaybackAudioSession(activate: {}, deactivate: {})
         )
         var releasedPins: Set<AutomaticCachePin> = []
         playback.setAutomaticCachedPlaybackHandlers(
@@ -29452,9 +29563,13 @@ private final class ThrowingTestAudioSessionActivation {
     var reject = false
     private(set) var callCount = 0
 
-    func activate() throws {
+    func activate() async throws(AudioSessionFailure) {
         callCount += 1
-        if reject { throw NSError(domain: "test-audio-session", code: 1) }
+        if reject {
+            throw AudioSessionFailure(
+                operation: .activation,
+                cause: .native(domain: .osStatus, code: 1))
+        }
     }
 }
 
@@ -29462,7 +29577,7 @@ private final class ThrowingTestAudioSessionActivation {
 private final class TestAudioSessionActivation: @unchecked Sendable {
     private(set) var callCount = 0
 
-    func activate() {
+    func activate() async {
         callCount += 1
     }
 }
@@ -29530,9 +29645,10 @@ private struct PlaybackRecoveryFixture {
             ),
             preferencesStore: PlaybackPreferencesStore(defaults: defaults),
             nowPlayingCoordinator: nowPlayingCoordinator,
-            audioSessionActivation: {
-                activation.activate()
-            },
+            audioSession: PlaybackAudioSession(
+                activate: {
+                    await activation.activate()
+                }, deactivate: {}),
             queuePlanning: queuePlanning,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
@@ -32290,5 +32406,20 @@ private final class StartupPlaybackDiagnosticRecorder: DiagnosticRecording {
         XCTAssertEqual(
             nativePosition, expected, accuracy: accuracy,
             diagnostic, file: file, line: line)
+    }
+}
+
+@MainActor
+private final class TestPendingAudioSession {
+    let gate = AsyncGate()
+    private(set) var activations = 0
+    private(set) var events: [String] = []
+    func session() -> PlaybackAudioSession {
+        PlaybackAudioSession(
+            activate: {
+                self.activations += 1
+                self.events.append("activate-\(self.activations)")
+                if self.activations == 2 { await self.gate.enterAndWait() }
+            }, deactivate: { self.events.append("release") })
     }
 }

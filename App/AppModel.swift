@@ -635,6 +635,7 @@ enum AppFailureCause: Equatable, Sendable, Codable {
     case invalidBookMetadata(BookMetadataFailure)
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
     case audioSessionActivationFailed
+    case audioSession(AudioSessionFailure)
     case playbackFixture(PlaybackFixtureFailure)
     case serverUnavailable, requestRejected, mediaUnavailable, uncertainMutation
     case requestCancelled, timeout, rateLimited
@@ -715,6 +716,7 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .invalidInput: "Check the entered information"
         case .localLoginUnavailable: "Local login unavailable"
         case .audioSessionActivationFailed: "Audio session unavailable"
+        case .audioSession(let failure): failure.presentationTitle
         case .mediaUnavailable: "Playback unavailable"
         case .playbackFixture: "Playback fixture missing"
         case .uncertainMutation: "Change needs attention"
@@ -833,6 +835,7 @@ struct AppFailure: Equatable, Sendable, Codable {
             "Audiobookshelf returned incomplete or mismatched account credentials."
         case .audioSessionActivationFailed:
             "iOS could not activate audio playback. Try Play again."
+        case .audioSession(let failure): failure.presentationMessage
         case .playbackFixture(.missingResource(let resource)):
             "The test app is missing the bundled \(resource.rawValue).m4a audio fixture."
         case .mediaUnavailable:
@@ -876,7 +879,8 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
             "wifi.exclamationmark"
         case .requestCancelled: "xmark.circle"
-        case .mediaUnavailable, .audioSessionActivationFailed, .playbackFixture:
+        case .mediaUnavailable, .audioSessionActivationFailed, .audioSession,
+            .playbackFixture:
             "play.slash"
         case .uncertainMutation: "arrow.triangle.2.circlepath"
         case .serverRequiresHTTPS: "lock.trianglebadge.exclamationmark"
@@ -892,6 +896,9 @@ struct AppFailure: Equatable, Sendable, Codable {
     var playbackRecoveryAction: PlaybackFailureResolution {
         switch cause {
         case .authenticationRequired, .invalidCredentials: .signIn
+        case .audioSession(let failure):
+            failure.operation == .deactivation || failure.cause == .cancelled
+                ? .dismiss : .retry
         case .serverUnavailable, .timeout, .rateLimited, .unavailableOffline,
             .localStorageUnavailable, .mediaUnavailable,
             .audioSessionActivationFailed,
@@ -1321,7 +1328,8 @@ extension AppFailureCause {
         case .persistenceUnavailable, .storedDataMigrationFailed,
             .localStorageUnavailable, .localDataReset, .statistics:
             .localStorage
-        case .mediaUnavailable, .audioSessionActivationFailed, .playbackFixture:
+        case .mediaUnavailable, .audioSessionActivationFailed, .audioSession,
+            .playbackFixture:
             .media
         case .serverUnsupported, .localLoginUnavailable:
             .unsupported
@@ -3541,7 +3549,9 @@ final class AppModel {
                 .downloadEntryReconciliation, .fixtureResourceLookup,
                 .pathClassification,
                 .endpointProbe,
-                .subscriptionStart, .subscriptionStop, .subscriptionReconnect:
+                .subscriptionStart, .subscriptionStop, .subscriptionReconnect,
+                .audioSessionConfiguration, .audioSessionActivation,
+                .audioSessionDeactivation:
                 code =
                     AppFailure(operation: .loadLibraryPage, serviceError: error)
                     .diagnosticFailureCode
@@ -5942,7 +5952,7 @@ final class AppModel {
                 return .superseded
             }
             playbackStartPhase = .resolving
-            playback.play()
+            await playback.play()
             return playbackStartOutcome(
                 source: .activePlayer,
                 accountID: savedAccount.id,

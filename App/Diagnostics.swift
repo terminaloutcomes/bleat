@@ -28,7 +28,9 @@ extension AppModel {
                 statisticsHistoryFailure,
                 statisticsArchiveFailure,
             ].compactMap(\.self))
-        return Array(Set(errors.flatMap(\.diagnosticsCodes))).sorted()
+        let audioCodes = playback.audioSessionFailure?.diagnosticsCodes ?? []
+        return Array(Set(errors.flatMap(\.diagnosticsCodes) + audioCodes))
+            .sorted()
     }
 
     private var bookmarkFailure: AppFailure? {
@@ -313,6 +315,7 @@ extension AppFailure {
         case (_, .requestCancelled): .requestCancelled
         case (_, .requestRejected): .requestRejected
         case (_, .audioSessionActivationFailed): .audioSessionActivationFailed
+        case (_, .audioSession(let failure)): failure.diagnosticFailureCode
         case (_, .mediaUnavailable): .mediaUnavailable
         case (_, .uncertainMutation): .uncertainMutation
         case (_, .authenticationCancelled): .authenticationCancelled
@@ -342,6 +345,9 @@ extension AppFailure {
 
     fileprivate var diagnosticsCodes: [String] {
         var codes = [diagnosticFailureCode.rawValue]
+        if case .audioSession(let failure) = cause {
+            codes += failure.diagnosticsCodes
+        }
         if case .privateCloud(let failure) = cause,
             case .cloudKit(let cloudKit) = failure.cause
         {

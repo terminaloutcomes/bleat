@@ -35,3 +35,38 @@ No physical device, installed retest build, signing material or trust setting is
 changed. Security dependency remediation is separate; this branch changes no
 lockfile. Normal macOS isolation remains in PR #466, with integration coordinated
 after independently reviewed fixes merge.
+
+
+## Audio implementation and approved compatibility boundary
+
+Playback now awaits one process-wide audio-session owner before opening a player,
+resuming Play, or recovering media services. Native actions are serialized and
+awaited even after caller cancellation, because Apple's completion API offers no
+cancellation that proves hardware work has retired. Activation leases prevent an
+old completion's cleanup from deactivating a newer activation. Synchronous remote
+commands admit one owned, coalesced async Play task; pause cancels admission and
+Stop awaits retirement before cleanup. Distinct configuration, activation and
+release failures preserve operation, stable failure code, stage, allowlisted
+native domain and numeric code. NSError descriptions and userInfo are omitted.
+
+On iOS 27, activation and deactivation call Apple's public native completion APIs.
+A declaration-only Objective-C bridge allows supported older SDK builds to call
+the same iOS 27 APIs at runtime, with a Sendable completion; it implements no
+replacement selectors and uses no private API. On iOS 26 only, setActive remains
+synchronous on the owning main actor because that OS has no native async API.
+setCategory also remains synchronous on the owning actor because Apple supplies
+no async setter; unchanged playback/spokenAudio configuration is not set again.
+The maintainer explicitly approved these exact boundaries before implementation.
+The iOS26 fallback can be removed when minimum deployment reaches iOS27; category
+setup can change when Apple supplies an async alternative. macOS continues to let
+AVPlayer manage audio without an AVAudioSession operation.
+
+The first runnable focused audio run executed 11 tests: ten passed and one model
+test failed two assertions that incorrectly expected replacement start to remain
+ready and paused. Replacement start has always autoplayed; its corrected oracle
+requires the current item, active playback intent and non-retired state, then an
+awaited final Stop. Seven adapter cases passed, including native iOS27 activation
+and release, off-actor/duplicate callbacks, FIFO cancellation drainage, rejected
+release recovery and stale-lease exclusion. Compilation-only attempts before this
+run executed zero tests and are not counted as coverage. Final verification is
+pending; intermediate Xcode diagnostic collection is retained separately.

@@ -406,7 +406,10 @@ final class PlaybackModel {
     private let bookmarkMutationStore: BookmarkMutationStore
     private let preferencesStore: PlaybackPreferencesStore
     private let nowPlayingCoordinator: NowPlayingCoordinator
-    private let audioSessionActivation: @MainActor @Sendable () throws -> Void
+    private let audioSession: PlaybackAudioSession
+    private var requestedPlayTask: Task<Void, Never>?
+    private var requestedPlayID: UUID?
+    private(set) var audioSessionFailure: AudioSessionFailure?
     private let queuePlanning:
         @MainActor @Sendable (
             AppPlaybackPreparation,
@@ -735,10 +738,7 @@ final class PlaybackModel {
         preferencesStore: PlaybackPreferencesStore = .shared,
         nowPlayingCoordinator: NowPlayingCoordinator =
             NowPlayingCoordinator(),
-        audioSessionActivation:
-            @escaping @MainActor @Sendable () throws -> Void = {
-                try PlaybackModel.activateAudioSession()
-            },
+        audioSession: PlaybackAudioSession = .system,
         queuePlanning:
             @escaping @MainActor @Sendable (
                 AppPlaybackPreparation,
@@ -770,7 +770,7 @@ final class PlaybackModel {
         self.bookmarkMutationStore = bookmarkMutationStore
         self.preferencesStore = preferencesStore
         self.nowPlayingCoordinator = nowPlayingCoordinator
-        self.audioSessionActivation = audioSessionActivation
+        self.audioSession = audioSession
         self.queuePlanning = queuePlanning
         self.monotonicNow = monotonicNow
         rate = preferencesStore.playbackRate()
@@ -964,7 +964,21 @@ final class PlaybackModel {
                 return
             }
 
-            try configureAudioSession()
+            do {
+                guard try await configureAudioSession(for: operationGeneration)
+                else {
+                    if let sessionID = prepared.sessionID {
+                        await closeUnadoptedPlaybackSession(
+                            sessionID, for: account)
+                    }
+                    return
+                }
+            } catch {
+                if let sessionID = prepared.sessionID {
+                    await closeUnadoptedPlaybackSession(sessionID, for: account)
+                }
+                throw error
+            }
             activeAccount = account
             preparingAccountID = nil
             preparation = prepared
@@ -1035,15 +1049,20 @@ final class PlaybackModel {
             activeDownloadDetail = nil
             localBookDetail = nil
             resetPlayer()
-            state = .failed(.mediaUnavailable)
+            if let failure = error as? AudioSessionFailure {
+                audioSessionFailure = failure
+                state = .failed(
+                    AppFailure(.openPlayback, .audioSession(failure)))
+                await diagnostics.record(
+                    failure.diagnosticEvent(.activateAudioSession))
+            } else {
+                state = .failed(.mediaUnavailable)
+                await diagnostics.record(
+                    .failed(
+                        .openPlayback, category: .playback,
+                        failureCode: .mediaUnavailable))
+            }
             telemetryOutcome = .failed(.media)
-            await diagnostics.record(
-                .failed(
-                    .openPlayback,
-                    category: .playback,
-                    failureCode: .mediaUnavailable
-                )
-            )
         }
     }
 
@@ -1083,11 +1102,8 @@ final class PlaybackModel {
             telemetryOutcome = .failed(.media)
             await diagnostics.record(
                 .failed(
-                    .openPlayback,
-                    category: .playback,
-                    failureCode: .mediaUnavailable
-                )
-            )
+                    .openPlayback, category: .playback,
+                    failureCode: .mediaUnavailable))
             return
         }
         playbackRequested = false
@@ -1202,7 +1218,8 @@ final class PlaybackModel {
                 chapters: detail.chapters,
                 source: .direct(tracks)
             )
-            try configureAudioSession()
+            guard try await configureAudioSession(for: operationGeneration)
+            else { return }
             activeAccount = account
             localAccountID = accountID
             preparingAccountID = nil
@@ -1269,15 +1286,20 @@ final class PlaybackModel {
             resetPlayer()
             releaseAutomaticCachedPlaybackWindow()
             resetCachedStreamingContinuation()
-            state = .failed(.mediaUnavailable)
+            if let failure = error as? AudioSessionFailure {
+                audioSessionFailure = failure
+                state = .failed(
+                    AppFailure(.openPlayback, .audioSession(failure)))
+                await diagnostics.record(
+                    failure.diagnosticEvent(.activateAudioSession))
+            } else {
+                state = .failed(.mediaUnavailable)
+                await diagnostics.record(
+                    .failed(
+                        .openPlayback, category: .playback,
+                        failureCode: .mediaUnavailable))
+            }
             telemetryOutcome = .failed(.media)
-            await diagnostics.record(
-                .failed(
-                    .openPlayback,
-                    category: .playback,
-                    failureCode: .mediaUnavailable
-                )
-            )
         }
     }
 
@@ -1300,7 +1322,7 @@ final class PlaybackModel {
             if !useLocalPosition {
                 syncState = .idle
             }
-            play()
+            await play()
         } catch {
             state = .failed(.mediaUnavailable)
         }
@@ -1592,25 +1614,68 @@ final class PlaybackModel {
         updateNowPlaying()
     }
 
-    func play() {
+    /// Admit a synchronous UI/remote command; the owned task performs the real
+    /// asynchronous operation. Replacements await retirement of the prior task.
+    @discardableResult
+    func requestPlay() -> PlaybackRemoteCommandOutcome {
+        if preparation == nil, resumeSelection != nil {
+            return resumeSelectionHandler?() ?? .unavailable
+        }
+        guard canRequestPreparedPlayback else { return .unavailable }
+        if let requestedPlayTask, !requestedPlayTask.isCancelled {
+            return .accepted
+        }
+        let predecessor = requestedPlayTask
+        let operationGeneration = generation
+        let id = UUID()
+        requestedPlayID = id
+        playbackRequested = true
+        updateNowPlaying()
+        requestedPlayTask = Task { @MainActor [weak self] in
+            _ = await predecessor?.value
+            defer {
+                if let self {
+                    if self.requestedPlayID == id {
+                        self.requestedPlayID = nil
+                        self.requestedPlayTask = nil
+                    }
+                }
+            }
+            guard let self, self.generation == operationGeneration,
+                !Task.isCancelled
+            else { return }
+            await self.play()
+        }
+        return .accepted
+    }
+
+    private var canRequestPreparedPlayback: Bool {
+        !isAccountSwitchShutdownInProgress && player != nil
+            && preparation != nil
+            && state != .idle && state != .preparing && state != .ended
+    }
+
+    func play() async {
         if preparation == nil, resumeSelection != nil {
             _ = resumeSelectionHandler?()
             return
         }
-        guard !isAccountSwitchShutdownInProgress, player != nil,
-            preparation != nil, state != .idle, state != .preparing,
-            state != .ended
-        else { return }
+        guard canRequestPreparedPlayback, !Task.isCancelled else { return }
+        let operationGeneration = generation
+        let playerIdentity = player.map(ObjectIdentifier.init)
+        playbackRequested = true
         do {
-            try configureAudioSession()
+            guard try await configureAudioSession(for: operationGeneration),
+                player.map(ObjectIdentifier.init) == playerIdentity,
+                playbackRequested
+            else { return }
         } catch {
-            let failure = AppFailure(
-                .openPlayback, .audioSessionActivationFailed)
-            record(
-                .failed(
-                    .activateAudioSession, category: .playback,
-                    failureCode: .audioSessionActivationFailed))
-            fail(failure)
+            guard generation == operationGeneration, !Task.isCancelled else {
+                return
+            }
+            audioSessionFailure = error
+            record(error.diagnosticEvent(.activateAudioSession))
+            fail(AppFailure(.openPlayback, .audioSession(error)))
             return
         }
         record(.completed(.activateAudioSession, category: .playback))
@@ -1707,6 +1772,7 @@ final class PlaybackModel {
     }
 
     func pause() {
+        requestedPlayTask?.cancel()
         resumeAfterInterruption = false
         cancelSelectionResume?()
         guard !isAccountSwitchShutdownInProgress else {
@@ -1749,11 +1815,7 @@ final class PlaybackModel {
     }
 
     func togglePlayback() {
-        if isPlaybackRequested {
-            pause()
-        } else {
-            play()
-        }
+        if isPlaybackRequested { pause() } else { requestPlay() }
     }
 
     func seekToAudioFile(at index: Int) async {
@@ -1767,6 +1829,7 @@ final class PlaybackModel {
     }
 
     func fail(_ failure: AppFailure) {
+        requestedPlayTask?.cancel()
         playbackRequested = false
         pendingPlaybackStartSpan?.end(failure.remoteTelemetryOutcome)
         pendingPlaybackStartSpan = nil
@@ -1968,7 +2031,7 @@ final class PlaybackModel {
             persistPosition()
             if continuation == .resume {
                 state = .ready
-                play()
+                await play()
             } else {
                 state = .paused
             }
@@ -2044,6 +2107,7 @@ final class PlaybackModel {
     }
 
     func cancelRequestedStart() {
+        requestedPlayTask?.cancel()
         generation &+= 1
         playbackRequested = false
         player?.pause()
@@ -2111,6 +2175,8 @@ final class PlaybackModel {
         // Queued player observations already reject the idle state.
         state = .idle
         nowPlayingCoordinator.clear()
+        requestedPlayTask?.cancel()
+        if let pending = requestedPlayTask { await pending.value }
         await diagnostics.record(
             .started(.closePlayback, category: .playback)
         )
@@ -2161,12 +2227,12 @@ final class PlaybackModel {
         syncState = .idle
         positionConflict = nil
         nowPlayingCoordinator.clear()
-        #if os(iOS)
-            try? AVAudioSession.sharedInstance().setActive(
-                false,
-                options: .notifyOthersOnDeactivation
-            )
-        #endif
+        do { try await audioSession.deactivate() } catch {
+            if !allowsSupersession || generation == operationGeneration {
+                audioSessionFailure = error
+            }
+            await diagnostics.record(error.diagnosticEvent(.closePlayback))
+        }
         await diagnostics.record(
             .completed(.closePlayback, category: .playback)
         )
@@ -2211,16 +2277,18 @@ final class PlaybackModel {
         lastObservedWholeBookTime = wholeBookTime
     }
 
-    private func configureAudioSession() throws {
-        try audioSessionActivation()
-    }
-
-    static func activateAudioSession() throws {
-        #if os(iOS)
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .spokenAudio)
-            try audioSession.setActive(true)
-        #endif
+    private func configureAudioSession(for operationGeneration: UInt64)
+        async throws(AudioSessionFailure) -> Bool
+    {
+        let lease = try await audioSession.activate()
+        guard generation == operationGeneration, !Task.isCancelled else {
+            do { try await audioSession.deactivate(ifCurrent: lease) } catch {
+                record(error.diagnosticEvent(.closePlayback))
+            }
+            return false
+        }
+        audioSessionFailure = nil
+        return true
     }
 
     private func updateRemoteSkipIntervals() {
@@ -2385,6 +2453,21 @@ final class PlaybackModel {
         offsetsByItem = [:]
         lastObservedWholeBookTime = nil
         hasConfirmedPlaybackAdvance = false
+    }
+
+    private func closeUnadoptedPlaybackSession(
+        _ sessionID: PlaybackSessionID, for account: ServerAccount
+    ) async {
+        do {
+            try await service.closePlayback(for: account, sessionID: sessionID)
+        } catch {
+            let failure = AppFailure(
+                operation: .openPlayback, serviceError: error)
+            await diagnostics.record(
+                .failed(
+                    .closePlayback, category: .playback,
+                    failureCode: failure.diagnosticFailureCode))
+        }
     }
 
     private func closeActiveSession() async {
@@ -3396,7 +3479,7 @@ final class PlaybackModel {
                     currentTime = continuationTime
                     state = shouldResume ? .ready : .paused
                     if shouldResume {
-                        play()
+                        await play()
                     }
                     return
                 } catch {
@@ -3511,7 +3594,7 @@ final class PlaybackModel {
                 || isPlaybackRequested
             state = shouldResume ? .ready : .paused
             if shouldResume {
-                play()
+                await play()
             }
             await loadBookmarks()
         } catch {
@@ -4111,7 +4194,7 @@ final class PlaybackModel {
                     resumeAfterInterruption
                     && options.contains(.shouldResume)
                 resumeAfterInterruption = false
-                if shouldResume { play() }
+                if shouldResume { requestPlay() }
             @unknown default:
                 resumeAfterInterruption = false
                 pause()
@@ -4148,7 +4231,8 @@ final class PlaybackModel {
         player?.pause()
         state = .preparing
         do {
-            try configureAudioSession()
+            guard try await configureAudioSession(for: operationGeneration)
+            else { return }
             try await rebuildQueue(at: recoveryTime)
             guard generation == operationGeneration else {
                 return
@@ -4170,7 +4254,14 @@ final class PlaybackModel {
                 return
             }
             resetPlayer()
-            state = .failed(.mediaUnavailable)
+            if let failure = error as? AudioSessionFailure {
+                audioSessionFailure = failure
+                state = .failed(
+                    AppFailure(.recoverPlayback, .audioSession(failure)))
+                record(failure.diagnosticEvent(.activateAudioSession))
+            } else {
+                state = .failed(.mediaUnavailable)
+            }
             updateNowPlaying()
         }
     }
@@ -4261,8 +4352,7 @@ final class PlaybackModel {
             guard isPlaybackControlAvailable, !isPlaybackRequested else {
                 return .unavailable
             }
-            play()
-            if case .failed = state { return .invalid }
+            return requestPlay()
         case .pause:
             guard isPlaybackControlAvailable, isPlaybackRequested else {
                 return .unavailable

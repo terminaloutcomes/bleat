@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "627 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
-  "methodCount": 627,
+  "status": "647 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
+  "methodCount": 647,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -52499,10 +52499,320 @@
         "iOS + CarPlay + DEBUG; native Search assertions require iOS27 and four-tab capacity; older runtime asserts the unsupported path, without skipping."
       ],
       "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testNativeInlineDuplicateCompletionPreservesFirstTypedResult",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 10
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "For each configuration/activation/deactivation stage, native OSStatus -50 wins over a duplicate success; structured stage/domain/code survive app diagnostics and Codable, while NSError private text is absent.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "For each configuration/activation/deactivation stage, native OSStatus -50 wins over a duplicate success; structured stage/domain/code survive app diagnostics and Codable, while NSError private text is absent.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testNativeOffActorLateCompletionAndRejection",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 57
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Register actual callback adapter; detached executor delivers false/no-error and a late native failure; exactly the first typed rejected result completes.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Register actual callback adapter; detached executor delivers false/no-error and a late native failure; exactly the first typed rejected result completes.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testCancelledActivationDrainsBeforeQueuedDeactivation",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 86
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Gate native activation, cancel its caller, admit release, then require activate-start/activate-end/deactivate FIFO; cancellation cannot release a still-active native request.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Gate native activation, cancel its caller, admit release, then require activate-start/activate-end/deactivate FIFO; cancellation cannot release a still-active native request.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testRetiredActivationLeaseCannotReleaseNewerActivation",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 113
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold newer activation, release the retired lease, and require no native deactivation until current lease releases.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Hold newer activation, release the retired lease, and require no native deactivation until current lease releases.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testCancelledBeforeAdmissionDoesNotActivate",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 134
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A task cancelled before admission returns typed activation/cancelled with zero native actions.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "A task cancelled before admission returns typed activation/cancelled with zero native actions.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testFailedDeactivationDoesNotPoisonNextActivation",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 152
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Rejected release preserves operation/cause; the next queued activation still executes exactly once.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Rejected release preserves operation/cause; the next queued activation still executes exactly once.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "PlaybackAudioSessionTests/testSystemAudioSessionCompletesActivationAndDeactivation",
+      "source": {
+        "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+        "line": 173
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Await real system activation and release on the executing runtime; iOS27 uses native async callbacks, iOS26 the approved unavoidable setActive boundary, macOS remains AVPlayer-managed.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Await real system activation and release on the executing runtime; iOS27 uses native async callbacks, iOS26 the approved unavoidable setActive boundary, macOS remains AVPlayer-managed.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testPauseDuringAudioActivationRejectsLateResume",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 608
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold prepared-player activation, pause, then drain; state remains paused, rate zero and no playback request, with stale activation released.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Hold prepared-player activation, pause, then drain; state remains paused, rate zero and no playback request, with stale activation released.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testStopDuringRemoteAudioActivationPreservesReplacement",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 630
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold remote Play activation, stop to retire presentation, start replacement, then drain; old Stop must preserve replacement item and autoplay; final awaited Stop returns idle.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Hold remote Play activation, stop to retire presentation, start replacement, then drain; old Stop must preserve replacement item and autoplay; final awaited Stop returns idle.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testStopPreservesTypedAudioReleaseFailureWhileIdle",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 670
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Rejected native release leaves playback idle and unrequested while preserving exact deactivation/rejected diagnostic state.",
+        "purpose": "Exercise the actual audio lifecycle boundary introduced by iOS27 native async migration.",
+        "ruleAssessments": {
+          "1": "Rejected native release leaves playback idle and unrequested while preserving exact deactivation/rejected diagnostic state.",
+          "2": "Actual continuation/owned-task completion or bounded gate entry establishes ordering; two-second assertion budgets where polling is needed, no sleep as success oracle.",
+          "3": "Model races assert requested intent and native paused rate where appropriate; replacement test does not compare an advancing clock to a startup seek.",
+          "4": "Every created task is awaited, every held gate released; callback holder is synchronized and duplicate completion consumes no continuation.",
+          "5": "Injected paired native actions and owned temporary media fixtures; real-system case explicitly uses the shared framework session.",
+          "6": "Native app-hosted tests; system case executes runtime-specific boundary, not physical-route, energy or audible-output acceptance.",
+          "7": "Compiler failures execute zero tests; the first runnable 11-case pass retained one model test with two incorrect autoplay expectations, corrected without timeout increases. Final execution receipt is recorded separately.",
+          "8": "XCTest assertions preserve caller locations; bounded helper reports elapsed/budget and observable registration/events/playback state.",
+          "9": "See scoped execution receipt; source review alone does not certify unexecuted platform acceptance."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Directly covers native callback completion and playback ownership introduced by the repair."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; no runtime skips; real framework path differs by platform/runtime."
+      ],
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
     }
   ],
   "decisionCounts": {
-    "keep": 525,
+    "keep": 545,
     "follow_up": 98,
     "fix": 4
   },
