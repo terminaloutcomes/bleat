@@ -693,6 +693,95 @@ final class AppModelTests: XCTestCase {
         }
     #endif
 
+    #if os(iOS)
+        func testAppModelFirstActivationRetirementReturnsSuperseded()
+            async throws
+        {
+            for existingSelection in [false, true] {
+                for downloaded in [false, true] {
+                    for interruption in [false, true] {
+                        let fixture = try playbackRecoveryFixture()
+                        defer { fixture.cleanUp() }
+                        let account = try fixtureAccount()
+                        let downloadsRoot = fixture.root.appendingPathComponent(
+                            "downloads")
+                        if downloaded {
+                            try FileManager.default.createDirectory(
+                                at: downloadsRoot,
+                                withIntermediateDirectories: true)
+                            try await prepareCompleteDownload(
+                                root: downloadsRoot, account: account,
+                                detail: fixture.detail)
+                        }
+                        let service = TestAppService(
+                            activeAccount: .success(account),
+                            playback: [
+                                .success(
+                                    playbackPreparation(
+                                        detail: fixture.detail,
+                                        audioURL: fixture.audioURL))
+                            ])
+                        let probe = TestPendingAudioSession(
+                            blockedActivation: 1)
+                        let store = PlaybackPositionStore(
+                            defaults: fixture.defaults)
+                        let selected =
+                            existingSelection
+                            ? LastPlayingRecord(
+                                accountID: account.id,
+                                book: fixture.detail.summary) : nil
+                        if let selected { try store.select(selected) }
+                        let model = AppModel(
+                            service: service,
+                            cloudStorageNoticeDefaults: fixture.defaults,
+                            downloadsStorageRootURL: downloadsRoot,
+                            downloadsBackgroundSessionIdentifier:
+                                backgroundSessionIdentifier(
+                                    "first-activation-outcome"),
+                            localSessionStore: LocalPlaybackSessionStore(
+                                defaults: fixture.defaults),
+                            playbackPositionStore: store,
+                            audioSession: probe.session())
+                        await model.start()
+                        let attempt = Task {
+                            await model.startPlayback(
+                                detail: fixture.detail, account: account)
+                        }
+                        await probe.gate.waitUntilEntered()
+                        if interruption {
+                            model.playback.handleInterruption(
+                                typeValue:
+                                    AVAudioSession.InterruptionType.began
+                                    .rawValue, optionsValue: 0)
+                        } else {
+                            model.playback.handleRouteChange(
+                                reasonValue:
+                                    AVAudioSession.RouteChangeReason
+                                    .oldDeviceUnavailable.rawValue)
+                        }
+                        await probe.gate.release()
+                        let outcome = await attempt.value
+                        let context =
+                            "existing=\(existingSelection), downloaded=\(downloaded), interruption=\(interruption)"
+                        XCTAssertEqual(outcome, .superseded, context)
+                        XCTAssertEqual(
+                            model.playback.state,
+                            existingSelection && downloaded ? .paused : .idle,
+                            context)
+                        XCTAssertFalse(
+                            model.playback.isPlaybackRequested, context)
+                        XCTAssertNil(
+                            model.playback.runtimeSnapshotForTesting
+                                .playerIdentity, context)
+                        XCTAssertEqual(
+                            try store.lastPlaying(), selected, context)
+                        await model.playback.stop()
+                    }
+                }
+            }
+        }
+    #endif
+
     func testReusedPlayerRetiredAudioStartDoesNotPublishSuccess() async throws {
         for cancelCaller in [false, true] {
             let fixture = try playbackRecoveryFixture(audioSeconds: 30)

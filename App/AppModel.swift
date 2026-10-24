@@ -6274,6 +6274,12 @@ final class AppModel {
         if case .failed(let failure) = playback.state {
             return .failed(failure)
         }
+        // An explicit Pause/Stop can retire first preparation before a player
+        // exists. That completed cancellation is not a media failure.
+        guard playback.state != .idle,
+            playback.state != .paused
+                || playback.isPrepared(accountID: accountID, itemID: itemID)
+        else { return .superseded }
         guard playback.accountID == accountID,
             playback.itemID == itemID,
             playback.isPrepared(accountID: accountID, itemID: itemID)

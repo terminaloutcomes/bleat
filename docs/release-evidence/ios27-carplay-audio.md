@@ -121,3 +121,29 @@ selection. The Pause/cancellation/Stop selection passed 17/17 without warnings
 before adding the final replacement identity. Final complete compatibility and
 exact pushed-head CI results are recorded in the PR; prior clean runs are not
 presented as coverage of these new review cases. No timeout was increased.
+
+
+The combined two-review correction at `bc787fa` then passed 18 focused tests and
+all 659 discovered app/UI smoke identities on iOS27, with zero skips, failures,
+expected failures or runtime warnings. A final related AppModel classification
+check also treats an explicitly retired idle first preparation as superseded,
+rather than inventing a media failure. Its eight source/event/persisted-selection combinations assert
+that no player or new LastPlaying appears, while a matching existing resumable
+selection remains paused and its persisted record stays unchanged. Final execution for that added
+identity and current-head CI remain separately reported in the PR.
+
+The added AppModel classification case initially executed six passing peers and
+one fixture failure: its complete-download helper was given a directory that had
+not been created before writing source.wav. The fixture now creates its owned
+directory explicitly. The failed seven-case xcresult is retained, with zero
+runtime warnings. Its post-test diagnostic collector was terminated only after
+all seven identities finished and the complete test output was copied; the test
+command finalized the original six-pass/one-failure result. No test timeout or
+failure budget was changed, and that failed attempt is not counted as success.
+
+The corrected final classification-focused selection passed all seven identities
+with zero failures/skips/expected failures/runtime warnings. Its new AppModel
+identity exercised all eight source/event/persisted-selection combinations. The
+final implementation and receipt are published together; complete compatibility
+and exact-head CI outcomes are recorded in the PR rather than inferred from the
+prior 659-case run.

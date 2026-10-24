@@ -11187,19 +11187,25 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testReusedPlayerRetiredAudioStartDoesNotPublishSuccess",
-      "line": 696,
+      "line": 768,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection",
-      "line": 746,
+      "line": 818,
       "language": "swift"
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testReusedPlayerRetiredAudioStartCannotReplaceNewSelection",
-      "line": 801,
+      "line": 873,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testAppModelFirstActivationRetirementReturnsSuperseded",
+      "line": 697,
       "language": "swift"
     }
   ],

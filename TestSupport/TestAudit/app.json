@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "652 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
-  "methodCount": 652,
+  "status": "653 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
+  "methodCount": 653,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -52876,7 +52876,7 @@
       "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartDoesNotPublishSuccess",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 696
+        "line": 768
       },
       "compilerAndSkipConditions": [
         "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
@@ -52907,7 +52907,7 @@
       "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 746
+        "line": 818
       },
       "compilerAndSkipConditions": [
         "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
@@ -52938,7 +52938,7 @@
       "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartCannotReplaceNewSelection",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 801
+        "line": 873
       },
       "compilerAndSkipConditions": [
         "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
@@ -52964,10 +52964,41 @@
         }
       },
       "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testAppModelFirstActivationRetirementReturnsSuperseded",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 697
+      },
+      "compilerAndSkipConditions": [
+        "iOS native app test target, no runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "First activation held across route loss or interruption, for streaming and complete downloaded media with fresh or existing persisted selection, returns superseded rather than media failure; no player/request or new LastPlaying is published.",
+        "purpose": "Keep cancellation classification consistent through first preparation and AppModel outcome/persistence.",
+        "ruleAssessments": {
+          "1": "Eight source/event/persisted-selection combinations assert exact superseded outcome, idle or matching restored-paused state, nil native player and unchanged prior LastPlaying (nil for fresh state) after first activation drains.",
+          "2": "Use actual activation entry and awaited start completion; no delays establish success.",
+          "3": "No advancing-clock comparisons; assert native player absence and requested intent.",
+          "4": "Release each audio gate, await the app operation and final Stop, then remove its owned media/defaults fixture.",
+          "5": "Explicit synthetic account/service, owned defaults/download root and valid complete download fixtures; inject only paired native audio timing.",
+          "6": "App-hosted integration of real AppModel preparation/outcome code; simulated events do not certify physical route behavior.",
+          "7": "Adds classification coverage to the two concrete reviewed races; earlier 18/18 focused and 659/659 full iOS27 results are retained as pre-classification evidence. Initial seven-case attempt retained six passes and this case failing fixture setup because its download directory was absent; create the owned directory, do not change timeouts. Post-test diagnostics interruption is documented separately. Corrected fresh-selection seven-case execution passed 7/7 with zero runtime warnings; final coverage also includes matching persisted selection restoration.",
+          "8": "Exact XCTest outcomes include source/event context; gate entry retains bounded failure diagnostics.",
+          "9": "Final focused/full execution and exact-head CI are reported in the PR; no zero-test or prior-head result is counted as this case."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "An intentionally retired first start must preserve cancellation rather than invent a media failure or saved selection."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
     }
   ],
   "decisionCounts": {
-    "keep": 550,
+    "keep": 551,
     "follow_up": 98,
     "fix": 4
   },
