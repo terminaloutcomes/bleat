@@ -1492,7 +1492,7 @@ mod tests {
         signing_key: &SigningKey,
         client_data_hash: &[u8; 32],
     ) -> (String, String, Vec<u8>) {
-        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let public_key = signing_key.verifying_key().to_sec1_point(false);
         let public_key = public_key.as_bytes().to_vec();
         let signature: Signature = signing_key.sign(client_data_hash);
         let evidence = DevelopmentAttestation {
@@ -1580,7 +1580,7 @@ mod tests {
         );
 
         let signing_key = SigningKey::from_slice(&[21; 32]).expect("test key should be valid");
-        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let public_key = signing_key.verifying_key().to_sec1_point(false);
         let key_id: [u8; 32] = Sha256::digest(public_key.as_bytes()).into();
         let mut authenticator = attestation_authenticator_data(
             TEAM_ID,
@@ -1808,7 +1808,7 @@ mod tests {
     #[test]
     fn attestation_authenticator_accepts_apple_documented_flag_shape() {
         let signing_key = SigningKey::from_slice(&[22; 32]).expect("test key should be valid");
-        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let public_key = signing_key.verifying_key().to_sec1_point(false);
         let key_id: [u8; 32] = Sha256::digest(public_key.as_bytes()).into();
         let encoded = attestation_authenticator_data(
             TEAM_ID,
@@ -2166,7 +2166,7 @@ mod tests {
     #[test]
     fn authenticator_cose_and_claim_parsers_reject_boundary_shapes() {
         let signing_key = SigningKey::from_slice(&[23; 32]).expect("test key should be valid");
-        let public_key = signing_key.verifying_key().to_encoded_point(false);
+        let public_key = signing_key.verifying_key().to_sec1_point(false);
         let key_id: [u8; 32] = Sha256::digest(public_key.as_bytes()).into();
         let valid = attestation_authenticator_data(
             TEAM_ID,

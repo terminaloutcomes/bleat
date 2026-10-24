@@ -14,6 +14,15 @@ API/Rust validation tasks also run Rust formatting. Review the resulting diff.
 For read-only formatting validation, use `mise run swift-lint` and
 `cargo fmt --all -- --check`.
 
+## Dependency security
+
+`mise run security:dependencies` checks the enabled workspace feature graph and
+runs `cargo audit --deny yanked` against both `Cargo.lock` (workspace tooling and
+API) and `bleat-api/Cargo.lock` (the standalone container build). Both resolutions
+must pass; an advisory failure in one still allows the other to be reported.
+The existing lockfile-only `rkyv` exception fails closed if the crate becomes
+enabled. The shell entry point delegates this policy to the Rust scripts package.
+
 ## Focused tests
 
 Run the narrowest relevant test first. Direct SwiftPM runs use the explicitly

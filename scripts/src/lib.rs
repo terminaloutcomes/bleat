@@ -15,6 +15,7 @@ pub mod appstore_testflight;
 pub mod ci_artifact_retry;
 pub mod ci_cache_keys;
 pub mod ci_smoke;
+pub mod dependency_audit;
 pub mod deploy_device;
 pub mod device_build;
 pub mod documentation;

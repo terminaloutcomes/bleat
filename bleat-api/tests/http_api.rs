@@ -255,10 +255,7 @@ fn development_key(seed: u8) -> SigningKey {
 
 fn development_key_id(signing_key: &SigningKey) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(
-        signing_key
-            .verifying_key()
-            .to_encoded_point(false)
-            .as_bytes(),
+        signing_key.verifying_key().to_sec1_point(false).as_bytes(),
     ))
 }
 
@@ -276,12 +273,8 @@ fn development_attestation(
     );
     let signature: Signature = signature_key.sign(&hash);
     let evidence = DevelopmentAttestation {
-        public_key: URL_SAFE_NO_PAD.encode(
-            signing_key
-                .verifying_key()
-                .to_encoded_point(false)
-                .as_bytes(),
-        ),
+        public_key: URL_SAFE_NO_PAD
+            .encode(signing_key.verifying_key().to_sec1_point(false).as_bytes()),
         signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
     };
     URL_SAFE_NO_PAD.encode(serde_json::to_vec(&evidence).expect("evidence should encode"))
@@ -439,7 +432,7 @@ async fn development_evidence_enrolls_and_issues_verifiable_es256_token() {
     let postgres = TestPostgres::start().await;
     let router = test_router(&postgres).await;
     let signing_key = SigningKey::from_slice(&[9_u8; 32]).expect("test key should be valid");
-    let public_key = signing_key.verifying_key().to_encoded_point(false);
+    let public_key = signing_key.verifying_key().to_sec1_point(false);
     let public_key = public_key.as_bytes();
     let key_id = URL_SAFE_NO_PAD.encode(Sha256::digest(public_key));
 
