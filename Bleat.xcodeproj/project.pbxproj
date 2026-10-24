@@ -14,6 +14,7 @@
 		08F4E3D28EE81E46CAD79563 /* ProcessMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077086F35259DE8E90E3E355 /* ProcessMemory.swift */; };
 		0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */; };
 		1194E9B9599CE01CE2C84728 /* ChapterTranscriptionSourceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E890D74C6F56A62319D7C32C /* ChapterTranscriptionSourceValidator.swift */; };
+		1342E04D98CB8B267AB0283C /* PlaybackAudioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCC99372A7B478E622EA64F /* PlaybackAudioSessionTests.swift */; };
 		138D289F4F5D702F55D7DE96 /* TranscriptExportArtifactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C15F87E4D5AC759E0750BF /* TranscriptExportArtifactTests.swift */; };
 		153A3AFC9C2B0600F93DC211 /* LegacyDiagnosticLogCleanup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */; };
 		1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */; };
@@ -66,6 +67,7 @@
 		9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */; };
 		9BD27F35EB37EA47F72F3364 /* BleatAccessibilityAuditUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 644A75599421B1D8368BC749 /* BleatAccessibilityAuditUITests.swift */; };
 		9C2AED3A3DFEB50C76339275 /* BleatReleaseScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A82F11A48563C7E31708E0 /* BleatReleaseScreenshotTests.swift */; };
+		9C858C5C82E970BA39D481E8 /* PlaybackAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206A45BD40BB291A1CB1579D /* PlaybackAudioSession.swift */; };
 		9EF6CCB025A3F5968759DDB8 /* AppAttestTelemetryAttester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513CE0349DC968676168CEA7 /* AppAttestTelemetryAttester.swift */; };
 		9F4E2D3F0E517AC44C199DD8 /* DownloadModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7F24DA4E4D6567B010C9B7 /* DownloadModel.swift */; };
 		AA52BE76FF8BA97DA914DC49 /* CarPlayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */; };
@@ -80,6 +82,7 @@
 		C4018E8ED6611BE8BC32DB72 /* CoverCacheLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E218E8C625F4988D9F2A870 /* CoverCacheLifecycleTests.swift */; };
 		CA30409A7B8350281DF6BFD0 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BC7735A08B9D198087831D /* AboutView.swift */; };
 		CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */; };
+		D7996CD60BEFFEA045ACBA5C /* BleatAudioSessionBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B55F1D66DE2BD258D587880 /* BleatAudioSessionBridge.m */; };
 		E68E758AEC7AB4CA2F88D7E1 /* CloudStorageNoticeObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B7353C4288AC9800776A8B /* CloudStorageNoticeObservation.swift */; };
 		E9A76FD9AAACDFDC4F7272AB /* BookmarkMutationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F235E10A1D1A5CF80E45F240 /* BookmarkMutationStore.swift */; };
 		F1E8803189D30226BDF5A910 /* BonjourDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF092B4585B9DD5C5509498E /* BonjourDiscovery.swift */; };
@@ -122,9 +125,12 @@
 		132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		195056D8D8775144BA48BC86 /* CarPlaySearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySearchController.swift; sourceTree = "<group>"; };
 		1A41EF5E9AB70839DE3808AA /* LegacyDiagnosticLogCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDiagnosticLogCleanup.swift; sourceTree = "<group>"; };
+		1EE9DB7EF4154B685FFF0F1A /* BleatAudioSessionBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BleatAudioSessionBridge.h; sourceTree = "<group>"; };
+		206A45BD40BB291A1CB1579D /* PlaybackAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackAudioSession.swift; sourceTree = "<group>"; };
 		20E018604E57C7CA92589EAC /* ChapterTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionView.swift; sourceTree = "<group>"; };
 		21B108BB84A124DE00CB28FD /* UIFixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = UIFixtures; path = TestSupport/UIFixtures; sourceTree = SOURCE_ROOT; };
 		26A2355D3E7E2E64CDE0B7DF /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		2B55F1D66DE2BD258D587880 /* BleatAudioSessionBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BleatAudioSessionBridge.m; sourceTree = "<group>"; };
 		2D99EAF91FC74A5D1651A5ED /* ChapterTranscriptionSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterTranscriptionSourceTests.swift; sourceTree = "<group>"; };
 		32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationCoordinator.swift; sourceTree = "<group>"; };
 		342F1DE39EFA56A26372696F /* SeriesCoverMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCoverMotionTests.swift; sourceTree = "<group>"; };
@@ -162,6 +168,7 @@
 		73719E4CDB73EE2DD988C5E3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		74A1612593F0EC1117D0ADD8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyServerDiscoveryTests.swift; sourceTree = "<group>"; };
+		7C6FD645E1C0DC54D66B22D0 /* Bleat-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Bleat-Bridging-Header.h"; sourceTree = "<group>"; };
 		81E92F3B7112D982A4EC5916 /* Bleat.cloudkit-enabled.app-attest-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-enabled.entitlements"; sourceTree = "<group>"; };
 		81F0EDAD38A8432D9D34BAB3 /* Bleat.cloudkit-disabled.app-attest-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-disabled.app-attest-enabled.entitlements"; sourceTree = "<group>"; };
 		83097EA2373140C4EBA6C0A4 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
@@ -171,6 +178,7 @@
 		A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSupport.swift; sourceTree = "<group>"; };
 		A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BleatMac.enabled.entitlements; sourceTree = "<group>"; };
 		A9F16612F5D186DFAED140F6 /* BookCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
+		ADCC99372A7B478E622EA64F /* PlaybackAudioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackAudioSessionTests.swift; sourceTree = "<group>"; };
 		AE0D5E4856C1B91ABEDE9782 /* AppAttestTelemetryAttesterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestTelemetryAttesterTests.swift; sourceTree = "<group>"; };
 		AE0DE6DBF9374F5CC3336E34 /* Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Bleat.cloudkit-enabled.app-attest-disabled.carplay-enabled.entitlements"; sourceTree = "<group>"; };
 		B2BC7735A08B9D198087831D /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
@@ -238,6 +246,7 @@
 				D9AB72375ED47B619ABB13FC /* LegacyDiagnosticLogCleanupTests.swift */,
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
 				360CB0609D1B73F92E630E3D /* NetworkPathTests.swift */,
+				ADCC99372A7B478E622EA64F /* PlaybackAudioSessionTests.swift */,
 				003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */,
 				4F5F30C2C9227C238F043DB5 /* ReleaseSecretLeakageTests.swift */,
 				C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */,
@@ -304,6 +313,7 @@
 				32468B63C9D4394522FDC41D /* AppNavigationCoordinator.swift */,
 				E12995342C7E6318A5F929A2 /* AppService.swift */,
 				74A1612593F0EC1117D0ADD8 /* Assets.xcassets */,
+				7C6FD645E1C0DC54D66B22D0 /* Bleat-Bridging-Header.h */,
 				6A7F79188F133EA3CC40DC41 /* Bleat.cloudkit-disabled.app-attest-disabled.carplay-enabled.entitlements */,
 				B31441EC9766BB7E6A359A91 /* Bleat.cloudkit-disabled.app-attest-disabled.entitlements */,
 				132C1E04C8A4BBF4FE41BFD0 /* Bleat.cloudkit-disabled.app-attest-enabled.carplay-enabled.entitlements */,
@@ -313,6 +323,8 @@
 				49FA3C11FE0D67C9A25BDB82 /* Bleat.cloudkit-enabled.app-attest-enabled.carplay-enabled.entitlements */,
 				81E92F3B7112D982A4EC5916 /* Bleat.cloudkit-enabled.app-attest-enabled.entitlements */,
 				09B26309512E738CF21FDF57 /* BleatApp.swift */,
+				1EE9DB7EF4154B685FFF0F1A /* BleatAudioSessionBridge.h */,
+				2B55F1D66DE2BD258D587880 /* BleatAudioSessionBridge.m */,
 				481EBC93D5616B135F0A4CEE /* BleatMac.disabled.entitlements */,
 				A8EB9D428517820BE07E065F /* BleatMac.enabled.entitlements */,
 				FF092B4585B9DD5C5509498E /* BonjourDiscovery.swift */,
@@ -340,6 +352,7 @@
 				F892257918F5A179B138847A /* NetworkPathMonitor.swift */,
 				46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */,
 				A7D4ED174BCA24F7C7DA6F81 /* PlatformSupport.swift */,
+				206A45BD40BB291A1CB1579D /* PlaybackAudioSession.swift */,
 				FE3F2D0C5F3157DDDDBA48F4 /* PlaybackModel.swift */,
 				BE86258004B5502381014564 /* PlaybackObservation.swift */,
 				9E9B7296D654D6A1FB32B98A /* PlaybackPositionStore.swift */,
@@ -564,6 +577,7 @@
 				6B48DBD681D8425A66B571CE /* LegacyDiagnosticLogCleanupTests.swift in Sources */,
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
 				25258798BD4BC080D1542227 /* NetworkPathTests.swift in Sources */,
+				1342E04D98CB8B267AB0283C /* PlaybackAudioSessionTests.swift in Sources */,
 				1789251CFF4A2F2CCB8E3FDD /* PlaybackPositionStoreTests.swift in Sources */,
 				52E5BD72E43B63251709DE89 /* ReleaseSecretLeakageTests.swift in Sources */,
 				5874C17F7E75B61370279B8A /* RemoteTelemetryConsentTests.swift in Sources */,
@@ -600,6 +614,7 @@
 				8054CFBF4601C6122146E21E /* AppNavigationCoordinator.swift in Sources */,
 				C1224783D3F9B1CC7057759A /* AppService.swift in Sources */,
 				071F95AAF10277EE0AAE3889 /* BleatApp.swift in Sources */,
+				D7996CD60BEFFEA045ACBA5C /* BleatAudioSessionBridge.m in Sources */,
 				F1E8803189D30226BDF5A910 /* BonjourDiscovery.swift in Sources */,
 				315C431973BBE5E53135BE12 /* BonjourTroubleshooterView.swift in Sources */,
 				297E83C44D4BF5CDE74061E6 /* BookCoverView.swift in Sources */,
@@ -625,6 +640,7 @@
 				6D4C2A7EA41FCD9E6684DBD7 /* NetworkPathMonitor.swift in Sources */,
 				3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */,
 				0FB132BC6195436D7513526E /* PlatformSupport.swift in Sources */,
+				9C858C5C82E970BA39D481E8 /* PlaybackAudioSession.swift in Sources */,
 				732438174A23B8EBC3BC1714 /* PlaybackModel.swift in Sources */,
 				25B46086FBA00C731871DA87 /* PlaybackObservation.swift in Sources */,
 				83E56DF219C4074C836A6859 /* PlaybackPositionStore.swift in Sources */,
@@ -859,6 +875,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "App/Bleat-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -932,6 +949,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "App/Bleat-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

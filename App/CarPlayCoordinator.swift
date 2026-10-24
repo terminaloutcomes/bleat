@@ -40,6 +40,7 @@
     @MainActor
     protocol CarPlayPresenting: AnyObject {
         func setRoot(_ template: CPTemplate)
+        func selectedTemplate(in tabBar: CPTabBarTemplate) -> CPTemplate?
         func push(_ template: CPTemplate)
         func pop()
         func present(_ template: CPTemplate)
@@ -80,6 +81,10 @@
                 template,
                 animated: true
             ) { _, _ in }
+        }
+
+        func selectedTemplate(in tabBar: CPTabBarTemplate) -> CPTemplate? {
+            tabBar.selectedTemplate
         }
 
         func push(_ template: CPTemplate) {
@@ -247,6 +252,7 @@
             private(set) var observationCallbackCountForTesting = 0
             private(set) var observationRefreshCountForTesting = 0
             private(set) var cellularActionCompletionSequenceForTesting = 0
+            private(set) var searchSelectionCompletionSequenceForTesting = 0
         #endif
 
         init(
@@ -656,11 +662,20 @@
             let rootIdentity = ObjectIdentifier(tabBarTemplate)
             let selectedIdentity = ObjectIdentifier(selectedTemplate)
             Task { @MainActor [weak self] in
+                #if DEBUG
+                    defer {
+                        if let self {
+                            self.searchSelectionCompletionSequenceForTesting &+=
+                                1
+                        }
+                    }
+                #endif
                 guard let self,
                     self.tabTemplate.map(ObjectIdentifier.init) == rootIdentity,
                     self.searchTab.map(ObjectIdentifier.init)
                         == selectedIdentity,
-                    self.tabTemplate?.selectedTemplate.map(
+                    let currentRoot = self.tabTemplate,
+                    self.presenter?.selectedTemplate(in: currentRoot).map(
                         ObjectIdentifier.init) == selectedIdentity
                 else { return }
                 self.openSelectedSearchTab()
@@ -668,7 +683,8 @@
         }
 
         private func openSelectedSearchTab() {
-            guard let searchTab, tabTemplate?.selectedTemplate === searchTab
+            guard let searchTab, let tabTemplate,
+                presenter?.selectedTemplate(in: tabTemplate) === searchTab
             else { return }
             if let search = searchController,
                 let presenter = presenter as? CarPlayInterfacePresenter,

@@ -11105,6 +11105,108 @@
       "name": "testLiveExternalCoverReplacementSurvivesProcessRelaunch",
       "line": 4549,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCarPlaySearchSelectionRejectsChangedAndRetiredRoots",
+      "line": 26092,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testNativeInlineDuplicateCompletionPreservesFirstTypedResult",
+      "line": 10,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testNativeOffActorLateCompletionAndRejection",
+      "line": 57,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testCancelledActivationDrainsBeforeQueuedDeactivation",
+      "line": 86,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testRetiredActivationLeaseCannotReleaseNewerActivation",
+      "line": 113,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testCancelledBeforeAdmissionDoesNotActivate",
+      "line": 134,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testFailedDeactivationDoesNotPoisonNextActivation",
+      "line": 152,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/PlaybackAudioSessionTests.swift",
+      "name": "testSystemAudioSessionCompletesActivationAndDeactivation",
+      "line": 173,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testPauseDuringAudioActivationRejectsLateResume",
+      "line": 608,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testStopDuringRemoteAudioActivationPreservesReplacement",
+      "line": 630,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testStopPreservesTypedAudioReleaseFailureWhileIdle",
+      "line": 670,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFirstActivationRouteLossRetiresStreamingAndDownloadedStarts",
+      "line": 609,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFirstActivationInterruptionRetiresStreamingAndDownloadedStarts",
+      "line": 615,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartDoesNotPublishSuccess",
+      "line": 768,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection",
+      "line": 818,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartCannotReplaceNewSelection",
+      "line": 873,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testAppModelFirstActivationRetirementReturnsSuperseded",
+      "line": 697,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

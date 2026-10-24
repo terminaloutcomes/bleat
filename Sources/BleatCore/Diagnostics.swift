@@ -127,6 +127,9 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case invalidLastPlayingRecord = "invalid_last_playing_record"
     case unsupportedLastPlayingVersion = "unsupported_last_playing_version"
     case audioSessionActivationFailed = "audio_session_activation_failed"
+    case audioSessionNativeFailure = "audio_session_native_failure"
+    case audioSessionRejected = "audio_session_rejected"
+    case audioSessionCancelled = "audio_session_cancelled"
     case persistenceUnavailable = "persistence_unavailable"
     case storedDataMigrationFailed = "stored_data_migration_failed"
     case invalidServerAddress = "invalid_server_address"
@@ -405,7 +408,17 @@ public enum DiagnosticEventName: String, Codable, Sendable {
     case stateTransition = "state_transition"
 }
 
+public enum DiagnosticNativeErrorDomain: String, Codable, Sendable {
+    case osStatus = "os_status"
+    case avFoundation = "av_foundation"
+    case cocoa
+    case unrecognized
+}
+
 public enum DiagnosticStage: String, Codable, Sendable {
+    case audioSessionConfiguration = "audio_session_configuration"
+    case audioSessionActivation = "audio_session_activation"
+    case audioSessionDeactivation = "audio_session_deactivation"
     case pathClassification = "path_classification"
     case endpointProbe = "endpoint_probe"
     case subscriptionStart = "subscription_start"
@@ -453,6 +466,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let failureCode: DiagnosticFailureCode?
     public let networkReason: DiagnosticNetworkReason?
     public let stage: DiagnosticStage?
+    public let nativeErrorDomain: DiagnosticNativeErrorDomain?
+    public let nativeErrorCode: Int?
     public let privateCloud: PrivateCloudDiagnosticDetail?
 
     private init(
@@ -471,6 +486,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         failureCode: DiagnosticFailureCode? = nil,
         networkReason: DiagnosticNetworkReason? = nil,
         stage: DiagnosticStage? = nil,
+        nativeErrorDomain: DiagnosticNativeErrorDomain? = nil,
+        nativeErrorCode: Int? = nil,
         privateCloud: PrivateCloudDiagnosticDetail? = nil
     ) {
         self.category = category
@@ -488,6 +505,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.failureCode = failureCode
         self.networkReason = networkReason
         self.stage = stage
+        self.nativeErrorDomain = nativeErrorDomain
+        self.nativeErrorCode = nativeErrorCode
         self.privateCloud = privateCloud
     }
 
@@ -554,7 +573,9 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         method: DiagnosticHTTPMethod? = nil,
         correlationID: UUID? = nil,
         durationMilliseconds: Int? = nil,
-        stage: DiagnosticStage? = nil
+        stage: DiagnosticStage? = nil,
+        nativeErrorDomain: DiagnosticNativeErrorDomain? = nil,
+        nativeErrorCode: Int? = nil
     ) -> DiagnosticEvent {
         DiagnosticEvent(
             category: category,
@@ -566,7 +587,9 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
             correlationID: correlationID,
             durationMilliseconds: durationMilliseconds,
             failureCode: failureCode,
-            stage: stage
+            stage: stage,
+            nativeErrorDomain: nativeErrorDomain,
+            nativeErrorCode: nativeErrorCode
         )
     }
 
@@ -678,6 +701,12 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         }
         if let toState {
             fields.append("to=\(toState.rawValue)")
+        }
+        if let nativeErrorDomain {
+            fields.append("native_domain=\(nativeErrorDomain.rawValue)")
+        }
+        if let nativeErrorCode {
+            fields.append("native_code=\(nativeErrorCode)")
         }
         if let failureCode {
             fields.append("failure=\(failureCode.rawValue)")

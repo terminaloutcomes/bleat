@@ -46,6 +46,7 @@
 - [Secret leakage](release-evidence/secret-leakage.md)
 - [Telemetry App Store privacy](release-evidence/telemetry-app-store-privacy.md)
 - [Callback and cancellation audit](release-evidence/callback-cancellation-audit.md)
+- [iOS 27 CarPlay and audio compatibility](release-evidence/ios27-carplay-audio.md)
 - [Transcript Reduce Motion audit](transcript-reduce-motion-audit.md)
 
 # Historical
