@@ -1937,6 +1937,7 @@ final class AppModel {
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore = .shared,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
+        audioSession: PlaybackAudioSession = .system,
         bookProgressOperationTimeout: Duration = .seconds(30),
         bookDetailOperationTimeout: Duration = .seconds(30),
         bookProgressSleep: @escaping @Sendable (Duration) async throws -> Void =
@@ -2001,6 +2002,7 @@ final class AppModel {
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
             nowPlayingCoordinator: nowPlayingCoordinator,
+            audioSession: audioSession,
             remoteTelemetryTracer: remoteTelemetryTracer,
             localSessionStore: localSessionStore,
             remoteTelemetryDownloadLogger: remoteTelemetryDownloadLogger,
@@ -2155,6 +2157,7 @@ final class AppModel {
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
         nowPlayingCoordinator: NowPlayingCoordinator?,
+        audioSession: PlaybackAudioSession,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
         localSessionStore: LocalPlaybackSessionStore,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging,
@@ -2167,6 +2170,7 @@ final class AppModel {
             localSessionStore: localSessionStore,
             nowPlayingCoordinator: nowPlayingCoordinator
                 ?? NowPlayingCoordinator(),
+            audioSession: audioSession,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
@@ -5952,7 +5956,19 @@ final class AppModel {
                 return .superseded
             }
             playbackStartPhase = .resolving
-            await playback.play()
+            let playOutcome = await playback.play()
+            guard playbackStartGeneration == generation, !Task.isCancelled,
+                playbackStartTarget
+                    == PlaybackStartTarget(
+                        accountID: savedAccount.id, itemID: itemID)
+            else { return .superseded }
+            switch playOutcome {
+            case .requested:
+                guard playback.isPlaybackRequested else { return .superseded }
+            case .failed(let failure): return .failed(failure)
+            case .superseded, .unavailable, .selectionResume:
+                return .superseded
+            }
             return playbackStartOutcome(
                 source: .activePlayer,
                 accountID: savedAccount.id,

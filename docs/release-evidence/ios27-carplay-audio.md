@@ -95,3 +95,29 @@ implementation. Exact final-head CI and its iOS26 runtime evidence are reported
 in the PR, separately from local iOS27 execution. iOS26 is not installed locally;
 no local iOS26 execution is claimed. Physical-route, energy, physical CarPlay,
 and signed macOS authentication/relaunch acceptance remain unverified.
+
+
+## Independent review corrections
+
+Review of `9fd541d` found two gaps despite the clean 654-case run. Pause returned
+before generation invalidation when the first activation awaited completion with
+no player yet. Route loss or interruption could therefore let initial streaming
+or downloaded preparation construct and autoplay a late player. Pause now retires
+that preparation before the player guard, releases any adopted automatic-cache
+pin, and returns to idle (or restores a matching existing resumable selection).
+The late activation drains and releases its lease; an unadopted server session
+closes. New first-activation gates cover both sources and both route/interruption
+paths; the initial corrected focused selection passed 17/17 without warnings.
+
+The reused-player AppModel path also treated any return from awaited Play as a
+successful start. Play now returns a typed requested/superseded/unavailable/failure
+or selection-admission outcome. It pauses cancelled pending intent only while it
+still owns that generation. AppModel revalidates its generation, task and target,
+then requires an actual current Play request before returning started or writing
+LastPlaying. App-level tests hold activation across Pause/caller cancellation,
+Stop suspended in real streamed progress synchronization, and replacement by a
+new target. They require superseded old outcomes and preserve absent or newer
+selection. The Pause/cancellation/Stop selection passed 17/17 without warnings
+before adding the final replacement identity. Final complete compatibility and
+exact pushed-head CI results are recorded in the PR; prior clean runs are not
+presented as coverage of these new review cases. No timeout was increased.

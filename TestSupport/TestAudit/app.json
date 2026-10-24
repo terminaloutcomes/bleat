@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "647 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
-  "methodCount": 647,
+  "status": "652 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
+  "methodCount": 652,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -52809,10 +52809,165 @@
         "Native app test target; no runtime skips; real framework path differs by platform/runtime."
       ],
       "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testFirstActivationRouteLossRetiresStreamingAndDownloadedStarts",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 609
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "For both streamed and downloaded first activation, hold the native action before player construction, remove the route, require idle/no player immediately and after completion, native release and exactly one unadopted streamed-session close.",
+        "purpose": "Regress the independently reviewed asynchronous first-preparation and reused-player ownership failures.",
+        "ruleAssessments": {
+          "1": "For both streamed and downloaded first activation, hold the native action before player construction, remove the route, require idle/no player immediately and after completion, native release and exactly one unadopted streamed-session close.",
+          "2": "Gate actual first/second activation and, for Stop, real service progress sync. Await every requested operation; bounded two-second semantic replacement admission only.",
+          "3": "Assert ownership, nil player or paused native rate and requested intent; no advancing-clock equality or late seek oracle.",
+          "4": "Release every held gate and await start/Stop/replacement tasks; final awaited Stop drains owned native and service cleanup.",
+          "5": "Owned temporary media/defaults/download roots, explicit synthetic account/service and paired audio actions; no physical route or device mutation.",
+          "6": "Native app-hosted model and real lifecycle paths, with injected hardware action timing. Does not certify physical-route or audible-output acceptance.",
+          "7": "The earlier 654-case clean result predates these independently found gaps; it is retained without treating it as coverage of the new races. First-activation17/17 and AppModel17/17 focused selections passed before the final replacement case; final results are reported in the PR.",
+          "8": "XCTest caller-located assertions and observed playback diagnostic state, exact outcomes and selected records; native entry is a bounded gate event.",
+          "9": "Focused and complete final-head evidence is recorded separately in the PR and scoped receipt; no historical review cohort is reopened."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises initial activation before any player exists and propagation through actual AppModel outcome/persistence boundaries."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testFirstActivationInterruptionRetiresStreamingAndDownloadedStarts",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 615
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold first activation for both sources, begin interruption, then require retired idle/no-player state after native completion; interruption-ended shouldResume cannot resurrect that start.",
+        "purpose": "Regress the independently reviewed asynchronous first-preparation and reused-player ownership failures.",
+        "ruleAssessments": {
+          "1": "Hold first activation for both sources, begin interruption, then require retired idle/no-player state after native completion; interruption-ended shouldResume cannot resurrect that start.",
+          "2": "Gate actual first/second activation and, for Stop, real service progress sync. Await every requested operation; bounded two-second semantic replacement admission only.",
+          "3": "Assert ownership, nil player or paused native rate and requested intent; no advancing-clock equality or late seek oracle.",
+          "4": "Release every held gate and await start/Stop/replacement tasks; final awaited Stop drains owned native and service cleanup.",
+          "5": "Owned temporary media/defaults/download roots, explicit synthetic account/service and paired audio actions; no physical route or device mutation.",
+          "6": "Native app-hosted model and real lifecycle paths, with injected hardware action timing. Does not certify physical-route or audible-output acceptance.",
+          "7": "The earlier 654-case clean result predates these independently found gaps; it is retained without treating it as coverage of the new races. First-activation17/17 and AppModel17/17 focused selections passed before the final replacement case; final results are reported in the PR.",
+          "8": "XCTest caller-located assertions and observed playback diagnostic state, exact outcomes and selected records; native entry is a bounded gate event.",
+          "9": "Focused and complete final-head evidence is recorded separately in the PR and scoped receipt; no historical review cohort is reopened."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises initial activation before any player exists and propagation through actual AppModel outcome/persistence boundaries."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartDoesNotPublishSuccess",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 696
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "AppModel reused-player activation held across explicit Pause and caller cancellation returns superseded, remains paused/rate-zero/unrequested and preserves the exact prior typed LastPlaying record without a new server open.",
+        "purpose": "Regress the independently reviewed asynchronous first-preparation and reused-player ownership failures.",
+        "ruleAssessments": {
+          "1": "AppModel reused-player activation held across explicit Pause and caller cancellation returns superseded, remains paused/rate-zero/unrequested and preserves the exact prior typed LastPlaying record without a new server open.",
+          "2": "Gate actual first/second activation and, for Stop, real service progress sync. Await every requested operation; bounded two-second semantic replacement admission only.",
+          "3": "Assert ownership, nil player or paused native rate and requested intent; no advancing-clock equality or late seek oracle.",
+          "4": "Release every held gate and await start/Stop/replacement tasks; final awaited Stop drains owned native and service cleanup.",
+          "5": "Owned temporary media/defaults/download roots, explicit synthetic account/service and paired audio actions; no physical route or device mutation.",
+          "6": "Native app-hosted model and real lifecycle paths, with injected hardware action timing. Does not certify physical-route or audible-output acceptance.",
+          "7": "The earlier 654-case clean result predates these independently found gaps; it is retained without treating it as coverage of the new races. First-activation17/17 and AppModel17/17 focused selections passed before the final replacement case; final results are reported in the PR.",
+          "8": "XCTest caller-located assertions and observed playback diagnostic state, exact outcomes and selected records; native entry is a bounded gate event.",
+          "9": "Focused and complete final-head evidence is recorded separately in the PR and scoped receipt; no historical review cohort is reopened."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises initial activation before any player exists and propagation through actual AppModel outcome/persistence boundaries."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 746
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold reused-player activation, Stop to clear LastPlaying and suspend in actual streamed progress synchronization, then complete old activation; AppModel must return superseded and preserve absent selection before and after Stop cleanup.",
+        "purpose": "Regress the independently reviewed asynchronous first-preparation and reused-player ownership failures.",
+        "ruleAssessments": {
+          "1": "Hold reused-player activation, Stop to clear LastPlaying and suspend in actual streamed progress synchronization, then complete old activation; AppModel must return superseded and preserve absent selection before and after Stop cleanup.",
+          "2": "Gate actual first/second activation and, for Stop, real service progress sync. Await every requested operation; bounded two-second semantic replacement admission only.",
+          "3": "Assert ownership, nil player or paused native rate and requested intent; no advancing-clock equality or late seek oracle.",
+          "4": "Release every held gate and await start/Stop/replacement tasks; final awaited Stop drains owned native and service cleanup.",
+          "5": "Owned temporary media/defaults/download roots, explicit synthetic account/service and paired audio actions; no physical route or device mutation.",
+          "6": "Native app-hosted model and real lifecycle paths, with injected hardware action timing. Does not certify physical-route or audible-output acceptance.",
+          "7": "The earlier 654-case clean result predates these independently found gaps; it is retained without treating it as coverage of the new races. First-activation17/17 and AppModel17/17 focused selections passed before the final replacement case; final results are reported in the PR.",
+          "8": "XCTest caller-located assertions and observed playback diagnostic state, exact outcomes and selected records; native entry is a bounded gate event.",
+          "9": "Focused and complete final-head evidence is recorded separately in the PR and scoped receipt; no historical review cohort is reopened."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises initial activation before any player exists and propagation through actual AppModel outcome/persistence boundaries."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "AppModelTests/testReusedPlayerRetiredAudioStartCannotReplaceNewSelection",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 801
+      },
+      "compilerAndSkipConditions": [
+        "Native app test target; first-activation route/interruption methods require iOS. No runtime skips."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold reused-player activation, start a different app-level target and complete both; old request returns superseded while the newer streamed request alone owns current item, playback intent and LastPlaying.",
+        "purpose": "Regress the independently reviewed asynchronous first-preparation and reused-player ownership failures.",
+        "ruleAssessments": {
+          "1": "Hold reused-player activation, start a different app-level target and complete both; old request returns superseded while the newer streamed request alone owns current item, playback intent and LastPlaying.",
+          "2": "Gate actual first/second activation and, for Stop, real service progress sync. Await every requested operation; bounded two-second semantic replacement admission only.",
+          "3": "Assert ownership, nil player or paused native rate and requested intent; no advancing-clock equality or late seek oracle.",
+          "4": "Release every held gate and await start/Stop/replacement tasks; final awaited Stop drains owned native and service cleanup.",
+          "5": "Owned temporary media/defaults/download roots, explicit synthetic account/service and paired audio actions; no physical route or device mutation.",
+          "6": "Native app-hosted model and real lifecycle paths, with injected hardware action timing. Does not certify physical-route or audible-output acceptance.",
+          "7": "The earlier 654-case clean result predates these independently found gaps; it is retained without treating it as coverage of the new races. First-activation17/17 and AppModel17/17 focused selections passed before the final replacement case; final results are reported in the PR.",
+          "8": "XCTest caller-located assertions and observed playback diagnostic state, exact outcomes and selected records; native entry is a bounded gate event.",
+          "9": "Focused and complete final-head evidence is recorded separately in the PR and scoped receipt; no historical review cohort is reopened."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises initial activation before any player exists and propagation through actual AppModel outcome/persistence boundaries."
+        }
+      },
+      "execution": "docs/release-evidence/ios27-carplay-audio.md"
     }
   ],
   "decisionCounts": {
-    "keep": 545,
+    "keep": 550,
     "follow_up": 98,
     "fix": 4
   },

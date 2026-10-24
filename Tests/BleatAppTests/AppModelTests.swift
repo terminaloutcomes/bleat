@@ -605,6 +605,263 @@ final class AppModelTests: XCTestCase {
         await playback.stop()
     }
 
+    #if os(iOS)
+        func testFirstActivationRouteLossRetiresStreamingAndDownloadedStarts()
+            async throws
+        {
+            try await assertFirstActivationRetired(interruption: false)
+        }
+
+        func
+            testFirstActivationInterruptionRetiresStreamingAndDownloadedStarts()
+            async throws
+        {
+            try await assertFirstActivationRetired(interruption: true)
+        }
+
+        private func assertFirstActivationRetired(interruption: Bool)
+            async throws
+        {
+            for downloaded in [false, true] {
+                let fixture = try playbackRecoveryFixture()
+                defer { fixture.cleanUp() }
+                let account = try fixtureAccount()
+                let prepared = playbackPreparation(
+                    detail: fixture.detail, audioURL: fixture.audioURL)
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    playback: [.success(prepared)])
+                let probe = TestPendingAudioSession(blockedActivation: 1)
+                let coordinator = NowPlayingCoordinator(
+                    infoCenter: TestNowPlayingInfoPublisher(),
+                    registersRemoteCommands: false)
+                let playback = PlaybackModel(
+                    service: service,
+                    nowPlayingCoordinator: coordinator,
+                    audioSession: probe.session())
+                let start = Task {
+                    if downloaded {
+                        await playback.startDownloaded(
+                            detail: fixture.detail,
+                            trackURLs: [fixture.audioURL],
+                            accountID: account.id, account: nil)
+                    } else {
+                        await playback.start(
+                            detail: fixture.detail, account: account)
+                    }
+                }
+                await probe.gate.waitUntilEntered()
+                XCTAssertEqual(
+                    playback.state, .preparing, "downloaded=\(downloaded)")
+                XCTAssertNil(playback.runtimeSnapshotForTesting.playerIdentity)
+                if interruption {
+                    playback.handleInterruption(
+                        typeValue: AVAudioSession.InterruptionType.began
+                            .rawValue,
+                        optionsValue: 0)
+                } else {
+                    playback.handleRouteChange(
+                        reasonValue:
+                            AVAudioSession.RouteChangeReason
+                            .oldDeviceUnavailable.rawValue)
+                }
+                XCTAssertEqual(playback.state, .idle)
+                XCTAssertFalse(playback.isPlaybackRequested)
+                await probe.gate.release()
+                await start.value
+                XCTAssertEqual(playback.state, .idle)
+                XCTAssertFalse(playback.hasActiveBook)
+                XCTAssertNil(playback.accountID)
+                XCTAssertNil(playback.runtimeSnapshotForTesting.playerIdentity)
+                XCTAssertNil(coordinator.latestSnapshot)
+                XCTAssertEqual(probe.events, ["activate-1", "release"])
+                if !downloaded {
+                    let closed = await service.playbackCloseSessionIDs()
+                    XCTAssertEqual(closed, [try XCTUnwrap(prepared.sessionID)])
+                }
+                if interruption {
+                    playback.handleInterruption(
+                        typeValue: AVAudioSession.InterruptionType.ended
+                            .rawValue,
+                        optionsValue: AVAudioSession.InterruptionOptions
+                            .shouldResume.rawValue)
+                    XCTAssertFalse(playback.isPlaybackRequested)
+                    XCTAssertEqual(probe.activations, 1)
+                }
+                await playback.stop()
+            }
+        }
+    #endif
+
+    func testReusedPlayerRetiredAudioStartDoesNotPublishSuccess() async throws {
+        for cancelCaller in [false, true] {
+            let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+            defer { fixture.cleanUp() }
+            let account = try fixtureAccount()
+            let service = TestAppService(
+                activeAccount: .success(account),
+                playback: [
+                    .success(
+                        playbackPreparation(
+                            detail: fixture.detail, audioURL: fixture.audioURL))
+                ])
+            let probe = TestPendingAudioSession()
+            let store = PlaybackPositionStore(defaults: fixture.defaults)
+            let model = AppModel(
+                service: service, cloudStorageNoticeDefaults: fixture.defaults,
+                downloadsStorageRootURL: fixture.root.appendingPathComponent(
+                    "downloads"),
+                downloadsBackgroundSessionIdentifier:
+                    backgroundSessionIdentifier("retired-reuse"),
+                localSessionStore: LocalPlaybackSessionStore(
+                    defaults: fixture.defaults),
+                playbackPositionStore: store, audioSession: probe.session())
+            await model.start()
+            let initial = await model.startPlayback(
+                detail: fixture.detail, account: account)
+            XCTAssertEqual(initial, .started(source: .streamed))
+            model.playback.pause()
+            let selected = try XCTUnwrap(store.lastPlaying())
+            let resume = Task {
+                await model.startPlayback(
+                    book: fixture.detail.summary, account: account,
+                    cancellationPolicy: .cancelPlayback)
+            }
+            await probe.gate.waitUntilEntered()
+            if cancelCaller { resume.cancel() } else { model.playback.pause() }
+            await probe.gate.release()
+            let outcome = await resume.value
+            XCTAssertEqual(outcome, .superseded, "cancelCaller=\(cancelCaller)")
+            XCTAssertEqual(model.playback.state, .paused)
+            XCTAssertFalse(model.playback.isPlaybackRequested)
+            XCTAssertEqual(
+                model.playback.runtimeSnapshotForTesting.playerRate, 0)
+            XCTAssertEqual(try store.lastPlaying(), selected)
+            let opened = await service.playbackOpenRequests()
+            XCTAssertEqual(opened.count, 1)
+            await model.playback.stop()
+        }
+    }
+
+    func testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let syncGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL))
+            ],
+            firstPlaybackSyncGate: syncGate)
+        let probe = TestPendingAudioSession()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: fixture.defaults,
+            downloadsStorageRootURL: fixture.root.appendingPathComponent(
+                "downloads"),
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "stopped-reuse"),
+            localSessionStore: LocalPlaybackSessionStore(
+                defaults: fixture.defaults),
+            playbackPositionStore: store, audioSession: probe.session())
+        await model.start()
+        let initial = await model.startPlayback(
+            detail: fixture.detail, account: account)
+        XCTAssertEqual(initial, .started(source: .streamed))
+        XCTAssertNotNil(try store.lastPlaying())
+        let resume = Task {
+            await model.startPlayback(detail: fixture.detail, account: account)
+        }
+        await probe.gate.waitUntilEntered()
+        let stop = Task { await model.playback.stop() }
+        await syncGate.waitUntilEntered()
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertNil(try store.lastPlaying())
+        await probe.gate.release()
+        let outcome = await resume.value
+        XCTAssertEqual(outcome, .superseded)
+        XCTAssertNil(
+            try store.lastPlaying(),
+            "Retired start must not restore selection during Stop cleanup")
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        await syncGate.release()
+        await stop.value
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertNil(try store.lastPlaying())
+        let closed = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(
+            closed, [PlaybackSessionID(rawValue: "playback-start-session")])
+    }
+
+    func testReusedPlayerRetiredAudioStartCannotReplaceNewSelection()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+        defer { fixture.cleanUp() }
+        let account = try fixtureAccount()
+        let replacement = fixtureBookDetail(
+            item: fixtureBook(
+                id: "new-audio-selection",
+                title: "New selection", libraryID: fixtureLibrary().id))
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL)),
+                .success(
+                    playbackPreparation(
+                        detail: replacement, audioURL: fixture.audioURL,
+                        sessionID: "replacement-audio-session")),
+            ])
+        let probe = TestPendingAudioSession()
+        let store = PlaybackPositionStore(defaults: fixture.defaults)
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: fixture.defaults,
+            downloadsStorageRootURL: fixture.root.appendingPathComponent(
+                "downloads"),
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "replacement-reuse"),
+            localSessionStore: LocalPlaybackSessionStore(
+                defaults: fixture.defaults),
+            playbackPositionStore: store, audioSession: probe.session())
+        await model.start()
+        let initial = await model.startPlayback(
+            detail: fixture.detail, account: account)
+        XCTAssertEqual(initial, .started(source: .streamed))
+        model.playback.pause()
+        let retired = Task {
+            await model.startPlayback(detail: fixture.detail, account: account)
+        }
+        await probe.gate.waitUntilEntered()
+        let newer = Task {
+            await model.startPlayback(detail: replacement, account: account)
+        }
+        await assertEventually(
+            "new replacement preparation", timeout: .seconds(2),
+            observed: { self.playbackDiagnostic(model.playback) },
+            condition: {
+                model.playback.itemID == replacement.id
+                    && model.playback.state == .preparing
+            })
+        await probe.gate.release()
+        let retiredOutcome = await retired.value
+        let newerOutcome = await newer.value
+        XCTAssertEqual(retiredOutcome, .superseded)
+        XCTAssertEqual(newerOutcome, .started(source: .streamed))
+        XCTAssertEqual(model.playback.itemID, replacement.id)
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        XCTAssertEqual(try store.lastPlaying()?.book.id, replacement.id)
+        let opened = await service.playbackOpenRequests()
+        XCTAssertEqual(opened.count, 2)
+        await model.playback.stop()
+    }
+
     func testPauseDuringAudioActivationRejectsLateResume() async throws {
         let fixture = try playbackRecoveryFixture()
         defer { fixture.cleanUp() }
@@ -619,7 +876,8 @@ final class AppModelTests: XCTestCase {
         await probe.gate.waitUntilEntered()
         playback.pause()
         await probe.gate.release()
-        await resume.value
+        let resumed = await resume.value
+        XCTAssertEqual(resumed, .superseded)
         XCTAssertEqual(playback.state, .paused)
         XCTAssertFalse(playback.isPlaybackRequested)
         XCTAssertEqual(playback.runtimeSnapshotForTesting.playerRate, 0)
@@ -32412,6 +32670,10 @@ private final class StartupPlaybackDiagnosticRecorder: DiagnosticRecording {
 @MainActor
 private final class TestPendingAudioSession {
     let gate = AsyncGate()
+    private let blockedActivation: Int
+    init(blockedActivation: Int = 2) {
+        self.blockedActivation = blockedActivation
+    }
     private(set) var activations = 0
     private(set) var events: [String] = []
     func session() -> PlaybackAudioSession {
@@ -32419,7 +32681,9 @@ private final class TestPendingAudioSession {
             activate: {
                 self.activations += 1
                 self.events.append("activate-\(self.activations)")
-                if self.activations == 2 { await self.gate.enterAndWait() }
+                if self.activations == self.blockedActivation {
+                    await self.gate.enterAndWait()
+                }
             }, deactivate: { self.events.append("release") })
     }
 }

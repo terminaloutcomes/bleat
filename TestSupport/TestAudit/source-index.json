@@ -11171,6 +11171,36 @@
       "name": "testStopPreservesTypedAudioReleaseFailureWhileIdle",
       "line": 670,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFirstActivationRouteLossRetiresStreamingAndDownloadedStarts",
+      "line": 609,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFirstActivationInterruptionRetiresStreamingAndDownloadedStarts",
+      "line": 615,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartDoesNotPublishSuccess",
+      "line": 696,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartCannotRestoreStoppedSelection",
+      "line": 746,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testReusedPlayerRetiredAudioStartCannotReplaceNewSelection",
+      "line": 801,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

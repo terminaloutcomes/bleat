@@ -17,6 +17,14 @@ enum PlaybackState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum PlaybackPlayOutcome: Equatable, Sendable {
+    case requested
+    case superseded
+    case unavailable
+    case failed(AppFailure)
+    case selectionResume(PlaybackRemoteCommandOutcome)
+}
+
 struct PlaybackRuntimeSnapshotForTesting {
     let playerIdentity: ObjectIdentifier?
     let queuedItemIdentities: [ObjectIdentifier]
@@ -1644,7 +1652,7 @@ final class PlaybackModel {
             guard let self, self.generation == operationGeneration,
                 !Task.isCancelled
             else { return }
-            await self.play()
+            _ = await self.play()
         }
         return .accepted
     }
@@ -1655,12 +1663,13 @@ final class PlaybackModel {
             && state != .idle && state != .preparing && state != .ended
     }
 
-    func play() async {
+    @discardableResult
+    func play() async -> PlaybackPlayOutcome {
         if preparation == nil, resumeSelection != nil {
-            _ = resumeSelectionHandler?()
-            return
+            return .selectionResume(resumeSelectionHandler?() ?? .unavailable)
         }
-        guard canRequestPreparedPlayback, !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return .superseded }
+        guard canRequestPreparedPlayback else { return .unavailable }
         let operationGeneration = generation
         let playerIdentity = player.map(ObjectIdentifier.init)
         playbackRequested = true
@@ -1668,18 +1677,26 @@ final class PlaybackModel {
             guard try await configureAudioSession(for: operationGeneration),
                 player.map(ObjectIdentifier.init) == playerIdentity,
                 playbackRequested
-            else { return }
+            else {
+                if generation == operationGeneration { pause() }
+                return .superseded
+            }
         } catch {
-            guard generation == operationGeneration, !Task.isCancelled else {
-                return
+            guard generation == operationGeneration else { return .superseded }
+            guard !Task.isCancelled else {
+                pause()
+                return .superseded
             }
             audioSessionFailure = error
             record(error.diagnosticEvent(.activateAudioSession))
-            fail(AppFailure(.openPlayback, .audioSession(error)))
-            return
+            let failure = AppFailure(.openPlayback, .audioSession(error))
+            fail(failure)
+            return .failed(failure)
         }
         record(.completed(.activateAudioSession, category: .playback))
         play(preservingPendingPlaybackStart: false)
+        if case .failed(let failure) = state { return .failed(failure) }
+        return playbackRequested ? .requested : .unavailable
     }
 
     private func play(preservingPendingPlaybackStart: Bool) {
@@ -1772,10 +1789,34 @@ final class PlaybackModel {
     }
 
     func pause() {
+        // Capture before the owning AppModel cancels its preparation task.
+        let preparingWithoutPlayer = player == nil && state == .preparing
         requestedPlayTask?.cancel()
         resumeAfterInterruption = false
         cancelSelectionResume?()
         guard !isAccountSwitchShutdownInProgress else {
+            return
+        }
+        if preparingWithoutPlayer {
+            // No player exists yet, but an awaited activation can still return.
+            // Retire that start before the player guard so route loss or an
+            // interruption cannot construct and autoplay a late player.
+            generation &+= 1
+            playbackRequested = false
+            pendingPlaybackStartSpan?.end(.cancelled)
+            pendingPlaybackStartSpan = nil
+            let selection = resumeSelection.flatMap { record in
+                record.accountID == preparingAccountID
+                    && record.book.id == itemID
+                    ? record : nil
+            }
+            preparingAccountID = nil
+            releaseAutomaticCachedPlaybackWindow()
+            resetCachedStreamingContinuation()
+            resumeSelection = nil
+            state = .idle
+            nowPlayingCoordinator.clear()
+            if let selection { restoreSelection(selection) }
             return
         }
         guard let player, hasActiveBook else {
