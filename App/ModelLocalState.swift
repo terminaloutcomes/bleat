@@ -13,11 +13,7 @@ final class ModelLocalState {
             let suite = "BleatMacTests.\(UUID().uuidString)"
             self.suite = suite
             defaults = UserDefaults(suiteName: suite) ?? UserDefaults()
-            let root =
-                ProcessInfo.processInfo.environment["BLEAT_MACOS_TEST_ROOT"]
-                .map { URL(fileURLWithPath: $0, isDirectory: true) }
-                ?? FileManager.default.temporaryDirectory
-                .appendingPathComponent("BleatMacTests", isDirectory: true)
+            let root = MacTestStorage.root
             downloadsRoot =
                 root
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -72,3 +68,14 @@ final class ModelLocalState {
         #endif
     }
 }
+
+#if BLEAT_MACOS_TESTING
+    enum MacTestStorage {
+        static let root: URL =
+            ProcessInfo.processInfo.environment["BLEAT_MACOS_TEST_ROOT"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "BleatMacTests-\(UUID().uuidString)", isDirectory: true)
+    }
+#endif

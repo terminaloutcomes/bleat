@@ -95,6 +95,7 @@ targets:
           BLEAT_APP_ATTEST_ENVIRONMENT: development
         MacTesting:
           BLEAT_APP_ATTEST_ENVIRONMENT: development
+          ENABLE_TESTABILITY: YES
           BLEAT_CLOUDKIT_MODE: disabled
           BLEAT_APP_ATTEST_MODE: disabled
           PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.Bleat.MacTestHost

@@ -30,7 +30,9 @@
 		315C431973BBE5E53135BE12 /* BonjourTroubleshooterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523CC77B75FB9D37CFCCEFA1 /* BonjourTroubleshooterView.swift */; };
 		3704B4B5449FC6CB62037606 /* BleatTranscription in Frameworks */ = {isa = PBXBuildFile; productRef = 904BA9E1C52D54609A64CB46 /* BleatTranscription */; };
 		372E68B88EF97EB3B4C4997C /* UITestPlaybackFixturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE78891EE73D176D414009C /* UITestPlaybackFixturesTests.swift */; };
+		3A52F87CD76454F6B01BEA3B /* MacTestHostAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67FF67FBEDEF845D58766A8 /* MacTestHostAdmission.swift */; };
 		3CE2FF1447DD621367B8C1B9 /* NowPlayingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B8EDE5B4043BABF4533BB6 /* NowPlayingCoordinator.swift */; };
+		41F515E476937DFC5D96AA86 /* MacTestIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01553D83131EBBA6F984EDAE /* MacTestIsolationTests.swift */; };
 		421E1D94991D910E1C6FAA04 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */; };
 		429A5E8508DCBC43350A5D8B /* BleatPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA2A9B233BE9C12B1B7C714 /* BleatPerformanceUITests.swift */; };
 		484E71246A83CC49E569767A /* UIFixtures in Resources */ = {isa = PBXBuildFile; fileRef = 21B108BB84A124DE00CB28FD /* UIFixtures */; };
@@ -113,6 +115,7 @@
 
 /* Begin PBXFileReference section */
 		003DE9F7F21E81E98C080C0E /* PlaybackPositionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackPositionStoreTests.swift; sourceTree = "<group>"; };
+		01553D83131EBBA6F984EDAE /* MacTestIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTestIsolationTests.swift; sourceTree = "<group>"; };
 		0183DD5F91A40CF0540A4D4B /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
 		03B7353C4288AC9800776A8B /* CloudStorageNoticeObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageNoticeObservation.swift; sourceTree = "<group>"; };
 		077086F35259DE8E90E3E355 /* ProcessMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessMemory.swift; sourceTree = "<group>"; };
@@ -192,6 +195,7 @@
 		BCA2A9B233BE9C12B1B7C714 /* BleatPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleatPerformanceUITests.swift; sourceTree = "<group>"; };
 		BE86258004B5502381014564 /* PlaybackObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackObservation.swift; sourceTree = "<group>"; };
 		C256E90EBC4C39AEEDA2BD0E /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
+		C67FF67FBEDEF845D58766A8 /* MacTestHostAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTestHostAdmission.swift; sourceTree = "<group>"; };
 		C7C9C24538EF1CB04541FCC3 /* RemoteTelemetryConsentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTelemetryConsentTests.swift; sourceTree = "<group>"; };
 		C9510E54E791CCD6CD282D28 /* StatisticsLiveDeliverySchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsLiveDeliverySchedule.swift; sourceTree = "<group>"; };
 		C95E962FA6077A6036CFC73D /* CarPlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCoordinator.swift; sourceTree = "<group>"; };
@@ -246,6 +250,7 @@
 				3DCEEC16ACBA6586D5978DE7 /* FrameworkCallbackTests.swift */,
 				62312716613B312BFBB816E3 /* KeychainEntitlementTests.swift */,
 				D9AB72375ED47B619ABB13FC /* LegacyDiagnosticLogCleanupTests.swift */,
+				01553D83131EBBA6F984EDAE /* MacTestIsolationTests.swift */,
 				777EB122CA85B31C9F059E0F /* NearbyServerDiscoveryTests.swift */,
 				360CB0609D1B73F92E630E3D /* NetworkPathTests.swift */,
 				ADCC99372A7B478E622EA64F /* PlaybackAudioSessionTests.swift */,
@@ -349,6 +354,7 @@
 				51560C6F4791593B26D59DAC /* LibraryCategoryContent.swift */,
 				0DEE8F15C405EA47B0AEBDCA /* LibraryPageMerger.swift */,
 				F8D22D9E035F6E4DE28DE0B5 /* LocalPlaybackSessionStore.swift */,
+				C67FF67FBEDEF845D58766A8 /* MacTestHostAdmission.swift */,
 				F2675018070436D35F6FC0FF /* MetadataEditorView.swift */,
 				45479E571A6CAFD62F096D5C /* ModelLocalState.swift */,
 				555C0318F83AFD25BAE18A54 /* NearbyServerDiscovery.swift */,
@@ -575,6 +581,7 @@
 				92A218CF37ED98706DA5495F /* FrameworkCallbackTests.swift in Sources */,
 				9A73E5EEDA51092EE4D64506 /* KeychainEntitlementTests.swift in Sources */,
 				6B48DBD681D8425A66B571CE /* LegacyDiagnosticLogCleanupTests.swift in Sources */,
+				41F515E476937DFC5D96AA86 /* MacTestIsolationTests.swift in Sources */,
 				CE151E18B0146F8CEDBF5EB8 /* NearbyServerDiscoveryTests.swift in Sources */,
 				25258798BD4BC080D1542227 /* NetworkPathTests.swift in Sources */,
 				1342E04D98CB8B267AB0283C /* PlaybackAudioSessionTests.swift in Sources */,
@@ -635,6 +642,7 @@
 				730E086E4D0C8555C38E8D57 /* LibraryCategoryContent.swift in Sources */,
 				740EAC4D17A388C338E9D343 /* LibraryPageMerger.swift in Sources */,
 				B87F1CC629E7094C9B063DA6 /* LocalPlaybackSessionStore.swift in Sources */,
+				3A52F87CD76454F6B01BEA3B /* MacTestHostAdmission.swift in Sources */,
 				6F9200285A7828E05EDF6C10 /* MetadataEditorView.swift in Sources */,
 				B374E21AD1D133EE2E47CEC6 /* ModelLocalState.swift in Sources */,
 				7DA9590A2267DF4B5A0E9C91 /* NearbyServerDiscovery.swift in Sources */,
@@ -772,6 +780,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 20261014.0835.34;
 				DEAD_CODE_STRIPPING = YES;
+				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = "$(TARGET_TEMP_DIR)/Bleat-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

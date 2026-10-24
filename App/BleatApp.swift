@@ -202,7 +202,11 @@ struct BleatApp: App {
             #if BLEAT_MACOS_TESTING
                 // The app-hosted unit-test process must never construct live
                 // services or start the normal application lifecycle.
-                Color.clear.accessibilityIdentifier("macos-unit-test-host")
+                if let rejection = MacTestHostAdmission.rejection() {
+                    Text("Unit-test host unavailable: \(rejection.rawValue)")
+                } else {
+                    Color.clear.accessibilityIdentifier("macos-unit-test-host")
+                }
             #else
                 RootView(model: model)
             #endif

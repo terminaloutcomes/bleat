@@ -32,6 +32,7 @@
   - [Current delivery and acceptance](release-evidence/test-reliability-current-status.md)
   - [Runner and shell-case review](release-evidence/test-reliability-runners.md)
   - [Runner verification batch](release-evidence/test-runner-verification.md)
+  - [macOS test isolation](release-evidence/macos-test-isolation.md)
   - [App test follow-ups](release-evidence/test-reliability-app-followups.md)
   - [Core test follow-ups](release-evidence/test-reliability-core-followups.md)
   - [UI, live and tooling follow-ups](release-evidence/test-reliability-other-followups.md)

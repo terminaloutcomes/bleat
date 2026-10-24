@@ -1147,3 +1147,12 @@ matched baseline failures, explicit browsing capability, presenter-owned
 selection, and unchanged stale-callback admission. Focused three-case and
 owning 53-case unit results are separate from audio-session migration and
 physical CarPlay acceptance. Historical completed audit cohorts remain credited.
+## Resumed macOS test isolation (#362, #369, #374)
+
+The five deferred macOS groups are active again by maintainer request.
+Dedicated configuration/manifest admission, inert bootstrap, constructor-owned
+model state and synthetic NetworkPath credential namespaces are implemented in
+this change. The [macOS isolation receipt](release-evidence/macos-test-isolation.md)
+separates current validation from compilation-only history and normal signed
+application authentication/relaunch acceptance. Existing iOS evidence, historical
+review dispositions and physical acceptance requirements retain their scope.

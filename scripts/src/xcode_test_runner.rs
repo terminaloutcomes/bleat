@@ -10,6 +10,7 @@ use std::process::{Command, ExitStatus};
 
 #[path = "xcode_test_runner/commands.rs"]
 mod commands;
+mod macos_preflight;
 use commands::{NativeBudgets, NativeRole, XcodeAction, native_command_status};
 
 #[cfg(test)]
@@ -20,6 +21,8 @@ type Result<T> = std::result::Result<T, XcodeRunnerError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum XcodeRunnerError {
+    #[error(transparent)]
+    MacosPreflight(#[from] macos_preflight::Error),
     #[error("{stage} native command failed: {source}")]
     NativeCommand {
         stage: String,
@@ -95,9 +98,16 @@ enum RunnerCommand {
     /// Verify paid capability build modes with bounded native queries.
     PaidBuildModes,
     /// The signed macOS build and test gate.
-    Macos,
+    Macos(MacosArgs),
     /// Run a selected Xcode scheme using the legacy xctest.sh arguments.
     Xctest(XctestArgs),
+}
+
+#[derive(Debug, Args)]
+struct MacosArgs {
+    /// Exact XCTest selector(s); default is the complete macOS app bundle.
+    #[arg(long = "test-id")]
+    test_ids: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -129,7 +139,7 @@ pub fn run() -> Result<()> {
         RunnerCommand::PaidBuildModes => {
             crate::paid_build_modes::run(&root).map_err(XcodeRunnerError::PaidBuildModes)
         }
-        RunnerCommand::Macos => run_macos(&root),
+        RunnerCommand::Macos(arguments) => run_macos(&root, arguments),
         RunnerCommand::Xctest(arguments) => run_xctest(&root, arguments),
     }
 }
@@ -328,7 +338,7 @@ fn run_core(root: &Path) -> Result<()> {
     )
 }
 
-fn run_macos(root: &Path) -> Result<()> {
+fn run_macos(root: &Path, arguments: MacosArgs) -> Result<()> {
     let team = std::env::var("BLEAT_DEVELOPMENT_TEAM").map_err(|_| {
         XcodeRunnerError::MissingEnvironmentVariable {
             name: "BLEAT_DEVELOPMENT_TEAM".to_owned(),
@@ -338,26 +348,51 @@ fn run_macos(root: &Path) -> Result<()> {
     let mut settings = build_settings();
     set_setting(&mut settings, "DEVELOPMENT_TEAM", team);
     set_setting(&mut settings, "CODE_SIGN_STYLE", "Manual".to_owned());
+    set_setting(&mut settings, "ENABLE_TESTABILITY", "YES".to_owned());
+    set_setting(
+        &mut settings,
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS",
+        "DEBUG BLEAT_MACOS_TESTING".to_owned(),
+    );
+    set_setting(
+        &mut settings,
+        "SWIFT_OPTIMIZATION_LEVEL",
+        "-Onone".to_owned(),
+    );
     // Keep the production identity out of the unit-test process.
     set_setting(&mut settings, "BLEAT_CLOUDKIT_MODE", "disabled".to_owned());
-    set_setting(&mut settings, "BLEAT_APP_ATTEST_MODE", "disabled".to_owned());
+    set_setting(
+        &mut settings,
+        "BLEAT_APP_ATTEST_MODE",
+        "disabled".to_owned(),
+    );
     set_setting(&mut settings, "BLEAT_CARPLAY_MODE", "disabled".to_owned());
+    let owned_state = tempfile::Builder::new()
+        .prefix("bleat-macos-tests-")
+        .tempdir()?;
     run_test_gate(
         root,
         TestGateRequest {
             build: XcodeBuildConfig::new(
                 "BleatMac",
                 Some("MacTesting"),
-                "platform=macOS",
+                if cfg!(target_arch = "aarch64") {
+                    "platform=macOS,arch=arm64"
+                } else {
+                    "platform=macOS,arch=x86_64"
+                },
                 ".build/macos-signed",
                 settings,
                 std::env::var("BUILD_VERBOSE").unwrap_or_default() != "true",
             ),
-            only: Vec::new(),
+            only: arguments.test_ids,
             exclude: Vec::new(),
             allowed_skip_selectors: Vec::new(),
             enable_code_coverage: false,
-            runner_environment: Vec::new(),
+            runner_environment: vec![(
+                "TEST_RUNNER_BLEAT_MACOS_TEST_ROOT".to_owned(),
+                owned_state.path().to_string_lossy().into_owned(),
+            )],
             result_bundle: PathBuf::from(format!(
                 ".build/macos-signed/tests-{}.xcresult",
                 run_id()
@@ -617,7 +652,41 @@ fn run_test_gate_with_budgets(
         &format!("{stage} build-for-testing"),
     )?;
 
-    let mut enumeration = xcodebuild_base(root, &build, xcodebuild_path)?;
+    // Admission must precede enumeration too: Xcode can load the test host.
+    let manifest = if build.scheme == "BleatMac" {
+        let team = build
+            .settings
+            .iter()
+            .find(|(name, _)| name == "DEVELOPMENT_TEAM")
+            .map(|(_, value)| value.as_str())
+            .ok_or("missing macOS signing team")?;
+        let built = macos_preflight::preflight(root, &build.derived_data, team)?;
+        let owned_root = runner_environment
+            .iter()
+            .find(|(name, _)| name == "TEST_RUNNER_BLEAT_MACOS_TEST_ROOT")
+            .map(|(_, value)| value.as_str())
+            .ok_or("missing owned macOS fixture root")?;
+        Some(macos_preflight::prepare_run(&built, owned_root)?)
+    } else {
+        None
+    };
+    let test_base = || -> Result<Command> {
+        if let Some(manifest) = &manifest {
+            let mut command = Command::new(xcodebuild_path);
+            command
+                .current_dir(root)
+                .arg("-xctestrun")
+                .arg(manifest.path())
+                .args(["-destination", &build.destination]);
+            if build.quiet {
+                command.arg("-quiet");
+            }
+            Ok(command)
+        } else {
+            xcodebuild_base(root, &build, xcodebuild_path)
+        }
+    };
+    let mut enumeration = test_base()?;
     if enable_code_coverage {
         enumeration.args(["-enableCodeCoverage", "YES"]);
     }
@@ -646,7 +715,7 @@ fn run_test_gate_with_budgets(
     let expected_ids: Vec<_> = expected.iter().map(|test| test.id.as_string()).collect();
     println!("{stage}: discovered {} tests", expected_ids.len());
 
-    let mut test = xcodebuild_base(root, &build, xcodebuild_path)?;
+    let mut test = test_base()?;
     if enable_code_coverage {
         test.args(["-enableCodeCoverage", "YES"]);
     }
@@ -735,8 +804,8 @@ mod tests {
     fn required_macos_configuration_rejects_empty_values() {
         assert!(required_environment_value("BLEAT_DEVELOPMENT_TEAM", "TEAM123".to_owned()).is_ok());
         assert!(matches!(
-            required_environment_value("BLEAT_BUNDLE_ID", String::new()),
-            Err(XcodeRunnerError::EmptyEnvironmentVariable { name }) if name == "BLEAT_BUNDLE_ID"
+            required_environment_value("BLEAT_DEVELOPMENT_TEAM", String::new()),
+            Err(XcodeRunnerError::EmptyEnvironmentVariable { name }) if name == "BLEAT_DEVELOPMENT_TEAM"
         ));
     }
 

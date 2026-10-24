@@ -237,7 +237,9 @@ enum ReadOnlyMigrationChild {
                 guard let observer = UserDefaults(suiteName: $0),
                     observer.synchronize()
                 else { return false }
-                return observer.persistentDomain(forName: $0) == nil
+                // Foundation can represent a removed domain as nil or an
+                // empty dictionary. Any surviving entry still fails cleanup.
+                return observer.persistentDomain(forName: $0)?.isEmpty != false
             }
         }
         func cleanup(removeFirst: Bool = false) -> [CleanupFailure] {

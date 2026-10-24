@@ -3,7 +3,7 @@
 Issue [#362](https://github.com/terminaloutcomes/bleat/issues/362) remains open.
 This checkpoint reconciles landed implementation with evidence and the
 maintainer's 22 October priority: finish important demonstrated problems and
-acceptance work; defer macOS application changes and optional hardening.
+acceptance work; macOS implementation resumed by maintainer request on 24 October 2026. Optional hardening remains deferred.
 An unchecked historical bullet is not itself an unfixed bug.
 
 ## Revision and counting
@@ -27,7 +27,7 @@ Count different units separately:
 | Important implementation remainder | The demonstrated multi-query geometry assertion was corrected in merged #444; the later Increase Contrast presentation failure remains unresolved. #375 and the full Release gate remain delivered. |
 | Known missing structured audit/index entries | 0 remaining in the bounded 85-entry list: this repair adds 25 app, 6 UI and 54 Rust primary records plus 85 navigation rows at source `82e3fdf`. Source concerns and historical execution limits remain explicit. This does not certify global coverage or close the separate review queue. |
 | Existing-record review queue | The fixed historical 241 core + 71 app identities now have **312 completed scoped reviews and zero pending identities** in the [identity ledger](../../TestSupport/TestAudit/review-queue-reconciliation.json). The final app batch records 58 bounded KEEP conclusions and 13 corrected test gaps. This finite review completion is separate from configuration-specific execution, whole native drainage, physical acceptance and the overall epic. Historical findings/receipts and per-record limits remain preserved. |
-| Deferred macOS implementation groups | 5, explicitly not completed, in #369. |
+| Resumed macOS implementation groups | Five active groups in #369; implementation and current validation are recorded in the [macOS isolation receipt](macos-test-isolation.md). Normal signed-app authentication/relaunch acceptance remains separate. |
 | Optional/unproven source concerns | 20 residual groups after #442 delivered UI-1/UI-7 and the required caller attribution. These are backlogged concerns, not confirmed defects or an implementation queue. |
 | Configuration/device acceptance | G4 and G5 are complete. Four groups remain active (G1/G2/G6/G7); G8's original background-download acceptance was already user-accepted under closed #33, with explicit evidence waivers. G3 signed macOS acceptance is explicitly deferred. These are validation groups, not code-defect counts. |
 

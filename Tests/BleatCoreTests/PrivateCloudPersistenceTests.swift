@@ -78,7 +78,7 @@ struct PrivateCloudPersistenceTests {
         #expect(owned.count == (failure == .afterData ? 1 : 2))
         #expect(Set(owned.map { $0.0 }).count == owned.count)
         for (name, defaults) in owned {
-            #expect(defaults.persistentDomain(forName: name) == nil)
+            #expect(defaults.persistentDomain(forName: name)?.isEmpty != false)
         }
         #expect(
             unrelated.persistentDomain(forName: unrelatedName)?["sentinel"]
