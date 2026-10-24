@@ -11267,6 +11267,18 @@
       "name": "scheme_runs_the_application_and_confines_isolation_to_tests",
       "line": 421,
       "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "legacy_macos_route_prepares_team_owned_root_selection_and_result",
+      "line": 447,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "legacy_macos_route_rejects_other_platform_release_and_reserved_admission",
+      "line": 493,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

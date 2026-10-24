@@ -9,7 +9,7 @@ The completed 312 historical review dispositions remain unchanged.
 | Group | Implementation |
 | --- | --- |
 | MAC-1 | `MacTesting` configuration and `BleatMac` scheme use a dedicated host/test identity, disabled CloudKit/App Attest/CarPlay, and existing development signing without provisioning updates. Package testability is explicit. The generated project comes from `project.yml`. |
-| MAC-2 | The Rust driver validates the single built `.xctestrun`, exact host executable/test bundle/target, bundle identities, runner admission marker, development signature/team and absence of production capabilities (only the exact standard Xcode unit-test loader entitlements are admitted) before enumeration. Enumeration and execution consume that same manifest. Existing exact-discovery/result verification rejects zero tests, missing identities, failures and unexpected skips. |
+| MAC-2 | The Rust driver validates the single built `.xctestrun`, exact host executable/test bundle/target, bundle identities, runner admission marker, development signature/team and absence of production capabilities (only the exact standard Xcode unit-test loader entitlements are admitted) before enumeration. Enumeration and execution consume that same manifest. Existing exact-discovery/result verification rejects zero tests, missing identities, failures and unexpected skips. The one provisioned synchronizable-Keychain identity is explicitly excluded from this reduced-entitlement lane; it remains separate acceptance. |
 | MAC-3 | The test configuration never constructs `AppBootstrap` or `RootView`; its scene admits only the dedicated identity and runner marker. A rejected launch remains inert and presents its typed rejection. Normal app compilation keeps its existing bootstrap. |
 | MAC-4 | AppModel initialization, its playback/download construction and standalone PlaybackModel initialization receive fresh constructor-owned preference stores and download paths in this configuration. Explicit restoration-test stores retain their identity. Normal configurations retain shared stores. Automatic remote-command registration is disabled for test defaults. The shared cover loader uses the run-owned cache root, and five direct download-test constructors also receive owned roots. Unique preference domains are removed when their owner retires; the driver owns the temporary download root through native test completion. |
 | MAC-5 | Both NetworkPathTests LiveAppService constructors supply a unique device-only synthetic credential namespace instead of production credential services. |
@@ -45,10 +45,15 @@ acceptance suite.
 ## Validation receipt
 
 Current validation: the dedicated development-signed macOS build-for-testing
-and supported unsigned macOS Release compilation passed. Fourteen Rust runner
+and supported unsigned macOS Release compilation passed. Seventeen Rust runner
 regressions, 39 build-helper tests, eight audit-parity regressions, strict Swift
-lint and documentation checking passed. Native application-test execution and
-final-head checks remain in progress.
+lint and documentation checking passed. Focused native admission/state execution
+passed three identities; the real legacy entry point independently passed the
+same three. The complete isolated lane passed 545 identities with zero failures,
+skips, expected failures or runtime warnings. The one explicitly excluded
+provisioned synchronizable-Keychain contract remains unmet acceptance, rather
+than a passed or skipped identity in that lane. Final-head CI and local Simulator
+compatibility checks are recorded in the PR before handoff.
 
 The provisioned signed core-host lane stopped before tests because its existing
 profile/registration prerequisites were unavailable; no registration or profile
@@ -67,9 +72,38 @@ The original native preflight attempts rejected the unhandled version-1 manifest
 and Xcode-injected test-loader entitlements before enumeration or execution.
 Their corrected structural regressions retain those rejection boundaries. Original unsuccessful build attempts remain local:
 missing provisioning profile for the new identity, the old two-configuration
-metadata assumption, and package modules compiled without testability. These
-attempts executed zero native tests and establish no runtime acceptance.
+metadata assumption, package modules compiled without testability, and mismatched package Debug
+conditions. These attempts executed zero native tests and establish no runtime acceptance.
 
 Signed normal-application authentication/relaunch acceptance remains separate.
 No iPad retest, physical iPhone energy work, other host access, credential setup,
 trust change or permission change is part of this implementation.
+
+
+The initial full native macOS attempt executed 546 identities: 545 passed and
+`KeychainEntitlementTests/testApplicationHostKeepsRotatingTokensDeviceOnly`
+failed with typed `missingEntitlement`; there were zero skips, expected failures
+or runtime warnings. Its result is retained, not reclassified as a pass. The
+isolated lane explicitly excludes only that provisioned-host contract; the four
+other Keychain identities remain selected. It establishes no synchronizable
+Keychain or signed normal-application authentication/relaunch acceptance.
+
+Legacy `scripts/xctest.sh -s BleatMac -d platform=macOS` uses the same signing,
+manifest, admission and owned-root preparation, preserving selection, result
+path and safe forwarded environment. Debug requests map to the isolated test
+configuration. Release/other-platform requests and overrides of the owned
+admission/root markers are rejected with distinct typed causes.
+
+
+Normal Xcode Run remains Debug and retains the real application bootstrap;
+MacTesting is confined to TestAction. The generated-scheme regression verifies
+both actions. Native Xcode logs retain ambiguous-destination warnings; inspected
+result bundles identify native macOS execution and contain no runtime warnings.
+One intermediate version-1 parser regression failed before its complete parser
+repair; the final 17-test runner receipt passes all identities.
+
+CI at reviewed head `40a5c12` reported newly published `RUSTSEC-2026-0387` for
+`crypto-bigint 0.5.5` in the unchanged backend lockfile. The macOS PR does not
+change either Rust lockfile or waive the advisory. Exact final-head status is
+reported separately; passing local implementation checks do not clear that
+repository-security gate or authorize merge.

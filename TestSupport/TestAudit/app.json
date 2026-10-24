@@ -45544,7 +45544,9 @@
         "line": 44,
         "endLineBeforeNextTest": 96
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "MacTesting reduced-entitlement runner explicitly excludes this one provisioned synchronizable-Keychain contract; iOS selection is unchanged. Failed macOS attempt and remaining signed acceptance are retained in docs/release-evidence/macos-test-isolation.md."
+      ],
       "setupAndDependencies": [],
       "actions": [
         {

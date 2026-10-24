@@ -296,6 +296,44 @@ mod tests {
         assert!(validate_identity(&Value::Dictionary(info), HOST_ID).is_ok());
         let mut entitlements = plist::Dictionary::new();
         assert!(validate_entitlements(&Value::Dictionary(entitlements.clone())).is_ok());
+        entitlements.insert(
+            "com.apple.security.get-task-allow".into(),
+            Value::Boolean(true),
+        );
+        entitlements.insert(
+            "com.apple.security.temporary-exception.files.absolute-path.read-only".into(),
+            Value::Array(vec![Value::String("/".into())]),
+        );
+        entitlements.insert(
+            "com.apple.security.temporary-exception.mach-lookup.global-name".into(),
+            Value::Array(
+                [
+                    "com.apple.testmanagerd",
+                    "com.apple.dt.testmanagerd.runner",
+                    "com.apple.coresymbolicationd",
+                ]
+                .into_iter()
+                .map(|value| Value::String(value.into()))
+                .collect(),
+            ),
+        );
+        assert!(validate_entitlements(&Value::Dictionary(entitlements.clone())).is_ok());
+        for name in [
+            "com.apple.security.get-task-allow",
+            "com.apple.security.temporary-exception.files.absolute-path.read-only",
+            "com.apple.security.temporary-exception.mach-lookup.global-name",
+        ] {
+            let mut changed = entitlements.clone();
+            changed.insert(name.into(), Value::String("unexpected".into()));
+            assert!(matches!(
+                validate_entitlements(&Value::Dictionary(changed)),
+                Err(Error::Rejected {
+                    stage: "entitlements",
+                    cause: "unexpected_test_loader_value"
+                })
+            ));
+        }
+
         entitlements.insert("keychain-access-groups".into(), Value::Array(vec![]));
         assert!(validate_entitlements(&Value::Dictionary(entitlements)).is_err());
     }
@@ -440,6 +478,99 @@ mod tests {
         assert_eq!(
             action("TestAction").attribute("buildConfiguration"),
             Some("MacTesting")
+        );
+    }
+
+    #[test]
+    fn legacy_macos_route_prepares_team_owned_root_selection_and_result() {
+        let arguments = super::super::XctestArgs {
+            scheme: "BleatMac".to_owned(),
+            destination: "platform=macOS".to_owned(),
+            test_id: Some("BleatAppTests/MacTestIsolationTests".to_owned()),
+            result_bundle: Some(PathBuf::from(".build/legacy-macos.xcresult")),
+            configuration: Some("Debug".to_owned()),
+            forwarded_environment: Vec::new(),
+        };
+        let environment = vec![("TEST_RUNNER_SYNTHETIC_FLAG".to_owned(), "1".to_owned())];
+        let macos = super::super::legacy_macos_arguments(&arguments, &environment)
+            .expect("valid legacy args")
+            .expect("macOS route");
+        let request = super::super::prepare_macos_request(
+            macos,
+            "SYNTHETIC_TEAM".to_owned(),
+            Path::new("owned-test-root"),
+        );
+        assert_eq!(request.build.scheme, "BleatMac");
+        assert_eq!(
+            request.exclude,
+            vec![
+                "BleatAppTests/KeychainEntitlementTests/testApplicationHostKeepsRotatingTokensDeviceOnly"
+            ]
+        );
+        assert_eq!(request.build.configuration.as_deref(), Some("MacTesting"));
+        assert_eq!(request.build.destination, arguments.destination);
+        assert!(
+            request
+                .build
+                .settings
+                .contains(&("DEVELOPMENT_TEAM".to_owned(), "SYNTHETIC_TEAM".to_owned()))
+        );
+        assert!(
+            request
+                .build
+                .settings
+                .contains(&("CODE_SIGN_STYLE".to_owned(), "Manual".to_owned()))
+        );
+        assert_eq!(request.only, vec!["BleatAppTests/MacTestIsolationTests"]);
+        assert_eq!(
+            request.result_bundle,
+            arguments.result_bundle.expect("requested result")
+        );
+        assert!(request.runner_environment.contains(&(
+            "TEST_RUNNER_BLEAT_MACOS_TEST_ROOT".to_owned(),
+            "owned-test-root".to_owned()
+        )));
+        assert!(request.runner_environment.contains(&environment[0]));
+    }
+
+    #[test]
+    fn legacy_macos_route_rejects_other_platform_release_and_reserved_admission() {
+        let mut arguments = super::super::XctestArgs {
+            scheme: "BleatMac".to_owned(),
+            destination: "platform=macOS".to_owned(),
+            test_id: None,
+            result_bundle: None,
+            configuration: None,
+            forwarded_environment: Vec::new(),
+        };
+        for name in [
+            "TEST_RUNNER_BLEAT_MACOS_TEST_ROOT",
+            "TEST_RUNNER_BLEAT_MACOS_TEST_HOST",
+        ] {
+            assert!(matches!(
+                super::super::legacy_macos_arguments(
+                    &arguments,
+                    &[(name.to_owned(), "replacement".to_owned())]
+                ),
+                Err(XcodeRunnerError::ReservedMacosTestEnvironment)
+            ));
+        }
+        arguments.configuration = Some("Release".to_owned());
+        assert!(matches!(
+            super::super::legacy_macos_arguments(&arguments, &[]),
+            Err(XcodeRunnerError::UnsupportedMacosTestConfiguration)
+        ));
+        arguments.configuration = None;
+        arguments.destination = "platform=iOS Simulator".to_owned();
+        assert!(matches!(
+            super::super::legacy_macos_arguments(&arguments, &[]),
+            Err(XcodeRunnerError::UnsupportedMacosDestination)
+        ));
+        arguments.scheme = "Bleat".to_owned();
+        assert!(
+            super::super::legacy_macos_arguments(&arguments, &[])
+                .expect("iOS route unchanged")
+                .is_none()
         );
     }
 
