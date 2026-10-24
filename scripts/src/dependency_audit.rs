@@ -6,16 +6,19 @@ const LOCKFILES: [&str; 2] = ["Cargo.lock", "bleat-api/Cargo.lock"];
 
 #[derive(Debug, Error)]
 pub enum AuditError {
-    #[error("dependency audit command failed to execute: {0}")]
-    Io(#[from] io::Error),
+    #[error("dependency command failed for {target}: {source}")]
+    Io {
+        target: &'static str,
+        source: io::Error,
+    },
     #[error("enabled dependency graph could not be checked")]
     Graph,
     #[error(
         "RUSTSEC-2026-0235 may only be ignored while rkyv is absent from the enabled feature graph"
     )]
     EnabledRkyv,
-    #[error("locked dependency audit failed")]
-    Advisories,
+    #[error("locked dependency audit failed for {0:?}")]
+    Advisories(Vec<&'static str>),
 }
 
 pub fn run(root: &Path) -> Result<(), AuditError> {
@@ -29,7 +32,11 @@ pub fn run(root: &Path) -> Result<(), AuditError> {
             "--prefix",
             "none",
         ])
-        .output()?;
+        .output()
+        .map_err(|source| AuditError::Io {
+            target: "workspace feature graph",
+            source,
+        })?;
     if !graph.status.success() {
         eprint!("{}", String::from_utf8_lossy(&graph.stderr));
         return Err(AuditError::Graph);
@@ -53,15 +60,20 @@ fn validate_graph(graph: &str) -> Result<(), AuditError> {
 }
 
 fn audit_lockfiles(mut audit: impl FnMut(&str) -> io::Result<bool>) -> Result<(), AuditError> {
-    let mut passed = true;
+    let mut failed = Vec::new();
     for lockfile in LOCKFILES {
         // Always inspect both resolutions, including when the workspace fails.
-        passed &= audit(lockfile)?;
+        if !audit(lockfile).map_err(|source| AuditError::Io {
+            target: lockfile,
+            source,
+        })? {
+            failed.push(lockfile);
+        }
     }
-    if passed {
+    if failed.is_empty() {
         Ok(())
     } else {
-        Err(AuditError::Advisories)
+        Err(AuditError::Advisories(failed))
     }
 }
 
@@ -96,7 +108,10 @@ mod tests {
     fn audit_spawn_failure_is_not_success() {
         assert!(matches!(
             audit_lockfiles(|_| Err(io::Error::from(io::ErrorKind::NotFound))),
-            Err(AuditError::Io(_))
+            Err(AuditError::Io {
+                target: "Cargo.lock",
+                ..
+            })
         ));
     }
 }
