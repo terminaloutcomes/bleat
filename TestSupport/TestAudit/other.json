@@ -12140,6 +12140,159 @@
           "reference": "docs/cover-cache-lifecycle.md#trusted-alias-removal-and-real-process-relaunch-2026-10-23"
         }
       ]
+    },
+    {
+      "id": "scripts::macos_preflight::rejects_production_and_adhoc_signatures_and_wrong_team",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 193,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::rejects_production_bundle_identity_and_capabilities",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 210,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::admits_exact_manifest_and_rejects_changed_host_bundle_target_or_admission",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 225,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::rejects_empty_and_multiple_test_configurations",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 288,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "build-scripts::validates_every_explicit_configuration_including_macos_test_host",
+      "path": "build-scripts/tests/release_version_check.rs",
+      "line": 169,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::prepared_run_owns_a_copy_and_injects_only_its_fixture_root",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 323,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::scheme_runs_the_application_and_confines_isolation_to_tests",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 421,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::legacy_macos_route_prepares_team_owned_root_selection_and_result",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 447,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "scripts::macos_preflight::legacy_macos_route_rejects_other_platform_release_and_reserved_admission",
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "line": 493,
+      "purpose": "Admit exact isolated macOS artifacts and reject changed identity, capability, manifest or configuration metadata.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Structural fixture mutation asserts the actual typed validator rejection; no real credential or framework launch."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Rust unit or integration target; no external services.",
+      "setup_dependencies": "Owned temporary products directory and synthetic signing/plist/configuration data.",
+      "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
+      "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
+      "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
     }
   ],
   "issue371_smoke_runner_lifecycle": {

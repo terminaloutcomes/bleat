@@ -23,9 +23,7 @@ pub enum ReleaseVersionError {
         "requested version {requested} differs from project.yml version {project}; bump project.yml, regenerate Xcode, and update CHANGELOG.md first"
     )]
     RequestedMismatch { requested: String, project: String },
-    #[error(
-        "generated Debug and Release versions must both match project.yml; run xcodegen generate"
-    )]
+    #[error("generated configuration versions must all match project.yml; run xcodegen generate")]
     GeneratedMismatch,
     #[error(
         "CURRENT_PROJECT_VERSION must be a UTC timestamp matching MARKETING_VERSION in project.yml and generated Xcode settings"
@@ -154,11 +152,26 @@ pub fn validate_metadata(
         .filter(|object| object["isa"] == "XCBuildConfiguration")
         .filter(|object| !object["buildSettings"]["MARKETING_VERSION"].is_null())
         .collect();
-    if configurations.len() != 2
-        || !["Debug", "Release"].iter().all(|name| {
-            configurations.iter().any(|object| {
-                object["name"] == *name && object["buildSettings"]["MARKETING_VERSION"] == version
-            })
+    let declared: Vec<&str> = match document["configs"].as_hash() {
+        Some(configs) => configs
+            .keys()
+            .map(|key| key.as_str().ok_or(ReleaseVersionError::ProjectInvalid))
+            .collect::<Result<_, _>>()?,
+        None => vec!["Debug", "Release"],
+    };
+    if !["Debug", "Release"]
+        .iter()
+        .all(|name| declared.contains(name))
+        || configurations.len() != declared.len()
+        || !declared.iter().all(|name| {
+            configurations
+                .iter()
+                .filter(|object| {
+                    object["name"] == *name
+                        && object["buildSettings"]["MARKETING_VERSION"] == version
+                })
+                .count()
+                == 1
         })
     {
         return Err(ReleaseVersionError::GeneratedMismatch);

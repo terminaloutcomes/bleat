@@ -164,3 +164,26 @@ fn rejects_malformed_sources_and_invalid_calendar_dates() {
         Err(ReleaseVersionError::GeneratedProjectInvalid)
     ));
 }
+
+#[test]
+fn validates_every_explicit_configuration_including_macos_test_host() {
+    let project =
+        format!("configs:\n  Debug: debug\n  Release: release\n  MacTesting: debug\n{PROJECT}");
+    let mut value = generated();
+    value["objects"]["mac-tests"] = value["objects"]["debug"].clone();
+    value["objects"]["mac-tests"]["name"] = json!("MacTesting");
+    assert!(validate_metadata(&project, &value, CHANGELOG, None).is_ok());
+    value["objects"]["mac-tests"]["buildSettings"]["MARKETING_VERSION"] = json!("2026.10.08");
+    assert!(matches!(
+        validate_metadata(&project, &value, CHANGELOG, None),
+        Err(ReleaseVersionError::GeneratedMismatch)
+    ));
+    assert!(matches!(
+        validate_metadata(&project, &generated(), CHANGELOG, None),
+        Err(ReleaseVersionError::GeneratedMismatch)
+    ));
+    assert!(matches!(
+        validate_metadata(PROJECT, &value, CHANGELOG, None),
+        Err(ReleaseVersionError::GeneratedMismatch)
+    ));
+}

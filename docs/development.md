@@ -250,6 +250,11 @@ export BLEAT_DEVELOPMENT_TEAM="YOUR_TEAM_ID"
 mise run macos:test
 ```
 
+This uses the dedicated inert `MacTesting` host, existing development signing,
+and exact built-manifest preflight. It does not request provisioning updates or
+prove normal-app authentication/relaunch. See the [macOS test isolation receipt](release-evidence/macos-test-isolation.md)
+for focused selection, artifact admission and remaining acceptance.
+
 ### Paid developer capability build modes
 
 `BUILD_WITHOUT_PAID_DEVELOPER` accepts exactly `YES` or `NO` and defaults to

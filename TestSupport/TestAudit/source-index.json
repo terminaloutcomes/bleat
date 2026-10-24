@@ -11207,6 +11207,78 @@
       "name": "testAppModelFirstActivationRetirementReturnsSuperseded",
       "line": 697,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+      "name": "testNativeHostAdmitsOnlyDedicatedIdentityAndRunner",
+      "line": 9,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+      "name": "testConstructorOwnedStateDoesNotInheritAnotherModel",
+      "line": 21,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+      "name": "testPlaybackConstructorDefaultsAreFreshAndExplicitStoreIsRetained",
+      "line": 37,
+      "language": "swift"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "rejects_production_and_adhoc_signatures_and_wrong_team",
+      "line": 193,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "rejects_production_bundle_identity_and_capabilities",
+      "line": 210,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "admits_exact_manifest_and_rejects_changed_host_bundle_target_or_admission",
+      "line": 225,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "rejects_empty_and_multiple_test_configurations",
+      "line": 288,
+      "language": "rust"
+    },
+    {
+      "path": "build-scripts/tests/release_version_check.rs",
+      "name": "validates_every_explicit_configuration_including_macos_test_host",
+      "line": 169,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "prepared_run_owns_a_copy_and_injects_only_its_fixture_root",
+      "line": 323,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "scheme_runs_the_application_and_confines_isolation_to_tests",
+      "line": 421,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "legacy_macos_route_prepares_team_owned_root_selection_and_result",
+      "line": 447,
+      "language": "rust"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner/macos_preflight.rs",
+      "name": "legacy_macos_route_rejects_other_platform_release_and_reserved_admission",
+      "line": 493,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

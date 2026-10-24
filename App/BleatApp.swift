@@ -182,23 +182,36 @@ struct BleatApp: App {
     #if os(iOS)
         @UIApplicationDelegateAdaptor(BleatAppDelegate.self)
         private var appDelegate
-    #else
+    #elseif !BLEAT_MACOS_TESTING
         @State private var bootstrap = AppBootstrap()
     #endif
 
-    private var model: AppModel {
-        #if os(iOS)
-            appDelegate.model
-        #else
-            bootstrap.model
-        #endif
-    }
+    #if !BLEAT_MACOS_TESTING
+        private var model: AppModel {
+            #if os(iOS)
+                appDelegate.model
+            #else
+                bootstrap.model
+            #endif
+        }
+
+    #endif
 
     var body: some Scene {
         WindowGroup {
-            RootView(model: model)
+            #if BLEAT_MACOS_TESTING
+                // The app-hosted unit-test process must never construct live
+                // services or start the normal application lifecycle.
+                if let rejection = MacTestHostAdmission.rejection() {
+                    Text("Unit-test host unavailable: \(rejection.rawValue)")
+                } else {
+                    Color.clear.accessibilityIdentifier("macos-unit-test-host")
+                }
+            #else
+                RootView(model: model)
+            #endif
         }
-        #if os(macOS)
+        #if os(macOS) && !BLEAT_MACOS_TESTING
             .commands {
                 CommandGroup(replacing: .appSettings) {
                     Button("Settings…") {

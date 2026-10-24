@@ -180,7 +180,13 @@ actor BookCoverImageLoader: BookCoverImageLoading {
     typealias Fetch =
         @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
-    static let shared = BookCoverImageLoader()
+    #if BLEAT_MACOS_TESTING
+        static let shared = BookCoverImageLoader(
+            cacheRoot: MacTestStorage.root.appendingPathComponent(
+                "BookCovers", isDirectory: true))
+    #else
+        static let shared = BookCoverImageLoader()
+    #endif
 
     nonisolated static func invalidateShared(for url: URL, accountID: AccountID)
         async

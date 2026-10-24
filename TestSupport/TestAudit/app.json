@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "653 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
-  "methodCount": 653,
+  "status": "656 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
+  "methodCount": 656,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -45544,7 +45544,9 @@
         "line": 44,
         "endLineBeforeNextTest": 96
       },
-      "compilerAndSkipConditions": [],
+      "compilerAndSkipConditions": [
+        "MacTesting reduced-entitlement runner explicitly excludes this one provisioned synchronizable-Keychain contract; iOS selection is unchanged. Failed macOS attempt and remaining signed acceptance are retained in docs/release-evidence/macos-test-isolation.md."
+      ],
       "setupAndDependencies": [],
       "actions": [
         {
@@ -52995,10 +52997,103 @@
         }
       },
       "execution": "docs/release-evidence/ios27-carplay-audio.md"
+    },
+    {
+      "identifier": "MacTestIsolationTests/testNativeHostAdmitsOnlyDedicatedIdentityAndRunner",
+      "source": {
+        "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+        "line": 9
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "testNativeHostAdmitsOnlyDedicatedIdentityAndRunner",
+        "purpose": "Protect the dedicated macOS app-test isolation boundary.",
+        "ruleAssessments": {
+          "1": "Require dedicated host admission, fresh model-local preferences/positions/download roots, or explicit injected preferences as the named test postcondition.",
+          "2": "Synchronous constructor and admission checks; no guessed delays or asynchronous ordering oracle.",
+          "3": "No active playback or position sampling; rate is a saved preference checked before starting playback.",
+          "4": "Owned ModelLocalState removes its unique preferences domain on release; no player is started, network request issued, or credential written.",
+          "5": "Fresh UUID domains and download paths for each constructor; explicit stores remain within this test.",
+          "6": "Dedicated macOS app-hosted unit configuration only; no authentication, relaunch, route or physical-device acceptance.",
+          "7": "New focused regression; native results and configuration failures retained separately in the receipt.",
+          "8": "XCTest call-site assertions retain typed admission variants and expected/actual values.",
+          "9": "Focused and owning execution status is recorded in the macOS isolation receipt; source review does not claim unexecuted tests passed."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises the actual admission or constructor/store boundary with independent state and concrete postconditions."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "BLEAT_MACOS_TESTING only; no environment-dependent skip"
+      ],
+      "execution": "docs/release-evidence/macos-test-isolation.md"
+    },
+    {
+      "identifier": "MacTestIsolationTests/testConstructorOwnedStateDoesNotInheritAnotherModel",
+      "source": {
+        "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+        "line": 21
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "testConstructorOwnedStateDoesNotInheritAnotherModel",
+        "purpose": "Protect the dedicated macOS app-test isolation boundary.",
+        "ruleAssessments": {
+          "1": "Require dedicated host admission, fresh model-local preferences/positions/download roots, or explicit injected preferences as the named test postcondition.",
+          "2": "Synchronous constructor and admission checks; no guessed delays or asynchronous ordering oracle.",
+          "3": "No active playback or position sampling; rate is a saved preference checked before starting playback.",
+          "4": "Owned ModelLocalState removes its unique preferences domain on release; no player is started, network request issued, or credential written.",
+          "5": "Fresh UUID domains and download paths for each constructor; explicit stores remain within this test.",
+          "6": "Dedicated macOS app-hosted unit configuration only; no authentication, relaunch, route or physical-device acceptance.",
+          "7": "New focused regression; native results and configuration failures retained separately in the receipt.",
+          "8": "XCTest call-site assertions retain typed admission variants and expected/actual values.",
+          "9": "Focused and owning execution status is recorded in the macOS isolation receipt; source review does not claim unexecuted tests passed."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises the actual admission or constructor/store boundary with independent state and concrete postconditions."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "BLEAT_MACOS_TESTING only; no environment-dependent skip"
+      ],
+      "execution": "docs/release-evidence/macos-test-isolation.md"
+    },
+    {
+      "identifier": "MacTestIsolationTests/testPlaybackConstructorDefaultsAreFreshAndExplicitStoreIsRetained",
+      "source": {
+        "path": "Tests/BleatAppTests/MacTestIsolationTests.swift",
+        "line": 37
+      },
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "testPlaybackConstructorDefaultsAreFreshAndExplicitStoreIsRetained",
+        "purpose": "Protect the dedicated macOS app-test isolation boundary.",
+        "ruleAssessments": {
+          "1": "Require dedicated host admission, fresh model-local preferences/positions/download roots, or explicit injected preferences as the named test postcondition.",
+          "2": "Synchronous constructor and admission checks; no guessed delays or asynchronous ordering oracle.",
+          "3": "No active playback or position sampling; rate is a saved preference checked before starting playback.",
+          "4": "Owned ModelLocalState removes its unique preferences domain on release; no player is started, network request issued, or credential written.",
+          "5": "Fresh UUID domains and download paths for each constructor; explicit stores remain within this test.",
+          "6": "Dedicated macOS app-hosted unit configuration only; no authentication, relaunch, route or physical-device acceptance.",
+          "7": "New focused regression; native results and configuration failures retained separately in the receipt.",
+          "8": "XCTest call-site assertions retain typed admission variants and expected/actual values.",
+          "9": "Focused and owning execution status is recorded in the macOS isolation receipt; source review does not claim unexecuted tests passed."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Exercises the actual admission or constructor/store boundary with independent state and concrete postconditions."
+        }
+      },
+      "compilerAndSkipConditions": [
+        "BLEAT_MACOS_TESTING only; no environment-dependent skip"
+      ],
+      "execution": "docs/release-evidence/macos-test-isolation.md"
     }
   ],
   "decisionCounts": {
-    "keep": 551,
+    "keep": 554,
     "follow_up": 98,
     "fix": 4
   },
@@ -53135,5 +53230,10 @@
     ],
     "evidence": "docs/release-evidence/ios27-carplay-audio.md",
     "scope": "Historical review decisions/counts remain preserved; only this observed iOS27 compatibility repair is recorded."
+  },
+  "macOSIsolationReview20261024": {
+    "newMethods": 3,
+    "scope": "Three new MacTesting-only isolation regressions; historical review cohorts and prior summary counts are preserved.",
+    "evidence": "docs/release-evidence/macos-test-isolation.md"
   }
 }

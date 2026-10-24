@@ -738,14 +738,15 @@ final class PlaybackModel {
         }
     }
 
+    @ObservationIgnored private let ownedLocalState: ModelLocalState
+
     init(
         service: any AppServicing,
-        positionStore: PlaybackPositionStore = .shared,
-        localSessionStore: LocalPlaybackSessionStore = .shared,
-        bookmarkMutationStore: BookmarkMutationStore = .shared,
-        preferencesStore: PlaybackPreferencesStore = .shared,
-        nowPlayingCoordinator: NowPlayingCoordinator =
-            NowPlayingCoordinator(),
+        positionStore: PlaybackPositionStore? = nil,
+        localSessionStore: LocalPlaybackSessionStore? = nil,
+        bookmarkMutationStore: BookmarkMutationStore? = nil,
+        preferencesStore: PlaybackPreferencesStore? = nil,
+        nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         audioSession: PlaybackAudioSession = .system,
         queuePlanning:
             @escaping @MainActor @Sendable (
@@ -766,6 +767,18 @@ final class PlaybackModel {
         remoteTelemetryTracer: any RemoteTelemetryTracing =
             InactiveRemoteTelemetryTracer()
     ) {
+        let localState = ModelLocalState()
+        ownedLocalState = localState
+        let positionStore = positionStore ?? localState.positionStore()
+        let localSessionStore = localSessionStore ?? localState.sessionStore()
+        let bookmarkMutationStore =
+            bookmarkMutationStore ?? localState.bookmarkStore()
+        let preferencesStore = preferencesStore ?? localState.preferencesStore()
+        let nowPlayingCoordinator =
+            nowPlayingCoordinator
+            ?? NowPlayingCoordinator(
+                registersRemoteCommands: ModelLocalState.registersRemoteCommands
+            )
         let skipBackwardInterval = preferencesStore.skipBackward()
         let skipForwardInterval = preferencesStore.skipForward()
         let previousCommandAction = preferencesStore.previousCommandAction()

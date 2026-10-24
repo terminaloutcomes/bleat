@@ -26492,5 +26492,14 @@
       "Tests/BleatCoreTests/LibraryCachePerformanceTests.swift::testCacheHeartbeatChildCancellationReapsChild"
     ],
     "evidence": "docs/release-evidence/test-reliability-audit.md#missing-audit-entry-repair-369"
+  },
+  "macOSRemovedDomainCompatibility20261024": {
+    "scope": "Observed host failure only; no historical review identities reopened.",
+    "changedBoundaries": [
+      "PrivateCloudPersistenceTests.ownedDefaultsAreRemovedOnSuccessAndThrowingExit(failure:)",
+      "ReadOnlyMigrationChild.Resources.domainsAbsent"
+    ],
+    "postcondition": "Absent or empty persistent domain after removal; any surviving entry still rejects cleanup. Existing sentinel ownership, unrelated-domain preservation, child-exit and I/O-close assertions remain.",
+    "evidence": "docs/release-evidence/macos-test-isolation.md"
   }
 }

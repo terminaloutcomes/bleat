@@ -7,6 +7,11 @@ options:
     macOS: "26.0"
   createIntermediateGroups: true
 
+configs:
+  Debug: debug
+  Release: release
+  MacTesting: debug
+
 attributes:
   LastUpgradeCheck: "2630"
 
@@ -88,6 +93,17 @@ targets:
       configs:
         Debug:
           BLEAT_APP_ATTEST_ENVIRONMENT: development
+        MacTesting:
+          BLEAT_APP_ATTEST_ENVIRONMENT: development
+          ENABLE_TESTABILITY: YES
+          BLEAT_CLOUDKIT_MODE: disabled
+          BLEAT_APP_ATTEST_MODE: disabled
+          PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.Bleat.MacTestHost
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Development
+          CODE_SIGN_ENTITLEMENTS: ""
+          "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": ""
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG BLEAT_MACOS_TESTING"
         Release:
           BLEAT_APP_ATTEST_ENVIRONMENT: production
     preBuildScripts:
@@ -138,6 +154,10 @@ targets:
         DEAD_CODE_STRIPPING: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bleat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bleat"
         BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        MacTesting:
+          PRODUCT_BUNDLE_IDENTIFIER: com.terminaloutcomes.Bleat.MacTestHost.Tests
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG BLEAT_MACOS_TESTING"
 
   BleatUITests:
     type: bundle.ui-testing
@@ -184,8 +204,10 @@ schemes:
     run:
       config: Debug
     test:
-      config: Debug
+      config: MacTesting
       gatherCoverageData: true
+      environmentVariables:
+        BLEAT_MACOS_TEST_HOST: "1"
       targets:
         - BleatAppTests
 

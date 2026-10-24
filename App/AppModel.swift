@@ -1912,9 +1912,11 @@ final class AppModel {
         }
     }
 
+    @ObservationIgnored private let ownedLocalState: ModelLocalState
+
     init(
         service: any AppServicing,
-        cloudStorageNoticeDefaults: UserDefaults = .standard,
+        cloudStorageNoticeDefaults: UserDefaults? = nil,
         nearbyServerDiscovery: (any NearbyServerDiscovering)? = nil,
         bootstrapError: AppBootstrapError? = nil,
         downloadsStorageRootURL: URL? = nil,
@@ -1932,10 +1934,10 @@ final class AppModel {
             InactiveRemoteTelemetryTracer(),
         operationObserver:
             (@MainActor @Sendable (AppModelOperationEvent) -> Void)? = nil,
-        localSessionStore: LocalPlaybackSessionStore = .shared,
+        localSessionStore: LocalPlaybackSessionStore? = nil,
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
-        playbackPositionStore: PlaybackPositionStore = .shared,
+        playbackPositionStore: PlaybackPositionStore? = nil,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         audioSession: PlaybackAudioSession = .system,
         bookProgressOperationTimeout: Duration = .seconds(30),
@@ -1966,6 +1968,16 @@ final class AppModel {
             @escaping @Sendable (AccountID) async -> Void =
             BookCoverImageLoader.removeShared(for:)
     ) {
+        let localState = ModelLocalState()
+        ownedLocalState = localState
+        let cloudStorageNoticeDefaults =
+            cloudStorageNoticeDefaults ?? localState.defaults
+        let localSessionStore =
+            localSessionStore
+            ?? localState.sessionStore()
+        let playbackPositionStore =
+            playbackPositionStore
+            ?? localState.positionStore()
         self.service = service
         self.invalidateBookCover = invalidateBookCover
         self.resetBookCovers = resetBookCovers
@@ -1979,7 +1991,8 @@ final class AppModel {
         self.nearbyServerDiscovery = nearbyServerDiscovery
         self.diagnostics = diagnostics
         let consentStore =
-            remoteTelemetryConsentStore ?? RemoteTelemetryConsentStore()
+            remoteTelemetryConsentStore
+            ?? RemoteTelemetryConsentStore(defaults: localState.defaults)
         self.remoteTelemetryConsentStore = consentStore
         self.remoteTelemetryConsentController =
             remoteTelemetryConsentController
@@ -1996,7 +2009,9 @@ final class AppModel {
         self.launchStage = launchStage
         let subsystems = Self.makePlaybackAndDownloads(
             service: service,
-            downloadsStorageRootURL: downloadsStorageRootURL,
+            defaults: localState.defaults,
+            downloadsStorageRootURL: downloadsStorageRootURL
+                ?? localState.downloadsRoot,
             downloadsBackgroundSessionIdentifier:
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
@@ -2152,6 +2167,7 @@ final class AppModel {
 
     private static func makePlaybackAndDownloads(
         service: any AppServicing,
+        defaults: UserDefaults,
         downloadsStorageRootURL: URL?,
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
@@ -2169,13 +2185,16 @@ final class AppModel {
             positionStore: playbackPositionStore,
             localSessionStore: localSessionStore,
             nowPlayingCoordinator: nowPlayingCoordinator
-                ?? NowPlayingCoordinator(),
+                ?? NowPlayingCoordinator(
+                    registersRemoteCommands: ModelLocalState
+                        .registersRemoteCommands),
             audioSession: audioSession,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer
         )
         let downloads = DownloadModel(
             service: service,
+            defaults: defaults,
             storageRootURL: downloadsStorageRootURL,
             diagnostics: diagnostics,
             remoteTelemetryTracer: remoteTelemetryTracer,

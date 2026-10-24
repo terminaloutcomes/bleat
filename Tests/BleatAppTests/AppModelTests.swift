@@ -1832,6 +1832,7 @@ final class AppModelTests: XCTestCase {
         let tracer = RecordingRemoteTelemetryTracer()
         let downloads = DownloadModel(
             service: TestAppService(activeAccount: .success(nil)),
+            storageRootURL: ModelLocalState().downloadsRoot,
             remoteTelemetryTracer: tracer)
         let interval = DateInterval(
             start: Date().addingTimeInterval(-1), duration: 1)
@@ -10703,7 +10704,7 @@ final class AppModelTests: XCTestCase {
         let service = TestAppService(activeAccount: .success(nil))
         let first = DownloadModel(
             service: service,
-            defaults: defaults
+            defaults: defaults, storageRootURL: ModelLocalState().downloadsRoot
         )
         var request = URLRequest(
             url: try XCTUnwrap(URL(string: "https://books.example/file"))
@@ -10733,7 +10734,7 @@ final class AppModelTests: XCTestCase {
         first.setNetworkPolicy(.allowCellular)
         let restored = DownloadModel(
             service: service,
-            defaults: defaults
+            defaults: defaults, storageRootURL: ModelLocalState().downloadsRoot
         )
         XCTAssertEqual(restored.networkPolicy, .allowCellular)
         XCTAssertTrue(
@@ -11434,7 +11435,9 @@ final class AppModelTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
         }
         let service = TestAppService(activeAccount: .success(nil))
-        let first = DownloadModel(service: service, defaults: defaults)
+        let first = DownloadModel(
+            service: service, defaults: defaults,
+            storageRootURL: ModelLocalState().downloadsRoot)
 
         XCTAssertEqual(first.automaticLookahead, .five)
         XCTAssertEqual(first.maximumConcurrentDownloads, 5)
@@ -11446,7 +11449,9 @@ final class AppModelTests: XCTestCase {
         first.setAutomaticLookahead(.all)
         first.setMaximumConcurrentDownloads(8)
         first.setAutomaticCleanupPolicy(.afterChapter)
-        let restored = DownloadModel(service: service, defaults: defaults)
+        let restored = DownloadModel(
+            service: service, defaults: defaults,
+            storageRootURL: ModelLocalState().downloadsRoot)
         XCTAssertEqual(restored.automaticLookahead, .all)
         XCTAssertEqual(restored.maximumConcurrentDownloads, 10)
         XCTAssertEqual(restored.automaticCleanupPolicy, .afterChapter)
