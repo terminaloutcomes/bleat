@@ -44,7 +44,7 @@ acceptance suite.
 
 ## Validation receipt
 
-Current validation: the dedicated development-signed macOS build-for-testing
+Original validation before serial integration: the dedicated development-signed macOS build-for-testing
 and supported unsigned macOS Release compilation passed. Seventeen Rust runner
 regressions, 39 build-helper tests, eight audit-parity regressions, strict Swift
 lint and documentation checking passed. Focused native admission/state execution
@@ -107,3 +107,36 @@ CI at reviewed head `40a5c12` reported newly published `RUSTSEC-2026-0387` for
 change either Rust lockfile or waive the advisory. Exact final-head status is
 reported separately; passing local implementation checks do not clear that
 repository-security gate or authorize merge.
+
+
+## Serial integration with CarPlay/audio repair (#468)
+
+PR #468 merged as `64fa56676cd88d3b1a87159754d91bc233f121e2` after two clean
+final reviews and successful exact-head checks. Its iOS26.5 CI and local iOS27
+lanes each verified 660 passes with zero failures, skips or runtime warnings.
+Its retained initial Rust image-pull setup failure recovered with one failed-job
+rerun on the unchanged reviewed head, without source or assertion changes.
+
+The macOS branch is rebased onto that merge. Conflict resolution retains both
+constructor-owned defaults/stores/download state and the asynchronous paired
+audio-session dependency, including the test-only remote-command policy. The
+first-activation and AppModel outcome/persistence retirement guards remain intact.
+Both audit inventories and traceability sections are retained, without reopening
+historical cohorts. XcodeGen regeneration adds the inherited bridging header to
+MacTesting; normal Run remains Debug and isolation stays confined to TestAction.
+
+The combined isolated macOS lane discovered and verified **558 passes**, zero
+failures/skips/expected failures/runtime warnings. This includes the thirteen
+additional cross-platform audio/lifecycle identities from #468. The real legacy
+entry point separately verified all three admission/state identities, also with
+zero runtime warnings. Seventeen Rust runner regressions, all 39 build-helper
+tests and eight audit-parity regressions passed. The full unsigned host gate
+verified 608 passes plus the one explicitly expected unsigned Keychain skip.
+Strict Swift lint, documentation references, audit parity and whitespace checks
+passed. Final combined Release/iOS and exact published-head CI results are
+reported in the PR rather than inferred from either pre-integration branch.
+
+The isolated lane still explicitly excludes the single provisioned-host
+Keychain contract. Its results do not establish normal signed authentication,
+relaunch or synchronizable-Keychain acceptance. No signing credentials, profiles,
+trust settings, physical devices or unrelated data were changed.

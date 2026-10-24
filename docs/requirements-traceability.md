@@ -1147,6 +1147,7 @@ matched baseline failures, explicit browsing capability, presenter-owned
 selection, and unchanged stale-callback admission. Focused three-case and
 owning 53-case unit results are separate from audio-session migration and
 physical CarPlay acceptance. Historical completed audit cohorts remain credited.
+
 ## Resumed macOS test isolation (#362, #369, #374)
 
 The five deferred macOS groups are active again by maintainer request.
