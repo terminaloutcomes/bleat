@@ -394,15 +394,15 @@ cleanup exception during sheet dismissal. Its secure password field still
 supports entry/paste and preserves saved credentials when left blank; login and
 system password-manager settings are unaffected. See the
 [account-editor AutoFill evidence](release-evidence/macos-account-editor-autofill.md)
-for the exact boundary and remaining runtime check.
+for the scoped mitigation and its retained validation limits.
 
 Signed macOS launch, native login and account restoration are supported, with
 accepted historical normal termination/relaunch and later candidate restoration
 and account-editor Save evidence in
 [GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25).
 Its broad credential/privacy evidence and final `APP-MAC-AUTH-001` completion
-remain open as post-1.0 acceptance; accepted login/relaunch is not reopened. Notarization, distribution,
-Mac-specific interface adaptation, and unlisted Mac media or background
+remain open as post-1.0 acceptance and do not gate the 1.0 release. Accepted
+login/relaunch is not reopened. Notarization, distribution, Mac-specific interface adaptation, and unlisted Mac media or background
 behavior are also not release gates.
 
 Build products and intermediate files are written beneath `.build/`.

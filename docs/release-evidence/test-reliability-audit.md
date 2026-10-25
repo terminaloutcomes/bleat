@@ -25,7 +25,9 @@ The parallel audit records are
 [`app.json`](../../TestSupport/TestAudit/app.json),
 [`core.json`](../../TestSupport/TestAudit/core.json), and
 [`other.json`](../../TestSupport/TestAudit/other.json). At that historical baseline, 1,542 JSON records were marked source-reviewed; the ten gate tests are recorded
-individually below. Those labels do not certify current per-record/helper review: the fixed 71 app / 241 core cohort is now completed in the identity ledger, with its scoped limits explicit. Read the
+individually below. Those labels do not certify current per-record/helper review.
+The fixed 71 app / 241 core cohort is now completed in the identity ledger, with
+its scoped limits explicit. Read the
 [runner and shell-case review](test-reliability-runners.md) alongside them;
 source-function discovery alone omits shell scenarios.
 
