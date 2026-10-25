@@ -48,88 +48,113 @@ cases assert intent, identity, presentation and session lifecycle, not exact
 advancing media position. No callback adapter changed. No test was skipped or
 assertion removed.
 
-## Validation
+## Validation and execution evidence
 
-The fresh unchanged-main reproduction in `.build/four-baseline.xcresult`
-executed exactly the four reported UI cases: four failures, zero skips and zero
-runtime warnings, with the same failure text as the saved #475 comparison.
-Xcode's failure diagnostics collection used its bounded 600-second allowance;
-the complete baseline operation took 850.611 seconds.
+The source is based on main `0ed12585dc6726fce2aca2336e99272014810f5d`.
+Final production/test code is
+`c19f8d459abd09bef088e23eb0267e6b6a98a0b9`; subsequent evidence commits change
+only this receipt. The authoritative completed aggregate outcomes, final SHA,
+artifact paths and exact-final-head CI links are kept in the
+[PR validation comment](https://github.com/terminaloutcomes/bleat/pull/476#issuecomment-6397997492).
+That comment distinguishes running stages from completed results. This receipt
+credits only the completed outcomes stated below.
 
-The corrected focused run in `.build/four-focused-v1.xcresult` executed and
-passed all 14 selected cases: the four UI journeys above, the new pending-Stop
-restart regression, existing explicit-Stop diagnostic suspension, newer-selection
-protection and matching-active-player reuse tests, plus all six
-`UITestPlaybackFixturesTests`. Zero failures, skips or runtime warnings; exact
-identities and individual outcomes were inspected using `xcresulttool`.
+| Selection/revision | Verified result | Artifact |
+| --- | --- | --- |
+| Four unchanged-main UI cases | All four reproduced the reported failures; zero skips/runtime warnings. Failure text matches the saved #475 comparison. | `.build/four-baseline.xcresult` |
+| Initial repair, focused | 14 passed; zero failures, skips or runtime warnings. All requested identities and individual outcomes inspected. | `.build/four-focused-v1.xcresult` |
+| Clean UI repetitions | All four identities passed twice: eight executions, with both Repetition nodes inspected; zero skips/runtime warnings. | `.build/four-repetitions.xcresult` |
+| Initial code `e747435`, complete `mise run check` | Passed in 4886.37 seconds: 609 signed host tests, 663 app tests, broader UI 119 passed/7 existing approved skips, core live 13 passed/8 configuration-dependent skips, and two app-live journeys. Native result warnings empty. | `.build/test-core-results/app-tests-37712-1792930492668.xcresult`, `.build/test-core-results/ui-tests-37712-1792930492668.xcresult`; app-live bundles beneath `TestSupport/ServerHarness/app-live-artifacts/caa19d96-55f6-4939-9c2e-665709752180/` |
+| Final code `c19f8d4`, focused | 15 passed, including both pending-Stop boundaries and all four UI journeys; zero failures, skips or runtime warnings. | `.build/four-final-focused.xcresult` |
+| Final code `c19f8d4`, recovered aggregate host/app stages | 609 signed host tests passed with zero skips; all 664 app tests passed with zero failures, skips or runtime warnings. | `.build/host-results/`; `.build/test-core-results/app-tests-67662-1792935944052.xcresult` |
+| Final code, complete UI/live aggregate and evidence-head CI | See the validation comment for the final outcomes and exact artifact/run links; do not infer completion from the earlier-source pass. | [Authoritative final record](https://github.com/terminaloutcomes/bleat/pull/476#issuecomment-6397997492) |
 
-The run used the `Bleat` scheme with a task-owned iPhone 17 Pro Simulator on
-iOS 27.0, serial testing, inert telemetry URLs, and a separate derived-data
-folder in this worktree. The selection was the four UI methods above,
-`BleatAppTests/UITestPlaybackFixturesTests`, and these app methods:
+The narrow runs used the `Bleat` scheme, a task-owned iPhone 17 Pro Simulator on
+iOS 27.0, serial testing, inert telemetry URLs, a separate worktree and
+`.build/xcode-derived`. The four UI selectors are the exact methods in the
+review table above. The final focused selection also includes the complete
+six-case `BleatAppTests/UITestPlaybackFixturesTests` and these AppModel methods:
 
 - `testPlaybackStartReplacesIdlePlayerWhileStopSyncIsPending`
+- `testPlaybackStartRetainsReplacementWhileStopStatisticsFinishIsPending`
 - `testPlaybackStartReusesMatchingActivePlayerAndResumes`
 - `testExplicitStopPausesBeforeDiagnosticSuspension`
 - `testStopCompletionDoesNotRetireNewerSelection`
 
-Strict scoped Swift formatting, `git diff --check` and `mise run docs:check`
-passed. Independent read-only review found two defects in the initial test draft
-(an unavailable fixture helper and awaiting replacement completion before gate
-release); both were corrected before execution. Review of the revised complete
-diff found no code findings. A final documentation review raised one P2:
-the initial receipt described waiter overwrite as a scoped cause despite progress
-serialization. The receipt now identifies rearming after release as the scoped
-cause and concurrent overwrite as a prevented latent fixture hazard. That finding
-is resolved; no other P2/P3 findings were raised.
+The repetition run adds `-test-iterations 2`. Every focused command writes a
+fresh result bundle with `-resultBundlePath`; `xcresulttool` summary and test
+node results were inspected rather than relying on the process exit code.
+The aggregate command is the supported workflow with only an owned destination
+override:
 
-The clean repetition run in `.build/four-repetitions.xcresult` passed all four
-identities twice (eight executions). Both per-identity `Repetition` nodes were
-inspected and passed; zero skips or runtime warnings. This used the same scheme,
-owned Simulator and four UI selectors with `-test-iterations 2`.
+```sh
+BLEAT_SIMULATOR_DESTINATION='platform=iOS Simulator,id=69211698-B640-4827-B900-BA513D7A6179' mise run check
+```
 
-The required `mise run check` aggregate is running with
-`BLEAT_SIMULATOR_DESTINATION` targeting that owned Simulator. It has verified
-609 signed host tests with zero skips, Swift Release and Simulator Release
-builds, paid-capability configuration contracts, and 663 Simulator app tests
-with zero failures, skips or runtime warnings. The app bundle is
-`.build/test-core-results/app-tests-37712-1792930492668.xcresult`.
-The 126-case UI lane passed with 119 passed, seven existing approved opt-in
-skips, zero failures and zero runtime warnings. All four repaired identities
-individually passed in the broad bundle:
-`.build/test-core-results/ui-tests-37712-1792930492668.xcresult`.
-Core live validation passed its unchanged result verifier with 13 passed and
-eight configuration-dependent skips. Both disposable app-live journeys then passed with zero skips and runtime
-warnings; online/offline bundles are beneath
-`TestSupport/ServerHarness/app-live-artifacts/caa19d96-55f6-4939-9c2e-665709752180/`.
-The original complete `mise run check` exited successfully in 4886.37 seconds.
+The seven broad-UI skips are the existing runner-approved opt-in cases; the
+core-live configuration-dependent telemetry cases execute separately in the
+aggregate's configured telemetry stage. No new skip, waiver, assertion removal or
+blind retry was added. No existing timeout or tolerance was enlarged. Signed-host tests retain complete
+Keychain evidence; unsigned CI coverage is separate. Physical-device, AirPlay,
+Bluetooth, CarPlay and background acceptance are not inferred from these runs.
 
-A final lifecycle audit subsequently identified the outer statistics-finish
-suspension: a same-book replacement can finish while old Stop is held outside
-progress serialization, then stale Stop could reset/close it before its next
-generation check. The final guard now checks immediately after that await.
-The new held-second-finish regression requires replacement completion and native
-player identity before releasing old Stop. Independent review found no issues in
-this revised source. Final-source focused revalidation passed all 15 selected identities in
-`.build/four-final-focused.xcresult`, including both pending-Stop boundaries and
-all four UI journeys. Zero skips or runtime warnings; individual outcomes were
-inspected. The required aggregate is being repeated on that final source;
-the earlier aggregate remains earlier-source evidence.
+### Final lifecycle audit and independent review
 
-The original aggregate continued through a model-capacity interruption without
-a duplicate run. Process and artifact inspection recovered its active UI lane;
-no completed tests were restarted.
+The initial uncommitted test draft had two P1 review findings: a nonexistent
+fixture helper and awaiting replacement completion before releasing serialized
+progress. Both were corrected before execution. A P2 receipt finding corrected
+the delayed-sync cause: rearming after release is the scoped defect; concurrent
+waiter overwrite is a prevented latent fixture hazard.
 
-CI passed on exact code commit
-`e747435ae57a809dd305ed58b5fb8893648a83ba`:
-[Validate Bleat](https://github.com/terminaloutcomes/bleat/actions/runs/40190889241),
-[release security](https://github.com/terminaloutcomes/bleat/actions/runs/40190889303),
-[CloudKit schema](https://github.com/terminaloutcomes/bleat/actions/runs/40190889227),
-and [website build](https://github.com/terminaloutcomes/bleat/actions/runs/40190889235).
-PR deployment jobs were skipped by their existing event conditions. The final
-evidence commit will receive its own exact-head CI verification.
+A final audit identified a further scoped P1: after the outer statistics-finish
+await, old Stop could reset/close a fully prepared replacement before checking
+its generation. The new guard runs immediately after that await. The regression
+holds statistics-finish call two, outside progress serialization, and requires
+replacement completion and native player identity before releasing old Stop.
+Independent review of the revised complete change found no remaining code
+findings. Changed and adjacent Stop/reuse/link paths were inspected for traps,
+actor assumptions and stale-operation admission; no callback adapter or blocking
+async fallback was introduced.
 
-Independent read-only review of that exact code commit confirmed no remaining
-findings after the documentation correction.
-This draft evidence does not claim complete validation or physical-device
-acceptance.
+The local accounting wait is legitimate: it flushes listening samples before
+reading and sending pending listened-seconds. Audio pause and Now Playing
+retirement occur before any await. The accounting completion does not confer
+ownership of replacement playback. See the
+[source-grounded architecture explanation](https://github.com/terminaloutcomes/bleat/pull/476#issuecomment-6398292113)
+for the exact functions and why a broader session-retirement refactor is outside
+this fix.
+
+### Runner recovery and expected diagnostic output
+
+The unchanged-main negative reproduction used Xcode's bounded 600-second
+failure-diagnostic collection allowance; the complete operation took 850.611
+seconds. That collection was not an unbounded app hang. The original complete
+aggregate also survived a model-capacity interruption: its active process and
+artifacts were recovered and the healthy run was allowed to finish without a
+duplicate run. Source inputs changed only after it completed.
+
+The first final-code aggregate attempt exited before host-test execution at
+`VerifySignature`. The generated host-runner app contained the ad hoc SwiftPM
+helper executable alongside a stale signed-bundle resource envelope/profile.
+The project recopies that helper in a pre-build script; the incremental artifact
+failed strict signature verification. This attempt provided no host coverage.
+The failed directory remains at
+`.build/host-runner-derived-signature-failure-c19f8d4`. After the failed process
+exited, only that generated derived directory was moved aside. A normal fresh
+build verified signing identity, Keychain entitlement and provisioning profile,
+then passed all 609 signed host tests. No signing, trust or security check was
+disabled or bypassed. Failed and recovered execution logs are retained separately.
+
+Expected output includes upstream OpenTelemetry manifest deprecation warnings,
+intentional read-only SwiftData fixture errors and explicitly matched cleanup
+failure known-issue fixtures. Source inspection confirmed those injected error
+paths. Native app/UI/live result warning arrays are checked separately; unexpected
+warnings fail the supported verifier.
+
+CI passed on exact code commit `c19f8d4`:
+[Validate Bleat](https://github.com/terminaloutcomes/bleat/actions/runs/40197656674),
+[release security](https://github.com/terminaloutcomes/bleat/actions/runs/40197656547),
+[CloudKit schema](https://github.com/terminaloutcomes/bleat/actions/runs/40197656756),
+and [website build](https://github.com/terminaloutcomes/bleat/actions/runs/40197656801).
+PR deployment jobs are skipped by their existing event conditions. Evidence-head
+CI and final aggregate completion are recorded in the linked validation comment.
