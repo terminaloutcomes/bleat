@@ -1627,7 +1627,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         XCTAssertTrue(settings.isHittable)
         settings.tap()
-        XCTAssertTrue(settings.wait(for: \.isSelected, toEqual: true, timeout: 5))
+        XCTAssertTrue(
+            settings.wait(for: \.isSelected, toEqual: true, timeout: 5))
         XCTAssertFalse(notice.exists)
         XCUIDevice.shared.press(.home)
         app.activate()
