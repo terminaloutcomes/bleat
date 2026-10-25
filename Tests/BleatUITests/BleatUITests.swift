@@ -1619,10 +1619,17 @@ final class BleatUITests: XCTestCase {
         }
         let notice = app.alerts["Cloud storage update"]
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.buttons["All my devices are updated"].exists)
+        notice.buttons["Later"].tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments = [scenario, noticeArgument]
+        app.launch()
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
-        notice.buttons["OK"].tap()
+        notice.buttons["All my devices are updated"].tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()

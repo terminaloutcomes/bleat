@@ -1881,7 +1881,18 @@ Successful legacy reconciliation queues one acknowledged **Cloud storage
 update** notice per installation across accounts and relaunches. It recommends
 updating every device to the fixed introducing release, 2026.10.14, or later,
 without claiming that an outdated device is currently running. It does not
-block synchronization or remove history. Design, signed-device migration and
+block synchronization or remove history.
+
+The upgrade notice offers **All my devices are updated** and **Later**. Confirmation
+records only this installation's acknowledgment; Bleat does not infer remote
+device versions or start a new cloud-history rewrite. Local sync-metadata
+migration is already automatic, verified, and restartable. Legacy listening
+slices remain immutable: their original playback samples are unavailable, so
+relabeling them as continuous segments would misrepresent how they were recorded.
+Later preserves the pending notice for a subsequent foreground or relaunch.
+Neither choice changes existing history or older-client compatibility.
+
+Design, signed-device migration and
 matched bidirectional mixed-version evidence are tracked in `docs/design/cloud-sync-storage.md` and
 [issue #355](https://github.com/terminaloutcomes/bleat/issues/355).
 
