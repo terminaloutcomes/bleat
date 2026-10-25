@@ -14,6 +14,26 @@ The completed 312 historical review dispositions remain unchanged.
 | MAC-4 | AppModel initialization, its playback/download construction and standalone PlaybackModel initialization receive fresh constructor-owned preference stores and download paths in this configuration. Explicit restoration-test stores retain their identity. Normal configurations retain shared stores. Automatic remote-command registration is disabled for test defaults. The shared cover loader uses the run-owned cache root, and five direct download-test constructors also receive owned roots. Unique preference domains are removed when their owner retires; the driver owns the temporary download root through native test completion. |
 | MAC-5 | Both NetworkPathTests LiveAppService constructors supply a unique device-only synthetic credential namespace instead of production credential services. |
 
+## Current acceptance disposition — 25 October 2026
+
+MAC-1–MAC-5 merged in [#466](https://github.com/terminaloutcomes/bleat/pull/466).
+Later [#469](https://github.com/terminaloutcomes/bleat/pull/469) and
+[#473](https://github.com/terminaloutcomes/bleat/pull/473) delivered normal-app
+storage/Diagnostics and account-editor fixes; #473's native lane passed 564/564
+with zero failures, skips, expected failures or runtime warnings. The historical
+failed attempts and reduced-entitlement lane receipts below remain unchanged.
+
+Separate provisioned evidence now credits the
+[609/609 core-host gate](https://github.com/terminaloutcomes/bleat/issues/25#issuecomment-6392332809)
+and [1/1 app-host Keychain contract](https://github.com/terminaloutcomes/bleat/issues/25#issuecomment-6392383064).
+That separate contract pass does not remove the reduced-entitlement lane's named
+exclusion or turn its earlier failure into a pass. [#25](https://github.com/terminaloutcomes/bleat/issues/25)
+retains accepted signed native login and historical normal termination/relaunch,
+plus later password-free candidate restoration and user-confirmed Save. Only its
+broad credential/privacy evidence and `APP-MAC-AUTH-001` completion remain open.
+See [current delivery and acceptance](test-reliability-current-status.md); these
+are linked receipts, not new executions performed by this tracking update.
+
 ## Supported validation
 
 Use the configured `.envrc` and an existing Apple Development signing identity:

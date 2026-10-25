@@ -28,13 +28,13 @@
 
 # Release Evidence
 
-- [Test reliability audit progress](release-evidence/test-reliability-audit.md)
+- [Test reliability audit and receipts](release-evidence/test-reliability-audit.md)
   - [Current delivery and acceptance](release-evidence/test-reliability-current-status.md)
   - [Runner and shell-case review](release-evidence/test-reliability-runners.md)
   - [Runner verification batch](release-evidence/test-runner-verification.md)
   - [macOS test isolation](release-evidence/macos-test-isolation.md)
-  - [App test follow-ups](release-evidence/test-reliability-app-followups.md)
-  - [Core test follow-ups](release-evidence/test-reliability-core-followups.md)
+  - [App review receipts](release-evidence/test-reliability-app-followups.md)
+  - [Core review receipts](release-evidence/test-reliability-core-followups.md)
   - [UI, live and tooling follow-ups](release-evidence/test-reliability-other-followups.md)
 - [Statistics validation](statistics-validation.md)
 - [Release screenshot Rust migration](release-evidence/release-screenshots-rust.md)
