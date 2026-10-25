@@ -388,6 +388,14 @@ entitlement before launch. Set `BLEAT_BUNDLE_ID` when the default bundle
 identifier is unavailable to the selected team. Keep the same team and bundle
 identifier to retain access to existing Keychain credentials.
 
+On macOS 27 and later, the account editor temporarily opts out of semantic
+Password AutoFill registration to avoid an observed native AutoFill observer
+cleanup exception during sheet dismissal. Its secure password field still
+supports entry/paste and preserves saved credentials when left blank; login and
+system password-manager settings are unaffected. See the
+[account-editor AutoFill evidence](release-evidence/macos-account-editor-autofill.md)
+for the exact boundary and remaining runtime check.
+
 Signed macOS launch, native login, and account restoration are supported.
 The signed login/relaunch evidence is tracked in
 [GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as

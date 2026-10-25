@@ -1181,6 +1181,46 @@ private struct OfflineDownloadsSheet: View {
     }
 }
 
+enum AccountEditorCredentialKind: Equatable {
+    case username, password
+
+    #if os(macOS)
+        var contentType: NSTextContentType? {
+            // macOS 27 AutoFill can throw during observer cleanup while an
+            // account sheet closes, leaving a visually stranded modal. Avoid
+            // registering these sheet fields with that framework until the
+            // native focus/dismissal regression is verified on a fixed OS.
+            if #available(macOS 27, *) { return nil }
+            return self == .username ? .username : .password
+        }
+    #else
+        var contentType: UITextContentType? {
+            self == .username ? .username : .password
+        }
+    #endif
+}
+
+struct AccountEditorCredentialFields: View {
+    @Binding var username: String
+    @Binding var password: String
+
+    var body: some View {
+        Group {
+            TextField("Username", text: $username)
+                .textContentType(
+                    AccountEditorCredentialKind.username.contentType
+                )
+                .iOSNoAutocapitalization()
+                .accessibilityIdentifier("accountEditor.username")
+            SecureField("Password", text: $password)
+                .textContentType(
+                    AccountEditorCredentialKind.password.contentType
+                )
+                .accessibilityIdentifier("accountEditor.password")
+        }
+    }
+}
+
 private struct AccountEditorView: View {
     @Bindable var model: AppModel
     let account: ServerAccount
@@ -1397,17 +1437,21 @@ private struct AccountEditorView: View {
 
     private var credentialsSection: some View {
         Section {
-            TextField("Username", text: $username)
-                .textContentType(.username)
-                .iOSNoAutocapitalization()
-                .accessibilityIdentifier("accountEditor.username")
-            SecureField("Password", text: $password)
-                .textContentType(.password)
-                .accessibilityIdentifier("accountEditor.password")
+            AccountEditorCredentialFields(
+                username: $username, password: $password)
         } header: {
             Text("Credentials")
         } footer: {
             Text("Leave password blank to keep the existing saved credentials.")
+            #if os(macOS)
+                if #available(macOS 27, *) {
+                    Text(
+                        "Password AutoFill is temporarily unavailable in this editor on this macOS version. You can paste a replacement password."
+                    )
+                    .accessibilityIdentifier(
+                        "accountEditor.autofillUnavailable")
+                }
+            #endif
         }
     }
 
