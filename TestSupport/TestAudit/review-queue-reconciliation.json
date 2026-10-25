@@ -25,6 +25,12 @@
     "The #438/#458 app fixes and the #459 stream case are outside these fixed cohorts and are not subtracted.",
     "No repository-wide security clearance is claimed; pre-existing zip advisories remain separate."
   ],
+  "currentSecurityRemediation": {
+    "asOf": "2026-10-25",
+    "pullRequest": "https://github.com/terminaloutcomes/bleat/pull/467",
+    "mergeRevision": "e53d8d0cef1e3ff9c6694c8210de8cbd97758221",
+    "scope": "The zip-advisory limit above is retained from the historical review snapshot. Merged #467 remediated the separate cryptography, zip and Tokio blockers and audits both Rust lockfiles. This annotation changes no semantic-review record, historical limit or execution count and makes no repository-wide security-clearance claim."
+  },
   "records": [
     {
       "id": "AUD-C-c5fe015b40e3",

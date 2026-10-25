@@ -5,9 +5,18 @@ and shared runners listed below. Current bounded reconciliation is recorded in
 [the 85-entry repair](#known-85-entry-reconciliation-369) and
 [the current checkpoint](test-reliability-current-status.md). Issue
 [#362](https://github.com/terminaloutcomes/bleat/issues/362) remains open for the
-explicit reliability follow-ups and missing execution evidence. Source review
+remaining privacy/device acceptance in that checkpoint. Source review
 does not mean full compliance. Rules and the required per-test record are in
 [Test reliability](../test-reliability.md).
+
+**Current reconciliation (25 October 2026):** the bounded 85-entry omission list
+was repaired by merged #450, and all 312 fixed scoped reviews (241 core + 71 app)
+are complete. Delivery children #370–#376 and grandchildren #378/#379/#382/#384
+are closed. The five macOS implementation groups are delivered in #466, followed
+by #467/#468/#469/#473. Dated source decisions, failed runs and their per-slice
+limits below remain historical; the [current checkpoint](test-reliability-current-status.md)
+supersedes their old pending/open/deferred summaries without claiming global
+compliance or new execution.
 
 Baseline: `d33a30a767d047b6a12e6f737b07e513e57aaf1c`.
 Audit date: 2026-10-16. Source-review decisions below do not imply execution.
@@ -16,7 +25,7 @@ The parallel audit records are
 [`app.json`](../../TestSupport/TestAudit/app.json),
 [`core.json`](../../TestSupport/TestAudit/core.json), and
 [`other.json`](../../TestSupport/TestAudit/other.json). At that historical baseline, 1,542 JSON records were marked source-reviewed; the ten gate tests are recorded
-individually below. Those labels do not certify current per-record/helper review: the separate 71 app / 241 core queue remains explicit. Read the
+individually below. Those labels do not certify current per-record/helper review: the fixed 71 app / 241 core cohort is now completed in the identity ledger, with its scoped limits explicit. Read the
 [runner and shell-case review](test-reliability-runners.md) alongside them;
 source-function discovery alone omits shell scenarios.
 

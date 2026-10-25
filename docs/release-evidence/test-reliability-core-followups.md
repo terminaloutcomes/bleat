@@ -1,5 +1,13 @@
 # Core test reliability follow-ups
 
+**Current disposition (25 October 2026):** this page preserves source-specific
+findings and dated receipts. The fixed 241-core/71-app cohort now has 312 completed
+scoped reviews, and delivery children #370–#376 plus grandchildren #378/#379/#382/#384
+are closed. Earlier pending counts and issue-open statements below describe their
+original checkpoints. Use [current delivery and acceptance](test-reliability-current-status.md)
+for the remaining privacy/device checklist; do not turn these historical tables
+into a reopened implementation or review queue.
+
 These are source-review findings for [issue #362](https://github.com/terminaloutcomes/bleat/issues/362). Owner for each item: Bleat maintainers handling #362. None is claimed fixed or validated here unless noted.
 
 | Test | Follow-up | Rationale and remaining risk |

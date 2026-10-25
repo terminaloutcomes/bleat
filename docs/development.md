@@ -396,10 +396,12 @@ system password-manager settings are unaffected. See the
 [account-editor AutoFill evidence](release-evidence/macos-account-editor-autofill.md)
 for the exact boundary and remaining runtime check.
 
-Signed macOS launch, native login, and account restoration are supported.
-The signed login/relaunch evidence is tracked in
-[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25) as
-post-1.0 work and does not block the 1.0 release. Notarization, distribution,
+Signed macOS launch, native login and account restoration are supported, with
+accepted historical normal termination/relaunch and later candidate restoration
+and account-editor Save evidence in
+[GitHub issue #25](https://github.com/terminaloutcomes/bleat/issues/25).
+Its broad credential/privacy evidence and final `APP-MAC-AUTH-001` completion
+remain open as post-1.0 acceptance; accepted login/relaunch is not reopened. Notarization, distribution,
 Mac-specific interface adaptation, and unlisted Mac media or background
 behavior are also not release gates.
 
