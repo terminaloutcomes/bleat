@@ -1,4 +1,6 @@
 #if BLEAT_MACOS_TESTING
+    import AppKit
+    import SwiftUI
     import BleatCore
     import XCTest
 
@@ -6,6 +8,16 @@
 
     @MainActor
     final class MacTestIsolationTests: XCTestCase {
+        func testStartupDiagnosticsHasVisibleBodyWithoutParentSize() {
+            let model = AppModel(
+                service: UnavailableAppService(),
+                bootstrapError: .storedDataMigrationFailed)
+            let host = NSHostingView(rootView: DiagnosticsView(model: model))
+            let size = host.fittingSize
+            XCTAssertGreaterThanOrEqual(size.width, 480)
+            XCTAssertGreaterThanOrEqual(size.height, 420)
+        }
+
         func testNativeHostAdmitsOnlyDedicatedIdentityAndRunner() {
             XCTAssertNil(MacTestHostAdmission.rejection())
             XCTAssertEqual(

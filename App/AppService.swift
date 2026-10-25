@@ -1,5 +1,7 @@
 import BleatCore
+import CoreData
 import Foundation
+import OSLog
 import Security
 import SwiftData
 
@@ -15,6 +17,36 @@ enum BleatLocalStore {
     private static let directoryName = "Bleat"
     private static let storeFilename = "Bleat.store"
     private static let legacyStoreFilename = "default.store"
+    private static let recoveredStoreFilename = "Bleat-owned.store"
+    private static let logger = Logger(
+        subsystem: "com.terminaloutcomes.Bleat", category: "store_selection")
+
+    enum Ownership: Equatable { case bleat, foreign, ambiguous }
+
+    static func ownership(of storeURL: URL) throws -> Ownership {
+        let metadata: [String: Any]
+        do {
+            metadata =
+                try NSPersistentStoreCoordinator.metadataForPersistentStore(
+                    ofType: NSSQLiteStoreType, at: storeURL,
+                    options: [NSReadOnlyPersistentStoreOption: true])
+        } catch {
+            let failure = error as NSError
+            logger.error(
+                "store_metadata.read_failed domain=\(failure.domain, privacy: .public) code=\(failure.code)"
+            )
+            throw AppBootstrapError.storedDataMigrationFailed
+        }
+        let names = Set(
+            (metadata[NSStoreModelVersionHashesKey] as? [String: Data] ?? [:])
+                .keys)
+        let bleatNames = Set(
+            Schema(versionedSchema: BleatPersistenceSchemaCurrent.self).entities
+                .map(\.name))
+        guard !names.isEmpty else { return .ambiguous }
+        if names.contains("ServerAccountRecord") { return .bleat }
+        return names.isDisjoint(with: bleatNames) ? .foreign : .ambiguous
+    }
 
     static func storeURL(
         fileManager: FileManager = .default,
@@ -40,7 +72,23 @@ enum BleatLocalStore {
             at: directoryURL,
             withIntermediateDirectories: true
         )
-        let storeURL = directoryURL.appendingPathComponent(storeFilename)
+        var storeURL = directoryURL.appendingPathComponent(storeFilename)
+        if fileManager.fileExists(atPath: storeURL.path),
+            try ownership(of: storeURL) == .foreign
+        {
+            // Older builds copied an unrelated shared default.store here. Leave
+            // that database and all sidecars intact; select a Bleat-owned store.
+            logger.notice("store_selection.foreign_copied_store_preserved")
+            storeURL = directoryURL.appendingPathComponent(
+                recoveredStoreFilename)
+            if fileManager.fileExists(atPath: storeURL.path),
+                try ownership(of: storeURL) != .bleat
+            {
+                logger.error(
+                    "store_selection.recovery_store_ownership_rejected")
+                throw AppBootstrapError.storedDataMigrationFailed
+            }
+        }
         try migrateLegacyStoreIfNeeded(
             fileManager: fileManager,
             legacyStoreURL: supportURL.appendingPathComponent(
@@ -60,6 +108,16 @@ enum BleatLocalStore {
             fileManager.fileExists(atPath: legacyStoreURL.path)
         else {
             return
+        }
+
+        switch try ownership(of: legacyStoreURL) {
+        case .bleat: break
+        case .foreign:
+            logger.notice("legacy_import.foreign_store_ignored")
+            return
+        case .ambiguous:
+            logger.error("legacy_import.ambiguous_store_rejected")
+            throw AppBootstrapError.storedDataMigrationFailed
         }
 
         let legacyStoreSidecars = ["-wal", "-shm"].map {
@@ -1473,6 +1531,8 @@ actor LiveAppService: AppServicing {
             let storeURL: URL
             do {
                 storeURL = try BleatLocalStore.storeURL()
+            } catch let error as AppBootstrapError {
+                throw error
             } catch {
                 throw .persistenceUnavailable
             }

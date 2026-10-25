@@ -821,7 +821,13 @@ unselected SwiftPM test bundles are not counted as additional coverage.
 segments, immutable finalized CloudKit payloads, and incremental metadata store.
 The SwiftData store is `Library/Application Support/Bleat/Bleat.store` inside the
 app data container; preserve its SQLite `-wal` and `-shm` companions when taking
-a private copy. The legacy preference dictionary contains secure system-field
+a private copy. On native macOS the legacy `default.store` may belong to another
+application: import it only when its model metadata identifies Bleat. If an older
+Bleat launch already copied a foreign database to `Bleat.store`, preserve that
+file and its companions in place and use `Bleat-owned.store` in the same
+app-owned directory. Unreadable or ambiguous existing data must fail safely;
+never reset it or substitute an in-memory store. Store-selection diagnostics
+record the stage and cause without publishing paths or record contents. The legacy preference dictionary contains secure system-field
 archives, not listening-history payloads. Do not commit or publish phone extracts.
 
 The user approved the native synchronous SwiftData fetch/save boundary on the
