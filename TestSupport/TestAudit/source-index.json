@@ -11279,6 +11279,78 @@
       "name": "legacy_macos_route_rejects_other_platform_release_and_reserved_admission",
       "line": 493,
       "language": "rust"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ProgressSyncTests.swift",
+      "name": "incompleteFinishedCheckpointPreservesStoredPayload",
+      "line": 46,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ProgressSyncTests.swift",
+      "name": "finishedCheckpointsPersistAcrossActorsAndAccountRemoval",
+      "line": 9,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ProgressSyncTests.swift",
+      "name": "finishedCheckpointUpgradePreservesMissingBaseline",
+      "line": 63,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictMissingCheckpointOffersNonDestructiveChoices",
+      "line": 21059,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictUnchangedCheckpointAllowsExplicitPatch",
+      "line": 21100,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictDetectsServerOnlyBothSidesAndClockSkew",
+      "line": 21127,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictChoiceRefetchesAndRejectsChangedServer",
+      "line": 21167,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictAccountRoundTripRetiresChoices",
+      "line": 21200,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictCheckpointIsScopedToAccountAndItem",
+      "line": 21227,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictPatchFailuresRetainCommonCheckpoint",
+      "line": 21250,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictPendingChoiceDoesNotBlockOtherItems",
+      "line": 21283,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testFinishedConflictConfirmedReadbackPersistsServerClock",
+      "line": 21310,
+      "language": "swift"
     }
   ],
   "historicalRetiredDeclarations": [

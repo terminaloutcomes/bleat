@@ -3,6 +3,7 @@ import SwiftData
 public enum BleatPersistenceModelCatalog {
     public static let currentModelTypes: [any PersistentModel.Type] = [
         ServerAccountRecord.self,
+        FinishedProgressCheckpointRecord.self,
         AccountIdentityAliasRecord.self,
         CachedLibraryCollectionRecord.self,
         CachedLibraryRecord.self,

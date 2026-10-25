@@ -477,6 +477,9 @@
     "testAccountDeletionAfterCacheEvictionPreservesHistory()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
+    "incompleteFinishedCheckpointPreservesStoredPayload()",
+    "finishedCheckpointsPersistAcrossActorsAndAccountRemoval()",
+    "finishedCheckpointUpgradePreservesMissingBaseline()",
     "testOlderServerReadsAllProgressFromCurrentUser()",
     "testAllProgressUsesAuthenticatedPathPrefixedRouteAndExcludesPodcasts()",
     "testAllProgressRejectsWrongUserAndMalformedBookProgress()",

@@ -420,8 +420,17 @@ public enum BleatPersistenceSchemaV0_1_6: VersionedSchema {
     }
 }
 
-public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+public enum BleatPersistenceSchemaV0_1_8: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 8) }
+    public static var models: [any PersistentModel.Type] {
+        BleatPersistenceModelCatalog.currentModelTypes.filter {
+            $0 != FinishedProgressCheckpointRecord.self
+        }
+    }
+}
+
+public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 9) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -436,6 +445,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             BleatPersistenceSchemaV0_1_5.self,
             BleatPersistenceSchemaV0_1_6.self,
             BleatPersistenceSchemaV0_1_7.self,
+            BleatPersistenceSchemaV0_1_8.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -464,6 +474,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_7.self,
+                toVersion: BleatPersistenceSchemaV0_1_8.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_8.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]

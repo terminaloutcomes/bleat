@@ -503,6 +503,21 @@ struct BookProgressFailureEntry: Equatable, Sendable {
     let failure: AppFailure
 }
 
+struct FinishedProgressConflict: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let account: ServerAccount
+    let book: LibraryBookSummary
+    let intendedFinished: Bool
+    let server: FinishedProgressCheckpoint
+    let reason: FinishedProgressConflictReason
+    let contextGeneration: UInt64
+}
+
+struct FinishedProgressResolution: Sendable {
+    let conflict: FinishedProgressConflict
+    let choice: FinishedProgressConflictChoice
+}
+
 private struct BookProgressMutationKey: Hashable, Sendable {
     let accountID: AccountID
     let itemID: LibraryItemID
@@ -515,6 +530,10 @@ private enum BookProgressMutationStage: Sendable {
 
 private enum BookProgressMutationResult: Sendable {
     case confirmed(LibraryBookDetail)
+    case adopted(LibraryBookDetail)
+    case conflict(
+        LibraryBookDetail, FinishedProgressCheckpoint,
+        FinishedProgressConflictReason)
     case failed(AppFailure)
     case cancelled
 }
@@ -1725,6 +1744,7 @@ final class AppModel {
     private(set) var bookEditSaveState: BookEditSaveState = .idle
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
+    private(set) var finishedProgressConflicts: [FinishedProgressConflict] = []
     private(set) var bookProgressFailures: [BookProgressFailureEntry] = []
     private(set) var presentedBookProgressFailure: BookProgressFailureEntry?
     var bookProgressFailure: AppFailure? {
@@ -5041,7 +5061,8 @@ final class AppModel {
         _ isFinished: Bool,
         book: LibraryBookSummary,
         expectedAccount: ServerAccount,
-        expectedContextGeneration: UInt64
+        expectedContextGeneration: UInt64,
+        resolution: FinishedProgressResolution? = nil
     ) async {
         guard account?.id == expectedAccount.id,
             bookProgressActionGeneration == expectedContextGeneration
@@ -5050,9 +5071,11 @@ final class AppModel {
             accountID: expectedAccount.id,
             itemID: book.id
         )
-        guard pendingBookProgressMutations[key] == nil else {
-            return
-        }
+        guard pendingBookProgressMutations[key] == nil,
+            !finishedProgressConflicts.contains(where: {
+                $0.account.id == key.accountID && $0.book.id == key.itemID
+            })
+        else { return }
 
         let token = UUID()
         bookProgressRevision &+= 1
@@ -5070,7 +5093,8 @@ final class AppModel {
             key: key,
             token: token,
             contextGeneration: expectedContextGeneration,
-            revision: revision
+            revision: revision,
+            resolution: resolution
         )
         guard pendingBookProgressMutations[key] == token else {
             return
@@ -5096,6 +5120,23 @@ final class AppModel {
             publishBookProgressFailure(failure, itemID: book.id)
         case .operation(.cancelled):
             break
+        case .operation(.conflict(_, let server, let reason)):
+            finishedProgressConflicts.append(
+                FinishedProgressConflict(
+                    id: UUID(), account: expectedAccount, book: book,
+                    intendedFinished: isFinished, server: server,
+                    reason: reason,
+                    contextGeneration: expectedContextGeneration))
+            bookProgressUpdateState = .idle
+        case .operation(.adopted(let detail)):
+            bookFinishedStates[detail.id] = detail.progress?.isFinished ?? false
+            bookProgressSnapshots[detail.id] = detail.progress
+            if selectedBookID == detail.id { bookDetail = .loaded(detail) }
+            bookProgressUpdateState = .saved
+            scheduleBookProgressReconciliation(
+                for: expectedAccount, detail: detail, key: key,
+                contextGeneration: expectedContextGeneration,
+                revision: revision, confirmedProgress: detail.progress)
         case .operation(.confirmed(let preparedDetail)):
             let confirmedProgress = commitFinishedState(
                 isFinished,
@@ -5121,11 +5162,35 @@ final class AppModel {
         }
     }
 
+    func resolveFinishedProgressConflict(
+        id: UUID, choice: FinishedProgressConflictChoice
+    ) async {
+        guard
+            let index = finishedProgressConflicts.firstIndex(where: {
+                $0.id == id
+            })
+        else { return }
+        let conflict = finishedProgressConflicts.remove(at: index)
+        guard choice != .cancel,
+            account?.id == conflict.account.id,
+            bookProgressActionGeneration == conflict.contextGeneration
+        else { return }
+        await setFinished(
+            conflict.intendedFinished, book: conflict.book,
+            expectedAccount: conflict.account,
+            expectedContextGeneration: conflict.contextGeneration,
+            resolution: FinishedProgressResolution(
+                conflict: conflict, choice: choice))
+    }
+
     func isBookProgressMutationPending(_ itemID: LibraryItemID) -> Bool {
         guard let account else { return false }
         return pendingBookProgressMutations[
             BookProgressMutationKey(accountID: account.id, itemID: itemID)
         ] != nil
+            || finishedProgressConflicts.contains {
+                $0.account.id == account.id && $0.book.id == itemID
+            }
     }
 
     func dismissBookProgressFailure() {
@@ -5159,7 +5224,8 @@ final class AppModel {
         key: BookProgressMutationKey,
         token: UUID,
         contextGeneration: UInt64,
-        revision: UInt64
+        revision: UInt64,
+        resolution: FinishedProgressResolution?
     ) async -> TimedBookProgressMutationResult {
         let (stream, continuation) =
             AsyncStream<TimedBookProgressMutationResult>.makeStream(
@@ -5178,7 +5244,8 @@ final class AppModel {
                 key: key,
                 token: token,
                 contextGeneration: contextGeneration,
-                revision: revision
+                revision: revision,
+                resolution: resolution
             )
             continuation.yield(.operation(result))
             continuation.finish()
@@ -5209,7 +5276,8 @@ final class AppModel {
         key: BookProgressMutationKey,
         token: UUID,
         contextGeneration: UInt64,
-        revision: UInt64
+        revision: UInt64,
+        resolution: FinishedProgressResolution?
     ) async -> BookProgressMutationResult {
         let detail: LibraryBookDetail
         do {
@@ -5240,6 +5308,53 @@ final class AppModel {
             )
         }
 
+        let server: FinishedProgressCheckpoint
+        do {
+            let checkpoint = try await service.finishedProgressCheckpoint(
+                for: account, itemID: detail.id)
+            let current = try await service.bookProgress(
+                for: account, itemID: detail.id)
+            guard !Task.isCancelled,
+                pendingBookProgressMutations[key] == token,
+                isCurrentBookProgressMutation(
+                    key: key, contextGeneration: contextGeneration,
+                    revision: revision)
+            else { return .cancelled }
+            if let current {
+                guard current.libraryItemID == detail.id,
+                    current.userID == account.user.id
+                else {
+                    return .failed(
+                        AppFailure(.updateProgress, .invalidServerResponse))
+                }
+            }
+            server = FinishedProgressCheckpoint(progress: current)
+            if let resolution {
+                guard resolution.conflict.server.matches(current) else {
+                    return .conflict(detail, server, .serverChanged)
+                }
+                if resolution.choice == .useServer {
+                    try await service.saveFinishedProgressCheckpoint(
+                        server, for: account, itemID: detail.id)
+                    return .adopted(detail.replacingProgress(with: current))
+                }
+            } else if let checkpoint {
+                guard checkpoint.matches(current) else {
+                    return .conflict(detail, server, .serverChanged)
+                }
+            } else {
+                return .conflict(detail, server, .missingCheckpoint)
+            }
+        } catch let error {
+            return .failed(
+                AppFailure(operation: .updateProgress, serviceError: error))
+        }
+        guard !Task.isCancelled,
+            pendingBookProgressMutations[key] == token,
+            isCurrentBookProgressMutation(
+                key: key, contextGeneration: contextGeneration,
+                revision: revision)
+        else { return .cancelled }
         bookProgressMutationStages[key] = .submitted
         do {
             try await service.updateBookProgress(
@@ -5262,7 +5377,7 @@ final class AppModel {
         else {
             return .cancelled
         }
-        return .confirmed(detail)
+        return .confirmed(detail.replacingProgress(with: server.progress))
     }
 
     private func commitFinishedState(
@@ -5366,6 +5481,51 @@ final class AppModel {
                     contextGeneration: contextGeneration,
                     revision: revision
                 )
+            else { return }
+            do {
+                let progress = try await service.bookProgress(
+                    for: account, itemID: detail.id)
+                guard
+                    isCurrentBookProgressMutation(
+                        key: key, contextGeneration: contextGeneration,
+                        revision: revision)
+                else { return }
+                if let progress {
+                    guard progress.libraryItemID == detail.id,
+                        progress.userID == account.user.id
+                    else {
+                        throw AppServiceError.progress(.malformedResponse)
+                    }
+                }
+                if let progress,
+                    progress.isFinished == confirmedProgress?.isFinished
+                {
+                    try await service.saveFinishedProgressCheckpoint(
+                        FinishedProgressCheckpoint(progress: progress),
+                        for: account, itemID: detail.id)
+                    guard
+                        isCurrentBookProgressMutation(
+                            key: key, contextGeneration: contextGeneration,
+                            revision: revision)
+                    else { return }
+                    bookProgressSnapshots[detail.id] = progress
+                }
+            } catch {
+                // PATCH already committed. Keep the previous checkpoint so the
+                // next explicit action rechecks rather than inventing a timestamp.
+                let failure =
+                    (error as? AppServiceError).map {
+                        AppFailure(operation: .updateProgress, serviceError: $0)
+                    } ?? AppFailure(.updateProgress, .invalidServerResponse)
+                await diagnostics.record(
+                    .failed(
+                        .reconcileFinishedProgress, category: .api,
+                        failureCode: failure.diagnosticFailureCode))
+            }
+            guard
+                isCurrentBookProgressMutation(
+                    key: key, contextGeneration: contextGeneration,
+                    revision: revision)
             else { return }
             if selectedBookID == detail.id {
                 do {
@@ -8293,6 +8453,7 @@ final class AppModel {
         pendingBookProgressMutations = [:]
         bookProgressMutationStages = [:]
         bookProgressMutationRevisions = [:]
+        finishedProgressConflicts = []
         bookProgressFailures = []
         presentedBookProgressFailure = nil
         bookProgressUpdateState = .idle

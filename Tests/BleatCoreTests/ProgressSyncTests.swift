@@ -1,10 +1,128 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import BleatCore
 
 @Suite(.serialized)
 final class ProgressSyncTests {
+    @Test func finishedCheckpointsPersistAcrossActorsAndAccountRemoval()
+        async throws
+    {
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            ])
+        let cache = LibraryCache(modelContainer: container)
+        let first = AccountID(rawValue: "a:b")
+        let second = AccountID(rawValue: "a")
+        let item = LibraryItemID(rawValue: "c")
+        let collisionItem = LibraryItemID(rawValue: "b:c")
+        try await cache.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: nil), accountID: first,
+            itemID: item)
+        let reopened = LibraryCache(modelContainer: container)
+        #expect(
+            try await reopened.finishedProgressCheckpoint(
+                accountID: first, itemID: item)
+                == FinishedProgressCheckpoint(progress: nil))
+        #expect(
+            try await reopened.finishedProgressCheckpoint(
+                accountID: second, itemID: collisionItem) == nil)
+        try await reopened.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: nil), accountID: second,
+            itemID: collisionItem)
+        try await reopened.removeAccount(first)
+        #expect(
+            try await reopened.finishedProgressCheckpoint(
+                accountID: first, itemID: item) == nil)
+        #expect(
+            try await reopened.finishedProgressCheckpoint(
+                accountID: second, itemID: collisionItem) != nil)
+    }
+
+    @Test func incompleteFinishedCheckpointPreservesStoredPayload() async throws
+    {
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            ])
+        let context = ModelContext(container)
+        let bytes = Data("{}".utf8)
+        context.insert(
+            FinishedProgressCheckpointRecord(
+                key: "7:accountitem", accountID: "account", itemID: "item",
+                payload: bytes))
+        try context.save()
+        let cache = LibraryCache(modelContainer: container)
+        await #expect(
+            throws: LibraryCacheError.invalidFinishedProgressCheckpoint
+        ) {
+            try await cache.finishedProgressCheckpoint(
+                accountID: AccountID(rawValue: "account"),
+                itemID: LibraryItemID(rawValue: "item"))
+        }
+        #expect(
+            try context.fetch(
+                FetchDescriptor<FinishedProgressCheckpointRecord>()
+            ).first?.payload == bytes)
+        // Confirmed absence has an explicit null, unlike incomplete valid JSON.
+        let absent = FinishedProgressCheckpoint(progress: nil)
+        #expect(
+            try JSONDecoder().decode(
+                FinishedProgressCheckpoint.self,
+                from: JSONEncoder().encode(absent)) == absent)
+    }
+
+    @Test func finishedCheckpointUpgradePreservesMissingBaseline() async throws
+    {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("legacy.store")
+        do {
+            let schema = Schema(
+                versionedSchema: BleatPersistenceSchemaV0_1_8.self)
+            let old = try ModelContainer(
+                for: schema,
+                configurations: [
+                    ModelConfiguration(
+                        schema: schema, url: url, cloudKitDatabase: .none)
+                ])
+            let context = ModelContext(old)
+            context.insert(
+                CachedLibraryCollectionRecord(
+                    accountID: "retained", refreshedAt: .distantPast))
+            try context.save()
+        }
+        let schema = Schema(versionedSchema: BleatPersistenceSchemaCurrent.self)
+        let upgraded = try ModelContainer(
+            for: schema,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema, url: url, cloudKitDatabase: .none)
+            ])
+        let context = ModelContext(upgraded)
+        #expect(
+            try context.fetch(FetchDescriptor<CachedLibraryCollectionRecord>())
+                .map(\.accountID) == ["retained"])
+        #expect(
+            try context.fetchCount(
+                FetchDescriptor<FinishedProgressCheckpointRecord>()) == 0)
+        let cache = LibraryCache(modelContainer: upgraded)
+        #expect(
+            try await cache.finishedProgressCheckpoint(
+                accountID: AccountID(rawValue: "retained"),
+                itemID: LibraryItemID(rawValue: "item")) == nil)
+    }
+
     @Test
     func testOlderServerReadsAllProgressFromCurrentUser() async throws {
         let accountID = AccountID(rawValue: "account")

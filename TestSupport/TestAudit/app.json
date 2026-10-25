@@ -7,8 +7,8 @@
       "Tests/BleatAppTests/TestAsyncGateTests.swift"
     ]
   },
-  "status": "656 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution.",
-  "methodCount": 656,
+  "status": "665 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution. Nine issue #146 conflict regressions have separate source records; broader acceptance remains unchanged.",
+  "methodCount": 665,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -53093,6 +53093,429 @@
         "BLEAT_MACOS_TESTING only; no environment-dependent skip"
       ],
       "execution": "docs/release-evidence/macos-test-isolation.md"
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictMissingCheckpointOffersNonDestructiveChoices",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21059,
+        "endLineBeforeNextTest": 21099
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "With no persisted baseline preserve the server snapshot and intended flag; Cancel and server adoption send no PATCH, device choice sends one flag-only PATCH.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "With no persisted baseline preserve the server snapshot and intended flag; Cancel and server adoption send no PATCH, device choice sends one flag-only PATCH."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "With no persisted baseline preserve the server snapshot and intended flag; Cancel and server adoption send no PATCH, device choice sends one flag-only PATCH.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictUnchangedCheckpointAllowsExplicitPatch",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21100,
+        "endLineBeforeNextTest": 21126
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An unchanged typed server/common snapshot permits the explicit flag-only PATCH.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "An unchanged typed server/common snapshot permits the explicit flag-only PATCH."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "An unchanged typed server/common snapshot permits the explicit flag-only PATCH.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictDetectsServerOnlyBothSidesAndClockSkew",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21127,
+        "endLineBeforeNextTest": 21166
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Both intended flags and equal/newer/regressed timestamps detect changed structured position without overwriting the common checkpoint.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "Both intended flags and equal/newer/regressed timestamps detect changed structured position without overwriting the common checkpoint."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "Both intended flags and equal/newer/regressed timestamps detect changed structured position without overwriting the common checkpoint.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictChoiceRefetchesAndRejectsChangedServer",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21167,
+        "endLineBeforeNextTest": 21199
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Either choice refetches and re-prompts when the server changes; a retired prompt ID cannot mutate.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "Either choice refetches and re-prompts when the server changes; a retired prompt ID cannot mutate."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "Either choice refetches and re-prompts when the server changes; a retired prompt ID cannot mutate.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictAccountRoundTripRetiresChoices",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21200,
+        "endLineBeforeNextTest": 21226
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Switching away and back retires the old choice and prevents stale publication or PATCH.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "Switching away and back retires the old choice and prevents stale publication or PATCH."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "Switching away and back retires the old choice and prevents stale publication or PATCH.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictCheckpointIsScopedToAccountAndItem",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21227,
+        "endLineBeforeNextTest": 21249
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Checkpoint lookup does not borrow another account or item baseline.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "Checkpoint lookup does not borrow another account or item baseline."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "Checkpoint lookup does not borrow another account or item baseline.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictPatchFailuresRetainCommonCheckpoint",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21250,
+        "endLineBeforeNextTest": 21282
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictPendingChoiceDoesNotBlockOtherItems",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21283,
+        "endLineBeforeNextTest": 21309
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "A conflict reserves its own item while another book can complete its explicit mutation.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "A conflict reserves its own item while another book can complete its explicit mutation."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "A conflict reserves its own item while another book can complete its explicit mutation.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testFinishedConflictConfirmedReadbackPersistsServerClock",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 21310,
+        "endLineBeforeNextTest": 21359
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "fixtureAccount",
+        "fixtureBookDetail",
+        "AppModelOperationEventProbe when readback completion is required"
+      ],
+      "actions": [],
+      "assertions": [],
+      "synchronizationEvidence": [
+        "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold the PATCH, install a known finished server snapshot, release it, await reconciliation completion, and verify persisted server-issued timestamp rather than device time.",
+        "purpose": "Explicit finished-state preflight and typed resolution regression.",
+        "actionPostconditions": [
+          {
+            "action": "Run the configured explicit action or conflict choice.",
+            "postcondition": "Hold the PATCH, install a known finished server snapshot, release it, await reconciliation completion, and verify persisted server-issued timestamp rather than device time."
+          }
+        ],
+        "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+        "ruleAssessments": {
+          "1": "Hold the PATCH, install a known finished server snapshot, release it, await reconciliation completion, and verify persisted server-issued timestamp rather than device time.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "3": "N/A: static progress values and server timestamps; no advancing player.",
+          "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
+          "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
+          "6": "Deterministic app-model/service boundary; live UI/server evidence is separate.",
+          "7": "No retries or tolerance relaxation.",
+          "8": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
+          "9": "Focused and owning native/Simulator lane evidence is retained separately; no skip guards."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
     }
   ],
   "decisionCounts": {
@@ -53238,5 +53661,10 @@
     "newMethods": 3,
     "scope": "Three new MacTesting-only isolation regressions; historical review cohorts and prior summary counts are preserved.",
     "evidence": "docs/release-evidence/macos-test-isolation.md"
+  },
+  "finishedProgressJourneyReview146": {
+    "path": "Tests/BleatUITests/BleatUITests.swift",
+    "identifier": "BleatLiveUITests/testLiveOnlineLoginPlaybackAndDownload",
+    "scope": "The extended helper checks actual server progress before and after Cancel/server adoption, relaunches after an enabled-action completion postcondition, changes progress through a second fixture client, verifies conflict preservation, explicitly chooses device state, and restores the flag before the existing playback journey. Uses only harness-provided loopback credentials and bounded semantic waits; root/prefix execution evidence is separate. This does not close broader test-epic acceptance."
   }
 }

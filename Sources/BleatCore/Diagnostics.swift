@@ -66,6 +66,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case exportStatistics = "export_statistics"
     case importStatistics = "import_statistics"
     case resetStatistics = "reset_statistics"
+    case reconcileFinishedProgress = "reconcile_finished_progress"
     case loadBook = "load_book"
     case loadBookmarks = "load_bookmarks"
     case loadTranscriptionJob = "load_transcription_job"

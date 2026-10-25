@@ -21064,6 +21064,307 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    func testFinishedConflictMissingCheckpointOffersNonDestructiveChoices()
+        async throws
+    {
+        for choice in [
+            FinishedProgressConflictChoice.cancel, .useServer, .keepDevice,
+        ] {
+            let account = try fixtureAccount()
+            let item = fixturePage(libraryID: fixtureLibrary().id).items[0]
+            let detail = fixtureBookDetail(item: item)
+            let progress = finishedConflictProgress(
+                account: account, detail: detail)
+            let service = TestAppService(
+                activeAccount: .success(account), bookDetail: .success(detail))
+            await service.setMissingFinishedCheckpoint()
+            await service.setBookProgress(progress)
+            let model = AppModel(service: service)
+            await model.start()
+            await model.setFinished(true, detail: detail)
+            let conflict = try XCTUnwrap(model.finishedProgressConflicts.first)
+            XCTAssertEqual(conflict.reason, .missingCheckpoint)
+            XCTAssertEqual(conflict.server.progress, progress)
+            XCTAssertTrue(model.isBookProgressMutationPending(item.id))
+            let before = await service.progressUpdateRequests()
+            XCTAssertTrue(before.isEmpty)
+            await model.setFinished(false, detail: detail)
+            XCTAssertEqual(model.finishedProgressConflicts.count, 1)
+            await model.resolveFinishedProgressConflict(
+                id: conflict.id, choice: choice)
+            XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
+            let after = await service.progressUpdateRequests()
+            XCTAssertEqual(after.count, choice == .keepDevice ? 1 : 0)
+            XCTAssertEqual(model.isBookFinished(item.id), choice == .keepDevice)
+            if choice == .useServer {
+                let checkpoint = try await service.finishedProgressCheckpoint(
+                    for: account, itemID: item.id)
+                XCTAssertEqual(checkpoint?.progress, progress)
+            }
+            XCTAssertNil(model.bookProgressFailure)
+        }
+    }
+
+    func testFinishedConflictUnchangedCheckpointAllowsExplicitPatch()
+        async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let progress = finishedConflictProgress(
+            account: account, detail: detail)
+        let service = TestAppService(
+            activeAccount: .success(account), bookDetail: .success(detail))
+        await service.setBookProgress(progress)
+        await service.setMissingFinishedCheckpoint()
+        try await service.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: progress), for: account,
+            itemID: detail.id)
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setFinished(true, detail: detail)
+        XCTAssertEqual(model.bookProgressUpdateState, .saved)
+        XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
+        let updates = await service.progressUpdateRequests()
+        XCTAssertEqual(
+            updates.map(\.update), [BookProgressUpdate(isFinished: true)])
+        let reads = await service.bookProgressRequests()
+        XCTAssertFalse(reads.isEmpty)
+    }
+
+    func testFinishedConflictDetectsServerOnlyBothSidesAndClockSkew()
+        async throws
+    {
+        for timestamp: Int64 in [9, 10, 11] {
+            for intended in [false, true] {
+                let account = try fixtureAccount()
+                let detail = fixtureBookDetail(
+                    item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+                let baseline = finishedConflictProgress(
+                    account: account, detail: detail)
+                let changed = finishedConflictProgress(
+                    account: account, detail: detail, time: 80,
+                    timestamp: timestamp)
+                let service = TestAppService(
+                    activeAccount: .success(account),
+                    bookDetail: .success(detail))
+                await service.setMissingFinishedCheckpoint()
+                try await service.saveFinishedProgressCheckpoint(
+                    FinishedProgressCheckpoint(progress: baseline),
+                    for: account, itemID: detail.id)
+                await service.setMissingFinishedCheckpoint()
+                await service.setBookProgress(changed)
+                let model = AppModel(service: service)
+                await model.start()
+                await model.setFinished(intended, detail: detail)
+                XCTAssertEqual(
+                    model.finishedProgressConflicts.first?.reason,
+                    .serverChanged)
+                XCTAssertEqual(
+                    model.finishedProgressConflicts.first?.server.progress,
+                    changed)
+                let updates = await service.progressUpdateRequests()
+                XCTAssertTrue(updates.isEmpty)
+                let checkpoint = try await service.finishedProgressCheckpoint(
+                    for: account, itemID: detail.id)
+                XCTAssertEqual(checkpoint?.progress, baseline)
+            }
+        }
+    }
+
+    func testFinishedConflictChoiceRefetchesAndRejectsChangedServer()
+        async throws
+    {
+        for choice in [FinishedProgressConflictChoice.useServer, .keepDevice] {
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+            let service = TestAppService(
+                activeAccount: .success(account), bookDetail: .success(detail))
+            await service.setMissingFinishedCheckpoint()
+            await service.setBookProgress(
+                finishedConflictProgress(account: account, detail: detail))
+            let model = AppModel(service: service)
+            await model.start()
+            await model.setFinished(true, detail: detail)
+            let first = try XCTUnwrap(model.finishedProgressConflicts.first)
+            let newer = finishedConflictProgress(
+                account: account, detail: detail, time: 90, timestamp: 11)
+            await service.setMissingFinishedCheckpoint()
+            await service.setBookProgress(newer)
+            await model.resolveFinishedProgressConflict(
+                id: first.id, choice: choice)
+            XCTAssertEqual(
+                model.finishedProgressConflicts.first?.server.progress, newer)
+            XCTAssertNotEqual(
+                model.finishedProgressConflicts.first?.id, first.id)
+            await model.resolveFinishedProgressConflict(
+                id: first.id, choice: .keepDevice)
+            let updates = await service.progressUpdateRequests()
+            XCTAssertTrue(updates.isEmpty)
+        }
+    }
+
+    func testFinishedConflictAccountRoundTripRetiresChoices() async throws {
+        let first = try fixtureAccount()
+        let second = try fixtureAccount(
+            accountID: "second", userID: "second-user", username: "second",
+            server: "https://second.example")
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let service = TestAppService(
+            accounts: .success([first, second]), activeAccount: .success(first),
+            bookDetail: .success(detail))
+        await service.setMissingFinishedCheckpoint()
+        await service.setBookProgress(
+            finishedConflictProgress(account: first, detail: detail))
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setFinished(true, detail: detail)
+        let conflict = try XCTUnwrap(model.finishedProgressConflicts.first)
+        await model.switchAccount(to: second)
+        await model.switchAccount(to: first)
+        await model.resolveFinishedProgressConflict(
+            id: conflict.id, choice: .keepDevice)
+        let updates = await service.progressUpdateRequests()
+        XCTAssertTrue(updates.isEmpty)
+        XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
+        XCTAssertNil(model.bookProgressFailure)
+    }
+
+    func testFinishedConflictCheckpointIsScopedToAccountAndItem() async throws {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let progress = finishedConflictProgress(
+            account: account, detail: detail)
+        let service = TestAppService(
+            activeAccount: .success(account), bookDetail: .success(detail))
+        await service.setMissingFinishedCheckpoint()
+        try await service.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: progress), for: account,
+            itemID: detail.id)
+        let other = try fixtureAccount(
+            accountID: "other", userID: "other-user", username: "other",
+            server: "https://other.example")
+        let otherCheckpoint = try await service.finishedProgressCheckpoint(
+            for: other, itemID: detail.id)
+        let otherItem = try await service.finishedProgressCheckpoint(
+            for: account, itemID: LibraryItemID(rawValue: "other-item"))
+        XCTAssertNil(otherCheckpoint)
+        XCTAssertNil(otherItem)
+    }
+
+    func testFinishedConflictPatchFailuresRetainCommonCheckpoint() async throws
+    {
+        for (error, cause) in [
+            (
+                AppServiceError.progress(.unexpectedStatus(403)),
+                AppFailureCause.permissionDenied
+            ), (.progress(.requestFailed), .uncertainMutation),
+        ] {
+            let account = try fixtureAccount()
+            let detail = fixtureBookDetail(
+                item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+            let baseline = finishedConflictProgress(
+                account: account, detail: detail)
+            let service = TestAppService(
+                activeAccount: .success(account), bookDetail: .success(detail),
+                progressUpdate: .failure(error))
+            await service.setBookProgress(baseline)
+            try await service.saveFinishedProgressCheckpoint(
+                FinishedProgressCheckpoint(progress: baseline), for: account,
+                itemID: detail.id)
+            let model = AppModel(service: service)
+            await model.start()
+            await model.setFinished(true, detail: detail)
+            XCTAssertEqual(
+                model.bookProgressFailure, AppFailure(.updateProgress, cause))
+            XCTAssertFalse(model.isBookFinished(detail.id))
+            let checkpoint = try await service.finishedProgressCheckpoint(
+                for: account, itemID: detail.id)
+            XCTAssertEqual(checkpoint?.progress, baseline)
+            XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
+        }
+    }
+
+    func testFinishedConflictPendingChoiceDoesNotBlockOtherItems() async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let other = fixtureBookDetail(
+            item: fixtureBook(
+                id: "other-item", title: "Other", libraryID: detail.libraryID))
+        let service = TestAppService(
+            activeAccount: .success(account), bookDetail: .success(detail))
+        await service.setBookProgress(
+            finishedConflictProgress(account: account, detail: detail))
+        let model = AppModel(service: service)
+        await model.start()
+        await model.setFinished(true, detail: detail)
+        let conflict = try XCTUnwrap(model.finishedProgressConflicts.first)
+        await service.setBookDetail(.success(other))
+        await model.setFinished(true, detail: other)
+        XCTAssertTrue(model.isBookFinished(other.id))
+        XCTAssertFalse(model.isBookFinished(detail.id))
+        XCTAssertEqual(model.finishedProgressConflicts.first?.id, conflict.id)
+        let requests = await service.progressUpdateRequests()
+        XCTAssertEqual(requests.map(\.itemID), [other.id])
+        await model.resolveFinishedProgressConflict(
+            id: conflict.id, choice: .cancel)
+    }
+
+    func testFinishedConflictConfirmedReadbackPersistsServerClock() async throws
+    {
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account), bookDetail: .success(detail),
+            progressUpdateGate: gate)
+        let operations = AppModelOperationEventProbe()
+        let model = AppModel(
+            service: service, operationObserver: { operations.record($0) })
+        await model.start()
+        let completed = operations.expectation(
+            for: .bookProgressReconciliationCompleted(account.id, detail.id))
+        let mutation = Task { await model.setFinished(true, detail: detail) }
+        await gate.waitUntilEntered()
+        let remote = LibraryBookProgress(
+            id: "confirmed", userID: account.user.id, libraryItemID: detail.id,
+            bookID: detail.bookID,
+            duration: detail.duration, progress: 1, currentTime: 25,
+            isFinished: true, hideFromContinueListening: false,
+            lastUpdateMilliseconds: 2, startedAtMilliseconds: 1,
+            finishedAtMilliseconds: 2)
+        await service.setBookProgress(remote)
+        await gate.release()
+        await mutation.value
+        XCTAssertTrue(model.isBookFinished(detail.id))
+        await fulfillment(of: [completed], timeout: 30)
+        let checkpoint = try await service.finishedProgressCheckpoint(
+            for: account, itemID: detail.id)
+        XCTAssertEqual(checkpoint?.progress, remote)
+        XCTAssertNil(model.bookProgressFailure)
+    }
+
+    private func finishedConflictProgress(
+        account: ServerAccount, detail: LibraryBookDetail, time: Double = 25,
+        timestamp: Int64 = 10
+    ) -> LibraryBookProgress {
+        LibraryBookProgress(
+            id: "conflict-progress", userID: account.user.id,
+            libraryItemID: detail.id,
+            bookID: detail.bookID, duration: detail.duration,
+            progress: time / detail.duration,
+            currentTime: time, isFinished: false,
+            hideFromContinueListening: false,
+            lastUpdateMilliseconds: timestamp, startedAtMilliseconds: 1,
+            finishedAtMilliseconds: nil)
+    }
+
     func testSetFinishedCommitsProgressAfterCanonicalPreparation() async throws
     {
         let account = try fixtureAccount()
@@ -32109,6 +32410,28 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount,
         bookmark: AudioBookmark
     ) async throws(AppServiceError) {}
+
+    private var missingFinishedCheckpoint = false
+
+    func setMissingFinishedCheckpoint() { missingFinishedCheckpoint = true }
+
+    private var finishedCheckpoints:
+        [AccountID: [LibraryItemID: FinishedProgressCheckpoint]] = [:]
+
+    func finishedProgressCheckpoint(
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) -> FinishedProgressCheckpoint? {
+        finishedCheckpoints[account.id]?[itemID]
+            ?? (missingFinishedCheckpoint
+                ? nil : FinishedProgressCheckpoint(progress: nil))
+    }
+
+    func saveFinishedProgressCheckpoint(
+        _ checkpoint: FinishedProgressCheckpoint,
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        finishedCheckpoints[account.id, default: [:]][itemID] = checkpoint
+    }
 
     func bookProgress(
         for account: ServerAccount,

@@ -250,3 +250,45 @@ extension AuthCoordinator {
         }
     }
 }
+
+/// A server-issued common snapshot. Never substitute a device-clock timestamp.
+public struct FinishedProgressCheckpoint: Codable, Equatable, Sendable {
+    public let progress: LibraryBookProgress?
+
+    public init(progress: LibraryBookProgress?) {
+        self.progress = progress
+    }
+
+    private enum CodingKeys: String, CodingKey { case progress }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        // Null means a confirmed absent server record. An absent field is an
+        // older/incomplete checkpoint, never evidence of confirmed absence.
+        progress = try values.decode(
+            LibraryBookProgress?.self, forKey: .progress)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(progress, forKey: .progress)
+    }
+
+    public func matches(_ current: LibraryBookProgress?) -> Bool {
+        // Include the timestamp even when values match: another explicit action
+        // may have restored the same values. Structural equality also catches
+        // changes with equal or regressed timestamps (server clock skew).
+        progress == current
+    }
+}
+
+public enum FinishedProgressConflictReason: Equatable, Sendable {
+    case missingCheckpoint
+    case serverChanged
+}
+
+public enum FinishedProgressConflictChoice: Equatable, Sendable {
+    case keepDevice
+    case useServer
+    case cancel
+}

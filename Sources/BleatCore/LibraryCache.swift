@@ -142,6 +142,22 @@ public final class CachedLibraryBookDetailRecord {
     }
 }
 
+/// Device-local common progress; deliberately independent of evictable browse caches.
+@Model
+public final class FinishedProgressCheckpointRecord {
+    @Attribute(.unique) var key: String
+    var accountID: String
+    var itemID: String
+    var payload: Data
+
+    init(key: String, accountID: String, itemID: String, payload: Data) {
+        self.key = key
+        self.accountID = accountID
+        self.itemID = itemID
+        self.payload = payload
+    }
+}
+
 public struct CachedLibrariesSnapshot: Equatable, Sendable {
     public let libraries: [LibrarySummary]
     public let refreshedAt: Date
@@ -184,12 +200,67 @@ public enum LibraryCacheError: Error, Equatable, Sendable {
     case invalidStoredHomeShelves
     case invalidBookDetail
     case invalidStoredBookDetail
+    case invalidFinishedProgressCheckpoint
     case encodingFailed
     case persistenceFailed
 }
 
 @ModelActor
 public actor LibraryCache {
+    public func finishedProgressCheckpoint(
+        accountID: AccountID, itemID: LibraryItemID
+    ) throws(LibraryCacheError) -> FinishedProgressCheckpoint? {
+        let record = try checkpointRecords().first {
+            $0.accountID == accountID.rawValue && $0.itemID == itemID.rawValue
+        }
+        guard let record else { return nil }
+        do {
+            let checkpoint = try JSONDecoder().decode(
+                FinishedProgressCheckpoint.self, from: record.payload)
+            if let progress = checkpoint.progress {
+                guard progress.libraryItemID == itemID else {
+                    throw LibraryCacheError.invalidFinishedProgressCheckpoint
+                }
+            }
+            return checkpoint
+        } catch { throw .invalidFinishedProgressCheckpoint }
+    }
+
+    public func saveFinishedProgressCheckpoint(
+        _ checkpoint: FinishedProgressCheckpoint,
+        accountID: AccountID, itemID: LibraryItemID
+    ) throws(LibraryCacheError) {
+        guard !accountID.rawValue.isEmpty else { throw .invalidAccountID }
+        guard !itemID.rawValue.isEmpty,
+            checkpoint.progress.map({ $0.libraryItemID == itemID }) ?? true
+        else { throw .invalidFinishedProgressCheckpoint }
+        let records = try checkpointRecords()
+        let payload = try encode(checkpoint)
+        if let record = records.first(where: {
+            $0.accountID == accountID.rawValue && $0.itemID == itemID.rawValue
+        }) {
+            record.payload = payload
+        } else {
+            // Length-prefixing prevents opaque IDs containing separators colliding.
+            let key =
+                "\(accountID.rawValue.utf8.count):\(accountID.rawValue)\(itemID.rawValue)"
+            modelContext.insert(
+                FinishedProgressCheckpointRecord(
+                    key: key, accountID: accountID.rawValue,
+                    itemID: itemID.rawValue, payload: payload))
+        }
+        try save()
+    }
+
+    private func checkpointRecords() throws(LibraryCacheError)
+        -> [FinishedProgressCheckpointRecord]
+    {
+        do {
+            return try modelContext.fetch(
+                FetchDescriptor<FinishedProgressCheckpointRecord>())
+        } catch { throw .persistenceFailed }
+    }
+
     public func replaceLibraries(
         _ libraries: [LibrarySummary],
         for accountID: AccountID,
@@ -784,6 +855,10 @@ public actor LibraryCache {
     ) throws(LibraryCacheError) {
         guard !accountID.rawValue.isEmpty else {
             throw .invalidAccountID
+        }
+        for record in try checkpointRecords()
+        where record.accountID == accountID.rawValue {
+            modelContext.delete(record)
         }
         for record in try libraryRecords()
         where record.accountID == accountID.rawValue {
