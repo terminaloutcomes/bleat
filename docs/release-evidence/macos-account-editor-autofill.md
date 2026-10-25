@@ -44,8 +44,20 @@ The first extended sheet/control run passed both assertions but was correctly
 rejected by the runtime-warning gate. Symbolication identified a synchronous
 AppKit `NSSpellChecker` / data-detector initialization wait when the synthetic
 username immediately resigned focus. Disabling SwiftUI autocorrection alone did
-not remove it; that second unsuccessful gate is also retained. The synthetic
-fixture now disables unrelated prose/data-detection services on its own native
-field editor before rapid focus changes. This does not disable a runtime checker
-or change system settings, AutoFill registration, responder transitions or
-native sheet dismissal. A clean corrected result remains required.
+not remove it; that second unsuccessful gate is also retained. A fixture-only attempt to disable prose/data-detection services also did not
+produce a clean gate. Both unsuccessful adjustments have been removed. The old
+registrations and mitigation now run the same native sheet fixture, values,
+focus sequence and normal dismissal in separate fresh processes, to establish
+matched warning evidence before any further change. A clean gate remains required.
+
+Matched fresh-process control and mitigation runs each passed their native
+assertions but reproduced the same priority-inversion warning. This establishes
+that the forced-focus fixture triggers that warning with both old and new
+registration behavior. The corrected fixture awaits AppKit's documented native
+background text-checking request before presenting the sheet, retaining normal
+text services and runtime checking. Both corrected fresh-process runs passed
+**1/1**, with zero failures, skips or runtime warnings. The ordinary native
+responder transitions, sheet completion and detached-parent assertions execute
+in both runs. Unsuccessful production autocorrection and fixture service-disable
+adjustments were removed; no warning was waived. Full-suite and affected-account
+runtime verification remain distinct gates.

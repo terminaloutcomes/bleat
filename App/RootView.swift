@@ -1211,7 +1211,6 @@ struct AccountEditorCredentialFields: View {
                     AccountEditorCredentialKind.username.contentType
                 )
                 .iOSNoAutocapitalization()
-                .autocorrectionDisabled()
                 .accessibilityIdentifier("accountEditor.username")
             SecureField("Password", text: $password)
                 .textContentType(

@@ -12,12 +12,60 @@
             testAccountEditorCredentialFieldsAvoidBrokenAutoFillSheetLifecycle()
             async throws
         {
+            let fields = AccountEditorCredentialFields(
+                username: .constant("synthetic-reader"), password: .constant("")
+            )
+            if #available(macOS 27, *) {
+                try await exerciseCredentialSheet(
+                    fields, expectedUsernameType: nil, expectedPasswordType: nil
+                )
+            } else {
+                try await exerciseCredentialSheet(
+                    fields, expectedUsernameType: .username,
+                    expectedPasswordType: .password)
+            }
+        }
+
+        func testNativeCredentialAutoFillControlUsesSemanticContentTypes()
+            async throws
+        {
+            // The original registrations use exactly the same native fixture,
+            // values, focus sequence and ordinary sheet dismissal as the fix.
+            try await exerciseCredentialSheet(
+                Group {
+                    TextField("Username", text: .constant("synthetic-reader"))
+                        .textContentType(.username)
+                        .iOSNoAutocapitalization()
+                        .accessibilityIdentifier("accountEditor.username")
+                    SecureField("Password", text: .constant(""))
+                        .textContentType(.password)
+                        .accessibilityIdentifier("accountEditor.password")
+                }, expectedUsernameType: .username,
+                expectedPasswordType: .password)
+        }
+
+        private func exerciseCredentialSheet<Fields: View>(
+            _ fields: Fields, expectedUsernameType: NSTextContentType?,
+            expectedPasswordType: NSTextContentType?
+        ) async throws {
+            // AppKit's first synchronous responder flush otherwise waits for
+            // data-detector initialization. Use the native background API to
+            // finish that unrelated fixture preparation before changing focus.
+            let checker = NSSpellChecker.shared
+            let tag = NSSpellChecker.uniqueSpellDocumentTag()
+            let prepared = expectation(
+                description: "native background text services prepared")
+            checker.requestChecking(
+                of: "synthetic-reader", range: NSRange(location: 0, length: 16),
+                types: NSTextCheckingResult.CheckingType.link.rawValue,
+                options: nil,
+                inSpellDocumentWithTag: tag
+            ) { @Sendable _, _, _, _ in prepared.fulfill() }
+            await fulfillment(of: [prepared], timeout: 5)
+            checker.closeSpellDocument(withTag: tag)
+
             let host = NSHostingView(
-                rootView: VStack {
-                    AccountEditorCredentialFields(
-                        username: .constant("synthetic-reader"),
-                        password: .constant(""))
-                }.frame(width: 500, height: 140))
+                rootView: VStack { fields }.frame(width: 500, height: 140))
             let parent = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
                 styleMask: [.titled], backing: .buffered, defer: false)
@@ -37,34 +85,18 @@
             )
             parent.beginSheet(sheet) { @Sendable _ in dismissed.fulfill() }
             host.layoutSubtreeIfNeeded()
-            func fields(in view: NSView) -> [NSTextField] {
+            func inputs(in view: NSView) -> [NSTextField] {
                 (view as? NSTextField).map { [$0] }
-                    ?? view.subviews.flatMap { fields(in: $0) }
+                    ?? view.subviews.flatMap { inputs(in: $0) }
             }
-            let inputs = fields(in: host).filter(\.isEditable)
+            let fields = inputs(in: host).filter(\.isEditable)
             let password = try XCTUnwrap(
-                inputs.compactMap { $0 as? NSSecureTextField }.first)
+                fields.compactMap { $0 as? NSSecureTextField }.first)
             let username = try XCTUnwrap(
-                inputs.first { !($0 is NSSecureTextField) })
-            if #available(macOS 27, *) {
-                XCTAssertNil(username.contentType)
-                XCTAssertNil(password.contentType)
-            } else {
-                XCTAssertEqual(username.contentType, .username)
-                XCTAssertEqual(password.contentType, .password)
-            }
+                fields.first { !($0 is NSSecureTextField) })
+            XCTAssertEqual(username.contentType, expectedUsernameType)
+            XCTAssertEqual(password.contentType, expectedPasswordType)
             XCTAssertTrue(parent.attachedSheet === sheet)
-            // Rapid programmatic focus changes otherwise synchronously flush
-            // AppKit's unrelated prose/data-detector startup. The retained
-            // warning stack identifies NSSpellChecker, not AutoFill teardown.
-            // Keep this synthetic credential fixture free of prose services;
-            // native responder changes and ordinary sheet dismissal still run.
-            let editor = try XCTUnwrap(
-                sheet.fieldEditor(true, for: username) as? NSTextView)
-            editor.isAutomaticDataDetectionEnabled = false
-            editor.isAutomaticLinkDetectionEnabled = false
-            editor.isContinuousSpellCheckingEnabled = false
-            editor.isAutomaticSpellingCorrectionEnabled = false
             XCTAssertTrue(sheet.makeFirstResponder(username))
             XCTAssertTrue(sheet.makeFirstResponder(password))
             XCTAssertTrue(sheet.makeFirstResponder(nil))
@@ -72,33 +104,6 @@
             await fulfillment(of: [dismissed], timeout: 5)
             XCTAssertNil(parent.attachedSheet)
             XCTAssertNil(sheet.sheetParent)
-        }
-
-        func testNativeCredentialAutoFillControlUsesSemanticContentTypes()
-            throws
-        {
-            // Control: these are the original editor's explicit registrations.
-            // This does not claim to reproduce the user's OS-managed AutoFill
-            // session; its exception was captured from the live process.
-            let host = NSHostingView(
-                rootView: VStack {
-                    TextField("Username", text: .constant("synthetic-reader"))
-                        .textContentType(.username)
-                    SecureField("Password", text: .constant(""))
-                        .textContentType(.password)
-                }.frame(width: 500, height: 140))
-            host.layoutSubtreeIfNeeded()
-            func fields(in view: NSView) -> [NSTextField] {
-                (view as? NSTextField).map { [$0] }
-                    ?? view.subviews.flatMap { fields(in: $0) }
-            }
-            let inputs = fields(in: host).filter(\.isEditable)
-            let password = try XCTUnwrap(
-                inputs.compactMap { $0 as? NSSecureTextField }.first)
-            let username = try XCTUnwrap(
-                inputs.first { !($0 is NSSecureTextField) })
-            XCTAssertEqual(username.contentType, .username)
-            XCTAssertEqual(password.contentType, .password)
         }
 
         func testStartupDiagnosticsHasVisibleBodyWithoutParentSize() {
