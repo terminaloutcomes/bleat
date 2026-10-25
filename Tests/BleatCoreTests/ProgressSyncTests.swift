@@ -9,25 +9,43 @@ final class ProgressSyncTests {
     @Test func finishedCheckpointsPersistAcrossActorsAndAccountRemoval()
         async throws
     {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
         let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
-        let container = try ModelContainer(
-            for: schema,
-            configurations: [
-                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            ])
-        let cache = LibraryCache(modelContainer: container)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            url: directory.appendingPathComponent("common.store"),
+            cloudKitDatabase: .none)
         let first = AccountID(rawValue: "a:b")
         let second = AccountID(rawValue: "a")
         let item = LibraryItemID(rawValue: "c")
         let collisionItem = LibraryItemID(rawValue: "b:c")
-        try await cache.saveFinishedProgressCheckpoint(
-            FinishedProgressCheckpoint(progress: nil), accountID: first,
-            itemID: item)
+        let checkpoint = FinishedProgressCheckpoint(
+            progress: LibraryBookProgress(
+                id: "checkpoint", userID: UserID(rawValue: "reader"),
+                libraryItemID: item,
+                bookID: BookID(rawValue: "book"), duration: 120, progress: 0.25,
+                currentTime: 30, isFinished: false,
+                hideFromContinueListening: false,
+                lastUpdateMilliseconds: 10, startedAtMilliseconds: 1,
+                finishedAtMilliseconds: nil))
+        do {
+            let initial = try ModelContainer(
+                for: schema, configurations: [configuration])
+            let cache = LibraryCache(modelContainer: initial)
+            try await cache.saveFinishedProgressCheckpoint(
+                checkpoint, accountID: first, itemID: item)
+        }
+        let container = try ModelContainer(
+            for: schema, configurations: [configuration])
         let reopened = LibraryCache(modelContainer: container)
         #expect(
             try await reopened.finishedProgressCheckpoint(
                 accountID: first, itemID: item)
-                == FinishedProgressCheckpoint(progress: nil))
+                == checkpoint)
         #expect(
             try await reopened.finishedProgressCheckpoint(
                 accountID: second, itemID: collisionItem) == nil)
@@ -66,6 +84,8 @@ final class ProgressSyncTests {
                 accountID: AccountID(rawValue: "account"),
                 itemID: LibraryItemID(rawValue: "item"))
         }
+        // Exact bytes are the retention contract for an unreadable checkpoint,
+        // not a progress comparison.
         #expect(
             try context.fetch(
                 FetchDescriptor<FinishedProgressCheckpointRecord>()

@@ -26258,21 +26258,21 @@
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Persist and reopen account/item checkpoints, exclude opaque-key collisions, and remove only the requested account.",
+      "purpose": "Persist a full structured progress checkpoint to a UUID-owned disk store, reopen a separate container/actor, exclude opaque-key collisions, and remove only the requested account.",
       "rules": {
         "1": "Persist and reopen account/item checkpoints, exclude opaque-key collisions, and remove only the requested account.",
         "2": "Await each actor/API operation before checking the semantic result.",
         "3": "N/A: fixed progress snapshots; no running player or temporal measurement.",
         "4": "Await all asynchronous calls; temporary migrated-store directory is removed with defer. No spawned task survives the test.",
-        "5": "Fresh in-memory ModelContainer or UUID-owned temporary store; synthetic account IDs only.",
+        "5": "Fresh UUID-owned temporary disk store with defer cleanup; synthetic account IDs and full structured progress only.",
         "6": "Local SwiftData integration and domain encoding, with no server or device claim.",
         "7": "No retries or relaxed assertions.",
         "8": "Swift Testing records the failing source expression and typed cause.",
         "9": "Focused progress and complete host lane execution are recorded separately in the issue 146 evidence receipt."
       },
       "decision": "keep",
-      "dependencies_and_setup": "Fresh in-memory ModelContainer or UUID-owned temporary store; synthetic account IDs only.",
-      "action_postconditions": "Persist and reopen account/item checkpoints, exclude opaque-key collisions, and remove only the requested account.",
+      "dependencies_and_setup": "Fresh UUID-owned temporary disk store with defer cleanup; synthetic account IDs and full structured progress only.",
+      "action_postconditions": "Persist a full structured progress checkpoint to a UUID-owned disk store, reopen a separate container/actor, exclude opaque-key collisions, and remove only the requested account.",
       "synchronization": "Await each actor/API operation before checking the semantic result.",
       "timeout_tolerance": "N/A: fixed progress snapshots; no running player or temporal measurement.",
       "classification": "Local SwiftData integration and domain encoding, with no server or device claim.",
@@ -26569,7 +26569,7 @@
   },
   "currentEntryCoverage": {
     "baseline_review_count": 562,
-    "current_records": 607,
+    "current_records": 610,
     "scope": "Host inventory functions plus retained opt-in source cases; current name parity is validated separately and does not re-review old assessments.",
     "newly_reviewed_missing_entries": [
       "Tests/BleatCoreTests/DownloadStorageTests.swift::testFixtureCleanupRemovesRootAfterSuccess",
@@ -26591,6 +26591,7 @@
   },
   "finishedProgressConflicts146": {
     "addedSourceReviews": 3,
-    "scope": "Checkpoint actor persistence/removal, shipped-schema upgrade with absent baseline, and incomplete-payload preservation. Historical audit counts above remain historical; execution is in docs/release-evidence/finished-progress-conflicts.md."
+    "scope": "Checkpoint actor persistence/removal, shipped-schema upgrade with absent baseline, and incomplete-payload preservation. Historical audit counts above remain historical; execution is in docs/release-evidence/finished-progress-conflicts.md.",
+    "accountRemovalReview": "The existing AccountStoreTests.testRemovingActiveAccountSelectsDeterministicReplacement now seeds canonical, legacy-alias and other-account checkpoints. Account removal must erase both owned namespaces while retaining the other account; APIs are awaited and storage is fresh/in-memory."
   }
 }

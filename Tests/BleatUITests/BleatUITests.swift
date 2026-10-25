@@ -5317,8 +5317,16 @@ final class BleatLiveUITests: XCTestCase {
             url: progressURL, token: token)
         XCTAssertEqual(unmodified, initial)
         let cancel = app.buttons["Cancel"].firstMatch
-        XCTAssertTrue(cancel.isHittable)
-        cancel.tap()
+        if cancel.exists {
+            XCTAssertTrue(cancel.isHittable)
+            cancel.tap()
+        } else {
+            // iOS 27 presents a native popover and omits its cancel-role
+            // button. Its backdrop is the native non-destructive dismissal.
+            XCTAssertTrue(app.staticTexts["Review Progress"].exists)
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2))
+                .tap()
+        }
         XCTAssertTrue(keepServer.waitForNonExistence(timeout: 10))
         let cancelled = try await liveFinishedProgress(
             url: progressURL, token: token)

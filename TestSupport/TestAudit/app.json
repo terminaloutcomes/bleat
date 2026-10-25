@@ -53444,7 +53444,7 @@
       ],
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "A conflict reserves its own item while another book can complete its explicit mutation.",
+        "intendedBehavior": "A conflict reserves its own item while another book can complete its explicit mutation. Also queue two conflicts, cancel the first, and await the exact next presented prompt with a bounded semantic condition.",
         "purpose": "Explicit finished-state preflight and typed resolution regression.",
         "actionPostconditions": [
           {
@@ -53455,7 +53455,7 @@
         "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
         "ruleAssessments": {
           "1": "A conflict reserves its own item while another book can complete its explicit mutation.",
-          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
+          "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release. Queue handoff uses the source-located assertEventually helper with a one-second failure budget and exact UUID equality.",
           "3": "N/A: static progress values and server timestamps; no advancing player.",
           "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",
           "5": "Fresh TestAppService actor and AppModel per case; fixture accounts and checkpoint map, never personal persistence. Existing fixture default explicitly represents confirmed absent server progress.",
@@ -53519,7 +53519,7 @@
     }
   ],
   "decisionCounts": {
-    "keep": 554,
+    "keep": 563,
     "follow_up": 98,
     "fix": 4
   },

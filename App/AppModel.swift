@@ -1745,6 +1745,9 @@ final class AppModel {
     private(set) var bookDeletionState: BookDeletionState = .idle
     private(set) var bookProgressUpdateState: BookProgressUpdateState = .idle
     private(set) var finishedProgressConflicts: [FinishedProgressConflict] = []
+    private(set) var presentedFinishedProgressConflict:
+        FinishedProgressConflict?
+    private var defersFinishedProgressConflictPresentation = false
     private(set) var bookProgressFailures: [BookProgressFailureEntry] = []
     private(set) var presentedBookProgressFailure: BookProgressFailureEntry?
     var bookProgressFailure: AppFailure? {
@@ -5127,6 +5130,12 @@ final class AppModel {
                     intendedFinished: isFinished, server: server,
                     reason: reason,
                     contextGeneration: expectedContextGeneration))
+            if presentedFinishedProgressConflict == nil,
+                !defersFinishedProgressConflictPresentation
+            {
+                presentedFinishedProgressConflict =
+                    finishedProgressConflicts.first
+            }
             bookProgressUpdateState = .idle
         case .operation(.adopted(let detail)):
             bookFinishedStates[detail.id] = detail.progress?.isFinished ?? false
@@ -5171,6 +5180,26 @@ final class AppModel {
             })
         else { return }
         let conflict = finishedProgressConflicts.remove(at: index)
+        if presentedFinishedProgressConflict?.id == id {
+            presentedFinishedProgressConflict = nil
+        }
+        defersFinishedProgressConflictPresentation = true
+        defer {
+            Task { @MainActor [weak self] in
+                // As with the existing failure queue, separate native prompt
+                // dismissal from presentation of the next queued item.
+                await Task.yield()
+                guard let self,
+                    self.bookProgressActionGeneration
+                        == conflict.contextGeneration
+                else { return }
+                self.defersFinishedProgressConflictPresentation = false
+                if self.presentedFinishedProgressConflict == nil {
+                    self.presentedFinishedProgressConflict =
+                        self.finishedProgressConflicts.first
+                }
+            }
+        }
         guard choice != .cancel,
             account?.id == conflict.account.id,
             bookProgressActionGeneration == conflict.contextGeneration
@@ -8454,6 +8483,8 @@ final class AppModel {
         bookProgressMutationStages = [:]
         bookProgressMutationRevisions = [:]
         finishedProgressConflicts = []
+        presentedFinishedProgressConflict = nil
+        defersFinishedProgressConflictPresentation = false
         bookProgressFailures = []
         presentedBookProgressFailure = nil
         bookProgressUpdateState = .idle

@@ -20,7 +20,8 @@ deferred that pre-existing conflict discrepancy from
 - `FinishedProgressCheckpointRecord` retains device-local account/item common
   snapshots independently of evictable browse data. The 0.1.8 to 0.1.9 lightweight
   schema upgrade adds the record without inventing a checkpoint for older data.
-  Account removal and local-data reset remove owned checkpoints.
+  Account removal (including legacy identity aliases) and local-data reset remove
+  owned checkpoints without deleting another account's checkpoint.
 - `FinishedProgressCheckpoint` compares decoded structural values, including
   server timestamps. Equal or regressed timestamps do not hide changed values.
   Explicit null represents confirmed absence; absent metadata is invalid and
@@ -46,8 +47,12 @@ Validation is ongoing; do not treat this receipt as final verification.
 - Complete isolated native app lane: 573 tests passed, zero failures/skips/runtime
   warnings, in `.build/macos-signed/tests-70236-1792914966878.xcresult`. This includes
   all nine new conflict identities. The earlier 570-test lane is superseded.
-  A subsequent view-only change removes a dismissal scheduling assumption;
-  its UI journey and final-head CI evidence remain pending.
+  Subsequent source review separated queued prompt presentation and froze the
+  historical schema model list. The nine affected native regressions passed
+  again in `.build/issue-146-native-nine-final.xcresult`, with zero failures,
+  skips, or runtime warnings; the nine core progress tests also passed again
+  after freezing the schema. Unchanged complete lanes are not rerun solely
+  to inflate evidence. Final-head CI and live journeys remain pending.
 - Independent focused repetition: six first conflict identities passed in
   `.build/issue-146-native-exact.xcresult`.
 - Three additional exact identities passed in
@@ -65,14 +70,48 @@ used `xcode-test-runner macos --test-id` directly. Native Xcode emitted its exis
 multiple-destination warning; inspected passing results had no runtime warnings.
 SwiftPM emitted a dependency watchOS-version deprecation warning.
 
-## Outstanding live and aggregate evidence
+## Completed live evidence
+
+The corrected online application journey passed separately against both layouts
+on disposable Audiobookshelf 2.37.0. Each result contains one passed exact identity,
+zero failures/skips/expected failures, and no runtime warnings:
+
+- Root: `TestSupport/ServerHarness/app-live-artifacts/issue-146-root-1debc2fa-42c2-486e-9a68-3f36ef08803a/root-online.xcresult`.
+- Prefix: `TestSupport/ServerHarness/app-live-artifacts/issue-146-prefix-9d9dba86-8e98-40f3-90a3-2bb62bc86ff2/prefix-online.xcresult`.
+
+Both use `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload`, the existing
+seed/reset/CA workflow, a fresh owned Simulator, and the current built products.
+The root invocation points the same journey at the root HTTPS base; the prefix
+invocation retains `/audiobookshelf`. Both complete fixture cleanup. These are
+application/HTTPS/server journeys, not physical-device evidence.
+
+`ProgressSyncLiveTests.testPinnedRootAndPrefixProgressContracts` also passed as
+one focused XCTest with zero skips through `mise run test:live` and the supported
+`BLEAT_LIVE_TEST_FILTER=ProgressSyncLiveTests` selection. It persists server-issued
+common snapshots and compares subsequent Finished/Unfinished responses on both
+layouts. The exact selection is retained in
+`.build/swiftpm-test-results/live-fc7205a6-03ff-474f-bd72-a90e6e5d548e-selection.json`.
+Its first fixture start executed no tests because the shared OIDC port was already
+allocated; the supported `BLEAT_OIDC_HTTPS_PORT` override resolved the collision.
+
+A final focused account-store/progress run passed 27 tests with zero skips after
+adding canonical and legacy-alias checkpoint removal. The existing removal test
+retains another account's checkpoint. The strengthened nine-test progress suite
+then passed again after reopening a full non-null checkpoint from a UUID-owned
+on-disk store and a separate container/actor.
+
+Validation used Xcode 27.0 (27A266a), Apple Swift 6.4, arm64 macOS 27.0.1, and iOS
+27.0 Simulator. No production app, account, server, trust setting, or dependency
+pin was changed.
+
+## Aggregate and preparation history
 
 The extended `BleatLiveUITests.testLiveOnlineLoginPlaybackAndDownload` journey
 checks actual server state around Cancel and server adoption, preserves a common
 checkpoint across process relaunch, changes progress through a second fixture
 client, verifies preservation while the typed conflict is visible, chooses this
-device, and restores the flag before the existing playback journey. It is not
-credited until the disposable root and prefixed runs pass.
+device, and restores the flag before the existing playback journey. The corrected
+root and prefix passes above supply that evidence.
 
 The initial `mise run test:app-live` attempt stopped before app build/test because
 Docker denied the pinned Audiobookshelf 2.37.0 image manifest. A host-side anonymous
@@ -87,8 +126,27 @@ additional pre-execution failure; normal configuration was restored for the run.
 No saved credentials, trust settings, pinned images, or live application state
 were changed.
 
-Aggregate validation, disposable root/prefix server and app journeys, final
-source/error-path review, draft PR publication, and exact-head CI are pending.
+The first prefixed online journey built and reached the conflict prompt. Its
+server-readback preservation checks passed, then its Cancel-button hittability
+assertion failed because the iOS 27 native popover omitted the cancel-role button.
+The recording shows the two choice buttons and unchanged server progress.
+Xcode subsequently timed out after 600 seconds gathering diagnostics. The failed
+one-test bundle is retained in
+`TestSupport/ServerHarness/app-live-artifacts/79ceafd1-5ad5-4bbb-b634-e93e28a92583/online.xcresult`.
+The corrected test exercises native outside dismissal when Cancel is omitted,
+then still requires the prompt to close and server state to remain unchanged.
+No wait was increased and no semantic postcondition was dropped.
+
+Draft [PR #475](https://github.com/terminaloutcomes/bleat/pull/475) preserves the
+implementation. The aggregate check has passed 612 signed host tests and 670
+simulator app tests and is still running its 126-test broader UI lane. Its four
+host known issues are intentional cleanup-failure reporter fixtures, not new
+failures. Rust workspace tests passed 381 cases; telemetry validation passed 107
+Rust cases and its separately verified Swift selections (91 executed across the
+selected runs), with zero failures/skips. Release/package/build-mode, schema,
+format and documentation prerequisites have passed. Remaining aggregate stages
+and final-head CI are pending. Initial-head CI passed at `c03a0285`; it does not
+certify the later reviewed fixes.
 `APP-FINISHED-001` remains implemented until that evidence is recorded.
 
 ## Source review
@@ -97,7 +155,10 @@ A source pass independently of test outcomes checked the issue's data-preservati
 identity, access, clock, submission-stage, and cancellation boundaries. It found a
 dialog dismissal ordering assumption and replaced it with a synchronously captured
 handled-prompt UUID before asynchronous resolution. A dismissed old prompt cannot
-consume a replacement. Adjacent progress paths retain typed failures and contain
+consume a replacement. The presented prompt is separate from queued conflicts,
+matching the established failure-queue dismissal lifecycle; a bounded regression
+checks the next item after cancellation. The historical 0.1.8 catalog is an
+explicit fixed list, independent of additions to the current catalog. Adjacent progress paths retain typed failures and contain
 no newly introduced traps, forced casts/throws, or blocking async wrappers.
 The final GET/PATCH race remains explicit because the server has no conditional
 write contract. Broader audit counts and signed/physical-device acceptance are

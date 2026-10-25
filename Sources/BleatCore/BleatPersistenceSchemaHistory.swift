@@ -422,11 +422,28 @@ public enum BleatPersistenceSchemaV0_1_6: VersionedSchema {
 
 public enum BleatPersistenceSchemaV0_1_8: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 8) }
-    public static var models: [any PersistentModel.Type] {
-        BleatPersistenceModelCatalog.currentModelTypes.filter {
-            $0 != FinishedProgressCheckpointRecord.self
-        }
-    }
+    public static let models: [any PersistentModel.Type] = [
+        ServerAccountRecord.self,
+        AccountIdentityAliasRecord.self,
+        CachedLibraryCollectionRecord.self,
+        CachedLibraryRecord.self,
+        CachedLibraryPageRecord.self,
+        CachedLibrarySearchRecord.self,
+        CachedLibraryHomeRecord.self,
+        CachedLibraryBookDetailRecord.self,
+        CachedChapterTranscriptRecord.self,
+        CachedChapterTranscriptionTaskRecord.self,
+        CachedChapterTranscriptionJobRecord.self,
+        ListeningSliceRecord.self,
+        CompletionMilestoneRecord.self,
+        RemoteListeningSessionRecord.self,
+        PrivateCloudStatisticsDeletionRecord.self,
+        StatisticsSessionAccountingRecord.self,
+        StatisticsHistoryImportRecord.self,
+        StatisticsSnapshotRecord.self,
+        PrivateCloudRecordMetadata.self,
+        PrivateCloudStateRecord.self,
+    ]
 }
 
 public enum BleatPersistenceSchemaCurrent: VersionedSchema {

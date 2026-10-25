@@ -1023,6 +1023,14 @@ public actor AccountStore {
             ).filter { $0.canonicalAccountID == id.rawValue }
             let legacyIDs = Set(aliases.map(\.legacyAccountID))
             for alias in aliases { modelContext.delete(alias) }
+            for checkpoint in try modelContext.fetch(
+                FetchDescriptor<FinishedProgressCheckpointRecord>()
+            )
+            where checkpoint.accountID == id.rawValue
+                || legacyIDs.contains(checkpoint.accountID)
+            {
+                modelContext.delete(checkpoint)
+            }
             for cached in try modelContext.fetch(
                 FetchDescriptor<CachedLibraryCollectionRecord>()
             ) where legacyIDs.contains(cached.accountID) {

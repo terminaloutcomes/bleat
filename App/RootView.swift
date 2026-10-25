@@ -1864,11 +1864,12 @@ private struct SignedInView: View {
             )
         }
         .confirmationDialog(
-            model.finishedProgressConflicts.first?.reason == .missingCheckpoint
+            model.presentedFinishedProgressConflict?.reason
+                == .missingCheckpoint
                 ? "Review Progress" : "Progress Changed",
             isPresented: finishedProgressConflictBinding,
             titleVisibility: .visible,
-            presenting: model.finishedProgressConflicts.first
+            presenting: model.presentedFinishedProgressConflict
         ) { conflict in
             Button(
                 conflict.intendedFinished
@@ -2002,9 +2003,9 @@ private struct SignedInView: View {
     }
 
     private var finishedProgressConflictBinding: Binding<Bool> {
-        let presentedID = model.finishedProgressConflicts.first?.id
+        let presentedID = model.presentedFinishedProgressConflict?.id
         return Binding(
-            get: { !model.finishedProgressConflicts.isEmpty },
+            get: { model.presentedFinishedProgressConflict != nil },
             set: { presented in
                 guard !presented, let presentedID,
                     handledFinishedProgressConflictID != presentedID

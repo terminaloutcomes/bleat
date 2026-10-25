@@ -21311,8 +21311,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.finishedProgressConflicts.first?.id, conflict.id)
         let requests = await service.progressUpdateRequests()
         XCTAssertEqual(requests.map(\.itemID), [other.id])
+        await service.setBookProgress(
+            finishedConflictProgress(account: account, detail: other))
+        await model.setFinished(false, detail: other)
+        let queued = try XCTUnwrap(model.finishedProgressConflicts.last)
+        XCTAssertEqual(model.finishedProgressConflicts.count, 2)
+        XCTAssertEqual(model.presentedFinishedProgressConflict?.id, conflict.id)
         await model.resolveFinishedProgressConflict(
             id: conflict.id, choice: .cancel)
+        await assertEventually(
+            "next item's progress choice", timeout: .seconds(1),
+            observed: {
+                String(
+                    describing: model.presentedFinishedProgressConflict?.book.id
+                )
+            },
+            condition: {
+                model.presentedFinishedProgressConflict?.id == queued.id
+            })
+        await model.resolveFinishedProgressConflict(
+            id: queued.id, choice: .cancel)
+        XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
     }
 
     func testFinishedConflictConfirmedReadbackPersistsServerClock() async throws
