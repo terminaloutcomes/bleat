@@ -1467,7 +1467,7 @@ private struct AccountEditorView: View {
     }
 }
 
-private struct DiagnosticsView: View {
+struct DiagnosticsView: View {
     @Bindable var model: AppModel
     private let metadata = AppMetadata()
 
@@ -1594,6 +1594,9 @@ private struct DiagnosticsView: View {
 
             RemoteTelemetryDiagnosticsSection(model: model)
         }
+        #if os(macOS)
+            .frame(minWidth: 480, minHeight: 420)
+        #endif
         .navigationTitle("Diagnostics")
         .task {
             async let endpointRefresh: Void = model.refreshEndpointDiagnostics()

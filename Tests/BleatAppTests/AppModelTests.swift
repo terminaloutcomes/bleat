@@ -1,7 +1,7 @@
 import AVFoundation
-import BleatCore
 import BleatTranscription
 import CloudKit
+import CoreData
 import MediaPlayer
 import Observation
 import SwiftData
@@ -9,6 +9,7 @@ import Synchronization
 import XCTest
 
 @testable import Bleat
+@testable import BleatCore
 
 extension DownloadStorageLayout {
     fileprivate func placeCompleteTestFile(
@@ -4954,25 +4955,122 @@ final class AppModelTests: XCTestCase {
             withIntermediateDirectories: true
         )
         let legacyURL = root.appendingPathComponent("default.store")
-        let legacyContents = Data("legacy store".utf8)
-        try legacyContents.write(to: legacyURL)
-        let legacyWALURL = URL(fileURLWithPath: legacyURL.path + "-wal")
-        let legacyWALContents = Data("legacy WAL".utf8)
-        try legacyWALContents.write(to: legacyWALURL)
-
-        let storeURL = try BleatLocalStore.storeURL(
-            applicationSupportURL: root
-        )
-
-        XCTAssertEqual(storeURL.lastPathComponent, "Bleat.store")
-        XCTAssertEqual(try Data(contentsOf: storeURL), legacyContents)
+        let schema = Schema(versionedSchema: BleatPersistenceSchemaCurrent.self)
+        do {
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [
+                    ModelConfiguration(
+                        schema: schema, url: legacyURL, cloudKitDatabase: .none)
+                ])
+            let context = ModelContext(container)
+            context.insert(
+                StatisticsHistoryImportRecord(
+                    accountID: AccountID(rawValue: "retained-account")))
+            try context.save()
+        }
+        let storeURL = try BleatLocalStore.storeURL(applicationSupportURL: root)
+        let migrated = try ModelContainer(
+            for: schema,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema, url: storeURL, cloudKitDatabase: .none)
+            ])
         XCTAssertEqual(
-            try Data(contentsOf: URL(fileURLWithPath: storeURL.path + "-wal")),
-            legacyWALContents
-        )
-        XCTAssertTrue(
-            FileManager.default.fileExists(atPath: legacyURL.path)
-        )
+            try ModelContext(migrated).fetch(
+                FetchDescriptor<StatisticsHistoryImportRecord>()
+            ).map(\.accountID), ["retained-account"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyURL.path))
+    }
+
+    private func writeForeignStore(at url: URL) throws {
+        let entity = NSEntityDescription()
+        entity.name = "APIRequestModel"
+        entity.managedObjectClassName = "NSManagedObject"
+        let attribute = NSAttributeDescription()
+        attribute.name = "fixtureValue"
+        attribute.attributeType = .stringAttributeType
+        entity.properties = [attribute]
+        let model = NSManagedObjectModel()
+        model.entities = [entity]
+        model.versionIdentifiers = ["1.0.0"]
+        let coordinator = NSPersistentStoreCoordinator(
+            managedObjectModel: model)
+        let store = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType, configurationName: nil, at: url)
+        let context = NSManagedObjectContext(.mainQueue)
+        context.persistentStoreCoordinator = coordinator
+        let record = NSEntityDescription.insertNewObject(
+            forEntityName: "APIRequestModel", into: context)
+        record.setValue("preserve-me", forKey: "fixtureValue")
+        try context.save()
+        try coordinator.remove(store)
+    }
+
+    func testBleatLocalStoreDoesNotImportForeignDefaultStore() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let foreign = root.appendingPathComponent("default.store")
+        try writeForeignStore(at: foreign)
+        // Intentional bytes comparison: the foreign database must remain untouched.
+        let original = try Data(contentsOf: foreign)
+        let selected = try BleatLocalStore.storeURL(applicationSupportURL: root)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: selected.path))
+        XCTAssertEqual(try Data(contentsOf: foreign), original)
+    }
+
+    func
+        testBleatLocalStorePreservesPreviouslyCopiedForeignDatabaseAndOpensRealStore()
+        throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let directory = root.appendingPathComponent("Bleat")
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copiedForeign = directory.appendingPathComponent("Bleat.store")
+        try writeForeignStore(at: copiedForeign)
+        let original = try Data(contentsOf: copiedForeign)
+        let selected = try BleatLocalStore.storeURL(applicationSupportURL: root)
+        XCTAssertNotEqual(selected, copiedForeign)
+        let schema = Schema(versionedSchema: BleatPersistenceSchemaCurrent.self)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: BleatPersistenceSchemaMigrationPlan.self,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema, url: selected, cloudKitDatabase: .none)
+            ])
+        XCTAssertEqual(
+            try ModelContext(container).fetchCount(
+                FetchDescriptor<ServerAccountRecord>()), 0)
+        XCTAssertEqual(
+            try BleatLocalStore.storeURL(applicationSupportURL: root), selected)
+        XCTAssertEqual(try Data(contentsOf: copiedForeign), original)
+    }
+
+    func testBleatLocalStoreDoesNotReplaceUnreadableExistingStore() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let directory = root.appendingPathComponent("Bleat")
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = directory.appendingPathComponent("Bleat.store")
+        let original = Data("unrecognized existing data".utf8)
+        try original.write(to: store)
+        XCTAssertThrowsError(
+            try BleatLocalStore.storeURL(applicationSupportURL: root))
+        XCTAssertEqual(try Data(contentsOf: store), original)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent("Bleat-owned.store")
+                    .path))
     }
 
     func testBookDetailPlaybackActionUsesPlaybackAndProgressState() {
