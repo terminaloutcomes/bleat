@@ -1892,6 +1892,7 @@
     },
     {
       "id": "BleatUITests::testDiagnosticTelemetryConsentLivesInSystemSettings",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2389,
       "purpose": "Diagnostic Telemetry Consent Lives In System Settings.",
@@ -1908,6 +1909,7 @@
     },
     {
       "id": "BleatUITests::testSystemSettingsLinkAvailableWhenStartupUnavailable",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2441,
       "purpose": "System Settings Link Available When Startup Unavailable.",
@@ -2164,6 +2166,7 @@
     },
     {
       "id": "BleatUITests::testMiniPlayerRestoresWhenStopIsSuperseded",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2967,
       "purpose": "Mini Player Restores When Stop Is Superseded.",
@@ -2386,6 +2389,7 @@
     },
     {
       "id": "BleatUITests::testViewOnServerOpensSystemBrowserWithoutEditPermission",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 3438,
       "purpose": "View On Server Opens System Browser Without Edit Permission.",

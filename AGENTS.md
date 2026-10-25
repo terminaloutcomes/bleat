@@ -312,6 +312,11 @@ Use `docs/development.md` as the canonical reference for supported test and
 validation commands.
 Follow [test reliability rules](docs/test-reliability.md) for test setup,
 semantic postconditions, bounded synchronization, diagnostics, and audit evidence.
+Complete its [change review checklist](docs/test-reliability.md#change-review-checklist)
+for affected tests and shared callers. Relevant UI, fixture, playback and
+synchronization changes require recorded local broad UI evidence before handoff;
+the two CI smoke journeys do not satisfy that gate. Revisit affected audit
+sign-offs and retain their original revision-specific evidence.
 
 Put tests in test targets, not production entry points. Add focused tests with
 each implementation change and use versioned saved fixtures for response

@@ -64,7 +64,7 @@ by the affected behavior. Host resources require normal execution permissions.
 | --- | --- | --- |
 | Core Swift logic | Focused Swift Testing, then `scripts/test-host.sh` when relevant | Host XML in `.build/host-results/`; signed lane rejects skips; unsigned excludes the named Keychain test |
 | App model/framework adapter | Focused app-hosted Xcode tests | `.xcresult`; verify requested identities, count, and individual outcomes |
-| UI/navigation | Relevant UI journey, accessibility tasks when affected | Simulator evidence only; no physical routing/background claim |
+| UI/navigation, shared UI fixtures/helpers, playback/synchronization used by UI journeys | Focused repetitions and owning suite, mandatory local broad UI gate; accessibility/live tasks when affected | [Review checklist and broad UI receipt](test-reliability.md#change-review-checklist); Simulator evidence only; no physical routing/background claim |
 | Audiobookshelf contract | `mise run test:compatibility`, redacted versioned fixtures | Both minimum/current profiles; root and prefixed routes; harness artifacts |
 | Playback/download/offline integration | `mise run test:app-live` | Disposable HTTPS server and Simulator; harness cleanup; no device claim |
 | Persistence/CloudKit | Migration fixtures/tests, `mise run test:cloudkit-schema` | Local migration and schema checks; signed two-device evidence remains separate |
@@ -184,5 +184,7 @@ always require source inspection and review.
 - Distinguish host, Simulator, disposable-server, signed-host, and physical-device validation.
 - Audit changed and adjacent failure/callback paths for traps, actor assumptions,
   cancellation reentrancy, and stale-operation acceptance.
+- Complete the [test change review checklist](test-reliability.md#change-review-checklist),
+  link required local broad UI evidence and revisit affected audit sign-offs.
 - Update traceability for affected requirements without treating old results as
   fresh validation. Do not commit, push, or publish without authorization.

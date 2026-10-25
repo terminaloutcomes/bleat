@@ -136,7 +136,11 @@ admission before its first diagnostic suspension. It enters the existing idle
 state, so queued player-state observations cannot republish the stopped book;
 direct Play rejects that retained idle preparation. Immediately after diagnostic
 recording, an ownership check abandons the old Stop if a newer generation has
-started. Later cleanup behavior is unchanged.
+started. Later cleanup behavior is unchanged at that historical revision. This proves
+the diagnostic suspension boundary only. The
+[#476 reassessment](test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026)
+records the subsequently demonstrated statistics-await ownership gap and idle
+reuse defect; its unmerged candidate adds separate regression coverage.
 
 Both corrected focused identities passed separately in
 `.build/audio-stop-retirement-after.xcresult` and

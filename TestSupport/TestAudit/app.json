@@ -695,6 +695,7 @@
     },
     {
       "identifier": "AppModelTests/testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 101,
@@ -35230,6 +35231,7 @@
     },
     {
       "identifier": "AppModelTests/testPlaybackStartReusesMatchingActivePlayerAndResumes",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 20571,
@@ -50969,6 +50971,7 @@
     },
     {
       "identifier": "AppModelTests/testStopCompletionDoesNotRetireNewerSelection",
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 11995
