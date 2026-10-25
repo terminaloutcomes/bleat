@@ -132,6 +132,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.selectionResumeFailure)
         XCTAssertTrue(model.playback.showsMiniPlayer)
         XCTAssertEqual(try store.lastPlaying()?.failure, failure)
+        let startup = StartupPlaybackDiagnosticRecorder()
         let relaunched = AppModel(
             service: TestAppService(
                 activeAccount: .success(account),
@@ -141,8 +142,10 @@ final class AppModelTests: XCTestCase {
                         playbackPreparation(
                             detail: fixture.detail, audioURL: fixture.audioURL))
                 ]),
+            diagnostics: startup,
             playbackPositionStore: PlaybackPositionStore(
                 defaults: fixture.defaults))
+        startup.playback = relaunched.playback
         await relaunched.start()
         XCTAssertEqual(relaunched.selectionResumeFailure, failure)
         XCTAssertEqual(relaunched.playback.state, .failed(failure))
@@ -152,8 +155,13 @@ final class AppModelTests: XCTestCase {
         guard case .started = outcome else {
             return XCTFail("Expected a successful retry")
         }
+        // Retry completion can await bookmarks while real audio advances.
+        // Verify the awaited native seek at the existing pre-play boundary.
+        startup.assertInitialPosition(0.5, accuracy: 0.15)
+        await startup.assertNativePlayRequested()
         relaunched.playback.pause()
-        XCTAssertEqual(relaunched.playback.currentTime, 0.5, accuracy: 0.15)
+        XCTAssertEqual(relaunched.playback.state, .paused)
+        XCTAssertFalse(relaunched.playback.isPlaybackRequested)
         XCTAssertNil(try store.lastPlaying()?.failure)
         await relaunched.playback.stop()
         XCTAssertNil(try store.lastPlaying())

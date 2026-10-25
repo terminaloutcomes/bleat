@@ -51,9 +51,11 @@ assertion removed.
 ## Validation and execution evidence
 
 The source is based on main `0ed12585dc6726fce2aca2336e99272014810f5d`.
-Final production/test code is
-`c19f8d459abd09bef088e23eb0267e6b6a98a0b9`; subsequent evidence commits change
-only this receipt. The authoritative completed aggregate outcomes, final SHA,
+Production code is `c19f8d459abd09bef088e23eb0267e6b6a98a0b9`.
+A later CI-discovered checkpoint-test oracle correction changes only that
+existing test and this receipt; production, UI, host and live inputs remain
+unchanged. Its focused/owning-app revalidation and exact final head are recorded
+in the validation comment. The authoritative completed aggregate outcomes, final SHA,
 artifact paths and exact-final-head CI links are kept in the
 [PR validation comment](https://github.com/terminaloutcomes/bleat/pull/476#issuecomment-6397997492).
 That comment distinguishes running stages from completed results. This receipt
@@ -158,3 +160,30 @@ CI passed on exact code commit `c19f8d4`:
 and [website build](https://github.com/terminaloutcomes/bleat/actions/runs/40197656801).
 PR deployment jobs are skipped by their existing event conditions. Evidence-head
 CI and final aggregate completion are recorded in the linked validation comment.
+
+
+### Final-CI checkpoint oracle correction
+
+The evidence-only `89c1cb2` head's
+[iOS CI job](https://github.com/terminaloutcomes/bleat/actions/runs/40202358640/job/121196022308)
+failed the unchanged
+`AppModelTests.testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint`
+on iOS 26.5: post-play position `0.7886353` was compared with the original
+`0.5 ± 0.15` checkpoint. Retry returns after playback has started and bookmark
+loading has completed, so the measured position can legitimately advance while
+that awaited work completes. This is a concrete test-oracle failure, not an
+infrastructure-only failure or a reason for a blind rerun.
+
+The corrected test injects the existing `StartupPlaybackDiagnosticRecorder`,
+which captures model and actual native AVPlayer positions after the awaited
+initial seek and before `play()`. It asserts that captured checkpoint with the
+unchanged tolerance, verifies the actual native Play request, then verifies Pause,
+cleared persisted failure and Stop clearing the last-playing selection. No
+production code, timeout, tolerance, UI assertion, skip or waiver changes.
+All three clean repetitions passed in
+`.build/checkpoint-oracle-repetitions.xcresult`, with all three repetition nodes
+inspected and zero skips/runtime warnings. Independent review confirmed that the
+actual seek/tolerance and playback guarantees are preserved without weakening.
+Owning app-bundle results and new exact-head CI are recorded in the validation
+comment. The already completed host/UI/live aggregate
+remains applicable to unchanged production and suite inputs.
