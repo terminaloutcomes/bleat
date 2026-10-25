@@ -9,7 +9,7 @@ physical-device work deferred in #457.
 | Boundary | Cause | Correction |
 | --- | --- | --- |
 | Diagnostics Settings link, including unavailable startup | The iOS 27 accessibility tree exposes the native SwiftUI Link as a Link; the tests queried Buttons after successfully scrolling to the same identifier. The saved baseline hierarchy contains the enabled, visible link. | Resolve the unique identifier without assuming a platform-specific element type; retain enabled/hittable checks and the system Settings control exercise. |
-| Start while mini-player Stop cleanup is suspended | Stop retires playback to idle immediately. `canReusePreparedPlayback` still admitted its retained preparation, but `play()` rejects idle, so the new Start silently returned superseded. | Exclude idle players from reuse. An explicit new Start uses normal preparation, permission checks, serialized progress writes and generation guards. Ordinary Play after Stop remains rejected. |
+| Start while mini-player Stop cleanup is suspended | Stop retires playback to idle immediately. `canReusePreparedPlayback` still admitted its retained preparation, but `play()` rejects idle, so the new Start silently returned superseded. | Exclude idle players from reuse. An explicit new Start uses normal preparation, permission checks and serialized progress writes. Stop rechecks its generation after statistics completion before resetting or closing a replacement. Ordinary Play after Stop remains rejected. |
 | Delayed sync fixture | Release reset the gate to hold again, blocking the replacement preparation's next serialized sync. A concurrent direct caller could also overwrite the single waiter. | Hold only the first sync. Subsequent serialized writes pass through after release; a direct concurrent waiter cannot replace the original continuation. |
 | View on server browser handoff | The test waited for Safari foreground, then immediately sampled Bleat foreground independently during the transition. | Bound one joint postcondition: Safari is foreground and Bleat has left foreground. Retain the final Bleat assertion and action interactability checks. Runtime confirmation is recorded below. |
 
@@ -34,11 +34,14 @@ app/account/data, security setting or physical device is used.
 | `testViewOnServerOpensSystemBrowserWithoutEditPermission` | Limited-permission fixture; open book action menu and invoke View on server without edit authority. | Enabled/hittable action plus joint foreground handoff within the existing 15-second budget. Network page availability is outside this dispatch test. |
 
 App regressions are
-`AppModelTests.testPlaybackStartReplacesIdlePlayerWhileStopSyncIsPending` and
+`AppModelTests.testPlaybackStartReplacesIdlePlayerWhileStopSyncIsPending`,
+`testPlaybackStartRetainsReplacementWhileStopStatisticsFinishIsPending`, and
 `UITestPlaybackFixturesTests.testDelayedSyncRetainsFirstWaiterAcrossReplacementAndRelease`.
-The first owns isolated storage, native media and a controlled first-sync gate;
-it verifies two session opens, old-session closure, retained paused presentation
-and subsequent active-player reuse. The second observes the gate's actual state
+The two AppModel cases own isolated storage and native media, holding either the
+first progress sync or Stop's second statistics finish (outside progress-write
+serialization). They verify two session opens, exact old-session closure, native
+replacement-player identity, retained paused presentation and subsequent
+active-player reuse. The fixture test observes the gate's actual state
 change before exercising later waits and release. Owned tasks/gates are cleaned
 up through teardown blocks. Position/rate tolerances are inapplicable: these
 cases assert intent, identity, presentation and session lifecycle, not exact
@@ -80,6 +83,53 @@ serialization. The receipt now identifies rearming after release as the scoped
 cause and concurrent overwrite as a prevented latent fixture hazard. That finding
 is resolved; no other P2/P3 findings were raised.
 
-Clean UI repetitions and the required aggregate validation are still pending.
+The clean repetition run in `.build/four-repetitions.xcresult` passed all four
+identities twice (eight executions). Both per-identity `Repetition` nodes were
+inspected and passed; zero skips or runtime warnings. This used the same scheme,
+owned Simulator and four UI selectors with `-test-iterations 2`.
+
+The required `mise run check` aggregate is running with
+`BLEAT_SIMULATOR_DESTINATION` targeting that owned Simulator. It has verified
+609 signed host tests with zero skips, Swift Release and Simulator Release
+builds, paid-capability configuration contracts, and 663 Simulator app tests
+with zero failures, skips or runtime warnings. The app bundle is
+`.build/test-core-results/app-tests-37712-1792930492668.xcresult`.
+The 126-case UI lane passed with 119 passed, seven existing approved opt-in
+skips, zero failures and zero runtime warnings. All four repaired identities
+individually passed in the broad bundle:
+`.build/test-core-results/ui-tests-37712-1792930492668.xcresult`.
+Core live validation passed its unchanged result verifier with 13 passed and
+eight configuration-dependent skips. Both disposable app-live journeys then passed with zero skips and runtime
+warnings; online/offline bundles are beneath
+`TestSupport/ServerHarness/app-live-artifacts/caa19d96-55f6-4939-9c2e-665709752180/`.
+The original complete `mise run check` exited successfully in 4886.37 seconds.
+
+A final lifecycle audit subsequently identified the outer statistics-finish
+suspension: a same-book replacement can finish while old Stop is held outside
+progress serialization, then stale Stop could reset/close it before its next
+generation check. The final guard now checks immediately after that await.
+The new held-second-finish regression requires replacement completion and native
+player identity before releasing old Stop. Independent review found no issues in
+this revised source. Final-source focused revalidation passed all 15 selected identities in
+`.build/four-final-focused.xcresult`, including both pending-Stop boundaries and
+all four UI journeys. Zero skips or runtime warnings; individual outcomes were
+inspected. The required aggregate is being repeated on that final source;
+the earlier aggregate remains earlier-source evidence.
+
+The original aggregate continued through a model-capacity interruption without
+a duplicate run. Process and artifact inspection recovered its active UI lane;
+no completed tests were restarted.
+
+CI passed on exact code commit
+`e747435ae57a809dd305ed58b5fb8893648a83ba`:
+[Validate Bleat](https://github.com/terminaloutcomes/bleat/actions/runs/40190889241),
+[release security](https://github.com/terminaloutcomes/bleat/actions/runs/40190889303),
+[CloudKit schema](https://github.com/terminaloutcomes/bleat/actions/runs/40190889227),
+and [website build](https://github.com/terminaloutcomes/bleat/actions/runs/40190889235).
+PR deployment jobs were skipped by their existing event conditions. The final
+evidence commit will receive its own exact-head CI verification.
+
+Independent read-only review of that exact code commit confirmed no remaining
+findings after the documentation correction.
 This draft evidence does not claim complete validation or physical-device
 acceptance.

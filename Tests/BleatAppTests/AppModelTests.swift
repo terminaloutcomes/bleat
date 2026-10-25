@@ -23394,6 +23394,25 @@ final class AppModelTests: XCTestCase {
     func testPlaybackStartReplacesIdlePlayerWhileStopSyncIsPending()
         async throws
     {
+        try await assertPlaybackReplacementSurvivesStop(at: .progressSync)
+    }
+
+    func testPlaybackStartRetainsReplacementWhileStopStatisticsFinishIsPending()
+        async throws
+    {
+        try await assertPlaybackReplacementSurvivesStop(at: .statisticsFinish)
+    }
+
+    private enum PendingStopBoundary {
+        case progressSync
+        case statisticsFinish
+    }
+
+    private func assertPlaybackReplacementSurvivesStop(
+        at boundary: PendingStopBoundary,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
         let fixture = try playbackRecoveryFixture(audioSeconds: 30)
         let account = try fixtureAccount()
         let syncGate = AsyncGate()
@@ -23409,7 +23428,12 @@ final class AppModelTests: XCTestCase {
                         detail: fixture.detail, audioURL: fixture.audioURL,
                         sessionID: "replacement-session")),
             ],
-            firstPlaybackSyncGate: syncGate)
+            firstPlaybackSyncGate: boundary == .progressSync ? syncGate : nil,
+            statisticsFinishGate: boundary == .statisticsFinish
+                ? syncGate : nil,
+            // Stop first finishes statistics inside syncProgress, then awaits
+            // a second finish outside progress-write serialization.
+            statisticsFinishGateCall: 2)
         let model = AppModel(
             service: service, cloudStorageNoticeDefaults: fixture.defaults,
             downloadsStorageRootURL: fixture.root.appendingPathComponent(
@@ -23430,40 +23454,66 @@ final class AppModelTests: XCTestCase {
         let initial = await model.startPlayback(
             detail: fixture.detail, account: account)
         XCTAssertEqual(initial, .started(source: .streamed))
-        let stop = Task { await model.playback.stop() }
+        let stopped = expectation(description: "old Stop completed")
+        let stop = Task {
+            await model.playback.stop()
+            stopped.fulfill()
+        }
         addTeardownBlock {
             await syncGate.release()
             await stop.value
         }
         let entered = await syncGate.waitUntilEntered(timeout: .seconds(5))
-        XCTAssertTrue(entered, "Stop must be held at progress synchronization")
+        XCTAssertTrue(
+            entered, "Stop must reach its held boundary", file: file, line: line
+        )
         XCTAssertEqual(model.playback.state, .idle)
         XCTAssertFalse(model.playback.canReusePreparedPlayback)
 
         let stoppingGeneration = model.playback.runtimeSnapshotForTesting
             .generation
+        let started = expectation(description: "replacement Start completed")
         let start = Task {
-            await model.startPlayback(detail: fixture.detail, account: account)
+            let outcome = await model.startPlayback(
+                detail: fixture.detail, account: account)
+            started.fulfill()
+            return outcome
         }
         addTeardownBlock {
             await syncGate.release()
             _ = await start.value
         }
         await assertEventually(
-            "replacement admitted while old Stop sync is held",
+            "replacement admitted while old Stop is held",
             timeout: .seconds(5),
             observed: { self.playbackDiagnostic(model.playback) },
+            file: file, line: line,
             condition: {
                 model.playback.runtimeSnapshotForTesting.generation
                     != stoppingGeneration
             })
-        await syncGate.release()
+        if boundary == .progressSync {
+            // New preparation must preserve serialized progress writes.
+            await syncGate.release()
+        }
+        let completion = await XCTWaiter.fulfillment(of: [started], timeout: 5)
+        XCTAssertEqual(completion, .completed, file: file, line: line)
+        if completion != .completed { await syncGate.release() }
         let replacement = await start.value
         XCTAssertEqual(replacement, .started(source: .streamed))
         XCTAssertTrue(model.playback.isPlaybackRequested)
         model.playback.pause()
+        let replacementPlayer = model.playback.runtimeSnapshotForTesting
+            .playerIdentity
+        XCTAssertNotNil(replacementPlayer, file: file, line: line)
+        // For the statistics boundary the replacement is fully prepared and
+        // paused before old Stop is released, exposing stale teardown directly.
         await syncGate.release()
+        await fulfillment(of: [stopped], timeout: 5)
         await stop.value
+        XCTAssertEqual(
+            model.playback.runtimeSnapshotForTesting.playerIdentity,
+            replacementPlayer, file: file, line: line)
 
         XCTAssertEqual(model.playback.state, .paused)
         XCTAssertTrue(model.playback.hasActiveBook)
@@ -30623,6 +30673,8 @@ private actor TestAppService: AppServicing {
     private let playbackCloseGate: AsyncGate?
     private let firstPlaybackSyncGate: AsyncGate?
     private let statisticsFinishGate: AsyncGate?
+    private let statisticsFinishGateCall: Int?
+    private var statisticsFinishCallCount = 0
     private let statisticsSummaryGate: AsyncGate?
     private let statisticsProvider:
         (@Sendable (StatisticsQuery) async -> StatisticsSummary)?
@@ -30879,6 +30931,7 @@ private actor TestAppService: AppServicing {
         playbackCloseGate: AsyncGate? = nil,
         firstPlaybackSyncGate: AsyncGate? = nil,
         statisticsFinishGate: AsyncGate? = nil,
+        statisticsFinishGateCall: Int? = nil,
         statisticsSummaryGate: AsyncGate? = nil,
         statisticsProvider: (
             @Sendable (StatisticsQuery) async -> StatisticsSummary
@@ -30966,6 +31019,7 @@ private actor TestAppService: AppServicing {
         self.playbackCloseGate = playbackCloseGate
         self.firstPlaybackSyncGate = firstPlaybackSyncGate
         self.statisticsFinishGate = statisticsFinishGate
+        self.statisticsFinishGateCall = statisticsFinishGateCall
         self.statisticsSummaryGate = statisticsSummaryGate
         self.statisticsProvider = statisticsProvider
         self.statisticsHistoryError = statisticsHistoryError
@@ -31704,7 +31758,11 @@ private actor TestAppService: AppServicing {
     func finishStatisticsSession(
         _ sessionID: PlaybackSessionID
     ) async throws(AppServiceError) {
-        if let statisticsFinishGate {
+        statisticsFinishCallCount += 1
+        if let statisticsFinishGate,
+            statisticsFinishGateCall == nil
+                || statisticsFinishGateCall == statisticsFinishCallCount
+        {
             await statisticsFinishGate.enterAndWait()
         }
     }

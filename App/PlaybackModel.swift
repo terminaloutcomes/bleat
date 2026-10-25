@@ -2248,6 +2248,9 @@ final class PlaybackModel {
             return
         }
         await finishStatisticsSession()
+        guard !allowsSupersession || generation == operationGeneration else {
+            return
+        }
         notifyAutomaticDownloadBandwidthReleased()
         resetPlayer()
         releaseAutomaticCachedPlaybackWindow()
