@@ -53388,7 +53388,8 @@
         "TestAppService",
         "fixtureAccount",
         "fixtureBookDetail",
-        "AppModelOperationEventProbe when readback completion is required"
+        "AppModelOperationEventProbe when readback completion is required",
+        "AppDiagnosticRecorderSpy with an injected invalid-checkpoint service failure"
       ],
       "actions": [],
       "assertions": [],
@@ -53397,7 +53398,7 @@
       ],
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations.",
+        "intendedBehavior": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations. An invalid stored checkpoint retains its distinct presentation/diagnostic cause, emits the load-checkpoint stage, and submits no PATCH.",
         "purpose": "Explicit finished-state preflight and typed resolution regression.",
         "actionPostconditions": [
           {
@@ -53407,7 +53408,7 @@
         ],
         "timeoutAndToleranceRationale": "XCTest exact values/typed outcomes and request counts retain caller locations; 30-second completion budget follows owning operation deadline.",
         "ruleAssessments": {
-          "1": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations.",
+          "1": "HTTP rejection and post-submission transport uncertainty preserve local state and common checkpoint with distinct typed presentations. Assert progressCheckpointInvalid, empty update requests and the exact finished_progress_checkpoint_invalid code at load_finished_progress_checkpoint.",
           "2": "Await setFinished/resolution and recorded service requests; the readback test registers its completion expectation before mutation and uses AsyncGate admission/release.",
           "3": "N/A: static progress values and server timestamps; no advancing player.",
           "4": "Await spawned mutation task and gate release in readback test; model tasks are account/revision-scoped. Other tests await direct APIs.",

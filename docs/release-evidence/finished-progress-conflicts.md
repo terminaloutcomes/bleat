@@ -138,14 +138,16 @@ then still requires the prompt to close and server state to remain unchanged.
 No wait was increased and no semantic postcondition was dropped.
 
 Draft [PR #475](https://github.com/terminaloutcomes/bleat/pull/475) preserves the
-implementation. The aggregate check has passed 612 signed host tests and 670
-simulator app tests and is still running its 126-test broader UI lane. Its four
+implementation. The aggregate check passed 612 signed host tests and 670
+simulator app tests, then failed its 126-test broader UI lane: 115 passed, four
+failed, and seven approved skips, with zero runtime warnings. Its four
 host known issues are intentional cleanup-failure reporter fixtures, not new
 failures. Rust workspace tests passed 381 cases; telemetry validation passed 107
 Rust cases and its separately verified Swift selections (91 executed across the
 selected runs), with zero failures/skips. Release/package/build-mode, schema,
-format and documentation prerequisites have passed. Remaining aggregate stages
-and final-head CI are pending. Initial-head CI passed at `c03a0285`; it does not
+format and documentation prerequisites have passed. The aggregate stopped before its full live stages; those stages are being run
+separately rather than restarting the completed host/app/UI lanes. Final-head CI
+is pending. Initial-head CI passed at `c03a0285`; it does not
 certify the later reviewed fixes.
 `APP-FINISHED-001` remains implemented until that evidence is recorded.
 
@@ -163,3 +165,33 @@ no newly introduced traps, forced casts/throws, or blocking async wrappers.
 The final GET/PATCH race remains explicit because the server has no conditional
 write contract. Broader audit counts and signed/physical-device acceptance are
 not inferred from these scoped checks.
+
+## Aggregate UI failures retained
+
+`mise run check` exited unsuccessfully after the full UI lane. Its native result
+ran from 2026-10-25 08:20:10 UTC to 09:12:43 UTC, followed by additional Xcode
+diagnostics collection. The failed bundle is
+`.build/test-core-results/ui-tests-73882-1792915950918.xcresult`.
+
+| Exact identity | Failed postcondition |
+| --- | --- |
+| `BleatUITests.testDiagnosticTelemetryConsentLivesInSystemSettings` | Could not find/tap `diagnostics.telemetry.settings`. |
+| `BleatUITests.testSystemSettingsLinkAvailableWhenStartupUnavailable` | The same System Settings link was not hittable. |
+| `BleatUITests.testMiniPlayerRestoresWhenStopIsSuperseded` | The playback label did not become Pause within its three-second semantic wait. |
+| `BleatUITests.testViewOnServerOpensSystemBrowserWithoutEditPermission` | Bleat was still foreground after the Safari-open check. |
+
+Source inspection confirms these cases exercise Settings, playback Stop/resume,
+and external browser handling; they do not call explicit finished-state actions.
+They have not been reproduced on an untouched baseline, so this receipt does not
+claim a baseline execution. No assertions, waits, security settings, or unrelated
+features were changed to hide them. The aggregate remains failed and readiness
+remains blocked until its required validation condition is satisfied.
+
+The invalid-checkpoint source audit also retained a distinct
+`progressCheckpointInvalid` presentation and
+`finished_progress_checkpoint_invalid` diagnostic at
+`load_finished_progress_checkpoint`. The typed failure is published after the
+logical operation retires and before diagnostics are awaited, so logging cannot
+replace it with a timeout. The existing failure-boundary regression passed again
+as one exact native test in
+`.build/issue-146-native-checkpoint-failure-final.xcresult`.

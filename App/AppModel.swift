@@ -653,6 +653,7 @@ enum AppFailureCause: Equatable, Sendable, Codable {
     case invalidLibraryCategories
     case invalidBookMetadata(BookMetadataFailure)
     case invalidServerResponse, localStorageUnavailable, unavailableOffline
+    case progressCheckpointInvalid
     case audioSessionActivationFailed
     case audioSession(AudioSessionFailure)
     case playbackFixture(PlaybackFixtureFailure)
@@ -702,6 +703,7 @@ struct AppFailure: Equatable, Sendable, Codable {
         switch cause {
         case .privateCloud(let failure): failure.presentationTitle
         case .localDataReset: "Local data reset incomplete"
+        case .progressCheckpointInvalid: "Saved progress unavailable"
         case .accountUnavailable: "Account unavailable"
         case .playbackIdentityMismatch: "Audiobook mismatch"
         case .inaccessibleLibrary, .inaccessibleTags,
@@ -817,6 +819,8 @@ struct AppFailure: Equatable, Sendable, Codable {
             }
         case .invalidServerResponse:
             "The server returned incomplete or inconsistent data."
+        case .progressCheckpointInvalid:
+            "Bleat could not read this book’s saved progress. Your saved data is kept, and this change was not sent to the server."
         case .localStorageUnavailable:
             "Bleat could not save or read the required data on this device."
         case .libraryCatalogChanged:
@@ -893,7 +897,7 @@ struct AppFailure: Equatable, Sendable, Codable {
             .authenticationCredentialInvalid:
             "exclamationmark.triangle"
         case .localStorageUnavailable, .persistenceUnavailable,
-            .storedDataMigrationFailed:
+            .storedDataMigrationFailed, .progressCheckpointInvalid:
             "externaldrive.badge.exclamationmark"
         case .unavailableOffline, .serverUnavailable, .timeout, .rateLimited:
             "wifi.exclamationmark"
@@ -1043,6 +1047,8 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .statistics(.partialSessionResetRequiresFullSession):
             return .statisticsResetSplitSession
         case .statistics(let error): return .statistics(error)
+        case .libraryCache(.invalidFinishedProgressCheckpoint):
+            return .progressCheckpointInvalid
         case .accountStore, .credentialStore, .accountIdentityMigration,
             .libraryCache,
             .transcriptCache:
@@ -1345,7 +1351,8 @@ extension AppFailureCause {
             .playbackIdentityMismatch:
             .invalidResponse
         case .persistenceUnavailable, .storedDataMigrationFailed,
-            .localStorageUnavailable, .localDataReset, .statistics:
+            .localStorageUnavailable, .localDataReset, .statistics,
+            .progressCheckpointInvalid:
             .localStorage
         case .mediaUnavailable, .audioSessionActivationFailed, .audioSession,
             .playbackFixture:
@@ -5121,6 +5128,15 @@ final class AppModel {
             )
         case .operation(.failed(let failure)):
             publishBookProgressFailure(failure, itemID: book.id)
+            if failure.cause == .progressCheckpointInvalid {
+                // Failure is already published and the operation deadline has
+                // retired; diagnostics cannot turn it into a timeout.
+                await diagnostics.record(
+                    .failed(
+                        .loadFinishedProgressCheckpoint,
+                        category: .app,
+                        failureCode: failure.diagnosticFailureCode))
+            }
         case .operation(.cancelled):
             break
         case .operation(.conflict(_, let server, let reason)):
@@ -5337,10 +5353,16 @@ final class AppModel {
             )
         }
 
+        let checkpoint: FinishedProgressCheckpoint?
+        do {
+            checkpoint = try await service.finishedProgressCheckpoint(
+                for: account, itemID: detail.id)
+        } catch let error {
+            return .failed(
+                AppFailure(operation: .updateProgress, serviceError: error))
+        }
         let server: FinishedProgressCheckpoint
         do {
-            let checkpoint = try await service.finishedProgressCheckpoint(
-                for: account, itemID: detail.id)
             let current = try await service.bookProgress(
                 for: account, itemID: detail.id)
             guard !Task.isCancelled,

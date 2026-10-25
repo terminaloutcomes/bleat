@@ -21286,6 +21286,30 @@ final class AppModelTests: XCTestCase {
             XCTAssertEqual(checkpoint?.progress, baseline)
             XCTAssertTrue(model.finishedProgressConflicts.isEmpty)
         }
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        let service = TestAppService(
+            activeAccount: .success(account), bookDetail: .success(detail))
+        await service.setFinishedCheckpointFailure(
+            .libraryCache(.invalidFinishedProgressCheckpoint))
+        let diagnostics = AppDiagnosticRecorderSpy()
+        let model = AppModel(service: service, diagnostics: diagnostics)
+        await model.start()
+        await model.setFinished(true, detail: detail)
+        XCTAssertEqual(
+            model.bookProgressFailure,
+            AppFailure(.updateProgress, .progressCheckpointInvalid))
+        XCTAssertFalse(model.isBookFinished(detail.id))
+        let updates = await service.progressUpdateRequests()
+        XCTAssertTrue(updates.isEmpty)
+        let events = await diagnostics.events()
+        XCTAssertTrue(
+            events.contains(
+                .failed(
+                    .loadFinishedProgressCheckpoint,
+                    category: .app,
+                    failureCode: .finishedProgressCheckpointInvalid)))
     }
 
     func testFinishedConflictPendingChoiceDoesNotBlockOtherItems() async throws
@@ -32430,6 +32454,12 @@ private actor TestAppService: AppServicing {
         bookmark: AudioBookmark
     ) async throws(AppServiceError) {}
 
+    private var finishedCheckpointFailure: AppServiceError?
+
+    func setFinishedCheckpointFailure(_ failure: AppServiceError) {
+        finishedCheckpointFailure = failure
+    }
+
     private var missingFinishedCheckpoint = false
 
     func setMissingFinishedCheckpoint() { missingFinishedCheckpoint = true }
@@ -32440,7 +32470,8 @@ private actor TestAppService: AppServicing {
     func finishedProgressCheckpoint(
         for account: ServerAccount, itemID: LibraryItemID
     ) async throws(AppServiceError) -> FinishedProgressCheckpoint? {
-        finishedCheckpoints[account.id]?[itemID]
+        if let finishedCheckpointFailure { throw finishedCheckpointFailure }
+        return finishedCheckpoints[account.id]?[itemID]
             ?? (missingFinishedCheckpoint
                 ? nil : FinishedProgressCheckpoint(progress: nil))
     }

@@ -67,6 +67,7 @@ public enum DiagnosticOperation: String, Codable, Sendable {
     case importStatistics = "import_statistics"
     case resetStatistics = "reset_statistics"
     case reconcileFinishedProgress = "reconcile_finished_progress"
+    case loadFinishedProgressCheckpoint = "load_finished_progress_checkpoint"
     case loadBook = "load_book"
     case loadBookmarks = "load_bookmarks"
     case loadTranscriptionJob = "load_transcription_job"
@@ -253,6 +254,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case carPlayLibraryPageInvalid = "carplay_library_page_invalid"
     case invalidLibraryCategories = "invalid_library_categories"
     case localStorageUnavailable = "local_storage_unavailable"
+    case finishedProgressCheckpointInvalid =
+        "finished_progress_checkpoint_invalid"
     case unavailableOffline = "unavailable_offline"
     case requestRejected = "request_rejected"
     case uncertainMutation = "uncertain_mutation"
