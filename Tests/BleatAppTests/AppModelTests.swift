@@ -23391,6 +23391,95 @@ final class AppModelTests: XCTestCase {
         await model.playback.stop()
     }
 
+    func testPlaybackStartReplacesIdlePlayerWhileStopSyncIsPending()
+        async throws
+    {
+        let fixture = try playbackRecoveryFixture(audioSeconds: 30)
+        let account = try fixtureAccount()
+        let syncGate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account),
+            playback: [
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL,
+                        sessionID: "stopping-session")),
+                .success(
+                    playbackPreparation(
+                        detail: fixture.detail, audioURL: fixture.audioURL,
+                        sessionID: "replacement-session")),
+            ],
+            firstPlaybackSyncGate: syncGate)
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: fixture.defaults,
+            downloadsStorageRootURL: fixture.root.appendingPathComponent(
+                "downloads"),
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "restart-during-stop"),
+            localSessionStore: LocalPlaybackSessionStore(
+                defaults: fixture.defaults),
+            playbackPositionStore: PlaybackPositionStore(
+                defaults: fixture.defaults),
+            audioSession: PlaybackAudioSession(activate: {}, deactivate: {}))
+        addTeardownBlock { @MainActor in
+            await syncGate.release()
+            await model.playback.stop()
+            fixture.cleanUp()
+        }
+        await model.start()
+        let initial = await model.startPlayback(
+            detail: fixture.detail, account: account)
+        XCTAssertEqual(initial, .started(source: .streamed))
+        let stop = Task { await model.playback.stop() }
+        addTeardownBlock {
+            await syncGate.release()
+            await stop.value
+        }
+        let entered = await syncGate.waitUntilEntered(timeout: .seconds(5))
+        XCTAssertTrue(entered, "Stop must be held at progress synchronization")
+        XCTAssertEqual(model.playback.state, .idle)
+        XCTAssertFalse(model.playback.canReusePreparedPlayback)
+
+        let stoppingGeneration = model.playback.runtimeSnapshotForTesting
+            .generation
+        let start = Task {
+            await model.startPlayback(detail: fixture.detail, account: account)
+        }
+        addTeardownBlock {
+            await syncGate.release()
+            _ = await start.value
+        }
+        await assertEventually(
+            "replacement admitted while old Stop sync is held",
+            timeout: .seconds(5),
+            observed: { self.playbackDiagnostic(model.playback) },
+            condition: {
+                model.playback.runtimeSnapshotForTesting.generation
+                    != stoppingGeneration
+            })
+        await syncGate.release()
+        let replacement = await start.value
+        XCTAssertEqual(replacement, .started(source: .streamed))
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        model.playback.pause()
+        await syncGate.release()
+        await stop.value
+
+        XCTAssertEqual(model.playback.state, .paused)
+        XCTAssertTrue(model.playback.hasActiveBook)
+        XCTAssertTrue(model.playback.showsMiniPlayer)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        let opened = await service.playbackOpenRequests()
+        XCTAssertEqual(opened.count, 2)
+        let closed = await service.playbackCloseSessionIDs()
+        XCTAssertEqual(
+            closed, [PlaybackSessionID(rawValue: "stopping-session")])
+        let resumed = await model.startPlayback(
+            detail: fixture.detail, account: account)
+        XCTAssertEqual(resumed, .started(source: .activePlayer))
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+    }
+
     func testPlaybackStartRejectsActivePlayerFromAnotherLibrary()
         async throws
     {

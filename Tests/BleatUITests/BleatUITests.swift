@@ -2600,7 +2600,11 @@ final class BleatUITests: XCTestCase {
             direction: .up
         )
         XCTAssertFalse(app.switches["diagnostics.telemetry.enabled"].exists)
-        app.buttons["diagnostics.telemetry.settings"].tap()
+        let settingsLink = app.descendants(matching: .any)[
+            "diagnostics.telemetry.settings"]
+        XCTAssertTrue(settingsLink.isEnabled)
+        XCTAssertTrue(settingsLink.isHittable)
+        settingsLink.tap()
 
         let settings = XCUIApplication(
             bundleIdentifier: "com.apple.Preferences")
@@ -2647,7 +2651,9 @@ final class BleatUITests: XCTestCase {
             direction: .up
         )
         XCTAssertFalse(app.switches["diagnostics.telemetry.enabled"].exists)
-        XCTAssertTrue(app.buttons["diagnostics.telemetry.settings"].isHittable)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["diagnostics.telemetry.settings"]
+                .isHittable)
     }
 
     @MainActor
@@ -3185,7 +3191,14 @@ final class BleatUITests: XCTestCase {
         app.staticTexts["The Test Audiobook"].tap()
         let play = app.buttons["book.detail.play"]
         XCTAssertTrue(play.waitForExistence(timeout: 3))
+        XCTAssertTrue(play.isEnabled)
+        XCTAssertTrue(play.isHittable)
         play.tap()
+        let started = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label == %@", "Pause The Test Audiobook"),
+            object: play)
+        XCTAssertEqual(XCTWaiter.wait(for: [started], timeout: 3), .completed)
         let miniToggle = app.buttons["player.mini.toggle"]
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 3))
         app.buttons["player.mini.open"].swipeDown(velocity: .fast)
@@ -3195,8 +3208,8 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(completeSync.waitForExistence(timeout: 3))
         XCTAssertTrue(completeSync.isHittable)
 
-        // Resume and pause while stop awaits progress synchronization. Pause
-        // supersedes the pending stop, leaving an active book to restore.
+        // A new Start replaces the retired player while the old Stop awaits
+        // synchronization. Pausing that replacement must survive old cleanup.
         let playbackStopped = XCTNSPredicateExpectation(
             predicate: NSPredicate(
                 format: "label == %@", "Start The Test Audiobook"),
@@ -3205,7 +3218,19 @@ final class BleatUITests: XCTestCase {
         XCTAssertEqual(
             XCTWaiter.wait(for: [playbackStopped], timeout: 3), .completed
         )
+        let stoppingGeneration = completeSync.value as? String
+        XCTAssertNotNil(stoppingGeneration)
         play.tap()
+        let replacementAdmitted = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "value != %@", stoppingGeneration ?? ""),
+            object: completeSync)
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [replacementAdmitted], timeout: 3), .completed)
+        XCTAssertFalse(miniToggle.exists)
+        // Preparation preserves serialized progress writes. Release the old
+        // sync only after the replacement has retired Stop's generation.
+        completeSync.tap()
         let playbackResumed = XCTNSPredicateExpectation(
             predicate: NSPredicate(
                 format: "label == %@", "Pause The Test Audiobook"),
@@ -3214,13 +3239,16 @@ final class BleatUITests: XCTestCase {
         XCTAssertEqual(
             XCTWaiter.wait(for: [playbackResumed], timeout: 3), .completed
         )
-        XCTAssertFalse(miniToggle.exists)
         play.tap()
-        completeSync.tap()
         XCTAssertTrue(miniToggle.waitForExistence(timeout: 10))
         XCTAssertEqual(miniToggle.label, "Play")
         XCTAssertTrue(miniToggle.isHittable)
         miniToggle.tap()
+        let restoredPlayback = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Pause"),
+            object: miniToggle)
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [restoredPlayback], timeout: 3), .completed)
         XCTAssertEqual(miniToggle.label, "Pause")
     }
 
@@ -3698,14 +3726,26 @@ final class BleatUITests: XCTestCase {
         actions.tap()
         let viewOnServer = app.buttons["book.detail.viewOnServer"]
         XCTAssertTrue(viewOnServer.waitForExistence(timeout: 3))
+        XCTAssertTrue(viewOnServer.isEnabled)
+        XCTAssertTrue(viewOnServer.isHittable)
         viewOnServer.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         let opened = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in safari.state == .runningForeground
+            predicate: NSPredicate { _, _ in
+                safari.state == .runningForeground
+                    && app.state != .runningForeground
             },
             object: nil
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [opened], timeout: 15), .completed)
+        let handoff = XCTWaiter.wait(for: [opened], timeout: 15)
+        if handoff != .completed {
+            let screenshot = XCTAttachment(
+                screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "Browser handoff foreground state"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(handoff, .completed)
         XCTAssertNotEqual(app.state, .runningForeground)
     }
 
