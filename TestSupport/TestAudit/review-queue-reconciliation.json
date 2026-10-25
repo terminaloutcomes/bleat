@@ -1398,7 +1398,7 @@
         "reviewed_source_revision": "ea41394238c7cf55692706f4a83fe9d5929a3c88",
         "evidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
         "scope_and_limits": "Detection, acknowledgment and repeated detection preserve the acknowledged version in the same defaults instance; no process restart.",
-        "current_input_rationale": "Test source/helpers and production inputs unchanged from the signed 609-test receipt at this head. Documentation-only dispositions; no new native execution claimed."
+        "current_input_rationale": "The historical receipt remains unchanged. PR #470 extends this identity for fresh and legacy-dismissed persisted shapes, reconstructed defaults, versioned acknowledgement durability and installation isolation; current execution/review evidence is recorded in PR #470."
       },
       "partialEvidence": "Issue #372 defaults lifecycle slice (2026-10-19): reviewed every fixture caller plus restored/restarted and read-only store construction. Caller-registered defer removes all exact owned data/configuration suite names on normal and throwing exits, including partial allocation. Root directory deletion remains a separate open finding. Historical checkpoint/synchronization assessments and evidence are unchanged by this cleanup."
     },

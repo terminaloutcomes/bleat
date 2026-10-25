@@ -1892,6 +1892,13 @@ relabeling them as continuous segments would misrepresent how they were recorded
 Later preserves the pending notice for a subsequent foreground or relaunch.
 Neither choice changes existing history or older-client compatibility.
 
+The revised notice uses a versioned installation-local acknowledgment. The
+previous OK dismissal does not suppress it: existing legacy detection remains
+valid and presents the revised notice until the user explicitly confirms it.
+The new acknowledgment survives relaunch and repeated detection; no flag is
+reset on launch, and a fresh installation without detected legacy data stays
+quiet.
+
 Design, signed-device migration and
 matched bidirectional mixed-version evidence are tracked in `docs/design/cloud-sync-storage.md` and
 [issue #355](https://github.com/terminaloutcomes/bleat/issues/355).

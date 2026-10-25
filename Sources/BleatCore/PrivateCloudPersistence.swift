@@ -460,8 +460,11 @@ struct PrivateCloudPersistence: Sendable {
 public enum CloudStorageUpgradeNotice {
     public static let introducedInVersion = "2026.10.14"
     private static let detectedKey = "bleat.cloudStorageUpgrade.v2.detected"
+    // The revised notice requires explicit device-update confirmation. The old
+    // OK acknowledgement must not suppress it; retain legacy detection so an
+    // already migrated installation can present it without another migration.
     private static let acknowledgedKey =
-        "bleat.cloudStorageUpgrade.v2.acknowledged"
+        "bleat.cloudStorageUpgrade.v3.acknowledged"
     public static func detectLegacy(in defaults: UserDefaults) {
         guard !defaults.bool(forKey: detectedKey) else { return }
         defaults.set(true, forKey: detectedKey)

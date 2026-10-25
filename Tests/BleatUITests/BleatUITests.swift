@@ -1602,13 +1602,34 @@ final class BleatUITests: XCTestCase {
 
     @MainActor
     func testCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch() {
+        assertCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch(
+            legacyAcknowledged: false)
+    }
+
+    @MainActor
+    func testLegacyDismissedCloudStorageNoticeRequiresRevisedConfirmation() {
+        assertCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch(
+            legacyAcknowledged: true)
+    }
+
+    @MainActor
+    private func
+        assertCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch(
+            legacyAcknowledged: Bool
+        )
+    {
         let scenario = "--ui-testing-signed-in"
         let noticeArgument = "--ui-testing-cloud-storage-notice"
+        var arguments = [
+            noticeArgument, "--ui-testing-cloud-storage-notice-reset",
+        ]
+        if legacyAcknowledged {
+            arguments.append(
+                "--ui-testing-cloud-storage-notice-legacy-acknowledged")
+        }
         let app = launch(
             scenario: scenario,
-            additionalArguments: [
-                noticeArgument, "--ui-testing-cloud-storage-notice-reset",
-            ])
+            additionalArguments: arguments)
         defer {
             app.terminate()
             app.launchArguments = [
@@ -1648,10 +1669,16 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()
+        XCTAssertTrue(
+            tabButton("Settings", in: app)
+                .wait(for: \.isHittable, toEqual: true, timeout: 5))
         XCTAssertFalse(notice.waitForExistence(timeout: 2))
         app.terminate()
         app.launchArguments = [scenario, noticeArgument]
         app.launch()
+        XCTAssertTrue(
+            tabButton("Settings", in: app)
+                .wait(for: \.isHittable, toEqual: true, timeout: 5))
         XCTAssertFalse(notice.waitForExistence(timeout: 2))
     }
 

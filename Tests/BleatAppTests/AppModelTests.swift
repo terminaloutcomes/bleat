@@ -1216,6 +1216,40 @@ final class AppModelTests: XCTestCase {
             cloudRequests, 0, "Confirmation must not initiate a cloud rewrite")
     }
 
+    func
+        testRevisedCloudStorageNoticeRequiresNewAcknowledgmentAfterLegacyDismissal()
+        async throws
+    {
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.setPersistentDomain(
+            [
+                "bleat.cloudStorageUpgrade.v2.detected": true,
+                "bleat.cloudStorageUpgrade.v2.acknowledged": true,
+            ], forName: suite)
+        let service = TestAppService(activeAccount: .success(nil))
+        let model = AppModel(
+            service: service, cloudStorageNoticeDefaults: defaults)
+        XCTAssertTrue(model.cloudStorageUpgradeNoticePending)
+        let pendingRelaunch = AppModel(
+            service: service,
+            cloudStorageNoticeDefaults: try XCTUnwrap(
+                UserDefaults(suiteName: suite)))
+        XCTAssertTrue(pendingRelaunch.cloudStorageUpgradeNoticePending)
+        model.acknowledgeCloudStorageUpgradeNotice()
+        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+        let confirmedRelaunch = AppModel(
+            service: service,
+            cloudStorageNoticeDefaults: try XCTUnwrap(
+                UserDefaults(suiteName: suite)))
+        XCTAssertFalse(confirmedRelaunch.cloudStorageUpgradeNoticePending)
+        XCTAssertTrue(
+            defaults.bool(forKey: "bleat.cloudStorageUpgrade.v2.acknowledged"))
+        let requests = await service.privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(requests, 0)
+    }
+
     func testDeferringCloudStorageNoticePreservesPendingAcknowledgment() throws
     {
         let suite = UUID().uuidString

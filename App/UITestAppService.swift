@@ -244,6 +244,7 @@
                 let noticeKeys = [
                     "bleat.cloudStorageUpgrade.v2.detected",
                     "bleat.cloudStorageUpgrade.v2.acknowledged",
+                    "bleat.cloudStorageUpgrade.v3.acknowledged",
                 ]
                 if arguments.contains("--ui-testing-cloud-storage-notice-reset")
                     || arguments.contains(
@@ -252,6 +253,15 @@
                     for key in noticeKeys {
                         UserDefaults.standard.removeObject(forKey: key)
                     }
+                }
+                if arguments.contains(
+                    "--ui-testing-cloud-storage-notice-legacy-acknowledged")
+                {
+                    UserDefaults.standard.set(
+                        true, forKey: "bleat.cloudStorageUpgrade.v2.detected")
+                    UserDefaults.standard.set(
+                        true,
+                        forKey: "bleat.cloudStorageUpgrade.v2.acknowledged")
                 }
                 if arguments.contains("--ui-testing-cloud-storage-notice") {
                     CloudStorageUpgradeNotice.detectLegacy(in: .standard)
