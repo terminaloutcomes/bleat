@@ -39,7 +39,7 @@ deferred that pre-existing conflict discrepancy from
 
 ## Executed evidence
 
-Validation is ongoing; do not treat this receipt as final verification.
+The required aggregate remains failed; do not treat this receipt as final verification.
 
 - Final focused core progress suite: nine tests passed, zero skips, including
   actor persistence/account isolation, a real prior-schema store upgrade, and
@@ -52,7 +52,7 @@ Validation is ongoing; do not treat this receipt as final verification.
   again in `.build/issue-146-native-nine-final.xcresult`, with zero failures,
   skips, or runtime warnings; the nine core progress tests also passed again
   after freezing the schema. Unchanged complete lanes are not rerun solely
-  to inflate evidence. Final-head CI and live journeys remain pending.
+  to inflate evidence. Completed code-head CI and live journeys are recorded below.
 - Independent focused repetition: six first conflict identities passed in
   `.build/issue-146-native-exact.xcresult`.
 - Three additional exact identities passed in
@@ -145,11 +145,20 @@ host known issues are intentional cleanup-failure reporter fixtures, not new
 failures. Rust workspace tests passed 381 cases; telemetry validation passed 107
 Rust cases and its separately verified Swift selections (91 executed across the
 selected runs), with zero failures/skips. Release/package/build-mode, schema,
-format and documentation prerequisites have passed. The aggregate stopped before its full live stages; those stages are being run
-separately rather than restarting the completed host/app/UI lanes. Final-head CI
-is pending. Initial-head CI passed at `c03a0285`; it does not
-certify the later reviewed fixes.
-`APP-FINISHED-001` remains implemented until that evidence is recorded.
+format and documentation prerequisites have passed. The aggregate stopped before
+its full live stages; both stages subsequently completed separately. The full
+server suite passed 13 tests with eight approved optional skips. The standard
+online/offline app-live gate passed both exact tests with zero failures, skips,
+or runtime warnings, including verified 401 refresh/range recovery. Its retained
+artifacts are in
+`TestSupport/ServerHarness/app-live-artifacts/2a825e82-68a5-45d4-91a2-981f460bdd65/`.
+Its owned containers, simulator, and derived build directory were cleaned up.
+
+Exact-code-head [CI at `fa5e6ada`](https://github.com/terminaloutcomes/bleat/actions/runs/40180915280)
+completed successfully, including iOS, Rust, host tests and coverage publication;
+security, schema and site checks also passed. Documentation-only follow-ups
+record their own CI in the PR. `APP-FINISHED-001` remains implemented because the
+required aggregate has not passed; these results do not certify broader acceptance.
 
 ## Source review
 
@@ -165,6 +174,16 @@ no newly introduced traps, forced casts/throws, or blocking async wrappers.
 The final GET/PATCH race remains explicit because the server has no conditional
 write contract. Broader audit counts and signed/physical-device acceptance are
 not inferred from these scoped checks.
+
+An independent reviewer subsequently reviewed exact code head
+`fa5e6ada6de6837f75cb08f306dc2f54f5b3f6b1` read-only, without rerunning tests.
+They found no scoped code correctness issues across persistence/migration,
+account/item isolation, typed comparisons, conflict choices, stale guards,
+rejection, uncertainty, readback and regression coverage. They identified stale
+pending/baseline statements in this receipt; this documentation update addresses
+that finding. The reviewer independently inspected the saved comparison summaries
+and successful GitHub validation jobs. Physical-device behavior and broader
+acceptance were outside that review.
 
 ## Aggregate UI failures retained
 
@@ -182,10 +201,25 @@ diagnostics collection. The failed bundle is
 
 Source inspection confirms these cases exercise Settings, playback Stop/resume,
 and external browser handling; they do not call explicit finished-state actions.
-They have not been reproduced on an untouched baseline, so this receipt does not
-claim a baseline execution. No assertions, waits, security settings, or unrelated
-features were changed to hide them. The aggregate remains failed and readiness
-remains blocked until its required validation condition is satisfied.
+All four were then selected in narrow paired runs on unchanged main
+`0ed12585dc6726fce2aca2336e99272014810f5d` and exact code head
+`fa5e6ada6de6837f75cb08f306dc2f54f5b3f6b1`, using separate fresh owned iPhone 17
+Pro simulators on iOS 27.0. Both runs selected exactly four tests; all four failed,
+with identical failure text, zero skips and zero runtime warnings. The baseline
+bundle is `.build/issue-146-baseline-four-v2.xcresult` relative to the separate
+baseline worktree;
+the head bundle is `.build/issue-146-head-four.xcresult`. Baseline elapsed time was
+746.349 seconds, including Xcode's 600-second diagnostic collection timeout;
+head elapsed time was 289.639 seconds. An initial baseline setup attempt ran zero
+tests because direct `xcodebuild` omitted the inert telemetry environment; the
+corrected run exported the existing worktree environment. Both comparison
+simulators were deleted after their results were captured.
+
+These failures reproduce without the #146 diff. No assertions, waits, security
+settings, or unrelated features were changed to hide them. The aggregate remains
+failed. Readiness remains pending explicit acceptance of the demonstrated
+baseline failures or separate resolution of those failures; the existing approval
+was conditional on passing required validation. The PR remains draft.
 
 The invalid-checkpoint source audit also retained a distinct
 `progressCheckpointInvalid` presentation and
