@@ -21374,6 +21374,10 @@ final class AppModelTests: XCTestCase {
         let completed = operations.expectation(
             for: .bookProgressReconciliationCompleted(account.id, detail.id))
         let mutation = Task { await model.setFinished(true, detail: detail) }
+        addTeardownBlock {
+            await gate.release()
+            await mutation.value
+        }
         await gate.waitUntilEntered()
         let remote = LibraryBookProgress(
             id: "confirmed", userID: account.user.id, libraryItemID: detail.id,

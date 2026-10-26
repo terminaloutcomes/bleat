@@ -5296,6 +5296,7 @@ final class BleatLiveUITests: XCTestCase {
         func chooseAction(expected: String, submit: Bool = true) async {
             let actions = app.buttons["book.detail.actions"]
             XCTAssertTrue(actions.waitForExistence(timeout: 20))
+            XCTAssertTrue(actions.isEnabled)
             XCTAssertTrue(actions.isHittable)
             actions.tap()
             let finished = app.buttons["book.detail.finished"]
@@ -5312,12 +5313,14 @@ final class BleatLiveUITests: XCTestCase {
         await chooseAction(expected: initialLabel)
         let keepServer = app.buttons["Keep Server Progress"]
         XCTAssertTrue(keepServer.waitForExistence(timeout: 20))
+        XCTAssertTrue(keepServer.isEnabled)
         XCTAssertTrue(keepServer.isHittable)
         let unmodified = try await liveFinishedProgress(
             url: progressURL, token: token)
         XCTAssertEqual(unmodified, initial)
         let cancel = app.buttons["Cancel"].firstMatch
         if cancel.exists {
+            XCTAssertTrue(cancel.isEnabled)
             XCTAssertTrue(cancel.isHittable)
             cancel.tap()
         } else {
@@ -5334,6 +5337,7 @@ final class BleatLiveUITests: XCTestCase {
 
         await chooseAction(expected: initialLabel)
         XCTAssertTrue(keepServer.waitForExistence(timeout: 20))
+        XCTAssertTrue(keepServer.isEnabled)
         XCTAssertTrue(keepServer.isHittable)
         keepServer.tap()
         XCTAssertTrue(keepServer.waitForNonExistence(timeout: 10))
@@ -5342,6 +5346,8 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertEqual(adopted, initial)
         // Confirm the operation has completed before terminating its process.
         let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
         actions.tap()
         let finished = app.buttons["book.detail.finished"]
         let adoptionCompleted = expectation(
@@ -5357,6 +5363,7 @@ final class BleatLiveUITests: XCTestCase {
         dismissSavePasswordPromptIfNeeded(app: app)
         let card = app.buttons["home.book.\(itemID)"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 30))
+        XCTAssertTrue(card.isEnabled)
         XCTAssertTrue(card.isHittable)
         card.tap()
         XCTAssertTrue(
@@ -5388,6 +5395,7 @@ final class BleatLiveUITests: XCTestCase {
         let useDevice = app.buttons[
             initial?.isFinished == true
                 ? "Mark Unfinished on Server" : "Mark Finished on Server"]
+        XCTAssertTrue(useDevice.isEnabled)
         XCTAssertTrue(useDevice.isHittable)
         useDevice.tap()
         XCTAssertTrue(useDevice.waitForNonExistence(timeout: 10))
@@ -5398,6 +5406,8 @@ final class BleatLiveUITests: XCTestCase {
         XCTAssertEqual(committed?.isFinished, !(initial?.isFinished ?? false))
         // Restore through the app, accepting a fresh conflict if the confirmed
         // PATCH's separate readback has not established the next checkpoint yet.
+        XCTAssertTrue(finished.isEnabled)
+        XCTAssertTrue(finished.isHittable)
         finished.tap()
         let deadline = ContinuousClock.now.advanced(by: .seconds(20))
         var restoredServer = try await liveFinishedProgress(
@@ -5408,7 +5418,9 @@ final class BleatLiveUITests: XCTestCase {
             let restore = app.buttons[
                 initial?.isFinished == true
                     ? "Mark Finished on Server" : "Mark Unfinished on Server"]
-            if restore.exists, restore.isHittable { restore.tap() }
+            if restore.exists, restore.isEnabled, restore.isHittable {
+                restore.tap()
+            }
             // Poll a semantic server postcondition; the 250ms cadence bounds
             // request traffic while the independent app request commits.
             try await Task.sleep(for: .milliseconds(250))
@@ -5416,6 +5428,8 @@ final class BleatLiveUITests: XCTestCase {
                 url: progressURL, token: token)
         }
         XCTAssertEqual(restoredServer?.isFinished, initial?.isFinished ?? false)
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
         actions.tap()
         let restored = expectation(
             for: NSPredicate(
@@ -5423,6 +5437,8 @@ final class BleatLiveUITests: XCTestCase {
             evaluatedWith: finished)
         await fulfillment(of: [restored], timeout: 20)
         // Dismiss the native menu before the caller navigates back.
+        XCTAssertTrue(app.staticTexts["book.detail.title"].isEnabled)
+        XCTAssertTrue(app.staticTexts["book.detail.title"].isHittable)
         app.staticTexts["book.detail.title"].tap()
     }
 
