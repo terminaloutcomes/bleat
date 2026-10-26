@@ -1693,7 +1693,7 @@ enum SignedInAlert: Equatable {
     var message: String {
         switch self {
         case .cloudStorageUpgrade:
-            "We’ve changed how Bleat stores listening history in iCloud. Please update Bleat on all your devices to version \(CloudStorageUpgradeNotice.introducedInVersion) or later. Your existing history is preserved."
+            "Bleat upgrades its local iCloud sync storage automatically and preserves existing listening history. Use Bleat version \(CloudStorageUpgradeNotice.introducedInVersion) or later on every device. Confirming below dismisses this notice on this device; it does not rewrite history."
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.message
@@ -1904,10 +1904,16 @@ private struct SignedInView: View {
                 Alert(
                     title: Text(entry.alert.title),
                     message: Text(entry.alert.message),
-                    dismissButton: .default(Text("OK")) {
-                        // Acknowledgment belongs to this installation-wide notice,
-                        // even if foreground/account changes replaced its queue entry.
+                    primaryButton: .default(Text("All my devices are updated"))
+                    {
+                        // This confirms the user's upgrade decision, not remote
+                        // device versions or a new history-conversion operation.
                         model.acknowledgeCloudStorageUpgradeNotice()
+                        alertQueue.finish(entry)
+                    },
+                    secondaryButton: .cancel(Text("Later")) {
+                        // Keep the durable notice pending. The queue defers it
+                        // until another foreground presentation or relaunch.
                         alertQueue.finish(entry)
                     })
             case .cellular:
@@ -2067,7 +2073,7 @@ private struct SignedInView: View {
         guard alertQueue.active?.id == entry.id else { return }
         switch entry.alert {
         case .cloudStorageUpgrade:
-            // Only the notice's OK action acknowledges it; presentation changes
+            // Only explicit upgrade confirmation acknowledges it; presentation changes
             // can dismiss an alert without a user response.
             break
         case .series:

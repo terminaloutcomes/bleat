@@ -417,13 +417,45 @@ struct PrivateCloudPersistenceTests {
     {
         var domains = OwnedDefaultsDomains()
         defer { domains.removeAll() }
-        let (_, defaults, _) = try fixture(domains: &domains)
-        #expect(!CloudStorageUpgradeNotice.isPending(in: defaults))
-        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
-        #expect(CloudStorageUpgradeNotice.isPending(in: defaults))
-        CloudStorageUpgradeNotice.acknowledge(in: defaults)
-        CloudStorageUpgradeNotice.detectLegacy(in: defaults)
-        #expect(!CloudStorageUpgradeNotice.isPending(in: defaults))
+        for legacyAcknowledged in [false, true] {
+            let defaults = try domains.make()
+            let name = try #require(domains.names.last)
+            #expect(!CloudStorageUpgradeNotice.isPending(in: defaults))
+            if legacyAcknowledged {
+                // Persist the exact old dismissed shape, without invoking the
+                // current acknowledgement API to manufacture a legacy fixture.
+                defaults.setPersistentDomain(
+                    [
+                        "bleat.cloudStorageUpgrade.v2.detected": true,
+                        "bleat.cloudStorageUpgrade.v2.acknowledged": true,
+                        "unrelated": "preserved",
+                    ], forName: name)
+            } else {
+                CloudStorageUpgradeNotice.detectLegacy(in: defaults)
+            }
+            let reopened = try #require(UserDefaults(suiteName: name))
+            #expect(CloudStorageUpgradeNotice.isPending(in: reopened))
+            CloudStorageUpgradeNotice.detectLegacy(in: reopened)
+            #expect(CloudStorageUpgradeNotice.isPending(in: reopened))
+            CloudStorageUpgradeNotice.acknowledge(in: reopened)
+            let confirmed = try #require(UserDefaults(suiteName: name))
+            CloudStorageUpgradeNotice.detectLegacy(in: confirmed)
+            #expect(!CloudStorageUpgradeNotice.isPending(in: confirmed))
+            #expect(
+                confirmed.persistentDomain(forName: name)?[
+                    "bleat.cloudStorageUpgrade.v3.acknowledged"] as? Bool
+                    == true)
+            #expect(
+                confirmed.bool(
+                    forKey: "bleat.cloudStorageUpgrade.v2.acknowledged")
+                    == legacyAcknowledged)
+            if legacyAcknowledged {
+                #expect(confirmed.string(forKey: "unrelated") == "preserved")
+            }
+            let otherInstallation = try domains.make()
+            CloudStorageUpgradeNotice.detectLegacy(in: otherInstallation)
+            #expect(CloudStorageUpgradeNotice.isPending(in: otherInstallation))
+        }
         #expect(CloudStorageUpgradeNotice.introducedInVersion == "2026.10.14")
     }
 
