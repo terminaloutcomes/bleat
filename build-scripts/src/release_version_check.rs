@@ -2,7 +2,7 @@ use std::{fs, path::Path, process::Command};
 
 use serde_json::Value;
 use thiserror::Error;
-use yaml_rust::YamlLoader;
+use yaml_rust2::YamlLoader;
 
 use crate::release_versions::{VersionError, resolve_marketing_version};
 

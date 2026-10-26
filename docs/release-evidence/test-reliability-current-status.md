@@ -5,7 +5,8 @@ This 25 October 2026 reconciliation describes delivery through merged
 [#473](https://github.com/terminaloutcomes/bleat/pull/473), main
 `9808cb1e5f9063c3c20526bbc86626c3a6448006`. It supersedes earlier current-status
 claims that the macOS work, child acceptance, or the fixed review cohort remain
-undelivered. Dated receipts and failed attempts below keep their tested-source
+undelivered. The [#476 reassessment](#sign-offs-revisited-after-476-26-october-2026)
+qualifies affected test sign-offs with unmerged candidate evidence. Dated receipts and failed attempts below keep their tested-source
 boundaries. An unchecked historical bullet is not itself an unfixed bug.
 
 ## Delivered implementation and current remainder
@@ -56,6 +57,46 @@ performance #46/#446 acceptance remains credited. The notice work
 [#470](https://github.com/terminaloutcomes/bleat/pull/470)/[#471](https://github.com/terminaloutcomes/bleat/issues/471)
 and modal layout [#472](https://github.com/terminaloutcomes/bleat/issues/472) stay
 separate from this epic reconciliation.
+
+## Sign-offs revisited after #476 (26 October 2026)
+
+This source review qualifies the historical keep/fixed labels below; it does
+not erase the original reviews, counts or failed attempts. Main at this review
+is `0ed12585dc6726fce2aca2336e99272014810f5d`. PR
+[#476](https://github.com/terminaloutcomes/bleat/pull/476) is **unmerged** at
+`851d51a14a2675c6dc97a60c43b9ba70cc4ea653`; its corrections are candidate
+implementation, not delivered main behavior. The audit JSON rows link here as
+reassessments while preserving their historical decisions and source extracts.
+
+| Affected sign-off / source | Reassessment of main and candidate correction |
+| --- | --- |
+| `other.json`: `testDiagnosticTelemetryConsentLivesInSystemSettings`, `testSystemSettingsLinkAvailableWhenStartupUnavailable`; `Tests/BleatUITests/BleatUITests.swift` | Historical keep does not establish native selector correctness on iOS 27: main queries Buttons for the SwiftUI Settings Link. Candidate uses the identifier across native element types, retaining the actual Settings journey and interaction checks. Fix pending merge; no platform-wide selector guarantee. |
+| `other.json`: `testViewOnServerOpensSystemBrowserWithoutEditPermission`; same UI source | Historical keep missed separately sampled foreground states. Candidate bounds Safari foreground and Bleat departure in one predicate; the dispatch test does not prove remote page availability. Fix pending merge. |
+| `other.json`: `testMiniPlayerRestoresWhenStopIsSuperseded`; same UI source; `App/UITestAppService.swift` and `App/RootView.swift` | Historical fixed label covers earlier label waits, not valid replacement admission or gate lifetime. Main's idle retained player is incorrectly reusable and delayed-sync release rearms. Candidate observes replacement generation before releasing serialized sync, then verifies paused restoration and resume; its one-shot gate retains the first waiter and later waits pass. Fix pending merge. |
+| `app.json`: `AppModelTests/testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint`; `Tests/BleatAppTests/AppModelTests.swift` | Historical keep/rule 3 overstates the stable boundary. Retry already starts native playback before returning; Pause afterward cannot undo advancing time. Candidate observes actual completed seek before Play through the existing recorder, retains `0.5 ± 0.15`, verifies native Play/Pause and persisted failure/Stop cleanup. Fix pending merge. |
+| `app.json`: `AppModelTests/testPlaybackStartReusesMatchingActivePlayerAndResumes`, `AppModelTests/testStopCompletionDoesNotRetireNewerSelection`; `App/PlaybackModel.swift` | Keep these bounded scenarios: matching paused reuse and replacement across the diagnostic suspension. They do not establish idle reuse eligibility or ownership after every later await. Main checks generation after diagnostics but not after the later statistics finish. Candidate excludes idle reuse, rechecks ownership after statistics, and adds two separately held progress/statistics replacement regressions checking native player identity, exact old-session closure and resumed reuse. No new regression is credited to main. |
+
+Review inspected the
+[pinned candidate diff](https://github.com/terminaloutcomes/bleat/compare/0ed12585dc6726fce2aca2336e99272014810f5d...851d51a14a2675c6dc97a60c43b9ba70cc4ea653)
+and [source-grounded receipt](https://github.com/terminaloutcomes/bleat/blob/851d51a14a2675c6dc97a60c43b9ba70cc4ea653/docs/release-evidence/broader-ui-regressions.md),
+including test bodies, fixture state and Stop/reuse continuations. Statistics
+completion flushes local listening accounting; the required correction is stale
+continuation ownership, not removing accounting or weakening serialization.
+The earlier diagnostic-boundary Stop evidence remains valid within that scope.
+
+The [authoritative execution receipt](https://github.com/terminaloutcomes/bleat/pull/476#issuecomment-6397997492)
+records four unchanged-main UI failures, followed by clean candidate repetitions
+(eight UI executions), 15 focused regressions, and a completed production
+aggregate: signed host 609 passed, app 664 passed, broad UI 119 passed with seven
+existing approved opt-in skips, core live 13 passed with eight configuration
+skips, and both app-live journeys passed. The final checkpoint-only correction
+has three clean repetitions, all 664 owning app tests and exact-final-head CI;
+unchanged host/UI/live inputs retain their earlier aggregate evidence. These
+are reported #476 results, **not executions by this documentation change**.
+The failed signing preflight and earlier checkpoint CI failure remain in that
+receipt. Neither inventory totals nor the historical 312-review cohort certifies
+execution or full semantic compliance. #475, #470 and deferred #457 are unchanged;
+physical-device acceptance remains separate.
 
 ## Revision and counting
 

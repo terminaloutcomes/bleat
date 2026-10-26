@@ -67,6 +67,11 @@ name-only destination. An unavailable device fails before compilation with an
 inventory diagnostic; `BLEAT_SIMULATOR_DESTINATION` remains an explicit override.
 This includes app unit regressions and two launch journeys; the broader UI
 regression suite runs through `scripts/test-core.sh`.
+Relevant UI, fixture, playback and synchronization changes must retain
+[local broad UI evidence](test-reliability.md#required-local-broad-ui-evidence)
+and the [review checklist](test-reliability.md#change-review-checklist) before
+handoff. CI smoke success does not establish broad UI coverage; no full UI
+suite is added to CI.
 The startup fixture remains suspended until the UI test taps the launching
 screen, so slow automation attachment cannot miss it. The test waits beyond
 the former five-second fixture timeout, checks the startup label, then verifies

@@ -56,6 +56,73 @@ startup remains suspended after a former timeout. Document that purpose and
 assert the resulting state. Do not replace real elapsed-time coverage with a
 mock when elapsed-time behavior is the contract being tested.
 
+## Change review checklist
+
+For changes to tests, shared helpers/fixtures, UI/navigation, playback or async
+coordination, the author records the following in the PR and an independent
+reviewer checks the affected bodies and shared callers. Use the PR template;
+mark an inapplicable item with a reason, not a blanket compliance claim.
+
+- [ ] Name affected test identifiers, helpers and callers; pair each action with
+  its semantic postcondition. Identify the native control type from the view
+  and accessibility evidence (for example, SwiftUI Link is not necessarily an
+  XCTest Button). Require a unique intended match and enabled/hittable state
+  before interaction; retain the actual native-control exercise.
+- [ ] Wait on one joint readiness condition when the next action requires
+  simultaneous states. For browser handoff, observe Safari foreground and Bleat
+  out of foreground together within the failure budget; separate successful
+  observations do not establish that boundary.
+- [ ] Name the measurement boundary. Exact seek/checkpoint assertions observe
+  completed native seek before Play, confirmed paused state before the measured
+  interval, or a controlled clock/player. Pausing after an awaited operation
+  that already played does not restore the original checkpoint. For advancing
+  playback record the observation window, rate and justified tolerance.
+- [ ] Name the operation/session/generation owning each suspension and cleanup.
+  Revalidate ownership after every await that precedes mutation or retirement.
+  Hold each relevant suspension separately, admit a replacement, then release
+  the old operation and prove replacement identity/state survive. Preserve
+  progress-write ordering; release serialized work before awaiting a dependent
+  replacement's completion.
+- [ ] State whether a gate is one-shot or reusable. Verify entry, cancellation,
+  repeated release, later waits and reuse as applicable. A one-shot release
+  must not rearm or overwrite a suspended waiter. Register teardown before
+  suspension, release and join owned tasks on failure, and isolate later tests.
+- [ ] Record focused repetitions and the owning suite, then the required local
+  broad UI receipt below. Preserve every failed/interrupted attempt and explain
+  its disposition; do not replace it with a green retry.
+- [ ] Revisit affected audit rows, shared rule profiles and current-status
+  sign-offs against code and evidence. Preserve the historical decision and
+  receipt; append the corrected scope, source revision and keep/fix/follow-up
+  rationale. Separate implemented, source-reviewed and execution-verified
+  status. Unmerged fixes and their results remain candidate evidence.
+
+## Required local broad UI evidence
+
+Changes affecting UI/navigation, shared UI fixtures or launch/reset/wait helpers,
+playback lifecycle, or synchronization used by UI journeys require both focused
+validation and the owning broad UI suite locally before handoff. This includes
+production changes behind unchanged UI tests. Use the supported
+[`scripts/test-core.sh` / `mise run test:local` workflow](development.md#local-validation);
+run additional live/configuration gates required by the affected behavior.
+The full UI suite is not added to CI: its two smoke journeys cannot substitute
+for the local receipt. A docs-only review/checklist change requires the
+[documentation checks](contributing.md#documentation-checks), not a fabricated UI rerun.
+
+Record revision, command, toolchain/runtime/device and configuration, exact
+selected identities/discovery, executed pass/fail/skip counts, skip reasons,
+individual outcomes, warnings and result-bundle/log paths in a retained PR
+comment or linked receipt. Distinguish inventory/discovery counts from executed
+tests and source inputs that changed after execution. For a later docs-only
+head, identify the earlier tested revision and unchanged relevant inputs rather
+than calling its results an exact-head rerun. Verify CI separately on the final
+published head through completion.
+
+Use an isolated worktree, build/result paths and task-owned Simulator. Coordinate
+shared host/Simulator capacity with concurrent owners; never cancel their runs,
+reset their devices or remove their build artifacts. If resources or another
+prerequisite prevent the required local gate, record the exact unexecuted gate
+and limitation, retain draft status and do not claim verified completion.
+
 ## Suite responsibilities
 
 | Suite | Runner and boundary |

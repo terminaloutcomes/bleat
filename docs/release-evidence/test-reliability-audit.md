@@ -76,6 +76,13 @@ The 140 follow-up decisions in this table are historical labels, not a current i
 or configuration evidence gaps. A keep decision means the inspected scenario
 can remain, not that every real-system configuration was run.
 
+The [#476 sign-off reassessment](test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026)
+qualifies the Settings, browser, mini-player, checkpoint and Stop/reuse records.
+Historical keep/fixed labels are not current certification of those boundaries.
+Apply the [change review checklist](../test-reliability.md#change-review-checklist)
+when changing audited tests or shared helpers; append a revision-specific
+reassessment instead of overwriting the historical receipt.
+
 ## Shared helpers
 
 | Path / helper | Review and decision |
