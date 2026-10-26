@@ -2,6 +2,8 @@
 
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command, time::Duration};
 
+use yaml_rust2::YamlLoader;
+
 #[path = "../support/bounded_command.rs"]
 mod bounded_command;
 
@@ -13,7 +15,7 @@ fn build_launchers_preserve_the_callers_toolchain_environment() {
         .parent()
         .expect("workspace");
     let project = fs::read_to_string(repository.join("project.yml")).expect("project");
-    let documents = yaml_rust::YamlLoader::load_from_str(&project).expect("project YAML");
+    let documents = YamlLoader::load_from_str(&project).expect("project YAML");
     let phase = documents[0]["targets"]["BleatApp"]["preBuildScripts"]
         .as_vec()
         .expect("phases")
@@ -138,7 +140,7 @@ fn xcode_sandbox_can_read_every_cargo_workspace_member() {
         .parent()
         .expect("workspace");
     let project = fs::read_to_string(repository.join("project.yml")).expect("project");
-    let documents = yaml_rust::YamlLoader::load_from_str(&project).expect("project YAML");
+    let documents = YamlLoader::load_from_str(&project).expect("project YAML");
     let phase = documents[0]["targets"]["BleatApp"]["preBuildScripts"]
         .as_vec()
         .expect("phases")
