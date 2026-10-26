@@ -2510,6 +2510,7 @@
         "decision": "keep",
         "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
       },
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; native picker candidate correction; fresh owning execution pending", "record": "docs/release-evidence/finished-progress-conflicts.md#native-file-picker-handoff-reassessment-26-october-2026"},
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-partial-transcription-cache, --ui-testing-playback, --ui-testing-transcription-available. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",

@@ -41,6 +41,42 @@ deferred that pre-existing conflict discrepancy from
 
 The required aggregate remains failed; do not treat this receipt as final verification.
 
+### Native file-picker handoff reassessment (26 October 2026)
+
+After integrating merged #476, code `47c338cd6fadc611f17cbf5eb8933105e1b425ac`
+passed 612 signed host tests and all 673 app tests. Its broad UI gate executed
+118 passes, one failure and seven existing approved skips, with zero runtime
+warnings. The failure is the unchanged
+`BleatUITests.testPartialTranscriptExportExplainsCoverageBeforeSharing` in
+`Tests/BleatUITests/BleatUITests.swift`. Live stages did not execute after that
+failure. Preserve the original bundle
+`.build/test-core-results/ui-tests-11690-1793010014617.xcresult`, aggregate log
+`.build/pr475-20261026-check.log`, activity export and attachments under
+`.build/pr475-20261026-partial-transcript-*`.
+
+The native Save to Files handoff exceeded the test's three-second budget.
+The last failed navigation query occurred about 3.16 seconds after the tap;
+the retained hierarchy about 4.51 seconds after it contains the native document
+manager navigation bar and `DOCPicker.filenameTextField` with value
+`The Test Audiobook`. A cold launch is plausible but not established.
+
+The candidate correction retains the partial-coverage warning, SRT confirmation
+and real native share-grid action. It adds enabled/hittable preconditions and
+requires navigation and the intended, hittable filename together. The native
+handoff failure budget changes from three to 15 seconds, matching the existing
+system-browser handoff budget; it is a bounded failure allowance, not a delay
+used to establish readiness. Failure retains elapsed time, hierarchy and a
+screenshot. No production export logic, assertion, skip or security policy is
+removed. The share extension does not have Safari's foreground/departure contract.
+
+Independent source review confirmed that this strengthens the semantic oracle.
+The historical `other.json` keep decision and its original three-second profile
+remain intact and qualified by this reassessment. Three focused candidate
+executions passed in `.build/pr475-20261026-file-picker-repetitions.xcresult`,
+with the exact identity, all repetition nodes and zero skips/runtime warnings
+verified by the repository result checker. The owning broad UI gate remains
+pending; candidate evidence is not merged behavior.
+
 - Final focused core progress suite: nine tests passed, zero skips, including
   actor persistence/account isolation, a real prior-schema store upgrade, and
   incomplete-payload preservation. Earlier eight-test execution is superseded.

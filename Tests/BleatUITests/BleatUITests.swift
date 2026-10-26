@@ -4018,15 +4018,30 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
-        app.staticTexts["The Test Audiobook"].tap()
-        app.buttons["book.detail.actions"].tap()
-        app.buttons["book.detail.transcription"].tap()
+        let book = app.staticTexts["The Test Audiobook"]
+        XCTAssertTrue(book.isEnabled)
+        XCTAssertTrue(book.isHittable)
+        book.tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
+        actions.tap()
+        let transcription = app.buttons["book.detail.transcription"]
+        XCTAssertTrue(transcription.waitForExistence(timeout: 3))
+        XCTAssertTrue(transcription.isEnabled)
+        XCTAssertTrue(transcription.isHittable)
+        transcription.tap()
 
         let export = app.buttons["transcription.export"]
         XCTAssertTrue(export.waitForExistence(timeout: 3))
+        XCTAssertTrue(export.isEnabled)
+        XCTAssertTrue(export.isHittable)
         export.tap()
         let subRip = app.buttons["transcription.export.subRip"]
         XCTAssertTrue(subRip.waitForExistence(timeout: 3))
+        XCTAssertTrue(subRip.isEnabled)
+        XCTAssertTrue(subRip.isHittable)
         subRip.tap()
 
         XCTAssertTrue(
@@ -4036,6 +4051,8 @@ final class BleatUITests: XCTestCase {
         )
         let confirmExport = app.buttons["Export SRT"]
         XCTAssertTrue(confirmExport.exists)
+        XCTAssertTrue(confirmExport.isEnabled)
+        XCTAssertTrue(confirmExport.isHittable)
         confirmExport.tap()
 
         let saveToFiles = app.cells["Save to Files"]
@@ -4043,13 +4060,33 @@ final class BleatUITests: XCTestCase {
         // The system share grid's cell can extend below its visible action.
         let saveToFilesLabel = saveToFiles.staticTexts["Save to Files"]
         XCTAssertTrue(saveToFilesLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(saveToFilesLabel.isEnabled)
         XCTAssertTrue(saveToFilesLabel.isHittable)
         saveToFilesLabel.tap()
         let files = XCUIApplication(
             bundleIdentifier: "com.apple.DocumentManagerUICore.SaveToFiles"
         )
-        XCTAssertTrue(
-            files.navigationBars.firstMatch.waitForExistence(timeout: 3)
+        let navigation = files.navigationBars.firstMatch
+        let filename = files.textFields["DOCPicker.filenameTextField"]
+        // The retained failure shows native picker readiness arriving just
+        // after three seconds. Use the existing system-handoff failure budget,
+        // and require the intended exported document as well as navigation.
+        let started = ContinuousClock.now
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                navigation.exists && filename.exists && filename.isHittable
+                    && (filename.value as? String) == "The Test Audiobook"
+            }, object: nil)
+        let outcome = XCTWaiter.wait(for: [ready], timeout: 15)
+        if outcome != .completed {
+            let screenshot = XCTAttachment(screenshot: files.screenshot())
+            screenshot.name = "Partial transcript native file picker handoff"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(
+            outcome, .completed,
+            "Expected native picker for the exported transcript within 15 seconds; elapsed=\(started.duration(to: ContinuousClock.now)); \(files.debugDescription)"
         )
     }
 
