@@ -4018,15 +4018,30 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(
             app.otherElements["app.signedIn"].waitForExistence(timeout: 3)
         )
-        app.staticTexts["The Test Audiobook"].tap()
-        app.buttons["book.detail.actions"].tap()
-        app.buttons["book.detail.transcription"].tap()
+        let book = app.staticTexts["The Test Audiobook"]
+        XCTAssertTrue(book.isEnabled)
+        XCTAssertTrue(book.isHittable)
+        book.tap()
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 3))
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
+        actions.tap()
+        let transcription = app.buttons["book.detail.transcription"]
+        XCTAssertTrue(transcription.waitForExistence(timeout: 3))
+        XCTAssertTrue(transcription.isEnabled)
+        XCTAssertTrue(transcription.isHittable)
+        transcription.tap()
 
         let export = app.buttons["transcription.export"]
         XCTAssertTrue(export.waitForExistence(timeout: 3))
+        XCTAssertTrue(export.isEnabled)
+        XCTAssertTrue(export.isHittable)
         export.tap()
         let subRip = app.buttons["transcription.export.subRip"]
         XCTAssertTrue(subRip.waitForExistence(timeout: 3))
+        XCTAssertTrue(subRip.isEnabled)
+        XCTAssertTrue(subRip.isHittable)
         subRip.tap()
 
         XCTAssertTrue(
@@ -4036,6 +4051,8 @@ final class BleatUITests: XCTestCase {
         )
         let confirmExport = app.buttons["Export SRT"]
         XCTAssertTrue(confirmExport.exists)
+        XCTAssertTrue(confirmExport.isEnabled)
+        XCTAssertTrue(confirmExport.isHittable)
         confirmExport.tap()
 
         let saveToFiles = app.cells["Save to Files"]
@@ -4043,13 +4060,33 @@ final class BleatUITests: XCTestCase {
         // The system share grid's cell can extend below its visible action.
         let saveToFilesLabel = saveToFiles.staticTexts["Save to Files"]
         XCTAssertTrue(saveToFilesLabel.waitForExistence(timeout: 3))
+        XCTAssertTrue(saveToFilesLabel.isEnabled)
         XCTAssertTrue(saveToFilesLabel.isHittable)
         saveToFilesLabel.tap()
         let files = XCUIApplication(
             bundleIdentifier: "com.apple.DocumentManagerUICore.SaveToFiles"
         )
-        XCTAssertTrue(
-            files.navigationBars.firstMatch.waitForExistence(timeout: 3)
+        let navigation = files.navigationBars.firstMatch
+        let filename = files.textFields["DOCPicker.filenameTextField"]
+        // The retained failure shows native picker readiness arriving just
+        // after three seconds. Use the existing system-handoff failure budget,
+        // and require the intended exported document as well as navigation.
+        let started = ContinuousClock.now
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                navigation.exists && filename.exists && filename.isHittable
+                    && (filename.value as? String) == "The Test Audiobook"
+            }, object: nil)
+        let outcome = XCTWaiter.wait(for: [ready], timeout: 15)
+        if outcome != .completed {
+            let screenshot = XCTAttachment(screenshot: files.screenshot())
+            screenshot.name = "Partial transcript native file picker handoff"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(
+            outcome, .completed,
+            "Expected native picker for the exported transcript within 15 seconds; elapsed=\(started.duration(to: ContinuousClock.now)); \(files.debugDescription)"
         )
     }
 
@@ -5090,6 +5127,10 @@ final class BleatLiveUITests: XCTestCase {
             app.staticTexts["book.detail.title"].waitForExistence(timeout: 20)
         )
         XCTAssertFalse(app.buttons["player.mini.open"].exists)
+        if !releaseSecretScanIsEnabled {
+            try await verifyLiveFinishedProgressConflict(
+                app: app, environment: environment, itemID: liveBookID)
+        }
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(remotePlay.waitForExistence(timeout: 20))
 
@@ -5251,6 +5292,211 @@ final class BleatLiveUITests: XCTestCase {
             try await Task.sleep(for: .seconds(12))
         }
         app.terminate()
+    }
+
+    private struct LiveFinishedProgress: Decodable, Equatable {
+        let isFinished: Bool
+        let currentTime: Double
+        let lastUpdate: Int64
+    }
+
+    @MainActor
+    private func verifyLiveFinishedProgressConflict(
+        app: XCUIApplication,
+        environment: (server: String, username: String, password: String),
+        itemID: String
+    ) async throws {
+        let base = try XCTUnwrap(URL(string: environment.server))
+        // This journey is run only by the disposable loopback server harness.
+        XCTAssertTrue(["localhost", "127.0.0.1"].contains(base.host ?? ""))
+        var login = URLRequest(url: base.appendingPathComponent("login"))
+        login.httpMethod = "POST"
+        login.setValue("true", forHTTPHeaderField: "x-return-tokens")
+        login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        login.httpBody = try JSONSerialization.data(withJSONObject: [
+            "username": environment.username, "password": environment.password,
+        ])
+        let loginData = try await liveCoverResponse(login)
+        let payload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: loginData) as? [String: Any])
+        let user = try XCTUnwrap(payload["user"] as? [String: Any])
+        let token = try XCTUnwrap(user["accessToken"] as? String)
+        let progressURL = base.appendingPathComponent("api/me/progress")
+            .appendingPathComponent(itemID)
+        let initial = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        let initialLabel =
+            initial?.isFinished == true ? "Mark Unfinished" : "Mark Finished"
+        let finalLabel =
+            initial?.isFinished == true ? "Mark Finished" : "Mark Unfinished"
+
+        func chooseAction(expected: String, submit: Bool = true) async {
+            let actions = app.buttons["book.detail.actions"]
+            XCTAssertTrue(actions.waitForExistence(timeout: 20))
+            XCTAssertTrue(actions.isEnabled)
+            XCTAssertTrue(actions.isHittable)
+            actions.tap()
+            let finished = app.buttons["book.detail.finished"]
+            XCTAssertTrue(finished.waitForExistence(timeout: 10))
+            let ready = expectation(
+                for: NSPredicate(
+                    format: "label == %@ AND enabled == true", expected),
+                evaluatedWith: finished)
+            await fulfillment(of: [ready], timeout: 20)
+            XCTAssertTrue(finished.isHittable)
+            if submit { finished.tap() }
+        }
+
+        await chooseAction(expected: initialLabel)
+        let keepServer = app.buttons["Keep Server Progress"]
+        XCTAssertTrue(keepServer.waitForExistence(timeout: 20))
+        XCTAssertTrue(keepServer.isEnabled)
+        XCTAssertTrue(keepServer.isHittable)
+        let unmodified = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(unmodified, initial)
+        let cancel = app.buttons["Cancel"].firstMatch
+        if cancel.exists {
+            XCTAssertTrue(cancel.isEnabled)
+            XCTAssertTrue(cancel.isHittable)
+            cancel.tap()
+        } else {
+            // iOS 27 presents a native popover and omits its cancel-role
+            // button. Its backdrop is the native non-destructive dismissal.
+            XCTAssertTrue(app.staticTexts["Review Progress"].exists)
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2))
+                .tap()
+        }
+        XCTAssertTrue(keepServer.waitForNonExistence(timeout: 10))
+        let cancelled = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(cancelled, initial)
+
+        await chooseAction(expected: initialLabel)
+        XCTAssertTrue(keepServer.waitForExistence(timeout: 20))
+        XCTAssertTrue(keepServer.isEnabled)
+        XCTAssertTrue(keepServer.isHittable)
+        keepServer.tap()
+        XCTAssertTrue(keepServer.waitForNonExistence(timeout: 10))
+        let adopted = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(adopted, initial)
+        // Confirm the operation has completed before terminating its process.
+        let actions = app.buttons["book.detail.actions"]
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
+        actions.tap()
+        let finished = app.buttons["book.detail.finished"]
+        let adoptionCompleted = expectation(
+            for: NSPredicate(
+                format: "enabled == true AND label == %@", initialLabel),
+            evaluatedWith: finished)
+        await fulfillment(of: [adoptionCompleted], timeout: 20)
+        app.terminate()
+        XCTAssertEqual(app.state, .notRunning)
+        app.launch()
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 30))
+        dismissSavePasswordPromptIfNeeded(app: app)
+        let card = app.buttons["home.book.\(itemID)"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 30))
+        XCTAssertTrue(card.isEnabled)
+        XCTAssertTrue(card.isHittable)
+        card.tap()
+        XCTAssertTrue(
+            app.staticTexts["book.detail.title"].waitForExistence(timeout: 20))
+
+        // A second client changes server position after the persisted common
+        // snapshot. The app must preserve it until the explicit user choice.
+        var external = URLRequest(url: progressURL)
+        external.httpMethod = "PATCH"
+        external.setValue(
+            "Bearer \(token)", forHTTPHeaderField: "Authorization")
+        external.setValue(
+            "application/json", forHTTPHeaderField: "Content-Type")
+        external.httpBody = try JSONSerialization.data(withJSONObject: [
+            "currentTime": (initial?.currentTime ?? 0) + 3,
+            "progress": 0.25,
+        ])
+        _ = try await liveCoverResponse(external)
+        let changed = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertNotEqual(changed, initial)
+        await chooseAction(expected: initialLabel)
+        XCTAssertTrue(
+            app.staticTexts["Progress Changed"].waitForExistence(timeout: 20))
+        XCTAssertTrue(keepServer.exists)
+        let preserved = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(preserved, changed)
+        let useDevice = app.buttons[
+            initial?.isFinished == true
+                ? "Mark Unfinished on Server" : "Mark Finished on Server"]
+        XCTAssertTrue(useDevice.isEnabled)
+        XCTAssertTrue(useDevice.isHittable)
+        useDevice.tap()
+        XCTAssertTrue(useDevice.waitForNonExistence(timeout: 10))
+        // The menu changes only after the production model receives HTTP 200.
+        await chooseAction(expected: finalLabel, submit: false)
+        let committed = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(committed?.isFinished, !(initial?.isFinished ?? false))
+        // Restore through the app, accepting a fresh conflict if the confirmed
+        // PATCH's separate readback has not established the next checkpoint yet.
+        XCTAssertTrue(finished.isEnabled)
+        XCTAssertTrue(finished.isHittable)
+        finished.tap()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        var restoredServer = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        while restoredServer?.isFinished != (initial?.isFinished ?? false),
+            ContinuousClock.now < deadline
+        {
+            let restore = app.buttons[
+                initial?.isFinished == true
+                    ? "Mark Finished on Server" : "Mark Unfinished on Server"]
+            if restore.exists, restore.isEnabled, restore.isHittable {
+                restore.tap()
+            }
+            // Poll a semantic server postcondition; the 250ms cadence bounds
+            // request traffic while the independent app request commits.
+            try await Task.sleep(for: .milliseconds(250))
+            restoredServer = try await liveFinishedProgress(
+                url: progressURL, token: token)
+        }
+        XCTAssertEqual(restoredServer?.isFinished, initial?.isFinished ?? false)
+        XCTAssertTrue(actions.isEnabled)
+        XCTAssertTrue(actions.isHittable)
+        actions.tap()
+        let restored = expectation(
+            for: NSPredicate(
+                format: "enabled == true AND label == %@", initialLabel),
+            evaluatedWith: finished)
+        await fulfillment(of: [restored], timeout: 20)
+        // The native menu makes the background title non-hittable. Its
+        // observed left backdrop dismisses without activating a book action.
+        let title = app.staticTexts["book.detail.title"]
+        XCTAssertTrue(title.isEnabled)
+        XCTAssertTrue(finished.isHittable)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2)).tap()
+        XCTAssertTrue(finished.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(title.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        let afterDismiss = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(afterDismiss, restoredServer)
+    }
+
+    @MainActor
+    private func liveFinishedProgress(url: URL, token: String) async throws
+        -> LiveFinishedProgress?
+    {
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let http = try XCTUnwrap(response as? HTTPURLResponse)
+        if http.statusCode == 404 { return nil }
+        XCTAssertEqual(http.statusCode, 200)
+        return try JSONDecoder().decode(LiveFinishedProgress.self, from: data)
     }
 
     @MainActor

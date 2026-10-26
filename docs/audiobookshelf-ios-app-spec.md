@@ -1644,13 +1644,33 @@ Track a local `lastCommonServerUpdate` and position for each item.
 - Before uploading queued local progress, fetch `GET /api/me/progress/<library-item-id>`. Use `lastUpdate` to determine whether the server moved after the common checkpoint.
 - Timestamps are the only concurrency signal the current server provides. Account for clock skew and never claim this is atomic conflict prevention.
 
-Marking a book finished or unfinished is an explicit progress mutation. It
-currently performs a canonical detail and access recheck before submission but
-does not yet compare the server timestamp with a persisted common checkpoint.
-[GitHub issue #146](https://github.com/terminaloutcomes/bleat/issues/146)
-tracks that pre-submission conflict check. Until it is complete, explicit
-finished-state changes must not be described as implementing these conflict
-rules.
+Marking a book finished or unfinished follows these conflict rules through one
+account/item-scoped operation shared by Book Detail and browsing context menus.
+Before PATCH, recheck canonical access, load the persisted common server snapshot,
+and fetch `GET /api/me/progress/<library-item-id>`. Compare the decoded timestamp
+and structured progress fields, including changes with equal or regressed server
+timestamps. Never compare device-clock time with server time or serialized bytes.
+
+If the server still matches the checkpoint, submit only the intended finished
+flag. A missing checkpoint (including an upgraded installation) or changed server
+snapshot preserves both states and requires a choice: explicitly apply this
+device's Finished/Unfinished intent, keep server progress, or cancel. Keeping the
+server or cancelling sends no PATCH. Either resolution refetches progress; another
+server change requires a fresh choice. Pending choices reserve only their own
+account/item and are retired by account switching.
+
+HTTP 200 remains the mutation commit point. A separate, revision-scoped readback
+persists the server-issued common snapshot when it confirms the intended flag;
+readback or persistence failure never reverses the confirmed mutation or invents a
+server timestamp. An incomplete stored checkpoint is a typed storage failure and
+its data is preserved. Preparation failures and HTTP rejection remain distinct
+from transport loss or timeout after submission, which remain uncertain mutations.
+The server has no conditional PATCH, so a concurrent change after the final GET
+can still race submission. This is best-effort reconciliation, not an atomic lock.
+
+Implementation and current evidence, including any outstanding disposable-server
+or application-journey gates, are recorded in the
+[finished-progress receipt](release-evidence/finished-progress-conflicts.md).
 
 ## 12. Lifetime listening statistics
 

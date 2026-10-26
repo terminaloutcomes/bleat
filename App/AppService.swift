@@ -712,6 +712,15 @@ protocol AppServicing: Sendable {
         bookmark: AudioBookmark
     ) async throws(AppServiceError)
 
+    func finishedProgressCheckpoint(
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) -> FinishedProgressCheckpoint?
+
+    func saveFinishedProgressCheckpoint(
+        _ checkpoint: FinishedProgressCheckpoint,
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError)
+
     func bookProgress(
         for account: ServerAccount,
         itemID: LibraryItemID
@@ -875,6 +884,19 @@ protocol AppServicing: Sendable {
 }
 
 extension AppServicing {
+    func finishedProgressCheckpoint(
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) -> FinishedProgressCheckpoint? {
+        throw .libraryCache(.persistenceFailed)
+    }
+
+    func saveFinishedProgressCheckpoint(
+        _ checkpoint: FinishedProgressCheckpoint,
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        throw .libraryCache(.persistenceFailed)
+    }
+
     func carPlayPage(
         for account: ServerAccount, libraryID: LibraryID,
         request: LibraryItemsPageRequest
@@ -3397,6 +3419,25 @@ actor LiveAppService: AppServicing {
         }
     }
 
+    func finishedProgressCheckpoint(
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) -> FinishedProgressCheckpoint? {
+        do {
+            return try await libraryCache.finishedProgressCheckpoint(
+                accountID: account.id, itemID: itemID)
+        } catch let error { throw .libraryCache(error) }
+    }
+
+    func saveFinishedProgressCheckpoint(
+        _ checkpoint: FinishedProgressCheckpoint,
+        for account: ServerAccount, itemID: LibraryItemID
+    ) async throws(AppServiceError) {
+        do {
+            try await libraryCache.saveFinishedProgressCheckpoint(
+                checkpoint, accountID: account.id, itemID: itemID)
+        } catch let error { throw .libraryCache(error) }
+    }
+
     func bookProgress(
         for account: ServerAccount,
         itemID: LibraryItemID
@@ -3522,6 +3563,7 @@ actor LiveAppService: AppServicing {
             try context.delete(model: CachedLibrarySearchRecord.self)
             try context.delete(model: CachedLibraryHomeRecord.self)
             try context.delete(model: CachedLibraryBookDetailRecord.self)
+            try context.delete(model: FinishedProgressCheckpointRecord.self)
             try context.delete(model: CachedChapterTranscriptRecord.self)
             try context.delete(model: CachedChapterTranscriptionTaskRecord.self)
             try context.delete(model: CachedChapterTranscriptionJobRecord.self)

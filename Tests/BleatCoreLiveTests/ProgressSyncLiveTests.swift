@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import XCTest
 
 @testable import BleatCore
@@ -85,6 +86,20 @@ final class ProgressSyncLiveTests: SwiftPMObservedLiveTestCase {
         let progress = try XCTUnwrap(fetchedProgress)
         XCTAssertEqual(progress.currentTime, 7, accuracy: 0.001)
         XCTAssertFalse(progress.isFinished)
+        let schema = Schema(BleatPersistenceModelCatalog.currentModelTypes)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [
+                ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            ])
+        let cache = LibraryCache(modelContainer: container)
+        try await cache.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: progress),
+            accountID: accountID, itemID: item.id)
+        let reopened = LibraryCache(modelContainer: container)
+        let common = try await reopened.finishedProgressCheckpoint(
+            accountID: accountID, itemID: item.id)
+        XCTAssertTrue(try XCTUnwrap(common).matches(progress))
 
         try await coordinator.updateBookProgress(
             accountID: accountID,
@@ -99,6 +114,10 @@ final class ProgressSyncLiveTests: SwiftPMObservedLiveTestCase {
         )
         let finished = try XCTUnwrap(fetchedFinished)
         XCTAssertTrue(finished.isFinished)
+        XCTAssertFalse(try XCTUnwrap(common).matches(finished))
+        try await reopened.saveFinishedProgressCheckpoint(
+            FinishedProgressCheckpoint(progress: finished),
+            accountID: accountID, itemID: item.id)
         let allFinished = try await coordinator.allBookProgress(
             accountID: accountID,
             userID: authenticated.user.id,
@@ -123,6 +142,9 @@ final class ProgressSyncLiveTests: SwiftPMObservedLiveTestCase {
         )
         let unfinished = try XCTUnwrap(fetchedUnfinished)
         XCTAssertFalse(unfinished.isFinished)
+        let finishedCheckpoint = try await cache.finishedProgressCheckpoint(
+            accountID: accountID, itemID: item.id)
+        XCTAssertFalse(try XCTUnwrap(finishedCheckpoint).matches(unfinished))
         let allUnfinished = try await coordinator.allBookProgress(
             accountID: accountID,
             userID: authenticated.user.id,

@@ -328,6 +328,21 @@ final class AccountStoreTests {
         try await fixture.store.save(a)
         try await fixture.store.save(b, makeActive: true)
 
+        let cache = LibraryCache(modelContainer: fixture.container)
+        let item = LibraryItemID(rawValue: "shared-item")
+        let legacy = AccountID(rawValue: "legacy-b")
+        for owner in [a.id, b.id, legacy] {
+            try await cache.saveFinishedProgressCheckpoint(
+                FinishedProgressCheckpoint(progress: nil), accountID: owner,
+                itemID: item)
+        }
+        let context = ModelContext(fixture.container)
+        context.insert(
+            AccountIdentityAliasRecord(
+                legacyAccountID: legacy.rawValue,
+                canonicalAccountID: b.id.rawValue))
+        try context.save()
+
         let removed = try await fixture.store.removeAccount(id: b.id)
         let active = try await fixture.store.activeAccount()
         let removedAgain = try await fixture.store.removeAccount(id: b.id)
@@ -336,6 +351,15 @@ final class AccountStoreTests {
         #expect(active?.id == a.id)
         #expect(!(removedAgain))
         #expect(accounts == [a])
+        #expect(
+            try await cache.finishedProgressCheckpoint(
+                accountID: b.id, itemID: item) == nil)
+        #expect(
+            try await cache.finishedProgressCheckpoint(
+                accountID: legacy, itemID: item) == nil)
+        #expect(
+            try await cache.finishedProgressCheckpoint(
+                accountID: a.id, itemID: item) != nil)
     }
 
     @Test

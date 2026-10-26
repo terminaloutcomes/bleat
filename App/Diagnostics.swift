@@ -308,6 +308,7 @@ extension AppFailure {
             }
         case (_, .invalidServerResponse): .invalidServerResponse
         case (_, .localStorageUnavailable): .localStorageUnavailable
+        case (_, .progressCheckpointInvalid): .finishedProgressCheckpointInvalid
         case (_, .unavailableOffline): .unavailableOffline
         case (_, .serverUnavailable): .serverUnavailable
         case (_, .timeout): .requestTimedOut

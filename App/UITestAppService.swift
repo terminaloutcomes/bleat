@@ -1660,6 +1660,23 @@
             bookmark: AudioBookmark
         ) async throws(AppServiceError) {}
 
+        private var finishedCheckpoints:
+            [AccountID: [LibraryItemID: FinishedProgressCheckpoint]] = [:]
+
+        func finishedProgressCheckpoint(
+            for account: ServerAccount, itemID: LibraryItemID
+        ) async throws(AppServiceError) -> FinishedProgressCheckpoint? {
+            finishedCheckpoints[account.id]?[itemID]
+                ?? FinishedProgressCheckpoint(progress: nil)
+        }
+
+        func saveFinishedProgressCheckpoint(
+            _ checkpoint: FinishedProgressCheckpoint,
+            for account: ServerAccount, itemID: LibraryItemID
+        ) async throws(AppServiceError) {
+            finishedCheckpoints[account.id, default: [:]][itemID] = checkpoint
+        }
+
         func bookProgress(
             for account: ServerAccount,
             itemID: LibraryItemID

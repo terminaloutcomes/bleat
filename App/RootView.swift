@@ -1767,6 +1767,7 @@ private struct SignedInView: View {
     @State private var bookActionPresentation =
         BookActionContextPresentation()
     @State private var alertQueue = SignedInAlertQueue()
+    @State private var handledFinishedProgressConflictID: UUID?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1862,6 +1863,41 @@ private struct SignedInView: View {
                 "Existing downloads will be kept. Each book will follow your current download network policy."
             )
         }
+        .confirmationDialog(
+            model.presentedFinishedProgressConflict?.reason
+                == .missingCheckpoint
+                ? "Review Progress" : "Progress Changed",
+            isPresented: finishedProgressConflictBinding,
+            titleVisibility: .visible,
+            presenting: model.presentedFinishedProgressConflict
+        ) { conflict in
+            Button(
+                conflict.intendedFinished
+                    ? "Mark Finished on Server" : "Mark Unfinished on Server"
+            ) {
+                handledFinishedProgressConflictID = conflict.id
+                Task {
+                    await model.resolveFinishedProgressConflict(
+                        id: conflict.id, choice: .keepDevice)
+                }
+            }
+            Button("Keep Server Progress") {
+                handledFinishedProgressConflictID = conflict.id
+                Task {
+                    await model.resolveFinishedProgressConflict(
+                        id: conflict.id, choice: .useServer)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                handledFinishedProgressConflictID = conflict.id
+                Task {
+                    await model.resolveFinishedProgressConflict(
+                        id: conflict.id, choice: .cancel)
+                }
+            }
+        } message: { conflict in
+            Text(finishedProgressConflictMessage(conflict))
+        }
         .alert(item: alertBinding) { entry in
             switch entry.alert {
             case .cloudStorageUpgrade:
@@ -1949,6 +1985,39 @@ private struct SignedInView: View {
             #endif
             alertQueue.reconcile(alertCandidates)
         }
+    }
+
+    private func finishedProgressConflictMessage(
+        _ conflict: FinishedProgressConflict
+    ) -> String {
+        let reason =
+            conflict.reason == .missingCheckpoint
+            ? "This device hasn’t confirmed the server’s progress yet."
+            : "Server progress changed since this device last confirmed it."
+        let server =
+            conflict.server.progress.map {
+                "\($0.isFinished ? "Finished" : "Unfinished"), at \($0.currentTime.formatted(.number.precision(.fractionLength(0)))) seconds"
+            } ?? "No saved server progress"
+        return
+            "\(conflict.book.title): \(reason) This device requests \(conflict.intendedFinished ? "Finished" : "Unfinished"). Server: \(server). No progress has been changed. Choose which state to keep."
+    }
+
+    private var finishedProgressConflictBinding: Binding<Bool> {
+        let presentedID = model.presentedFinishedProgressConflict?.id
+        return Binding(
+            get: { model.presentedFinishedProgressConflict != nil },
+            set: { presented in
+                guard !presented, let presentedID,
+                    handledFinishedProgressConflictID != presentedID
+                else { return }
+                Task { @MainActor in
+                    // Only an implicit dismissal cancels. A button records its
+                    // exact request synchronously before beginning async work;
+                    // an older dismissal cannot consume a replacement prompt.
+                    await model.resolveFinishedProgressConflict(
+                        id: presentedID, choice: .cancel)
+                }
+            })
     }
 
     private var alertCandidates: [SignedInAlert] {

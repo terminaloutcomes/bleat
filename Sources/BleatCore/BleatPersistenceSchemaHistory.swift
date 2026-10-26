@@ -420,8 +420,34 @@ public enum BleatPersistenceSchemaV0_1_6: VersionedSchema {
     }
 }
 
-public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+public enum BleatPersistenceSchemaV0_1_8: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 8) }
+    public static let models: [any PersistentModel.Type] = [
+        ServerAccountRecord.self,
+        AccountIdentityAliasRecord.self,
+        CachedLibraryCollectionRecord.self,
+        CachedLibraryRecord.self,
+        CachedLibraryPageRecord.self,
+        CachedLibrarySearchRecord.self,
+        CachedLibraryHomeRecord.self,
+        CachedLibraryBookDetailRecord.self,
+        CachedChapterTranscriptRecord.self,
+        CachedChapterTranscriptionTaskRecord.self,
+        CachedChapterTranscriptionJobRecord.self,
+        ListeningSliceRecord.self,
+        CompletionMilestoneRecord.self,
+        RemoteListeningSessionRecord.self,
+        PrivateCloudStatisticsDeletionRecord.self,
+        StatisticsSessionAccountingRecord.self,
+        StatisticsHistoryImportRecord.self,
+        StatisticsSnapshotRecord.self,
+        PrivateCloudRecordMetadata.self,
+        PrivateCloudStateRecord.self,
+    ]
+}
+
+public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 9) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -436,6 +462,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             BleatPersistenceSchemaV0_1_5.self,
             BleatPersistenceSchemaV0_1_6.self,
             BleatPersistenceSchemaV0_1_7.self,
+            BleatPersistenceSchemaV0_1_8.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -464,6 +491,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_7.self,
+                toVersion: BleatPersistenceSchemaV0_1_8.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_8.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]
