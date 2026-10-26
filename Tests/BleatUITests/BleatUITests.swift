@@ -5473,10 +5473,17 @@ final class BleatLiveUITests: XCTestCase {
                 format: "enabled == true AND label == %@", initialLabel),
             evaluatedWith: finished)
         await fulfillment(of: [restored], timeout: 20)
-        // Dismiss the native menu before the caller navigates back.
-        XCTAssertTrue(app.staticTexts["book.detail.title"].isEnabled)
-        XCTAssertTrue(app.staticTexts["book.detail.title"].isHittable)
-        app.staticTexts["book.detail.title"].tap()
+        // The native menu makes the background title non-hittable. Its
+        // observed left backdrop dismisses without activating a book action.
+        let title = app.staticTexts["book.detail.title"]
+        XCTAssertTrue(title.isEnabled)
+        XCTAssertTrue(finished.isHittable)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2)).tap()
+        XCTAssertTrue(finished.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(title.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        let afterDismiss = try await liveFinishedProgress(
+            url: progressURL, token: token)
+        XCTAssertEqual(afterDismiss, restoredServer)
     }
 
     @MainActor

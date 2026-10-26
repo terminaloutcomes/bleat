@@ -5,6 +5,41 @@ This receipt concerns explicit Mark Played, Unplayed, Finished, and Unfinished.
 It does not close broader test-reliability, iPad, signed-device, or playback
 acceptance work.
 
+## Current verification checkpoint (26 October 2026)
+
+PR [#475](https://github.com/terminaloutcomes/bleat/pull/475) records the final
+published revision, CI and detailed execution receipts. Production inputs are
+unchanged from integrated `47c338c` on merged #476 (`79b2cfe`). Later corrections
+change UI-test readiness/dismissal and evidence only. The earlier sections retain
+their source-specific failures and pending checkpoints; they are not the latest
+readiness claim.
+
+| Boundary | Evidence recorded at checkpoint preparation |
+| --- | --- |
+| Focused domain/model | Nine `ProgressSyncTests`; all nine `AppModelTests.testFinishedConflict*` identities twice (18 executions), zero skips |
+| Signed host | 612 passed, zero skipped; `.build/pr475-20261026-check.log` and `.build/host-results/` |
+| Corrected native picker | Three exact repetitions, zero skips/runtime warnings; `.build/pr475-20261026-file-picker-repetitions.xcresult` |
+| Owning gate at `d948faf` | 673 app tests passed; broad UI 119 passed/seven existing approved skips, zero runtime warnings; `.build/pr475-20261026-local-corrected.log` |
+| Core HTTPS contract | Focused root/prefix progress case passed once; owning core-live 13 passed/eight existing configuration skips; `.build/pr475-20261026-progress-live.log` and `.build/pr475-20261026-live.log` |
+| Corrected prefixed app journeys | Online and offline passed one exact identity each, zero skips/runtime warnings; `TestSupport/ServerHarness/app-live-artifacts/8d5280be-3335-4e07-b014-290f9fb1f294/` |
+| Corrected root app journey | Online passed one exact identity, zero skips/runtime warnings; `TestSupport/ServerHarness/app-live-artifacts/pr475-root-61cae012/root-online.xcresult` |
+| Additional owning replay after menu correction | Running; outcome pending at checkpoint preparation. Log: `.build/pr475-20261026-local-final-menu.log`; final result will be recorded in the PR receipt |
+
+Root validation used the existing harness `up`, `seed` and `ca` commands with a
+unique Compose project, copied disposable media, dedicated loopback ports and
+an owned iPhone 17 Pro Simulator. Current built tests received the root HTTPS
+URL in a copied generated run configuration. The root fixture, Simulator, CA,
+media copy and credential-bearing run copy were removed after verification;
+results and logs remain. It is application/HTTPS evidence, not physical-device
+or native macOS authentication evidence.
+
+The final menu correction changes only the live helper that the ordinary broad
+selection skips without its fixture. Its enabled live callers passed on both
+server layouts. Production, host, core and other UI bodies retain their earlier
+passing inputs; the additional owning replay is retained separately. The exact
+published-head CI outcome and any later source/evidence distinction are recorded
+in the PR receipt rather than inferred from these earlier runs.
+
 ## Baseline finding
 
 Current main at investigation was `0ed12585dc6726fce2aca2336e99272014810f5d`.
@@ -39,7 +74,8 @@ deferred that pre-existing conflict discrepancy from
 
 ## Executed evidence
 
-The required aggregate remains failed; do not treat this receipt as final verification.
+The original aggregate below failed. Later receipts in the current checkpoint
+supersede it only for their named tested inputs; the failed attempt is retained.
 
 ### Native file-picker handoff reassessment (26 October 2026)
 
@@ -74,8 +110,33 @@ The historical `other.json` keep decision and its original three-second profile
 remain intact and qualified by this reassessment. Three focused candidate
 executions passed in `.build/pr475-20261026-file-picker-repetitions.xcresult`,
 with the exact identity, all repetition nodes and zero skips/runtime warnings
-verified by the repository result checker. The owning broad UI gate remains
-pending; candidate evidence is not merged behavior.
+verified by the repository result checker. At this first correction checkpoint,
+the owning broad UI gate was pending; the current checkpoint reports later
+outcomes. Candidate evidence is not merged behavior.
+
+### Live menu dismissal reassessment (26 October 2026)
+
+The corrected `d948faf` owning gate passed all 673 app tests and the broad UI
+selection (119 passed, seven existing approved skips), without runtime warnings.
+Focused root/prefix `ProgressSyncLiveTests` passed once, and the full core-live
+suite passed 13 tests with eight existing configuration skips.
+
+The subsequent prefixed app-live online journey failed the new helper's final
+background-title hittability assertion while its native action menu was still
+open. All conflict-choice, server-preservation and restoration checks before
+that point passed. The recording shows the native menu and its unobscured left
+backdrop; the background title is not an interactive dismissal control.
+Retain `TestSupport/ServerHarness/app-live-artifacts/ed788721-4dfd-47d4-a182-a10ed2c87a7c/online.xcresult`
+and `.build/pr475-20261026-live-failure-*`. Offline did not execute.
+
+The candidate correction exercises the observed native backdrop, asserts menu
+departure and then background-title hittability, and reads server progress again
+to verify dismissal made no mutation. The original title-enabled check and all
+server-choice assertions remain. This corrects action/postcondition ordering
+without removing the failing assertion. Server-choice budgets are unchanged;
+the new menu/title readiness waits use the existing ten-second dismissal budget.
+Fresh live execution and the final owning receipt were pending at this source
+review checkpoint. The current checkpoint reports subsequent outcomes.
 
 - Final focused core progress suite: nine tests passed, zero skips, including
   actor persistence/account isolation, a real prior-schema store upgrade, and

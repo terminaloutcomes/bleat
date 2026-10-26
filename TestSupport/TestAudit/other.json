@@ -2675,6 +2675,7 @@
         "decision": "keep",
         "reason": "Inspected the complete live-flow body and its exact opt-in guard. This intentionally separate live validation exercises configured Audiobookshelf authentication, playback/download, or statistics behavior with semantic UI outcomes; the environment gate is explicit and keeps it out of deterministic fixture runs."
       },
+      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; conflict helper and native dismissal source-reviewed; corrected root/prefix candidate execution verified", "record": "docs/release-evidence/finished-progress-conflicts.md#live-menu-dismissal-reassessment-26-october-2026"},
       "profile": "ui_fixture",
       "enablement": "App-live UI test; requires configured BLEAT_LIVE_APP_URL, BLEAT_LIVE_USERNAME, and credential/broker settings accepted by requireLiveConfiguration(); run scripts/test-app-live.sh. Skips when required live configuration is absent; macOS can skip unsupported path.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): none (real/live app path). Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
