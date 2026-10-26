@@ -1,5 +1,6 @@
 import AVFoundation
 import BleatCore
+import Observation
 import XCTest
 
 @testable import Bleat
@@ -10,6 +11,37 @@ import XCTest
             deviceID: "fixture-test", clientName: "Bleat",
             clientVersion: "test",
             manufacturer: "Apple", model: "Simulator")
+
+        @MainActor
+        func testDelayedSyncRetainsFirstWaiterAcrossReplacementAndRelease()
+            async
+        {
+            let gate = UITestPlaybackSyncGate()
+            let waiting = expectation(description: "first sync suspended")
+            let finished = expectation(description: "first sync released")
+            withObservationTracking {
+                _ = gate.state
+            } onChange: {
+                waiting.fulfill()
+            }
+            let first = Task { @MainActor in
+                await gate.wait()
+                finished.fulfill()
+            }
+            addTeardownBlock { @MainActor in
+                gate.release()
+                await first.value
+            }
+            await fulfillment(of: [waiting], timeout: 3)
+            XCTAssertEqual(gate.state, .waiting)
+            await gate.wait()
+            XCTAssertEqual(gate.state, .waiting)
+            gate.release()
+            await fulfillment(of: [finished], timeout: 3)
+            await first.value
+            await gate.wait()
+            XCTAssertEqual(gate.state, .released)
+        }
 
         @MainActor
         func testSeparateJourneysDoNotShareDownloadStorage() async throws {

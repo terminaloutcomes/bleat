@@ -201,6 +201,10 @@ struct RootView: View {
                         UITestPlaybackSyncGate.shared.release()
                     }
                     .accessibilityIdentifier("testing.playback.completeSync")
+                    .accessibilityValue(
+                        String(
+                            model.playback.runtimeSnapshotForTesting.generation)
+                    )
                 }
                 if ProcessInfo.processInfo.arguments.contains(
                     "--ui-testing-slow-context-download"

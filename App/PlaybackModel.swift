@@ -26,6 +26,7 @@ enum PlaybackPlayOutcome: Equatable, Sendable {
 }
 
 struct PlaybackRuntimeSnapshotForTesting {
+    let generation: UInt64
     let playerIdentity: ObjectIdentifier?
     let queuedItemIdentities: [ObjectIdentifier]
     let itemStatus: AVPlayerItem.Status?
@@ -521,6 +522,7 @@ final class PlaybackModel {
 
     var runtimeSnapshotForTesting: PlaybackRuntimeSnapshotForTesting {
         PlaybackRuntimeSnapshotForTesting(
+            generation: generation,
             playerIdentity: player.map(ObjectIdentifier.init),
             queuedItemIdentities: player?.items().map(ObjectIdentifier.init)
                 ?? [],
@@ -584,7 +586,7 @@ final class PlaybackModel {
     }
 
     var canReusePreparedPlayback: Bool {
-        state != .ended && !isPlaybackFailed
+        state != .idle && state != .ended && !isPlaybackFailed
     }
 
     func retainFailedBookForRetry(
@@ -2246,6 +2248,9 @@ final class PlaybackModel {
             return
         }
         await finishStatisticsSession()
+        guard !allowsSupersession || generation == operationGeneration else {
+            return
+        }
         notifyAutomaticDownloadBandwidthReleased()
         resetPlayer()
         releaseAutomaticCachedPlaybackWindow()

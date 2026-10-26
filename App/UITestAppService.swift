@@ -10,6 +10,7 @@
         enum State {
             case idle
             case waiting
+            case released
         }
 
         static let shared = UITestPlaybackSyncGate()
@@ -17,6 +18,9 @@
         private var continuation: CheckedContinuation<Void, Never>?
 
         func wait() async {
+            // Hold only the old Stop's sync. A replacement start also syncs the
+            // retained session; it must not overwrite the suspended waiter.
+            guard state == .idle else { return }
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
                 state = .waiting
@@ -26,7 +30,7 @@
         func release() {
             let pending = continuation
             continuation = nil
-            state = .idle
+            state = .released
             pending?.resume()
         }
     }

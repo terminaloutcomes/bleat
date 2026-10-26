@@ -1157,3 +1157,12 @@ this change. The [macOS isolation receipt](release-evidence/macos-test-isolation
 separates current validation from compilation-only history and normal signed
 application authentication/relaunch acceptance. Existing iOS evidence, historical
 review dispositions and physical acceptance requirements retain their scope.
+
+
+## Broader UI regression coverage
+
+The [scoped repair receipt](release-evidence/broader-ui-regressions.md) records
+the Diagnostics Settings-link selectors, pending-Stop restart admission, delayed
+sync fixture ownership and external-browser handoff checks for
+APP-DIAGNOSTICS-CONSENT-001, APP-PLAYBACK-001 and APP-SERVER-BOOK-001.
+Simulator validation remains separate from physical-device acceptance.
