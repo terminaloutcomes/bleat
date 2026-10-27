@@ -67,12 +67,98 @@ enum AppLifecycleCloudSyncPolicy {
     }
 }
 
+// One owner prevents an incoming sync sheet from replacing an unanswered notice.
+@MainActor
+@Observable
+final class CloudPromptPresentation {
+    enum Kind: String, Identifiable {
+        case storageNotice, accountSelection, configurationConflict
+        var id: Self { self }
+    }
+
+    struct Entry: Identifiable {
+        let id = UUID()
+        let kind: Kind
+    }
+
+    private(set) var active: Entry?
+    private(set) var generation: UInt64 = 0
+    private var pending: [Kind] = []
+    private(set) var dismissing: Entry?
+    private var resolvingID: UUID?
+    private var noticeDeferred = false
+    private var hasFailure = false
+
+    struct Requests: Equatable {
+        let notice: Bool
+        let accounts: Bool
+        let conflict: Bool
+        let failure: Bool
+    }
+
+    var isBusy: Bool {
+        active != nil || dismissing != nil || resolvingID != nil || hasFailure
+    }
+    var canPresentFailure: Bool {
+        active == nil && dismissing == nil && resolvingID == nil
+    }
+
+    func reconcile(
+        notice: Bool, accounts: Bool, conflict: Bool, failure: Bool = false
+    ) {
+        hasFailure = failure
+        pending = []
+        if notice && !noticeDeferred { pending.append(.storageNotice) }
+        if accounts { pending.append(.accountSelection) }
+        if conflict { pending.append(.configurationConflict) }
+        if let active, !pending.contains(active.kind) { dismiss(active) }
+        showNext()
+    }
+
+    func deferNotice() {
+        noticeDeferred = true
+        pending.removeAll { $0 == .storageNotice }
+        if let active, active.kind == .storageNotice { dismiss(active) }
+    }
+
+    func foreground() { noticeDeferred = false }
+
+    func dismiss(_ entry: Entry, resolving: Bool = false) {
+        guard active?.id == entry.id else { return }
+        active = nil
+        dismissing = entry
+        if resolving { resolvingID = entry.id }
+    }
+
+    func didDismiss(_ entry: Entry) {
+        guard dismissing?.id == entry.id else { return }
+        dismissing = nil
+        showNext()
+    }
+
+    func didResolve(_ entry: Entry) {
+        guard resolvingID == entry.id else { return }
+        resolvingID = nil
+        showNext()
+    }
+
+    private func showNext() {
+        guard active == nil, dismissing == nil, resolvingID == nil, !hasFailure
+        else { return }
+        if let next = pending.first {
+            generation &+= 1
+            active = Entry(kind: next)
+        }
+    }
+}
+
 struct RootView: View {
     @Bindable var model: AppModel
     @State private var navigation = AppNavigationCoordinator()
     @State private var deepLinkInbox = AppDeepLinkInbox.shared
     @State private var isShowingDiagnostics = false
     @State private var cloudAccountSelectionFailure: AppFailure?
+    @State private var cloudPrompts = CloudPromptPresentation()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -116,11 +202,14 @@ struct RootView: View {
                         }
                     }
             case .signedIn:
-                SignedInView(model: model, navigation: navigation)
-                    .tint(colourScheme.color)
-                    #if os(macOS)
-                        .id(colourScheme)
-                    #endif
+                SignedInView(
+                    model: model, navigation: navigation,
+                    cloudPrompts: cloudPrompts
+                )
+                .tint(colourScheme.color)
+                #if os(macOS)
+                    .id(colourScheme)
+                #endif
             case .unavailable(let failure):
                 ContentUnavailableView {
                     Label(failure.title, systemImage: failure.systemImage)
@@ -261,47 +350,69 @@ struct RootView: View {
                 Text(failure.message)
             }
         }
+        .onChange(of: cloudPromptCandidates, initial: true) { _, _ in
+            reconcileCloudPrompts()
+        }
         .sheet(
-            isPresented: Binding(
-                get: {
-                    !model.cloudAccountSelectionDeferred
-                        && !model.pendingCloudServerConfigurationChanges.isEmpty
-                },
-                set: { isPresented in
-                    if !isPresented,
-                        !model.pendingCloudServerConfigurationChanges.isEmpty
-                    {
-                        Task {
-                            cloudAccountSelectionFailure =
-                                await model.deferCloudAccountSelection()
+            item: cloudPromptBinding,
+            onDismiss: cloudPromptDismissal
+        ) { prompt in
+            switch prompt.kind {
+            case .storageNotice:
+                NavigationStack {
+                    Form {
+                        Text(SignedInAlert.cloudStorageUpgrade.message)
+                        Button("All my devices are updated") {
+                            model.acknowledgeCloudStorageUpgradeNotice()
+                            cloudPrompts.deferNotice()
+                        }
+                        Button("Later", role: .cancel) {
+                            cloudPrompts.deferNotice()
                         }
                     }
+                    .navigationTitle("Cloud storage update")
                 }
-            )
-        ) {
-            CloudAccountSelectionView(
-                candidates: model.cloudAccountConfigurationOptions,
-                onSelect: { selected in
-                    let failure =
-                        await model.resolveCloudAccountConfigurationOption(
-                            selected
-                        )
-                    if model.pendingCloudServerConfigurationChanges.isEmpty {
-                        cloudAccountSelectionFailure = failure
-                    }
-                    return failure
-                },
-                onCancel: {
-                    await model.deferCloudAccountSelection()
+                .accessibilityIdentifier("cloudStorageUpgradeNotice")
+                .interactiveDismissDisabled()
+            case .accountSelection:
+                CloudAccountSelectionView(
+                    candidates: model.cloudAccountConfigurationOptions,
+                    onSelect: { selected in
+                        let failure =
+                            await model.resolveCloudAccountConfigurationOption(
+                                selected)
+                        if model.pendingCloudServerConfigurationChanges.isEmpty
+                        {
+                            cloudAccountSelectionFailure = failure
+                        }
+                        return failure
+                    },
+                    onCancel: { await model.deferCloudAccountSelection() }
+                )
+            case .configurationConflict:
+                if let conflict = model.pendingCloudConfigurationConflict {
+                    CloudConfigurationConflictView(
+                        conflict: conflict,
+                        onResolve: { resolution in
+                            await model.resolveCloudConfigurationConflict(
+                                resolution)?.message
+                        }
+                    )
+                    .interactiveDismissDisabled()
                 }
-            )
+            }
         }
         .alert(
             "Cannot Restore iCloud Account",
             isPresented: Binding(
-                get: { cloudAccountSelectionFailure != nil },
+                get: {
+                    cloudAccountSelectionFailure != nil
+                        && cloudPrompts.canPresentFailure
+                },
                 set: { isPresented in
-                    if !isPresented { cloudAccountSelectionFailure = nil }
+                    if !isPresented, cloudPrompts.canPresentFailure {
+                        cloudAccountSelectionFailure = nil
+                    }
                 }
             )
         ) {
@@ -310,22 +421,6 @@ struct RootView: View {
             if let failure = cloudAccountSelectionFailure {
                 Text(failure.message)
             }
-        }
-        .sheet(
-            item: Binding(
-                get: { model.pendingCloudConfigurationConflict },
-                set: { _ in }
-            )
-        ) { conflict in
-            CloudConfigurationConflictView(
-                conflict: conflict,
-                onResolve: { resolution in
-                    await model.resolveCloudConfigurationConflict(
-                        resolution
-                    )?.message
-                }
-            )
-            .interactiveDismissDisabled()
         }
         .sheet(isPresented: $isShowingDiagnostics) {
             NavigationStack {
@@ -362,6 +457,8 @@ struct RootView: View {
             model.setLiveUpdatesActive(phase == .active)
             model.setRemoteTelemetryForeground(phase == .active)
             if phase == .active {
+                cloudPrompts.foreground()
+                reconcileCloudPrompts()
                 model.downloads.reloadSyncedPreferences()
             }
             if AppLifecycleCloudSyncPolicy.shouldSynchronize(
@@ -373,6 +470,52 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    private var cloudPromptCandidates: CloudPromptPresentation.Requests {
+        .init(
+            notice: model.cloudStorageUpgradeNoticePending,
+            accounts: !model.cloudAccountSelectionDeferred
+                && !model.pendingCloudServerConfigurationChanges.isEmpty,
+            conflict: model.pendingCloudConfigurationConflict != nil,
+            failure: cloudAccountSelectionFailure != nil)
+    }
+
+    private func reconcileCloudPrompts() {
+        let requests = cloudPromptCandidates
+        cloudPrompts.reconcile(
+            notice: requests.notice, accounts: requests.accounts,
+            conflict: requests.conflict, failure: requests.failure)
+    }
+
+    private var cloudPromptDismissal: () -> Void {
+        let rendered = cloudPrompts.dismissing ?? cloudPrompts.active
+        return {
+            guard let rendered else { return }
+            reconcileCloudPrompts()
+            cloudPrompts.didDismiss(rendered)
+        }
+    }
+
+    private var cloudPromptBinding: Binding<CloudPromptPresentation.Entry?> {
+        let rendered = cloudPrompts.active
+        return Binding(
+            get: { cloudPrompts.active },
+            set: { value in
+                guard value == nil, let rendered,
+                    cloudPrompts.active?.id == rendered.id
+                else { return }
+                cloudPrompts.dismiss(
+                    rendered, resolving: rendered.kind == .accountSelection)
+                if rendered.kind == .accountSelection {
+                    Task {
+                        cloudAccountSelectionFailure =
+                            await model.deferCloudAccountSelection()
+                        reconcileCloudPrompts()
+                        cloudPrompts.didResolve(rendered)
+                    }
+                }
+            })
     }
 
 }
@@ -1787,6 +1930,7 @@ final class SignedInAlertQueue {
 private struct SignedInView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
+    let cloudPrompts: CloudPromptPresentation
     @State private var playbackFailure: AppFailure?
     @State private var resumeSignInAccount: ServerAccount?
     @State private var signInAfterPlayerDismissal = false
@@ -2055,9 +2199,6 @@ private struct SignedInView: View {
 
     private var alertCandidates: [SignedInAlert] {
         var candidates: [SignedInAlert] = []
-        if scenePhase == .active, model.cloudStorageUpgradeNoticePending {
-            candidates.append(.cloudStorageUpgrade)
-        }
         if let failure = model.seriesDownloadFailure {
             candidates.append(.series(failure))
         }
@@ -2080,12 +2221,18 @@ private struct SignedInView: View {
 
     private var alertBinding: Binding<SignedInAlertQueue.Entry?> {
         let renderedEntry = alertQueue.active
+        let renderedCloudGeneration = cloudPrompts.generation
         return Binding(
-            get: { alertQueue.active },
+            get: { cloudPrompts.isBusy ? nil : alertQueue.active },
             set: { entry in
+                // A root-owned cloud presentation suspends this alert, not its request.
+                guard !cloudPrompts.isBusy else { return }
                 if entry == nil, let active = renderedEntry {
                     Task { @MainActor in
                         await Task.yield()
+                        guard !cloudPrompts.isBusy,
+                            cloudPrompts.generation == renderedCloudGeneration
+                        else { return }
                         dismissAlert(active)
                     }
                 }

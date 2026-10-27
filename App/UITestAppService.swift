@@ -242,6 +242,7 @@
         private var libraryRequests = 0
         private var bookDetailRequests = 0
         private var cloudSelectionAttempts = 0
+        private var cloudNoticeSyncs = 0
         private var cloudSelectionResolved = false
         private var cloudChoiceDefaults: UserDefaults? {
             guard
@@ -441,6 +442,13 @@
         func synchronizePrivateCloud() async throws(AppServiceError)
             -> [CloudServerConfigurationChange]
         {
+            cloudNoticeSyncs += 1
+            if cloudNoticeSyncs > 1,
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-cloud-notice-after-start")
+            {
+                CloudStorageUpgradeNotice.detectLegacy(in: .standard)
+            }
             guard
                 ProcessInfo.processInfo.arguments.contains(
                     "--ui-testing-cloud-account-selection"

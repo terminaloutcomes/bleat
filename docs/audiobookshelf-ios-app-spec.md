@@ -1902,6 +1902,10 @@ slices remain immutable: their original playback samples are unavailable, so
 relabeling them as continuous segments would misrepresent how they were recorded.
 Later preserves the pending notice for a subsequent foreground or relaunch.
 Neither choice changes existing history or older-client compatibility.
+The notice and iCloud account/preference choices share one presentation owner.
+An incoming sync result must wait for the unanswered notice; explicit confirmation
+or Later releases it only after dismissal. Presentation interruption never implies
+acknowledgment, and queued account choices remain pending.
 
 The revised notice uses a versioned installation-local acknowledgment. The
 previous OK dismissal does not suppress it: existing legacy detection remains
