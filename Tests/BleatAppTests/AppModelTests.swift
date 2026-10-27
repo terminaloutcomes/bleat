@@ -29553,14 +29553,20 @@ final class AppModelTests: XCTestCase {
                     "CarPlayCompleteDownload-\(UUID().uuidString)",
                     isDirectory: true
                 )
-            defer {
-                try? FileManager.default.removeItem(at: root)
-            }
+            addTeardownBlock { try? FileManager.default.removeItem(at: root) }
             try FileManager.default.createDirectory(
                 at: root,
                 withIntermediateDirectories: true
             )
-            let account = try fixtureAccount()
+            let suite = "CarPlayCompleteDownload.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            addTeardownBlock { @MainActor in
+                defaults.removePersistentDomain(forName: suite)
+            }
+            let positions = PlaybackPositionStore(defaults: defaults)
+            let sessions = LocalPlaybackSessionStore(defaults: defaults)
+            let account = try fixtureAccount(
+                accountID: "carplay-\(UUID().uuidString)")
             let library = fixtureLibrary()
             let book = fixturePage(libraryID: library.id).items[0]
             let detail = fixtureBookDetail(item: book)
@@ -29581,15 +29587,39 @@ final class AppModelTests: XCTestCase {
                 ),
                 bookDetail: .success(detail)
             )
+            let activationGate = AsyncGate()
+            let completionCount = Mutex(0)
+            let coverLoader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { _ in throw URLError(.resourceUnavailable) })
             let onlineModel = AppModel(
                 service: onlineService,
+                cloudStorageNoticeDefaults: defaults,
+                nearbyServerDiscovery: UnavailableNearbyServerDiscovery(),
                 downloadsStorageRootURL: root,
                 downloadsBackgroundSessionIdentifier:
-                    backgroundSessionIdentifier("carplay-complete-download")
+                    backgroundSessionIdentifier("carplay-complete-download"),
+                localSessionStore: sessions,
+                playbackPositionStore: positions,
+                playbackPreferencesStore: PlaybackPreferencesStore(
+                    defaults: defaults),
+                nowPlayingCoordinator: NowPlayingCoordinator(
+                    infoCenter: TestNowPlayingInfoPublisher(),
+                    coverLoader: coverLoader,
+                    registersRemoteCommands: false),
+                audioSession: PlaybackAudioSession(
+                    activate: { await activationGate.enterAndWait() },
+                    deactivate: {})
             )
             await onlineModel.start()
             let onlinePresenter = TestCarPlayPresenter()
-            let onlineCoordinator = CarPlayCoordinator(model: onlineModel)
+            let onlineCoordinator = CarPlayCoordinator(
+                model: onlineModel, coverLoader: coverLoader)
+            addTeardownBlock { @MainActor in
+                await activationGate.release()
+                await onlineModel.playback.stop()
+                onlineCoordinator.disconnect()
+            }
             onlineCoordinator.connect(onlinePresenter)
             await onlineCoordinator.waitForLibraryLoad()
             onlineCoordinator.refreshTemplates()
@@ -29606,9 +29636,22 @@ final class AppModelTests: XCTestCase {
                 description: "Online selection preferred download"
             )
             remoteItem.handler?(remoteItem) {
+                completionCount.withLock { $0 += 1 }
                 onlineCompletion.fulfill()
             }
+            let entered = await activationGate.waitUntilEntered(
+                timeout: .seconds(3))
+            XCTAssertTrue(entered, playbackDiagnostic(onlineModel.playback))
+            XCTAssertEqual(completionCount.withLock { $0 }, 0)
+            await activationGate.release()
             await fulfillment(of: [onlineCompletion], timeout: 3)
+            let session = try XCTUnwrap(
+                sessions.session(accountID: account.id, itemID: book.id))
+            XCTAssertEqual(session.startTime, 0)
+            XCTAssertEqual(onlineModel.playback.audioFiles.count, 1)
+            XCTAssertTrue(
+                onlineModel.playback.audioFiles.allSatisfy { $0.url.isFileURL })
+            XCTAssertEqual(completionCount.withLock { $0 }, 1)
             let onlinePlaybackRequests =
                 await onlineService.playbackOpenRequests()
             XCTAssertTrue(onlinePlaybackRequests.isEmpty)
@@ -30401,6 +30444,11 @@ final class AppModelTests: XCTestCase {
                 )
             )
             buffer.frameLength = 8_000
+            let samples = try XCTUnwrap(buffer.floatChannelData)
+            for channel in 0..<Int(format.channelCount) {
+                samples[channel].initialize(
+                    repeating: 0, count: Int(buffer.frameLength))
+            }
             try audioFile.write(from: buffer)
         }
         let size = try XCTUnwrap(

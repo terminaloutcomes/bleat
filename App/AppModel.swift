@@ -2001,6 +2001,7 @@ final class AppModel {
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore? = nil,
+        playbackPreferencesStore: PlaybackPreferencesStore? = nil,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         audioSession: PlaybackAudioSession = .system,
         bookProgressOperationTimeout: Duration = .seconds(30),
@@ -2079,6 +2080,7 @@ final class AppModel {
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
+            playbackPreferencesStore: playbackPreferencesStore,
             nowPlayingCoordinator: nowPlayingCoordinator,
             audioSession: audioSession,
             remoteTelemetryTracer: remoteTelemetryTracer,
@@ -2235,6 +2237,7 @@ final class AppModel {
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
+        playbackPreferencesStore: PlaybackPreferencesStore?,
         nowPlayingCoordinator: NowPlayingCoordinator?,
         audioSession: PlaybackAudioSession,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
@@ -2247,6 +2250,7 @@ final class AppModel {
             service: service,
             positionStore: playbackPositionStore,
             localSessionStore: localSessionStore,
+            preferencesStore: playbackPreferencesStore,
             nowPlayingCoordinator: nowPlayingCoordinator
                 ?? NowPlayingCoordinator(
                     registersRemoteCommands: ModelLocalState
