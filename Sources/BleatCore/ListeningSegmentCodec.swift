@@ -124,6 +124,48 @@ enum ListeningSegmentCodec {
     static let maximumSources = 1024
     static let maximumPayloadBytes = 768 * 1024
 
+    private struct ComponentBounds {
+        let first: ListeningSlice
+        let end: Date
+        let minimumPosition: Double
+    }
+
+    private static func combinedBounds(_ parts: [ComponentBounds]) throws
+        -> ComponentBounds
+    {
+        guard let first = parts.min(by: { order($0.first, $1.first) }) else {
+            throw ListeningSegmentFailure(.resolution, .invalidLineage)
+        }
+        var reach = first.end
+        var minimum = first.minimumPosition
+        for part in parts.sorted(by: { order($0.first, $1.first) }) {
+            guard sameLogicalContext(first.first, part.first),
+                part.first.startedAt
+                    <= reach.addingTimeInterval(
+                        ListeningContinuityPolicy.wallGapTolerance),
+                part.minimumPosition
+                    + ListeningContinuityPolicy.storedMediaGapTolerance
+                    >= first.first.startPosition
+            else {
+                throw ListeningSegmentFailure(.resolution, .incompatibleBounds)
+            }
+            reach = max(reach, part.end)
+            minimum = min(minimum, part.minimumPosition)
+        }
+        return ComponentBounds(
+            first: first.first, end: reach, minimumPosition: minimum)
+    }
+
+    private static func normalizingSession(
+        _ value: ListeningSlice,
+        using sessions: [PlaybackSessionID: PlaybackSessionID]
+    ) -> ListeningSlice {
+        value.replacingSessionID(
+            sessions[value.sessionID]
+                ?? StatisticsArchive.portableSessionID(
+                    sessionID: value.sessionID))
+    }
+
     static func encode(_ segment: ListeningSlice) throws -> Data {
         try validate(segment)
         let data = try serialize(segment)
@@ -359,44 +401,136 @@ enum ListeningSegmentCodec {
     ) throws -> ListeningSegmentResolution {
         for value in representations { try validate(value, allowActive: true) }
         var groups: [ListeningResolvedGroup] = []
+        var sessions: [PlaybackSessionID: PlaybackSessionID] = [:]
+        for value in representations where sessions[value.sessionID] == nil {
+            sessions[value.sessionID] = StatisticsArchive.portableSessionID(
+                sessionID: value.sessionID)
+        }
+        func precedes(_ lhs: ListeningSlice, _ rhs: ListeningSlice) -> Bool {
+            order(
+                normalizingSession(lhs, using: sessions),
+                normalizingSession(rhs, using: sessions))
+        }
         let resets = representations.filter {
             $0.lineage?.kind == .resetAnchors
         }
-        for value in representations.filter({
+        let inputs = try representations.filter({
             $0.lineage?.kind != .resetAnchors
-        }).sorted(by: order) {
-            let items = try contributions(value)
-            var sources: [UUID: ListeningSourceContribution] = [:]
-            for item in items { sources[item.id] = item }
-            var headers = [value]
-            var keep: [ListeningResolvedGroup] = []
-            for group in groups {
-                guard group.value.accountID == value.accountID,
-                    !Set(group.sources.keys).isDisjoint(with: sources.keys)
-                else {
-                    keep.append(group)
-                    continue
+        }).map { value in
+            (
+                value: value,
+                context: normalizingSession(value, using: sessions),
+                sources: try contributions(value)
+            )
+        }.sorted { order($0.context, $1.context) }
+
+        var parents = Array(inputs.indices)
+        var sizes = Array(repeating: 1, count: inputs.count)
+        var heads = Array(inputs.indices)
+        var touched = Array(inputs.indices)
+        var children = Array(repeating: [Int](), count: inputs.count)
+        var bounds = inputs.map {
+            ComponentBounds(
+                first: $0.context, end: $0.value.endedAt,
+                minimumPosition: $0.value.startPosition)
+        }
+        func root(_ index: Int) -> Int {
+            var current = index
+            while parents[current] != current {
+                parents[current] = parents[parents[current]]
+                current = parents[current]
+            }
+            return current
+        }
+        func join(_ lhs: Int, _ rhs: Int) -> Int {
+            let left = root(lhs)
+            let right = root(rhs)
+            guard left != right else { return left }
+            let leftSize = sizes[left]
+            let rightSize = sizes[right]
+            if leftSize < rightSize {
+                parents[left] = right
+                sizes[right] = rightSize + leftSize
+                return right
+            }
+            parents[right] = left
+            sizes[left] = leftSize + rightSize
+            return left
+        }
+        var owners:
+            [ListeningSourceIdentity:
+                (index: Int, contribution: ListeningSourceContribution)] = [:]
+        for (index, input) in inputs.enumerated() {
+            var matches: Set<Int> = []
+            var collisions:
+                [(
+                    index: Int, expected: ListeningSourceContribution,
+                    received: ListeningSourceContribution
+                )] = []
+            for contribution in input.sources {
+                let identity = ListeningSourceIdentity(
+                    accountID: input.value.accountID, id: contribution.id)
+                if let previous = owners[identity] {
+                    collisions.append(
+                        (previous.index, previous.contribution, contribution))
+                    if previous.index != index {
+                        matches.insert(root(previous.index))
+                    }
+                } else {
+                    owners[identity] = (index, contribution)
                 }
-                guard sameLogicalContext(group.value, value) else {
+            }
+            // Context conflicts precede contribution conflicts when one input
+            // has multiple invalid shared sources, independent of source order.
+            for collision in collisions {
+                guard
+                    sameLogicalContext(
+                        inputs[collision.index].context, input.context)
+                else {
                     throw ListeningSegmentFailure(
                         .resolution, .metadataConflict)
                 }
-                for (id, contribution) in group.sources {
-                    if let previous = sources[id], previous != contribution {
-                        throw ListeningSegmentFailure(
-                            .resolution, .sourceConflict)
-                    }
-                    sources[id] = contribution
-                }
-                headers.append(contentsOf: group.representations)
             }
-            let merged = try resolvedGroup(headers, sources: sources)
-            keep.append(merged)
-            groups = keep
+            for collision in collisions {
+                guard collision.expected == collision.received else {
+                    throw ListeningSegmentFailure(.resolution, .sourceConflict)
+                }
+            }
+            let matched = matches.sorted { touched[$0] < touched[$1] }
+            // Validate each merge before a later bridge could conceal malformed
+            // intermediate bounds. Summaries avoid rebuilding growing headers.
+            let mergedBounds = try combinedBounds(
+                [bounds[index]] + matched.map { bounds[$0] })
+            children[index] = matched.map { heads[$0] }
+            var merged = index
+            for other in matched { merged = join(merged, other) }
+            bounds[merged] = mergedBounds
+            heads[merged] = index
+            touched[merged] = index
+        }
+        var componentSources: [Int: [UUID: ListeningSourceContribution]] = [:]
+        for (identity, owner) in owners {
+            let component = root(owner.index)
+            componentSources[component, default: [:]][identity.id] =
+                owner.contribution
+        }
+        let components = Set(inputs.indices.map { root($0) })
+            .sorted { touched[$0] < touched[$1] }
+        for component in components {
+            var headers: [ListeningSlice] = []
+            var pending = [heads[component]]
+            while let index = pending.popLast() {
+                headers.append(inputs[index].value)
+                pending.append(contentsOf: children[index].reversed())
+            }
+            groups.append(
+                try resolvedGroup(
+                    headers, sources: componentSources[component] ?? [:],
+                    portableSessions: sessions))
         }
         if !applyingResets {
             return ListeningSegmentResolution(
-                groups: groups.sorted { order($0.value, $1.value) },
+                groups: groups.sorted { precedes($0.value, $1.value) },
                 resetEnvelopes: resets, supplements: [], removals: [])
         }
         struct ResetKey: Hashable {
@@ -472,34 +606,35 @@ enum ListeningSegmentCodec {
             }
         }
         return ListeningSegmentResolution(
-            groups: groups.sorted { order($0.value, $1.value) },
+            groups: groups.sorted { precedes($0.value, $1.value) },
             resetEnvelopes: resets, supplements: supplements, removals: removals
         )
     }
 
     private static func resolvedGroup(
         _ representations: [ListeningSlice],
-        sources: [UUID: ListeningSourceContribution]
+        sources: [UUID: ListeningSourceContribution],
+        portableSessions: [PlaybackSessionID: PlaybackSessionID]
     ) throws -> ListeningResolvedGroup {
-        guard let first = representations.min(by: order),
+        let projected = representations.map {
+            (
+                value: $0,
+                context: normalizingSession($0, using: portableSessions)
+            )
+        }
+        guard
+            let first = projected.min(by: { order($0.context, $1.context) })?
+                .value,
             let last = representations.max(by: { $0.endedAt < $1.endedAt })
         else {
             throw ListeningSegmentFailure(.resolution, .invalidLineage)
         }
-        var reach = first.endedAt
-        for header in representations.sorted(by: order) {
-            guard sameLogicalContext(first, header),
-                header.startedAt
-                    <= reach.addingTimeInterval(
-                        ListeningContinuityPolicy.wallGapTolerance),
-                header.startPosition
-                    + ListeningContinuityPolicy.storedMediaGapTolerance
-                    >= first.startPosition
-            else {
-                throw ListeningSegmentFailure(.resolution, .incompatibleBounds)
-            }
-            reach = max(reach, header.endedAt)
-        }
+        _ = try combinedBounds(
+            projected.map {
+                ComponentBounds(
+                    first: $0.context, end: $0.value.endedAt,
+                    minimumPosition: $0.value.startPosition)
+            })
         if representations.count == 1 {
             return ListeningResolvedGroup(
                 value: first, sources: sources, representations: representations

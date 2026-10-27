@@ -247,3 +247,56 @@ receipt is not an exact published-head claim: reconcile the dependency with the
 separate share fix and repeat the final owning UI gate before merge. Full
 signed-host, actual CloudKit/multi-device and physical-device evidence remain
 separate. No release or migration of actual user history was performed.
+
+### CI portability and coexistence scaling correction
+
+The first published head's unsigned host run on Xcode 26.6 terminated with
+`NSInvalidArgumentException: keypath recordingFormat not found in entity
+ListeningSliceRecord` during canonical preparation. The retained
+`.build/migration-ci-host-failure.log` and original Actions run preserve that
+failure. Preparation now queries only the primitive finalized-state property
+and compares the materialized Codable enum in Swift. No schema or frozen-store
+definition changed. The supported older runtime need not expose a Codable enum
+as a SQL attribute; a Swift property declaration alone does not prove that
+predicate is safe.
+
+A representative native fixture also exposed repeated aggregate reconstruction
+in overlap resolution. Its first diagnostic run was interrupted (exit 130),
+still in the second of three preparation passes after about nine minutes of
+full-CPU execution. It contained 8,194 pending observations, two represented
+legacy observations, a replacement, and current/active rows. The one-second
+owned-process sample is `.build/canonical-enum-stall-sample.txt`; this was not
+a completed measurement or an extrapolation to 58,000 observations. Independent
+review also caught a new helper's changed default; the legacy recording state
+is again optional `nil`, with explicit finalized state only for current-format
+fixtures. The interrupted attempt is not counted as passing coverage.
+
+The shared resolver now indexes account/source identities, joins overlapping
+components and materializes each final component once. It caches portable
+session normalization and retains the prior header order through an iterative
+merge tree. A shared bounds-summary check still rejects each invalid
+intermediate merge before a later bridge could conceal it. Metadata conflicts
+precede contribution conflicts for an input with multiple invalid shared
+sources. Exact source proofs, deterministic quantity summation, identity
+hashing, canonical encoding and reset resolution remain the same.
+
+Final local unsigned acceptance passed **139 declared tests in seven suites**
+in 45.797 seconds (`.build/canonical-resolver-final-acceptance.log`). The native
+8,194-pending fixture completed all three passes and preservation assertions in
+14.724 seconds. Actual resolution of 58,008 sources with original rows and
+duplicate replacements took 6.746 seconds, preserving 290,040 real seconds,
+435,060 audiobook seconds and exact unique-source cardinality. The encoded
+fixture remains 58 envelopes / 5,016,115 bytes. These are measured observations,
+not low-CPU or short-duration pass requirements. Whole-command profiling
+reported 66.13 seconds elapsed and 857,653,248 bytes maximum resident size,
+including build/test infrastructure; this is not an app-memory measurement.
+
+The new regressions retain account separation, exact typed metadata/proof/bounds
+rejection, malformed intermediate bounds despite a later spanning bridge, and
+context-before-proof priority under reordered delivery. Native mutation remains
+limited to 8,192 eligible observations per pass after represented-source
+filtering; total history reads are not bounded. The fixture was not shrunk and
+no duration threshold was inflated. Actual app responsiveness during migration,
+signed-device behavior and live multi-device CloudKit remain separate evidence;
+the concurrent standalone share-sheet UI run is not proof of migration UI
+responsiveness.

@@ -1,14 +1,14 @@
 {
   "issue": "https://github.com/terminaloutcomes/bleat/issues/362",
-  "scope": "Tests/BleatCoreTests and Tests/BleatTranscriptionTests. Retains 621 pre-existing source-reviewed audit records and adds 22 canonical-migration records; execution and unresolved follow-ups are separate.",
+  "scope": "Tests/BleatCoreTests and Tests/BleatTranscriptionTests. Retains 621 pre-existing source-reviewed audit records and adds 24 canonical-migration records; execution and unresolved follow-ups are separate.",
   "source_index": "TestSupport/TestAudit/source-index.json",
   "review_revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
-  "declaration_count": 643,
-  "reviewed_count": 643,
+  "declaration_count": 645,
+  "reviewed_count": 645,
   "candidate_review": {
     "date": "2026-10-27",
     "base_revision": "76492149b0c8a5fd708d2ac095f8890e201541fb",
-    "added_functions": 22,
+    "added_functions": 24,
     "pre_existing_records": 621,
     "historical_reviewed_functions": 562,
     "scope": "Uncommitted canonical-history migration plus two approved test-only safeguards; independent source review is separate from executed argument counts and device/cloud evidence.",
@@ -130,6 +130,66 @@
     }
   ],
   "tests": [
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 334
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve native mixed-format filtering and bounded mutation progress.",
+      "dependencies_and_setup": "New in-memory container: finalized continuous and active rows, two already represented legacy rows with an envelope, and8194 pending observations; legacy nil state preserved.",
+      "action_postconditions": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup.",
+      "synchronization": "Pure synchronous codec calls or directly awaited repository actor operations; no test-owned task, observer, guessed yield or readiness sleep.",
+      "timeout_tolerance": "No low-CPU or duration pass threshold. Finite owned execution and measured runtime/resource receipts are separate from semantic assertions.",
+      "classification": "Isolated Swift Testing host regression with synthetic data.",
+      "compiler_skip": "No opt-in or skip guard; current host inventory includes this function.",
+      "rules": {
+        "1": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup.",
+        "2": "Inspect actual operation completion and full native/codec results; no delay replaces a postcondition.",
+        "3": "Inapplicable: no advancing player, seek or actual UI responsiveness is measured.",
+        "4": "No unstructured task or callback created by the body; test-scoped container and awaited repository operations.",
+        "5": "New in-memory container: finalized continuous and active rows, two already represented legacy rows with an envelope, and8194 pending observations; legacy nil state preserved.",
+        "6": "Actual native SwiftData host operations, not CloudKit. Writes per pass are bounded; history reads remain unbounded.",
+        "7": "Preserve the original crash and interrupted scaling attempt. Retain8194/58008 scales and exact assertions; no retry-to-green or arbitrary speed requirement.",
+        "8": "Caller/value or typed stage/cause assertions plus whole-command time/resources and owned-process sample retain diagnostic evidence.",
+        "9": "Final acceptance:139 declarations/seven suites. Representative timings and parameter cases are in docs/design/cloud-sync-storage.md; CI/device results remain separate."
+      },
+      "decision": "keep",
+      "reason": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup. Actual native SwiftData host operations, not CloudKit. Writes per pass are bounded; history reads remain unbounded.",
+      "shared_helper_review": "Reviewed restored optional-nil slice defaults, isolated repository factory, shared codec and persistence callers. No credentials, user storage or production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::resolutionPreservesAccountSeparationAndTypedConflictBoundaries",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 522
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve account isolation and exact rejection causes in overlap resolution.",
+      "dependencies_and_setup": "Six synthetic observations; local JSON-derived malformed envelopes are decoded by the real shared codec.",
+      "action_postconditions": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders.",
+      "synchronization": "Pure synchronous codec calls or directly awaited repository actor operations; no test-owned task, observer, guessed yield or readiness sleep.",
+      "timeout_tolerance": "No low-CPU or duration pass threshold. Finite owned execution and measured runtime/resource receipts are separate from semantic assertions.",
+      "classification": "Isolated Swift Testing host regression with synthetic data.",
+      "compiler_skip": "No opt-in or skip guard; current host inventory includes this function.",
+      "rules": {
+        "1": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders.",
+        "2": "Inspect actual operation completion and full native/codec results; no delay replaces a postcondition.",
+        "3": "Inapplicable: no advancing player, seek or actual UI responsiveness is measured.",
+        "4": "No unstructured task or callback created by the body; test-scoped container and awaited repository operations.",
+        "5": "Six synthetic observations; local JSON-derived malformed envelopes are decoded by the real shared codec.",
+        "6": "A small semantic rejection matrix, not exhaustive corruption fuzzing or live-cloud evidence.",
+        "7": "Preserve the original crash and interrupted scaling attempt. Retain8194/58008 scales and exact assertions; no retry-to-green or arbitrary speed requirement.",
+        "8": "Caller/value or typed stage/cause assertions plus whole-command time/resources and owned-process sample retain diagnostic evidence.",
+        "9": "Final acceptance:139 declarations/seven suites. Representative timings and parameter cases are in docs/design/cloud-sync-storage.md; CI/device results remain separate."
+      },
+      "decision": "keep",
+      "reason": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders. A small semantic rejection matrix, not exhaustive corruption fuzzing or live-cloud evidence.",
+      "shared_helper_review": "Reviewed restored optional-nil slice defaults, isolated repository factory, shared codec and persistence callers. No credentials, user storage or production CloudKit."
+    },
     {
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::diagnosticsRetainExactSegmentStageAndCause",
       "source": {
@@ -404,7 +464,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::wallToleranceHasExplicitHalfSecondBoundary",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 359
+        "line": 425
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -434,7 +494,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::representationNoiseDoesNotCreateAFalseGap",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 367
+        "line": 433
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -464,7 +524,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::knownBoundariesAlwaysWin",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 389
+        "line": 455
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -494,7 +554,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::wallGapNeverAddsListeningAndMediaSeekRemainsSeparate",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 396
+        "line": 462
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -524,7 +584,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::deterministicSharedCodecPreservesLocalCloudLocalPayload",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 414
+        "line": 480
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -554,7 +614,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 434
+        "line": 500
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -584,7 +644,7 @@
       "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::syntheticHistoryShowsActualRecordAndPayloadReduction",
       "source": {
         "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
-        "line": 456
+        "line": 616
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",

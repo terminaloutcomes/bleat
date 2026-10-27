@@ -334,12 +334,14 @@
     "accountRekeyRebuildsCanonicalPayloadAndReceiptDependencies()",
     "pendingPreconsentResetDoesNotActivateAnotherAccountsProtocol()",
     "localAccountHistoryRemovalDoesNotCreateCloudReset()",
+    "compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources()",
     "wallToleranceHasExplicitHalfSecondBoundary(gap:)",
     "representationNoiseDoesNotCreateAFalseGap()",
     "knownBoundariesAlwaysWin(boundary:)",
     "wallGapNeverAddsListeningAndMediaSeekRemainsSeparate()",
     "deterministicSharedCodecPreservesLocalCloudLocalPayload()",
     "overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping()",
+    "resolutionPreservesAccountSeparationAndTypedConflictBoundaries()",
     "syntheticHistoryShowsActualRecordAndPayloadReduction()"
   ],
   "BleatCoreTests.LiveUpdatesTests": [

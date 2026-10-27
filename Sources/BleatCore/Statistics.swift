@@ -2834,11 +2834,14 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
+            // Compare the Codable enum after materialization: supported older
+            // SwiftData runtimes need not expose it as a SQL-queryable keypath.
             let legacy = try context.fetch(
                 FetchDescriptor<ListeningSliceRecord>(
                     predicate: #Predicate {
-                        $0.recordingFormat == nil && $0.isFinalized != false
-                    }))
+                        $0.isFinalized != false
+                    })
+            ).filter { $0.recordingFormat == nil }
             guard !legacy.isEmpty else { return }
             let current = try reconcileListeningSegments(context)
             var represented: Set<ListeningSourceIdentity> = []
