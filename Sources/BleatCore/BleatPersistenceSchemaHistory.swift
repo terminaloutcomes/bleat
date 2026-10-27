@@ -446,8 +446,115 @@ public enum BleatPersistenceSchemaV0_1_8: VersionedSchema {
     ]
 }
 
-public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+public enum BleatPersistenceSchemaV0_1_9: VersionedSchema {
     public static var versionIdentifier: Schema.Version { .init(0, 1, 9) }
+    public static var models: [any PersistentModel.Type] {
+        [
+
+            ServerAccountRecord.self,
+            FinishedProgressCheckpointRecord.self,
+            AccountIdentityAliasRecord.self,
+            CachedLibraryCollectionRecord.self,
+            CachedLibraryRecord.self,
+            CachedLibraryPageRecord.self,
+            CachedLibrarySearchRecord.self,
+            CachedLibraryHomeRecord.self,
+            CachedLibraryBookDetailRecord.self,
+            CachedChapterTranscriptRecord.self,
+            CachedChapterTranscriptionTaskRecord.self,
+            CachedChapterTranscriptionJobRecord.self,
+            ListeningSliceRecord.self,
+            CompletionMilestoneRecord.self,
+            RemoteListeningSessionRecord.self,
+            PrivateCloudStatisticsDeletionRecord.self,
+            StatisticsSessionAccountingRecord.self,
+            StatisticsHistoryImportRecord.self,
+            StatisticsSnapshotRecord.self,
+            PrivateCloudRecordMetadata.self,
+            PrivateCloudStateRecord.self,
+        ]
+    }
+    @Model
+    public final class ListeningSliceRecord {
+        #Index<ListeningSliceRecord>([\.privateCloudSynchronized])
+
+        @Attribute(.unique)
+        var eventID: UUID
+        var accountID: String
+        var itemID: String
+        var sessionID: String
+        var startedAt: Date
+        var endedAt: Date
+        var startPosition: Double
+        var endPosition: Double
+        var realSeconds: Double
+        var audiobookSeconds: Double
+        var playbackRate: Double
+        var chapterID: Int?
+        var chapterTitle: String?
+        var chapterStart: Double?
+        var chapterEnd: Double?
+        var title: String
+        var author: String
+        var duration: Double
+        var recordingFormat: ListeningRecordingFormat?
+        var isFinalized: Bool?
+        var privateCloudSynchronized: Bool?
+
+        init(_ slice: ListeningSlice) {
+            eventID = slice.id
+            accountID = slice.accountID.rawValue
+            itemID = slice.itemID.rawValue
+            sessionID = slice.sessionID.rawValue
+            startedAt = slice.startedAt
+            endedAt = slice.endedAt
+            startPosition = slice.startPosition
+            endPosition = slice.endPosition
+            realSeconds = slice.realSeconds
+            audiobookSeconds = slice.audiobookSeconds
+            playbackRate = slice.playbackRate
+            chapterID = slice.chapterID
+            chapterTitle = slice.chapterTitle
+            chapterStart = slice.chapterStart
+            chapterEnd = slice.chapterEnd
+            title = slice.title
+            author = slice.author
+            duration = slice.duration
+            recordingFormat = slice.recordingFormat
+            isFinalized = slice.recordingState != .active
+            privateCloudSynchronized = false
+        }
+
+        var domainValue: ListeningSlice {
+            ListeningSlice(
+                id: eventID,
+                accountID: AccountID(rawValue: accountID),
+                itemID: LibraryItemID(rawValue: itemID),
+                sessionID: PlaybackSessionID(rawValue: sessionID),
+                startedAt: startedAt,
+                endedAt: endedAt,
+                startPosition: startPosition,
+                endPosition: endPosition,
+                realSeconds: realSeconds,
+                audiobookSeconds: audiobookSeconds,
+                playbackRate: playbackRate,
+                chapterID: chapterID,
+                chapterTitle: chapterTitle,
+                chapterStart: chapterStart,
+                chapterEnd: chapterEnd,
+                title: title,
+                author: author,
+                duration: duration, recordingFormat: recordingFormat,
+                recordingState: recordingFormat == nil
+                    ? nil : (isFinalized == false ? .active : .finalized)
+            )
+        }
+    }
+
+}
+
+public enum BleatPersistenceSchemaCurrent: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { .init(0, 1, 10) }
     public static var models: [any PersistentModel.Type] {
         BleatPersistenceModelCatalog.currentModelTypes
     }
@@ -463,6 +570,7 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             BleatPersistenceSchemaV0_1_6.self,
             BleatPersistenceSchemaV0_1_7.self,
             BleatPersistenceSchemaV0_1_8.self,
+            BleatPersistenceSchemaV0_1_9.self,
             BleatPersistenceSchemaCurrent.self,
         ]
     }
@@ -495,6 +603,10 @@ public enum BleatPersistenceSchemaMigrationPlan: SchemaMigrationPlan {
             ),
             .lightweight(
                 fromVersion: BleatPersistenceSchemaV0_1_8.self,
+                toVersion: BleatPersistenceSchemaV0_1_9.self
+            ),
+            .lightweight(
+                fromVersion: BleatPersistenceSchemaV0_1_9.self,
                 toVersion: BleatPersistenceSchemaCurrent.self
             ),
         ]

@@ -432,6 +432,9 @@ extension PrivateCloudSyncError {
             default:
                 .serverRejected
             }
+        case .segmentFailure(let failure):
+            failure.stage == .storageRead || failure.stage == .storageWrite
+                ? .localStorage : .invalidResponse
         case .persistenceFailed, .storage:
             .localStorage
         case .callbackTimedOut:

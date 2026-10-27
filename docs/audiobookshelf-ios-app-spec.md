@@ -1888,20 +1888,37 @@ source preferences. CloudKit waits for migration; browsing and playback do not.
 Invalid data or save/verification failures retain the source and surface the
 specific typed processing failure rather than resetting sync state.
 
-Successful legacy reconciliation queues one acknowledged **Cloud storage
-update** notice per installation across accounts and relaunches. It recommends
-updating every device to the fixed introducing release, 2026.10.14, or later,
-without claiming that an outdated device is currently running. It does not
-block synchronization or remove history.
+Successful legacy reconciliation queues a **Cloud storage update** notice per
+installation. The canonical migration requires fresh explicit consent that all
+devices support its introducing release (proposed 2026.10.27, subject to release
+validation). Earlier reminder acknowledgments never authorize retirement. The
+notice offers **All devices updated — convert history** and **Later**, explains
+conversion and verified removal, and retains Later across foreground/relaunch.
+It does not claim to detect remote device versions or block ordinary sync.
 
-The upgrade notice offers **All my devices are updated** and **Later**. Confirmation
-records only this installation's acknowledgment; Bleat does not infer remote
-device versions or start a new cloud-history rewrite. Local sync-metadata
-migration is already automatic, verified, and restartable. Legacy listening
-slices remain immutable: their original playback samples are unavailable, so
-relabeling them as continuous segments would misrepresent how they were recorded.
-Later preserves the pending notice for a subsequent foreground or relaunch.
-Neither choice changes existing history or older-client compatibility.
+Compatible legacy observations convert into the canonical continuous-segment
+model with one shared local/CloudKit codec and continuity predicate. The trial
+wall adjacency tolerance is 0.5 seconds, independently guarded by media endpoints
+and known playback/context boundaries. Gaps add no measured listening time.
+Five-second timestamps are not retained; compact source identities, measured
+contributions and proof hashes preserve overlap deduplication. Reporting-day
+boundaries remain exact; sub-day queries use segment start-date selection and
+cannot reconstruct removed timer checkpoints. Ambiguous partial resets are
+rejected with explicit wider-range guidance rather than deleting extra history.
+
+Originals coexist with replacements without double-counting. Retirement requires
+an actual server save receipt matching the exact current canonical payload;
+fetched data is not a receipt. Bounded conversion and durable cleanup resume
+after interruption. Permanent reset actions/anchors suppress offline reuploads,
+survive ordinary reset, account rekey/removal and version-2 export/import, and
+are uploaded before dependent physical deletion. Account-wide removal retains
+minimal reset metadata; full cloud-zone erasure removes its remote copy until
+retained local reset metadata is synchronized again.
+Uncovered canonical physical deletions retain/repair authoritative local history.
+Unknown versions, corrupt payloads and conflicting proofs produce typed stage
+and cause diagnostics while preserving source data. See
+[canonical conversion design](design/cloud-sync-storage.md#canonical-history-conversion)
+for limits and the distinction between isolated evidence and device validation.
 The notice and iCloud account/preference choices share one presentation owner.
 An incoming sync result must wait for the unanswered notice; explicit confirmation
 or Later releases it only after dismissal. Presentation interruption never implies

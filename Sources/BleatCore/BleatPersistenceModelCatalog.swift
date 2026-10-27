@@ -15,6 +15,7 @@ public enum BleatPersistenceModelCatalog {
         CachedChapterTranscriptionTaskRecord.self,
         CachedChapterTranscriptionJobRecord.self,
         ListeningSliceRecord.self,
+        ListeningSegmentCleanupRecord.self,
         CompletionMilestoneRecord.self,
         RemoteListeningSessionRecord.self,
         PrivateCloudStatisticsDeletionRecord.self,

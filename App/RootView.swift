@@ -362,7 +362,7 @@ struct RootView: View {
                 NavigationStack {
                     Form {
                         Text(SignedInAlert.cloudStorageUpgrade.message)
-                        Button("All my devices are updated") {
+                        Button("All devices updated — convert history") {
                             model.acknowledgeCloudStorageUpgradeNotice()
                             cloudPrompts.deferNotice()
                         }
@@ -1863,7 +1863,7 @@ enum SignedInAlert: Equatable {
     var message: String {
         switch self {
         case .cloudStorageUpgrade:
-            "Bleat upgrades its local iCloud sync storage automatically and preserves existing listening history. Use Bleat version \(CloudStorageUpgradeNotice.introducedInVersion) or later on every device. Confirming below dismisses this notice on this device; it does not rewrite history."
+            "Update every device to Bleat \(CloudStorageUpgradeNotice.canonicalSegmentsIntroducedInVersion) or later before confirming. Bleat will combine compatible older listening records into continuous segments, retain measured listening totals and meaningful playback boundaries, and remove original records only after iCloud confirms their replacements. Small timer checkpoints are not retained. Custom resets that cut a combined segment require a wider range. Confirmation enables this conversion and cleanup on this device."
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.message
@@ -2075,10 +2075,9 @@ private struct SignedInView: View {
                 Alert(
                     title: Text(entry.alert.title),
                     message: Text(entry.alert.message),
-                    primaryButton: .default(Text("All my devices are updated"))
-                    {
-                        // This confirms the user's upgrade decision, not remote
-                        // device versions or a new history-conversion operation.
+                    primaryButton: .default(
+                        Text("All devices updated — convert history")
+                    ) {
                         model.acknowledgeCloudStorageUpgradeNotice()
                         alertQueue.finish(entry)
                     },
@@ -7500,6 +7499,11 @@ extension StatisticsRepositoryError {
         case .invalidSlice: "Invalid listening slice"
         case .invalidCompletion: "Invalid completion record"
         case .persistenceFailed: "Statistics storage unavailable"
+        case .segmentFailure(let failure):
+            failure.cause == .partialRangeResetUnsupported
+                || failure.cause == .ambiguousResetOverlap
+                ? "Reset needs a wider range"
+                : "Listening history needs attention"
         case .invalidArchive: "Invalid statistics archive"
         case .invalidAccountMapping: "Archive belongs to another account"
         case .partialSessionResetRequiresFullSession:
@@ -7516,6 +7520,21 @@ extension StatisticsRepositoryError {
             "The completion record failed validation. Existing history was preserved."
         case .persistenceFailed:
             "Bleat could not read or save statistics on this device. Try again."
+        case .segmentFailure(let failure):
+            switch failure.cause {
+            case .partialRangeResetUnsupported, .ambiguousResetOverlap:
+                "This range cuts through combined listening history. Select whole UTC reporting days or reset the account. No additional history was deleted."
+            case .stalePreparation:
+                "Listening history changed during synchronization. Retry to prepare the current history."
+            case .readFailed, .writeFailed:
+                "Bleat could not read or save listening history on this device. Retry after storage is available."
+            case .missingReceipt, .incompleteReplacement:
+                "Bleat is waiting for verified replacement history. Existing records have been retained. Retry synchronization."
+            case .unsupportedVersion:
+                "This history was written by a newer Bleat version. Update Bleat before retrying. Existing records have been retained."
+            default:
+                "Listening history could not be reconciled safely. Existing records have been retained. The diagnostic records the processing stage and cause."
+            }
         case .invalidArchive:
             "The archive has an unsupported version or invalid records. No history was imported."
         case .invalidAccountMapping:
@@ -7531,6 +7550,7 @@ extension StatisticsRepositoryError {
         case .invalidSlice: .statisticsInvalidSlice
         case .invalidCompletion: .statisticsInvalidCompletion
         case .persistenceFailed: .statisticsPersistenceFailed
+        case .segmentFailure: .statisticsSegmentFailure
         case .invalidArchive: .statisticsInvalidArchive
         case .invalidAccountMapping: .statisticsInvalidAccountMapping
         case .partialSessionResetRequiresFullSession:
