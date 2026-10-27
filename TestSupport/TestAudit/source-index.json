@@ -4,6 +4,18 @@
   "declarations": [
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources",
+      "line": 334,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "resolutionPreservesAccountSeparationAndTypedConflictBoundaries",
+      "line": 522,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "diagnosticsRetainExactSegmentStageAndCause",
       "line": 9,
       "language": "swift"
@@ -59,43 +71,43 @@
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "wallToleranceHasExplicitHalfSecondBoundary",
-      "line": 359,
+      "line": 425,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "representationNoiseDoesNotCreateAFalseGap",
-      "line": 367,
+      "line": 433,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "knownBoundariesAlwaysWin",
-      "line": 389,
+      "line": 455,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "wallGapNeverAddsListeningAndMediaSeekRemainsSeparate",
-      "line": 396,
+      "line": 462,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "deterministicSharedCodecPreservesLocalCloudLocalPayload",
-      "line": 414,
+      "line": 480,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping",
-      "line": 434,
+      "line": 500,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
       "name": "syntheticHistoryShowsActualRecordAndPayloadReduction",
-      "line": 456,
+      "line": 616,
       "language": "swift"
     },
     {

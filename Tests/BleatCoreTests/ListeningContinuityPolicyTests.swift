@@ -330,9 +330,74 @@ import Testing
         try await repository.removeAccountHistoryLocally(original.accountID)
         #expect(try await repository.archive().resetEnvelopes == roots)
     }
+    @Test
+    func compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources()
+        async throws
+    {
+        let repository = try repository()
+        let container = await repository.modelContainer
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        let current = try slice(
+            0, format: .continuousSegment, state: .finalized)
+        let active = try slice(
+            1, format: .continuousSegment, state: .active)
+        let represented = try [slice(2), slice(3)]
+        let pending = try
+            (4..<(4 + ListeningSegmentCodec.maximumSources * 8 + 2))
+            .map { try slice($0) }
+        for value in [current, active] + represented + pending {
+            context.insert(ListeningSliceRecord(value))
+        }
+        let existing = try #require(
+            ListeningSegmentCodec.coalesce(represented).first)
+        context.insert(
+            try ListeningSliceRecord(
+                encodedSegment: ListeningSegmentCodec.encode(existing)))
+        try context.save()
+
+        func representedIDs() throws -> Set<UUID> {
+            var ids: Set<UUID> = []
+            for row in try ModelContext(container).fetch(
+                FetchDescriptor<ListeningSliceRecord>())
+            where row.segmentPayload != nil {
+                let value = try row.validatedValue()
+                if value.lineage?.kind == .observations {
+                    ids.formUnion(try ListeningSegmentCodec.sourceIDs(value))
+                }
+            }
+            return ids
+        }
+
+        try await repository.prepareCanonicalCompaction()
+        let first = try representedIDs()
+        #expect(
+            first.count == represented.count + ListeningSegmentCodec
+                .maximumSources * 8)
+        #expect(!first.contains(try #require(pending.last).id))
+        try await repository.prepareCanonicalCompaction()
+        let complete = try representedIDs()
+        #expect(complete == Set((represented + pending).map(\.id)))
+        try await repository.prepareCanonicalCompaction()
+        #expect(try representedIDs() == complete)
+
+        let retained = try ModelContext(container).fetch(
+            FetchDescriptor<ListeningSliceRecord>())
+        #expect(
+            try retained.first { $0.eventID == current.id }?.validatedValue()
+                == current)
+        #expect(
+            try retained.first { $0.eventID == active.id }?.validatedValue()
+                == active)
+        #expect(Set(retained.map(\.eventID)).isSuperset(of: complete))
+        #expect(try await repository.privateCloudDeletions().isEmpty)
+    }
+
     private func slice(
         _ index: Int, gap: Double = 0, positionGap: Double = 0,
-        boundary: ListeningBoundary? = nil
+        boundary: ListeningBoundary? = nil,
+        format: ListeningRecordingFormat? = nil,
+        state: ListeningRecordingState? = nil
     ) throws -> ListeningSlice {
         let id = try #require(
             UUID(
@@ -352,6 +417,7 @@ import Testing
             chapterEnd: nil,
             title: "Synthetic book", author: "Synthetic author",
             duration: 100_000,
+            recordingFormat: format, recordingState: state,
             boundaryAfter: boundary)
     }
 
@@ -453,6 +519,100 @@ import Testing
         #expect(lineage["timestamps"] == nil)
     }
 
+    @Test func resolutionPreservesAccountSeparationAndTypedConflictBoundaries()
+        throws
+    {
+        let originals = try (0..<6).map { try slice($0) }
+        func modified(_ value: ListeningSlice, _ fields: [String: Any]) throws
+            -> ListeningSlice
+        {
+            var json = try #require(
+                JSONSerialization.jsonObject(
+                    with: ListeningSegmentCodec.encode(value)) as? [String: Any]
+            )
+            json.merge(fields) { _, replacement in replacement }
+            return try ListeningSegmentCodec.decode(
+                JSONSerialization.data(withJSONObject: json))
+        }
+        let separate = try ListeningSegmentCodec.resolve([
+            originals[0],
+            originals[0].reidentified(as: AccountID(rawValue: "other")),
+        ])
+        #expect(separate.groups.count == 2)
+        #expect(separate.groups.reduce(0) { $0 + $1.value.realSeconds } == 10)
+        let a = try #require(
+            ListeningSegmentCodec.coalesce(Array(originals[0...1])).first)
+        let b = try #require(
+            ListeningSegmentCodec.coalesce(Array(originals[1...2])).first)
+        let base = originals[0].startedAt.timeIntervalSinceReferenceDate
+        let metadata = try modified(a, ["title": "Different metadata"])
+        let contribution = try modified(
+            originals[0],
+            [
+                "realSeconds": 4.0, "audiobookSeconds": 6.0,
+                "endedAt": base + 4, "endPosition": 6.0,
+            ])
+        let gap = try modified(
+            b, ["startedAt": base + 25, "endedAt": base + 35])
+        #expect(throws: ListeningSegmentFailure(.resolution, .metadataConflict))
+        {
+            try ListeningSegmentCodec.resolve([metadata, originals[0]])
+        }
+        #expect(throws: ListeningSegmentFailure(.resolution, .sourceConflict)) {
+            try ListeningSegmentCodec.resolve([a, contribution])
+        }
+        #expect(
+            throws: ListeningSegmentFailure(.resolution, .incompatibleBounds)
+        ) {
+            try ListeningSegmentCodec.resolve([a, gap])
+        }
+
+        // The final connected union has spanning coverage, but an earlier
+        // malformed component must still fail before the later bridge arrives.
+        let d = try modified(
+            #require(
+                ListeningSegmentCodec.coalesce(Array(originals[4...5])).first),
+            [
+                "startedAt": base + 5, "endedAt": base + 35,
+                "startPosition": 0.0, "endPosition": 15.0,
+            ])
+        let b1 = try modified(
+            b,
+            [
+                "startedAt": base + 10, "endedAt": base + 20,
+                "startPosition": 15.0, "endPosition": 30.0,
+            ])
+        let b2 = try modified(
+            #require(
+                ListeningSegmentCodec.coalesce(Array(originals[2...3])).first),
+            [
+                "startedAt": base + 15, "endedAt": base + 25,
+                "startPosition": 10.0, "endPosition": 25.0,
+            ])
+        let bridge = try modified(
+            #require(ListeningSegmentCodec.coalesce(originals).first),
+            ["startedAt": base + 20, "endedAt": base + 50])
+        #expect(
+            throws: ListeningSegmentFailure(.resolution, .incompatibleBounds)
+        ) {
+            try ListeningSegmentCodec.resolve([bridge, b2, d, originals[0], b1])
+        }
+        let wrongTitle = try modified(
+            originals[1], ["title": "Different metadata"])
+        let shifted = try modified(
+            a, ["startedAt": base + 10, "endedAt": base + 20])
+        for values in [
+            [shifted, contribution, wrongTitle],
+            [wrongTitle, contribution, shifted],
+        ] {
+            #expect(
+                throws: ListeningSegmentFailure(.resolution, .metadataConflict)
+            ) {
+                try ListeningSegmentCodec.resolve(values)
+            }
+        }
+    }
+
     @Test func syntheticHistoryShowsActualRecordAndPayloadReduction() throws {
         let originals = try (0..<58_008).map { try slice($0) }
         let compacted = try ListeningSegmentCodec.coalesce(originals)
@@ -466,8 +626,24 @@ import Testing
         #expect(newBytes < oldBytes / 2)
         #expect(compacted.reduce(0) { $0 + $1.realSeconds } == 290_040)
         #expect(compacted.reduce(0) { $0 + $1.audiobookSeconds } == 435_060)
+        let started = ContinuousClock.now
+        let resolved = try ListeningSegmentCodec.resolve(
+            originals + compacted + compacted.reversed())
+        #expect(resolved.groups.count == compacted.count)
+        #expect(
+            resolved.groups.reduce(0) { $0 + $1.sources.count }
+                == originals.count)
+        #expect(
+            resolved.groups.reduce(0) { $0 + $1.value.realSeconds }
+                == 290_040)
+        #expect(
+            resolved.groups.reduce(0) { $0 + $1.value.audiobookSeconds }
+                == 435_060)
         print(
             "Canonical trial: \(originals.count) records / \(oldBytes) bytes -> \(compacted.count) records / \(newBytes) bytes; synthetic only"
+        )
+        print(
+            "Canonical resolver trial: \(originals.count) sources with duplicate replacements; elapsed=\(started.duration(to: .now)); exact totals and dedupe asserted"
         )
     }
 }
