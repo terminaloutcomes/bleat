@@ -40,12 +40,21 @@ final class AppBootstrap {
     let model: AppModel
 
     init() {
-        let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder
-            .shared
         #if BLEAT_RELEASE_SECRET_SCAN
             RemoteTelemetryConsentStore
                 .applyReleaseSecretScanLaunchOverride()
         #endif
+        #if DEBUG || BLEAT_UI_TESTING
+            if AppUnitTestHostAdmission.isInert(),
+                !UITestAppService.hasExplicitScenario()
+            {
+                model = AppUnitTestHostAdmission.admitProcess()
+                return
+            }
+            let testService = UITestAppService.current()
+        #endif
+        let diagnostics: any DiagnosticRecording = SystemDiagnosticRecorder
+            .shared
         if let event = LegacyDiagnosticLogCleanup.removeLegacyDirectory()
             .failureDiagnosticEvent
         {
@@ -57,7 +66,7 @@ final class AppBootstrap {
         let launchMode = AppLaunchMode()
 
         #if DEBUG || BLEAT_UI_TESTING
-            if let testService = UITestAppService.current() {
+            if let testService {
                 model = AppModel(
                     service: testService,
                     nearbyServerDiscovery:
@@ -68,6 +77,11 @@ final class AppBootstrap {
                     diagnostics: diagnostics,
                     remoteTelemetryConsentController: remoteTelemetry,
                     remoteTelemetryTracer: remoteTelemetry.tracer,
+                    operationObserver: { event in
+                        if event == .privateCloudSynchronizationCompleted {
+                            UITestCloudChoiceSyncProbe.shared.completed = true
+                        }
+                    },
                     remoteTelemetryDownloadLogger: remoteTelemetry.logger,
                     downloadRemovalStorageCheckpoint: {
                         if let failure =

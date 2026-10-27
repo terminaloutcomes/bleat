@@ -853,6 +853,10 @@ protocol AppServicing: Sendable {
     func pendingPrivateCloudConfigurationConflict() async
         -> CloudConfigurationConflict?
 
+    func deferPrivateCloudServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws(AppServiceError)
+
     func resolvePrivateCloudConfigurationConflict(
         _ resolution: CloudConfigurationConflictResolution
     ) async throws(AppServiceError)
@@ -1298,6 +1302,14 @@ extension AppServicing {
         -> CloudConfigurationConflict?
     {
         nil
+    }
+
+    func deferPrivateCloudServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws(AppServiceError) {
+        throw .privateCloud(
+            PrivateCloudSyncFailure(
+                operation: .deferServerConfiguration, cause: .disabled))
     }
 
     func resolvePrivateCloudConfigurationConflict(
@@ -3574,6 +3586,8 @@ actor LiveAppService: AppServicing {
             try context.delete(model: PrivateCloudStatisticsDeletionRecord.self)
             try context.delete(model: StatisticsSessionAccountingRecord.self)
             try context.delete(model: StatisticsHistoryImportRecord.self)
+            try PrivateCloudStateRecord.removeAccountConfigurationChoices(
+                in: context)
             try context.save()
         } catch {
             throw .localDataReset(.persistentStore)
@@ -3581,6 +3595,9 @@ actor LiveAppService: AppServicing {
 
         await accountStore.discardAfterPersistentReset()
         await statisticsRepository.discardAfterPersistentReset()
+        do {
+            try await privateCloudSync?.clearLocalAccountConfigurationChoices()
+        } catch { throw .privateCloud(error) }
         do {
             try await credentialStore.deleteAllCredentials()
         } catch let error {
@@ -4058,6 +4075,19 @@ actor LiveAppService: AppServicing {
         -> CloudConfigurationConflict?
     {
         await privateCloudSync?.pendingConfigurationConflict()
+    }
+
+    func deferPrivateCloudServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws(AppServiceError) {
+        guard let privateCloudSync else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .deferServerConfiguration, cause: .disabled))
+        }
+        do {
+            try await privateCloudSync.deferServerConfigurationChanges(changes)
+        } catch { throw .privateCloud(error) }
     }
 
     func resolvePrivateCloudConfigurationConflict(

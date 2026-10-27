@@ -123,7 +123,8 @@ Application tests must run through Xcode, not `swift test`. From a configured
 shell, select a fresh result-bundle path and an installed destination:
 
 ```sh
-xcodebuild -project Bleat.xcodeproj -scheme Bleat \
+TEST_RUNNER_BLEAT_UNIT_TEST_HOST=1 \
+  xcodebuild -project Bleat.xcodeproj -scheme Bleat \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -resultBundlePath .build/focused-documentation.xcresult \
   -only-testing:BleatAppTests/DocumentationLinkTests test

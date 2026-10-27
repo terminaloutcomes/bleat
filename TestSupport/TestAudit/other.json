@@ -941,10 +941,10 @@
       "synchronization_timeout": "synchronous accessibility assertions / XCTest interaction; XCTest waits for UI interaction completion, no explicit timeout in this body."
     },
     {
-      "id": "BleatUITests::testCloudAccountSelectionCancelDefersUntilNextLaunch",
+      "id": "BleatUITests::testCloudAccountSelectionCancelSurvivesNextLaunch",
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 70,
-      "purpose": "Cloud Account Selection Cancel Defers Until Next Launch.",
+      "purpose": "Cancel/swipe preserves semantic deferral across process relaunch.",
       "review": {
         "status": "reviewed",
         "decision": "keep",
@@ -952,15 +952,35 @@
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
-      "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-cloud-account-selection, --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by --ui-testing-cloud-account-selection, icloud.accountSelection.cancel, app.signedIn. Body-specific asserted postconditions: XCTAssertTrue(cancel.waitForExistence(timeout: 10)) XCTAssertTrue(cancel.waitForNonExistence(timeout: 3)) XCTAssertTrue(app.otherElements[\"app.signedIn\"].exists)",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 10 seconds."
+      "setup_dependencies": "Synthetic service and fresh per-test UUID preferences suite, retained for this test relaunch only.",
+      "action_postconditions": "Dismiss chooser, await disappearance, relaunch, await signed-in surface and assert chooser absence.",
+      "synchronization_timeout": "Ten-second bounded UI failure budgets; after relaunch await explicit fixture signal emitted only after model cloud synchronization applies its account/pending snapshot, then assert chooser absence. Signed-in presentation alone is insufficient.",
+      "historicalReviewBeforeCloudChoiceFix": {
+        "base": "0c58ed3",
+        "record": {
+          "id": "BleatUITests::testCloudAccountSelectionCancelDefersUntilNextLaunch",
+          "path": "Tests/BleatUITests/BleatUITests.swift",
+          "line": 70,
+          "purpose": "Cloud Account Selection Cancel Defers Until Next Launch.",
+          "review": {
+            "status": "reviewed",
+            "decision": "keep",
+            "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
+          },
+          "profile": "ui_fixture",
+          "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
+          "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-cloud-account-selection, --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
+          "action_postconditions": "Drives the UI controls identified by --ui-testing-cloud-account-selection, icloud.accountSelection.cancel, app.signedIn. Body-specific asserted postconditions: XCTAssertTrue(cancel.waitForExistence(timeout: 10)) XCTAssertTrue(cancel.waitForNonExistence(timeout: 3)) XCTAssertTrue(app.otherElements[\"app.signedIn\"].exists)",
+          "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 10 seconds."
+        },
+        "disposition": "Preserved historical review. Its launch-only dismissal behavior is superseded by this semantic durable-choice regression; historical executions do not validate the candidate fix."
+      }
     },
     {
-      "id": "BleatUITests::testCloudAccountSelectionSwipeDefersUntilNextLaunch",
+      "id": "BleatUITests::testCloudAccountSelectionSwipeDeferralSurvivesNextLaunch",
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 87,
-      "purpose": "Cloud Account Selection Swipe Defers Until Next Launch.",
+      "purpose": "Cancel/swipe preserves semantic deferral across process relaunch.",
       "review": {
         "status": "reviewed",
         "decision": "keep",
@@ -968,9 +988,29 @@
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
-      "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-cloud-account-selection, --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by --ui-testing-cloud-account-selection, icloud.accountSelection.cancel, Accounts from iCloud. Body-specific asserted postconditions: XCTAssertTrue(cancel.waitForExistence(timeout: 10)) XCTAssertTrue(sheet.exists) XCTAssertTrue(cancel.waitForNonExistence(timeout: 3))",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 10 seconds."
+      "setup_dependencies": "Synthetic service and fresh per-test UUID preferences suite, retained for this test relaunch only.",
+      "action_postconditions": "Dismiss chooser, await disappearance, relaunch, await signed-in surface and assert chooser absence.",
+      "synchronization_timeout": "Ten-second bounded UI failure budgets; after relaunch await explicit fixture signal emitted only after model cloud synchronization applies its account/pending snapshot, then assert chooser absence. Signed-in presentation alone is insufficient.",
+      "historicalReviewBeforeCloudChoiceFix": {
+        "base": "0c58ed3",
+        "record": {
+          "id": "BleatUITests::testCloudAccountSelectionSwipeDefersUntilNextLaunch",
+          "path": "Tests/BleatUITests/BleatUITests.swift",
+          "line": 87,
+          "purpose": "Cloud Account Selection Swipe Defers Until Next Launch.",
+          "review": {
+            "status": "reviewed",
+            "decision": "keep",
+            "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
+          },
+          "profile": "ui_fixture",
+          "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
+          "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-cloud-account-selection, --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
+          "action_postconditions": "Drives the UI controls identified by --ui-testing-cloud-account-selection, icloud.accountSelection.cancel, Accounts from iCloud. Body-specific asserted postconditions: XCTAssertTrue(cancel.waitForExistence(timeout: 10)) XCTAssertTrue(sheet.exists) XCTAssertTrue(cancel.waitForNonExistence(timeout: 3))",
+          "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 10 seconds."
+        },
+        "disposition": "Preserved historical review. Its launch-only dismissal behavior is superseded by this semantic durable-choice regression; historical executions do not validate the candidate fix."
+      }
     },
     {
       "id": "BleatUITests::testCloudAccountSelectionFailureShowsErrorAndAllowsRetry",
@@ -1892,7 +1932,11 @@
     },
     {
       "id": "BleatUITests::testDiagnosticTelemetryConsentLivesInSystemSettings",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2389,
       "purpose": "Diagnostic Telemetry Consent Lives In System Settings.",
@@ -1909,7 +1953,11 @@
     },
     {
       "id": "BleatUITests::testSystemSettingsLinkAvailableWhenStartupUnavailable",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2441,
       "purpose": "System Settings Link Available When Startup Unavailable.",
@@ -2166,7 +2214,11 @@
     },
     {
       "id": "BleatUITests::testMiniPlayerRestoresWhenStopIsSuperseded",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2967,
       "purpose": "Mini Player Restores When Stop Is Superseded.",
@@ -2389,7 +2441,11 @@
     },
     {
       "id": "BleatUITests::testViewOnServerOpensSystemBrowserWithoutEditPermission",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 3438,
       "purpose": "View On Server Opens System Browser Without Edit Permission.",
@@ -2510,7 +2566,11 @@
         "decision": "keep",
         "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
       },
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; native picker candidate correction; fresh owning execution pending", "record": "docs/release-evidence/finished-progress-conflicts.md#native-file-picker-handoff-reassessment-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; native picker candidate correction; fresh owning execution pending",
+        "record": "docs/release-evidence/finished-progress-conflicts.md#native-file-picker-handoff-reassessment-26-october-2026"
+      },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-partial-transcription-cache, --ui-testing-playback, --ui-testing-transcription-available. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
@@ -2675,7 +2735,11 @@
         "decision": "keep",
         "reason": "Inspected the complete live-flow body and its exact opt-in guard. This intentionally separate live validation exercises configured Audiobookshelf authentication, playback/download, or statistics behavior with semantic UI outcomes; the environment gate is explicit and keeps it out of deterministic fixture runs."
       },
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; conflict helper and native dismissal source-reviewed; corrected root/prefix candidate execution verified", "record": "docs/release-evidence/finished-progress-conflicts.md#live-menu-dismissal-reassessment-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; conflict helper and native dismissal source-reviewed; corrected root/prefix candidate execution verified",
+        "record": "docs/release-evidence/finished-progress-conflicts.md#live-menu-dismissal-reassessment-26-october-2026"
+      },
       "profile": "ui_fixture",
       "enablement": "App-live UI test; requires configured BLEAT_LIVE_APP_URL, BLEAT_LIVE_USERNAME, and credential/broker settings accepted by requireLiveConfiguration(); run scripts/test-app-live.sh. Skips when required live configuration is absent; macOS can skip unsupported path.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): none (real/live app path). Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
@@ -12299,6 +12363,39 @@
       "action_postconditions": "Exact accepted fixture plus rejected host, target, identity, admission, capability or configuration variants.",
       "synchronization_timeout": "Synchronous parsing/validation only; no ordering waits.",
       "cleanup": "Temporary directory cleanup owned by tempfile; no user resources."
+    },
+    {
+      "id": "BleatUITests::testCloudAccountCurrentIsFirstAndSelectionSurvivesRelaunch",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 70,
+      "purpose": "Verify Current label, ordering above cloud, enabled/hittable selection and chooser absence after process relaunch.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Checks actual chooser presentation/wiring separately from durable store and model semantics."
+      },
+      "profile": "ui_fixture",
+      "enablement": "Selected disposable iOS Simulator UI test only; native execution pending.",
+      "setup_dependencies": "Synthetic cloud service with a fresh per-test UUID preferences suite shared only with its own relaunch.",
+      "action_postconditions": "Assert Current label and vertical order, select enabled/hittable confirmation, await sheet disappearance, relaunch and assert signed-in surface with no chooser.",
+      "synchronization_timeout": "Ten-second bounded UI failure budgets; after relaunch await explicit fixture signal emitted only after model cloud synchronization applies its account/pending snapshot, then assert chooser absence. Signed-in presentation alone is insufficient."
+    },
+    {
+      "id": "scripts::app_unit_host_admission_is_scoped_and_overrides_disabled_marker",
+      "path": "scripts/src/xcode_test_runner.rs",
+      "line": 870,
+      "purpose": "Scope mandatory inert-host environment to app-unit selections; preserve unrelated values and UI/Mac selections; override caller-disabled marker exactly once; verify the separate CI smoke constructor admits its app-unit host during enumeration and execution.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Six table cases assert exact environment values and marker multiplicity, plus the CI command constructor environment, without invoking native commands."
+      },
+      "profile": "rust_deterministic",
+      "enablement": "Default Cargo unit test; no skip or opt-in.",
+      "setup_dependencies": "In-memory scheme, selector and environment tuples only; no native app, network, credentials or filesystem.",
+      "action_postconditions": "Exact app-target and empty selections get one marker=1; UI, Mac and unrelated selections retain marker=0; unrelated tuple remains.",
+      "synchronization_timeout": "Pure synchronous transformation; no wait or timing tolerance.",
+      "cleanup": "No external resources or tasks."
     }
   ],
   "issue371_smoke_runner_lifecycle": {

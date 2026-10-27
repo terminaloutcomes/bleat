@@ -89,6 +89,15 @@ public struct ServerAccount: Codable, Hashable, Identifiable, Sendable {
         authenticationMethods.contains(.local)
     }
 
+    /// The chooser resolves account identity, endpoints and the login name.
+    /// Connection health/validation are device-local; server version, advertised
+    /// capabilities and permissions are refreshed metadata, not user choices.
+    public func hasSameCloudConfiguration(as other: ServerAccount) -> Bool {
+        id == other.id && server == other.server
+            && localServer == other.localServer
+            && user.id == other.user.id && user.username == other.user.username
+    }
+
     public var supportsOpenIDAuthentication: Bool {
         authenticationMethods.contains(.openID)
     }
@@ -809,6 +818,12 @@ public actor AccountStore {
         _ account: ServerAccount,
         makeActive: Bool = false
     ) throws(AccountStoreError) {
+        try save(account, makeActive: makeActive, pendingRestore: false)
+    }
+
+    private func save(
+        _ account: ServerAccount, makeActive: Bool, pendingRestore: Bool
+    ) throws(AccountStoreError) {
         let records = try fetchRecords()
         if let duplicate = records.first(where: {
             $0.serverURL == account.server.url.absoluteString
@@ -830,9 +845,10 @@ public actor AccountStore {
         }
 
         let shouldActivate =
-            makeActive
-            || records.isEmpty
-            || !records.contains(where: \.isActiveBrowsingAccount)
+            !pendingRestore
+            && (makeActive
+                || records.isEmpty
+                || !records.contains(where: \.isActiveBrowsingAccount))
         if shouldActivate {
             for record in records {
                 record.isActiveBrowsingAccount = false
@@ -844,7 +860,9 @@ public actor AccountStore {
             existing.serverURL = account.server.url.absoluteString
             existing.remoteUserID = account.user.id.rawValue
             existing.profileData = profileData
-            if shouldActivate {
+            if pendingRestore {
+                existing.isActiveBrowsingAccount = false
+            } else if shouldActivate {
                 existing.isActiveBrowsingAccount = true
             }
         } else {
@@ -860,6 +878,65 @@ public actor AccountStore {
         try saveContext()
     }
 
+    /// Authentication refreshes identity, permissions and connection health,
+    /// while retaining the configured endpoint of this same canonical account.
+    public func saveAuthenticatedAccount(
+        _ account: ServerAccount, makeActive: Bool
+    ) throws(AccountStoreError) -> ServerAccount {
+        let saved: ServerAccount
+        if let current = try self.account(id: account.id) {
+            guard current.server == account.server,
+                current.user.id == account.user.id
+            else {
+                throw .invalidStoredAccount(account.id)
+            }
+            do {
+                saved = try account.updatingLocalServer(
+                    current.localServer, validated: current.localServerValidated
+                )
+            } catch { throw .profileEncodingFailed }
+        } else {
+            saved = account
+        }
+        try save(saved, makeActive: makeActive)
+        return saved
+    }
+
+    /// A cloud descriptor selects configuration, never this device's login
+    /// state. Keep pending restores inactive until local authentication succeeds.
+    func saveSelectedCloudConfiguration(_ incoming: ServerAccount)
+        throws(AccountStoreError)
+    {
+        guard let current = try account(id: incoming.id) else {
+            let unvalidated: ServerAccount
+            do {
+                unvalidated = try incoming.updatingLocalServer(
+                    incoming.localServer, validated: false)
+            } catch { throw .profileEncodingFailed }
+            try savePendingRestoredAccount(unvalidated)
+            return
+        }
+        guard current.server == incoming.server,
+            current.user.id == incoming.user.id
+        else {
+            throw .invalidStoredAccount(incoming.id)
+        }
+        let selected: ServerAccount
+        do {
+            selected = try incoming.updatingConnectionState(
+                current.connectionState
+            ).updatingLocalServer(
+                incoming.localServer,
+                validated: current.localServer == incoming.localServer
+                    && current.localServerValidated)
+        } catch { throw .profileEncodingFailed }
+        if current.connectionState == .reauthenticationRequired {
+            try savePendingRestoredAccount(selected)
+        } else {
+            try save(selected)
+        }
+    }
+
     /// Stores an account restored from iCloud without making it usable until
     /// this device has authenticated the expected remote user.
     public func savePendingRestoredAccount(
@@ -873,17 +950,7 @@ public actor AccountStore {
         } catch {
             throw .profileEncodingFailed
         }
-        try save(pending)
-        let records = try fetchRecords()
-        guard
-            let record = records.first(where: {
-                $0.accountID == pending.id.rawValue
-            })
-        else {
-            throw .accountNotFound(pending.id)
-        }
-        record.isActiveBrowsingAccount = false
-        try saveContext()
+        try save(pending, makeActive: false, pendingRestore: true)
     }
 
     public func accounts() throws(AccountStoreError) -> [ServerAccount] {
@@ -1225,14 +1292,14 @@ extension AuthCoordinator {
         }
 
         do {
-            try await accountStore.save(account, makeActive: makeActive)
+            return try await accountStore.saveAuthenticatedAccount(
+                account, makeActive: makeActive)
         } catch let error {
             try await rollbackOnboardingCredentials(
                 accountID: canonicalID,
                 originalError: .accountPersistenceFailed(error)
             )
         }
-        return account
     }
 
     public func loginForPersistedAccountUpdate(

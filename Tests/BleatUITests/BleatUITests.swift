@@ -67,7 +67,36 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testCloudAccountSelectionCancelDefersUntilNextLaunch() {
+    func testCloudAccountCurrentIsFirstAndSelectionSurvivesRelaunch() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-cloud-account-selection"])
+        let current = app.buttons["icloud.accountCandidate.current.ui-account"]
+        let remote = app.buttons["icloud.accountCandidate.ui-account"]
+        XCTAssertTrue(current.waitForExistence(timeout: 10))
+        XCTAssertTrue(current.isHittable)
+        XCTAssertTrue(current.label.contains("Current"))
+        XCTAssertTrue(remote.exists)
+        XCTAssertLessThan(current.frame.minY, remote.frame.minY)
+        current.tap()
+        let use = app.buttons["icloud.accountSelection.useSelected"]
+        XCTAssertTrue(use.isEnabled)
+        XCTAssertTrue(use.isHittable)
+        use.tap()
+        XCTAssertTrue(use.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["app.signedIn"].exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["icloud.fixtureSyncCompleted"].waitForExistence(
+                timeout: 10))
+        XCTAssertFalse(use.exists)
+    }
+
+    @MainActor
+    func testCloudAccountSelectionCancelSurvivesNextLaunch() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: ["--ui-testing-cloud-account-selection"]
@@ -80,11 +109,16 @@ final class BleatUITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["icloud.fixtureSyncCompleted"].waitForExistence(
+                timeout: 10))
+        XCTAssertFalse(cancel.exists)
     }
 
     @MainActor
-    func testCloudAccountSelectionSwipeDefersUntilNextLaunch() {
+    func testCloudAccountSelectionSwipeDeferralSurvivesNextLaunch() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: ["--ui-testing-cloud-account-selection"]
@@ -104,7 +138,12 @@ final class BleatUITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.otherElements["app.signedIn"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["icloud.fixtureSyncCompleted"].waitForExistence(
+                timeout: 10))
+        XCTAssertFalse(cancel.exists)
     }
 
     @MainActor
@@ -4500,6 +4539,11 @@ final class BleatUITests: XCTestCase {
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [scenario] + additionalArguments
+        if additionalArguments.contains("--ui-testing-cloud-account-selection")
+        {
+            app.launchArguments.append(
+                "--ui-testing-cloud-choice-session=\(UUID().uuidString)")
+        }
         let auditsLargestText = additionalArguments.contains(
             UIContentSizeCategory.accessibilityExtraExtraExtraLarge.rawValue)
         if auditsLargestText {

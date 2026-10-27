@@ -1810,12 +1810,6 @@
     },
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
-      "name": "testCloudAccountSelectionDeferralIsSharedByViewsForOneLaunch",
-      "line": 14588,
-      "language": "swift"
-    },
-    {
-      "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testCloudAccountSelectionSendFailureAfterCommitCannotRetryChoice",
       "line": 14624,
       "language": "swift"
@@ -7514,18 +7508,6 @@
     },
     {
       "path": "Tests/BleatUITests/BleatUITests.swift",
-      "name": "testCloudAccountSelectionCancelDefersUntilNextLaunch",
-      "line": 70,
-      "language": "swift"
-    },
-    {
-      "path": "Tests/BleatUITests/BleatUITests.swift",
-      "name": "testCloudAccountSelectionSwipeDefersUntilNextLaunch",
-      "line": 87,
-      "language": "swift"
-    },
-    {
-      "path": "Tests/BleatUITests/BleatUITests.swift",
       "name": "testCloudAccountSelectionFailureShowsErrorAndAllowsRetry",
       "line": 111,
       "language": "swift"
@@ -11351,6 +11333,114 @@
       "name": "testFinishedConflictConfirmedReadbackPersistsServerClock",
       "line": 21310,
       "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCloudAccountSelectionDeferralSurvivesSyncAndNextLaunch",
+      "line": 14588,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testCloudAccountSelectionCancelSurvivesNextLaunch",
+      "line": 70,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testCloudAccountSelectionSwipeDeferralSurvivesNextLaunch",
+      "line": 87,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testAcceptedCloudAccountDoesNotPromptAgainOrBecomeAuthenticated",
+      "line": 11,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testCancelledCloudChoicesSurviveReopenedStoreAndChangedConfigurationPrompts",
+      "line": 67,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testCloudConfigurationKeepsDeviceConnectionAndEndpointValidation",
+      "line": 154,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testStaleExplicitCloudSelectionDoesNotAcceptAnotherCandidate",
+      "line": 194,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testCurrentAndCloudChoicesRetireAllCompetingSnapshots",
+      "line": 229,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/AccountStoreTests.swift",
+      "name": "testReauthenticationRetainsSelectedLocalEndpointAndReturnsSavedProfile",
+      "line": 10,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+      "name": "testOpenIDReauthenticationRetainsSelectedLocalEndpoint",
+      "line": 11,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCloudAccountSelectionDrainsStaleSyncAndBlocksReentrantChoice",
+      "line": 16756,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCloudAccountOptionsPutCurrentFirstAndKeepItsLocalData",
+      "line": 16818,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCloudAccountOptionsIncludeLocalForDifferentCloudIdentityAndDeduplicate",
+      "line": 16848,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testCloudAccountCurrentIsFirstAndSelectionSurvivesRelaunch",
+      "line": 70,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testCurrentCloudChoiceCommittedSendFailureClosesChooser",
+      "line": 16848,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testCloudChoiceRemovalPreservesOtherAccountDecisions",
+      "line": 322,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testExplicitUnitTestHostStaysInert",
+      "line": 40,
+      "language": "swift"
+    },
+    {
+      "path": "scripts/src/xcode_test_runner.rs",
+      "name": "app_unit_host_admission_is_scoped_and_overrides_disabled_marker",
+      "line": 870,
+      "language": "rust"
     }
   ],
   "historicalRetiredDeclarations": [

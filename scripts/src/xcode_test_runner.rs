@@ -677,6 +677,7 @@ fn run_test_gate_with_budgets(
         result_bundle,
         stage,
     } = request;
+    let runner_environment = app_unit_host_environment(&build.scheme, &only, runner_environment);
     if root.join(&result_bundle).exists() {
         return Err(XcodeRunnerError::ExistingResultBundle {
             path: root.join(&result_bundle),
@@ -750,6 +751,12 @@ fn run_test_gate_with_budgets(
         }
     };
     let mut enumeration = test_base()?;
+    enumeration.envs(
+        runner_environment
+            .iter()
+            .filter(|(name, _)| name == "TEST_RUNNER_BLEAT_UNIT_TEST_HOST")
+            .map(|(name, value)| (name, value)),
+    );
     if enable_code_coverage {
         enumeration.args(["-enableCodeCoverage", "YES"]);
     }
@@ -817,6 +824,23 @@ fn run_test_gate_with_budgets(
     }
 }
 
+fn app_unit_host_environment(
+    scheme: &str,
+    only: &[String],
+    mut environment: Vec<(String, String)>,
+) -> Vec<(String, String)> {
+    if scheme != "BleatMac"
+        && (only.is_empty()
+            || only.iter().any(|selector| {
+                selector == "BleatAppTests" || selector.starts_with("BleatAppTests/")
+            }))
+    {
+        environment.retain(|(key, _)| key != "TEST_RUNNER_BLEAT_UNIT_TEST_HOST");
+        environment.push(("TEST_RUNNER_BLEAT_UNIT_TEST_HOST".into(), "1".into()));
+    }
+    environment
+}
+
 fn resolve_allowed_skips(expected: &[ExpectedTest], selectors: &[String]) -> Result<Vec<TestId>> {
     selectors
         .iter()
@@ -835,12 +859,52 @@ fn resolve_allowed_skips(expected: &[ExpectedTest], selectors: &[String]) -> Res
 #[cfg(test)]
 mod tests {
     use super::{
-        TestGateRequest, XcodeBuildConfig, XcodeRunnerError, required_environment_value,
-        resolve_allowed_skips, run_test_gate_with,
+        TestGateRequest, XcodeBuildConfig, XcodeRunnerError, app_unit_host_environment,
+        required_environment_value, resolve_allowed_skips, run_test_gate_with,
     };
     use crate::test_results::{ExpectedTest, TestId, verify_result_json};
     use std::fs;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn app_unit_host_admission_is_scoped_and_overrides_disabled_marker() {
+        let smoke = crate::ci_smoke::xcodebuild();
+        assert!(
+            smoke
+                .get_envs()
+                .any(|(key, value)| key == "TEST_RUNNER_BLEAT_UNIT_TEST_HOST"
+                    && value == Some(std::ffi::OsStr::new("1")))
+        );
+        for (scheme, selectors, admitted) in [
+            ("Bleat", vec!["BleatAppTests"], true),
+            ("Bleat", vec!["BleatAppTests/AppModelTests"], true),
+            ("Bleat", vec![], true),
+            ("Bleat", vec!["BleatUITests"], false),
+            ("BleatMac", vec!["BleatAppTests"], false),
+            ("Bleat", vec!["OtherTests"], false),
+        ] {
+            let selectors = selectors.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            let environment = app_unit_host_environment(
+                scheme,
+                &selectors,
+                vec![
+                    ("UNRELATED".into(), "preserved".into()),
+                    ("TEST_RUNNER_BLEAT_UNIT_TEST_HOST".into(), "0".into()),
+                ],
+            );
+            assert!(environment.contains(&("UNRELATED".into(), "preserved".into())));
+            let flags = environment
+                .iter()
+                .filter(|(key, _)| key == "TEST_RUNNER_BLEAT_UNIT_TEST_HOST")
+                .map(|(_, value)| value.as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                flags,
+                vec![if admitted { "1" } else { "0" }],
+                "scheme={scheme}; selectors={selectors:?}"
+            );
+        }
+    }
 
     #[test]
     fn configured_skip_requires_an_exact_identity_in_the_selected_inventory() {

@@ -1,11 +1,55 @@
 import AuthenticationServices
 import Foundation
+import SwiftData
 import Testing
 
 @testable import BleatCore
 
 @Suite(.serialized)
 final class OpenIDAuthenticationTests {
+    @Test
+    func testOpenIDReauthenticationRetainsSelectedLocalEndpoint() async throws {
+        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [
+                ModelConfiguration(
+                    schema: schema, isStoredInMemoryOnly: true,
+                    cloudKitDatabase: .none)
+            ])
+        let accounts = AccountStore(modelContainer: container)
+        let coordinator = AuthCoordinator(
+            transport: OpenIDTestTransport(),
+            credentialStore: OpenIDCredentialStore())
+        let server = DiscoveredServer(
+            baseURL: try NormalizedServerURL("https://example.com"),
+            version: try #require(AudiobookshelfServerVersion("2.36.0")),
+            language: "en-us", authenticationMethods: [.openID],
+            authenticationFormData: nil)
+        let first = try await coordinator.loginWithOpenIDAndPersistAccount(
+            accountID: AccountID(rawValue: "test"), discoveredServer: server,
+            callbackURL: Self.callbackURL,
+            browser: OpenIDTestBrowser.success(callbackURL: Self.callbackURL),
+            accountStore: accounts)
+        let local = try NormalizedServerURL("https://local.example")
+        try await accounts.setLocalServer(local, validated: true, for: first.id)
+        try await accounts.setConnectionState(
+            .reauthenticationRequired, for: first.id)
+        let authenticated =
+            try await coordinator.loginWithOpenIDAndPersistAccount(
+                accountID: first.id, discoveredServer: server,
+                callbackURL: Self.callbackURL,
+                browser: OpenIDTestBrowser.success(
+                    callbackURL: Self.callbackURL),
+                accountStore: accounts, expectedUserID: first.user.id,
+                makeActive: false)
+        #expect(authenticated.localServer == local)
+        #expect(authenticated.localServerValidated)
+        #expect(authenticated.connectionState == .connected)
+        #expect(
+            try await AccountStore(modelContainer: container).account(
+                id: first.id) == authenticated)
+    }
     @MainActor
     @Test
     func testNativeBrowserCallbackAdapterRunsOffMainActor() async throws {
