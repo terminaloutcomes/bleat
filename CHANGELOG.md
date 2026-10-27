@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.10.27 - 2026-10-27
+
+### Fixed
+
+- Preserve selected iCloud account settings and sequence cloud prompts without displacing an unanswered compatibility notice.
+- Retain legacy listening history in fewer canonical records. After fresh confirmation that every device is updated, remove old records only after their replacement upload is verified.
+- Wait for the native transcript-sharing action to become usable in the export UI test.
+
 ## 2026.10.14 - 2026-10-14
 
 ### Fixed
