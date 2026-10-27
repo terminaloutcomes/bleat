@@ -84,6 +84,18 @@ dismissal-token and reverse-arrival additions and are not final-source receipts:
 Final focused validation passed eight exact cases with zero failures, skips or
 runtime warnings in `.build/cloud-prompts-final-focused.xcresult`, including
 reverse alert arrival, queued alerts, combined notice/account flows, swipe,
-committed-send failure, held deferral and stale dismissal identity. Owning and
-local broad UI evidence remains pending.
+committed-send failure, held deferral and stale dismissal identity. The supported local broad gate then passed at `cf8a312`: the Release build,
+**685 app-unit cases** with zero failures/skips, and **132 UI cases** with
+**125 passed, seven canonical gated skips**, zero failures/expected failures or
+runtime warnings. Every individual outcome was checked; the skipped identities
+match the prior gated inventory (external-host handoff, three live cases, two
+release-secret scans and release screenshots). Bundles are
+`.build/test-core-results/app-tests-56086-1793083289942.xcresult` and
+`.build/test-core-results/ui-tests-56086-1793083289942.xcresult`;
+`.build/cloud-prompts-terminal-receipt.json` records the command and source hash.
+The environment remains Xcode 27.0/Swift 6.4 with an arm64 iPhone 17 Pro Simulator
+on iOS 27.0 (24A434). Xcode's existing debugger-version console diagnostics remain;
+no result-bundle runtime warning or crash was reported. Documentation and strict
+Swift-format lint passed. These are Simulator presentation results, not new
+live-server, signed-macOS or physical-device evidence.
 The earlier TestFlight upload contains `a927005`, not this follow-up.
