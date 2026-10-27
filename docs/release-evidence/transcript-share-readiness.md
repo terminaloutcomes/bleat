@@ -62,7 +62,7 @@ text or a successful single repetition cannot substitute for those gates.
 | 6: real integration | App transcript data is synthetic; the native share service and document picker are real Simulator integration, not a controlled fake or device evidence. |
 | 7: diagnosis first | Unchanged-baseline failure, empty remote container and delayed native readiness justify the bounded state wait. No assertion removal, sleep or retry-to-green. |
 | 8: failure diagnostics | Both handoffs retain elapsed time, observed accessibility hierarchy and a named screenshot; XCTest retains the failing caller. |
-| 9: repetitions and owning suite | One cold and two predetermined warm executions are verified below; the broad owning gate is required separately. |
+| 9: repetitions and owning suite | Retain earlier cold/warm outcomes as historical evidence; require a fresh main-based individual execution and owning UI suite. Published-head receipts belong in PR comments. |
 
 ## Standalone publication scope
 
@@ -79,6 +79,7 @@ verified despite loss of its outer runner's exit status; no retries or forced
 stops replaced its result. Those artifacts are preserved outside this PR.
 
 Fresh main-based focused and owning-UI receipts, final source identity and CI
-checks are required before this PR is merged. No full UI suite is added to CI.
+checks are required before this PR is merged and are recorded in PR #482's
+evidence comments. No full UI suite is added to CI.
 The existing native picker assertions and each handoff's15-second failure
 budget remain unchanged by publication.

@@ -2512,7 +2512,7 @@
       },
       "reassessment": {
         "date": "2026-10-27",
-        "status": "historical sign-off qualified; both native handoffs source-reviewed; standalone main-based focused and owning UI validation pending",
+        "status": "historical sign-off qualified; both native handoffs source-reviewed; standalone main-based execution receipts are recorded separately in PR #482 comments",
         "record": "docs/release-evidence/transcript-share-readiness.md"
       },
       "profile": "ui_fixture",
