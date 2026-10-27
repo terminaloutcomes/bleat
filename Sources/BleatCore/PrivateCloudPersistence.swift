@@ -59,6 +59,19 @@ public final class PrivateCloudStateRecord {
         self.key = key
         self.payload = payload
     }
+
+    /// Stage only chooser-state deletion in the caller's local reset transaction.
+    public static func removeAccountConfigurationChoices(
+        in context: ModelContext
+    ) throws {
+        let pending = "bleat.cloudKit.pendingAccountChanges.v1"
+        let deferred = "bleat.cloudKit.deferredAccountConfigurations.v1"
+        try context.delete(
+            model: PrivateCloudStateRecord.self,
+            where: #Predicate {
+                $0.key == pending || $0.key == deferred
+            })
+    }
 }
 
 struct PrivateCloudMetadataValue: Sendable {
@@ -85,6 +98,7 @@ struct PrivateCloudPersistence: Sendable {
         "bleat.cloudKit.ignoredStatisticsAccounts.v1",
         "bleat.cloudKit.pendingConfigurationConflict.v1",
         "bleat.cloudKit.pendingAccountChanges.v1",
+        "bleat.cloudKit.deferredAccountConfigurations.v1",
         "bleat.cloudKit.legacyAccountIdentityMappings.v1",
         "bleat.cloudKit.pendingLegacyRecordDeletions.v1",
     ]
@@ -292,18 +306,26 @@ struct PrivateCloudPersistence: Sendable {
     }
 
     func set(_ value: Any, forKey key: String) throws {
+        try setValues([(key, value)])
+    }
+
+    /// Commit related local decisions together so interrupted/failed writes
+    /// cannot consume pending choices without remembering their disposition.
+    func setValues(_ values: [(String, Any)]) throws {
         let context = context()
         do {
-            let payload = try PropertyListSerialization.data(
-                fromPropertyList: value, format: .binary, options: 0)
-            if let row = try context.fetch(
-                FetchDescriptor<PrivateCloudStateRecord>(
-                    predicate: #Predicate { $0.key == key })
-            ).first {
-                row.payload = payload
-            } else {
-                context.insert(
-                    PrivateCloudStateRecord(key: key, payload: payload))
+            for (key, value) in values {
+                let payload = try PropertyListSerialization.data(
+                    fromPropertyList: value, format: .binary, options: 0)
+                if let row = try context.fetch(
+                    FetchDescriptor<PrivateCloudStateRecord>(
+                        predicate: #Predicate { $0.key == key })
+                ).first {
+                    row.payload = payload
+                } else {
+                    context.insert(
+                        PrivateCloudStateRecord(key: key, payload: payload))
+                }
             }
             try context.save()
         } catch {

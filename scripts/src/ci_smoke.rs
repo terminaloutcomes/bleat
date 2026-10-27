@@ -198,8 +198,11 @@ fn default_simulator_destination(devices: &[u8]) -> Result<String> {
     Ok(format!("platform=iOS Simulator,id={id}"))
 }
 
-fn xcodebuild() -> Command {
+pub(crate) fn xcodebuild() -> Command {
     let mut command = Command::new("xcodebuild");
+    // The app-unit host must stay inert during both enumeration and execution.
+    // Explicit UI fixture scenarios retain priority in AppBootstrap.
+    command.env("TEST_RUNNER_BLEAT_UNIT_TEST_HOST", "1");
     command.args([
         "-project",
         "Bleat.xcodeproj",

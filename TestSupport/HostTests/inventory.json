@@ -17,7 +17,8 @@
     "testOnboardingRejectsNonLocalServerBeforeTransport()",
     "testOnboardingReportsCredentialRollbackFailure()",
     "testPersistedSignOutAndRemovalUseStoredServerAndClearCredentials()",
-    "testPersistedLifecycleRejectsUnknownAccountBeforeLogout()"
+    "testPersistedLifecycleRejectsUnknownAccountBeforeLogout()",
+    "testReauthenticationRetainsSelectedLocalEndpointAndReturnsSavedProfile()"
   ],
   "BleatCoreTests.AudiobookshelfAPITests": [
     "capturedSupportedLibraryAndDetailShapes(version:)",
@@ -394,7 +395,8 @@
     "testInvalidAccountDoesNotTouchAttemptOrCookies()",
     "testNativeBrowserCallbackAdapterRunsOffMainActor()",
     "testWaitingWebSessionFactoryRetiresExistingAndLateSessions(scenario:)",
-    "testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers(scenario:)"
+    "testOpenIDBrowserGateRetiresAllRegisteredAndLateCallers(scenario:)",
+    "testOpenIDReauthenticationRetainsSelectedLocalEndpoint()"
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
@@ -474,7 +476,13 @@
     "testInvalidPersistedConfigurationConflictFailsClosed()",
     "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()",
     "testFailedPendingStateSavesPreserveRetryState()",
-    "testAccountDeletionAfterCacheEvictionPreservesHistory()"
+    "testAccountDeletionAfterCacheEvictionPreservesHistory()",
+    "testAcceptedCloudAccountDoesNotPromptAgainOrBecomeAuthenticated()",
+    "testCancelledCloudChoicesSurviveReopenedStoreAndChangedConfigurationPrompts()",
+    "testCloudConfigurationKeepsDeviceConnectionAndEndpointValidation()",
+    "testStaleExplicitCloudSelectionDoesNotAcceptAnotherCandidate()",
+    "testCurrentAndCloudChoicesRetireAllCompetingSnapshots()",
+    "testCloudChoiceRemovalPreservesOtherAccountDecisions()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
     "incompleteFinishedCheckpointPreservesStoredPayload()",

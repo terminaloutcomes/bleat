@@ -1830,14 +1830,25 @@ or local server settings immediately pushes the updated non-secret account
 descriptor. A
 different account descriptor fetched from CloudKit remains pending until the
 user explicitly selects one complete structural configuration from a single
-aggregate choice; cancelling preserves the candidates and pauses account sync;
-keeping the device values pushes them back to CloudKit. A cloud-only account
+aggregate choice. Existing local configurations appear first as **Current**,
+followed by distinct cloud alternatives. Cancelling preserves unresolved
+candidates and durably dismisses their semantic configurations across syncs and
+relaunches; a different account identity, primary/local endpoint or login name
+can prompt again. Connection health, device-local endpoint validation, server
+metadata, capability ordering and record-generation churn alone do not constitute
+a configuration choice. Selecting Current preserves local data and pushes the
+chosen descriptor; unselected cloud accounts are deferred by configuration,
+without deleting them or permanently ignoring their account IDs. A cloud-only account
 likewise requires confirmation before it is added locally. On a fresh install,
 the signed-out form exposes the same single-flight automatic/manual restore as
 **Sync from iCloud**, including progress, empty-zone, and typed failure states.
 The chosen descriptor remains inactive with `reauthenticationRequired` until a
 mandatory native password authenticates the expected remote user and canonical
-identity; rotating tokens remain device-only. Account descriptors
+identity; rotating tokens remain device-only. Reauthentication refreshes the
+authenticated profile while retaining the configured local endpoint for the same
+canonical account, primary server and remote user. Repeated delivery of the
+chosen descriptor must neither reset device authentication state nor reopen the
+chooser. Account descriptors
 carry a generation ID and predecessor identity; a delayed predecessor is stale
 and must be ignored and replaced without prompting or changing local settings.
 Legacy device-generated account IDs are canonicalized from the normalized

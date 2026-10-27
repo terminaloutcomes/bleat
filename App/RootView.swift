@@ -144,6 +144,12 @@ struct RootView: View {
         #if DEBUG || BLEAT_UI_TESTING
             .overlay(alignment: .topTrailing) {
                 VStack {
+                    if ProcessInfo.processInfo.arguments.contains(
+                        "--ui-testing-cloud-account-selection"
+                    ), UITestCloudChoiceSyncProbe.shared.completed {
+                        Text("Cloud synchronization completed")
+                        .accessibilityIdentifier("icloud.fixtureSyncCompleted")
+                    }
                     if !model.perfMemoryLabel.isEmpty {
                         Text(model.perfMemoryLabel)
                         .accessibilityIdentifier("perf.memory")
@@ -265,16 +271,19 @@ struct RootView: View {
                     if !isPresented,
                         !model.pendingCloudServerConfigurationChanges.isEmpty
                     {
-                        model.deferCloudAccountSelection()
+                        Task {
+                            cloudAccountSelectionFailure =
+                                await model.deferCloudAccountSelection()
+                        }
                     }
                 }
             )
         ) {
             CloudAccountSelectionView(
-                candidates: model.pendingCloudServerConfigurationChanges,
+                candidates: model.cloudAccountConfigurationOptions,
                 onSelect: { selected in
                     let failure =
-                        await model.resolveCloudServerConfigurationSelection(
+                        await model.resolveCloudAccountConfigurationOption(
                             selected
                         )
                     if model.pendingCloudServerConfigurationChanges.isEmpty {
@@ -283,7 +292,7 @@ struct RootView: View {
                     return failure
                 },
                 onCancel: {
-                    model.deferCloudAccountSelection()
+                    await model.deferCloudAccountSelection()
                 }
             )
         }
@@ -369,10 +378,10 @@ struct RootView: View {
 }
 
 private struct CloudAccountSelectionView: View {
-    let candidates: [CloudServerConfigurationChange]
-    let onSelect: (CloudServerConfigurationChange) async -> AppFailure?
-    let onCancel: () -> Void
-    @State private var selectedIndex: Int?
+    let candidates: [CloudAccountConfigurationOption]
+    let onSelect: (CloudAccountConfigurationOption) async -> AppFailure?
+    let onCancel: () async -> AppFailure?
+    @State private var selected: CloudAccountConfigurationOption?
     @State private var isSaving = false
     @State private var selectionFailure: AppFailure?
 
@@ -381,29 +390,36 @@ private struct CloudAccountSelectionView: View {
             Form {
                 Section("Choose an Account Configuration") {
                     ForEach(Array(candidates.enumerated()), id: \.offset) {
-                        index, candidate in
+                        _, candidate in
                         Button {
-                            selectedIndex = index
+                            selected = candidate
+                            selectionFailure = nil
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Label(
-                                    candidate.incoming.user.username,
-                                    systemImage: selectedIndex == index
+                                    candidate.isCurrent
+                                        ? "Current"
+                                        : candidate.account.user.username,
+                                    systemImage: selected?.matches(candidate)
+                                        == true
                                         ? "checkmark.circle.fill"
                                         : "circle"
                                 )
+                                if candidate.isCurrent {
+                                    Text(candidate.account.user.username)
+                                }
                                 Text(
-                                    "Main Server: \(candidate.incoming.server.url.absoluteString)"
+                                    "Main Server: \(candidate.account.server.url.absoluteString)"
                                 )
                                 Text(
-                                    "Local Server: \(candidate.incoming.localServer?.url.absoluteString ?? "None")"
+                                    "Local Server: \(candidate.account.localServer?.url.absoluteString ?? "None")"
                                 )
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(
-                            "icloud.accountCandidate.\(candidate.id.rawValue)"
+                            "icloud.accountCandidate.\(candidate.isCurrent ? "current." : "")\(candidate.account.id.rawValue)"
                         )
                     }
                 }
@@ -424,26 +440,37 @@ private struct CloudAccountSelectionView: View {
             .navigationTitle("Accounts from iCloud")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                        .disabled(isSaving)
-                        .accessibilityIdentifier(
-                            "icloud.accountSelection.cancel")
+                    Button("Cancel") {
+                        isSaving = true
+                        Task {
+                            selectionFailure = await onCancel()
+                            isSaving = false
+                        }
+                    }
+                    .disabled(isSaving)
+                    .accessibilityIdentifier(
+                        "icloud.accountSelection.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Use Selected") {
-                        guard let selectedIndex,
-                            candidates.indices.contains(selectedIndex)
+                        guard let selected,
+                            let currentChoice = candidates.first(where: {
+                                $0.matches(selected)
+                            })
                         else { return }
-                        let selected = candidates[selectedIndex]
                         isSaving = true
                         selectionFailure = nil
                         Task {
-                            selectionFailure = await onSelect(selected)
+                            selectionFailure = await onSelect(currentChoice)
                             isSaving = false
                         }
                     }
                     .disabled(
-                        selectedIndex == nil || isSaving
+                        selected == nil
+                            || !candidates.contains(where: { candidate in
+                                selected?.matches(candidate) == true
+                            })
+                            || isSaving
                             || selectionFailure?.allowsRetry == false
                     )
                     .accessibilityIdentifier(

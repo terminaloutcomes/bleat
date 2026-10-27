@@ -40,6 +40,13 @@ development team; this uses the provisioned signed host and accepts no skips.
 app tests through the `Bleat` scheme and verify the requested test identifiers
 and outcomes in an `.xcresult` bundle.
 
+The supported runner forwards `BLEAT_UNIT_TEST_HOST=1` to iOS application-unit
+hosts during enumeration and execution. Debug/UI-testing composition then uses
+an inert local model before live account services, Bonjour discovery or remote
+telemetry are initialized. Explicit UI fixture scenarios keep their own
+composition. For a direct `xcodebuild` app-unit invocation, prefix the command
+with `TEST_RUNNER_BLEAT_UNIT_TEST_HOST=1` to retain that isolation.
+
 ## Swift linting
 
 Run the same read-only, strict formatter lint task used in GitHub Actions:

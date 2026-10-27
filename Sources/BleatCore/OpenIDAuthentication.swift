@@ -888,14 +888,14 @@ extension AuthCoordinator where Transport: OpenIDSessionTransport {
         }
 
         do {
-            try await accountStore.save(account, makeActive: makeActive)
+            return try await accountStore.saveAuthenticatedAccount(
+                account, makeActive: makeActive)
         } catch let error {
             try await rollbackOnboardingCredentials(
                 accountID: authenticated.id,
                 originalError: .accountPersistenceFailed(error)
             )
         }
-        return account
     }
 }
 

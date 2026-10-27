@@ -695,7 +695,11 @@
     },
     {
       "identifier": "AppModelTests/testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 101,
@@ -24455,76 +24459,6 @@
       }
     },
     {
-      "identifier": "AppModelTests/testCloudAccountSelectionDeferralIsSharedByViewsForOneLaunch",
-      "source": {
-        "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 14584,
-        "endLineBeforeNextTest": 14619
-      },
-      "compilerAndSkipConditions": [],
-      "setupAndDependencies": [
-        "TestAppService",
-        "fixtureAccount"
-      ],
-      "actions": [
-        {
-          "line": 14608,
-          "expression": "await model.start()"
-        }
-      ],
-      "assertions": [
-        {
-          "line": 14612,
-          "expression": "XCTAssertTrue(queued)"
-        },
-        {
-          "line": 14615,
-          "expression": "XCTAssertTrue(model.cloudAccountSelectionDeferred)"
-        },
-        {
-          "line": 14616,
-          "expression": "XCTAssertEqual(model.pendingCloudServerConfigurationChanges, [change])"
-        },
-        {
-          "line": 14619,
-          "expression": "XCTAssertFalse(nextLaunch.cloudAccountSelectionDeferred)"
-        }
-      ],
-      "synchronizationEvidence": [
-        {
-          "line": 14609,
-          "expression": "let queued = await waitUntil(timeout: .seconds(2)) {"
-        }
-      ],
-      "manualReview": {
-        "status": "source_reviewed",
-        "intendedBehavior": "Keep one-launch cloud account selection deferral on model while later launch starts fresh.",
-        "purpose": "Two AppModel instances sharing service fake.",
-        "actionPostconditions": [
-          {
-            "action": "Queue change, defer, inspect fresh model.",
-            "postcondition": "First model retains pending change and deferral; new model default is not deferred."
-          }
-        ],
-        "timeoutAndToleranceRationale": "Bounded 2-second queue waits assert success; gate completions and service calls are awaited. This is a state-arrival bound, not a product timing tolerance.",
-        "ruleAssessments": {
-          "1": "The action is followed by direct typed/model state or service request assertions specific to this scenario.",
-          "2": "Cloud queue waits use bounded waitUntil and assert success before dependent actions; no fixed scheduler sleeps.",
-          "3": "N/A: no playback timing invariant.",
-          "4": "All gated service work is awaited after release; no framework callback drain is assumed.",
-          "5": "Cloud and account state are service fakes; local reset count is inspected where relevant.",
-          "6": "AppModel/service boundary is deterministic and injected; no live CloudKit account or server is contacted.",
-          "7": "No retry-to-green, assertion suppression, or timeout widening is present.",
-          "8": "Exact values/types are asserted; timeout condition waits are bounded and assert their result.",
-          "9": "No skip condition; app host simulator evidence pending."
-        },
-        "decision": {
-          "outcome": "keep",
-          "reason": "Typed cloud/account transitions are exercised with gated or bounded deterministic setup and exact resulting state."
-        }
-      }
-    },
-    {
       "identifier": "AppModelTests/testCloudAccountSelectionSendFailureAfterCommitCannotRetryChoice",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
@@ -35231,7 +35165,11 @@
     },
     {
       "identifier": "AppModelTests/testPlaybackStartReusesMatchingActivePlayerAndResumes",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 20571,
@@ -50971,7 +50909,11 @@
     },
     {
       "identifier": "AppModelTests/testStopCompletionDoesNotRetireNewerSelection",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 11995
@@ -53515,6 +53457,401 @@
         "decision": {
           "outcome": "keep",
           "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testCloudAccountSelectionDeferralSurvivesSyncAndNextLaunch",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16663
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "ModelLocalState (isolated MacTesting)",
+        "AsyncGate for race only"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "line": 16663,
+          "expression": "Defer a presented snapshot; assert shared model deferral and no pending choice after explicit sync or a new model using the same fixture service."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16663,
+          "expression": "Assert bounded model readiness before dependent actions and await public model APIs."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Defer a presented snapshot; assert shared model deferral and no pending choice after explicit sync or a new model using the same fixture service.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Exercise chooser lifecycle",
+            "postcondition": "Defer a presented snapshot; assert shared model deferral and no pending choice after explicit sync or a new model using the same fixture service."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Two seconds is a model delivery failure budget; the race uses bounded AsyncGate admission and explicit release.",
+        "ruleAssessments": {
+          "1": "Defer a presented snapshot; assert shared model deferral and no pending choice after explicit sync or a new model using the same fixture service.",
+          "2": "Assert bounded model readiness before dependent actions and await public model APIs.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "Race teardown releases both gates and awaits caller tasks; other model operations are awaited.",
+          "5": "Fake service plus isolated MacTesting constructor-owned defaults; any iOS execution must use a disposable app container.",
+          "6": "Controlled model fixture evidence only; actual CloudKit and device evidence remain separate.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest reports action/assertion locations and exact typed failures; readiness has a two-second local delivery budget.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
+        }
+      },
+      "historicalReviewBeforeCloudChoiceFix": {
+        "base": "0c58ed3",
+        "record": {
+          "identifier": "AppModelTests/testCloudAccountSelectionDeferralIsSharedByViewsForOneLaunch",
+          "source": {
+            "path": "Tests/BleatAppTests/AppModelTests.swift",
+            "line": 14584,
+            "endLineBeforeNextTest": 14619
+          },
+          "compilerAndSkipConditions": [],
+          "setupAndDependencies": [
+            "TestAppService",
+            "fixtureAccount"
+          ],
+          "actions": [
+            {
+              "line": 14608,
+              "expression": "await model.start()"
+            }
+          ],
+          "assertions": [
+            {
+              "line": 14612,
+              "expression": "XCTAssertTrue(queued)"
+            },
+            {
+              "line": 14615,
+              "expression": "XCTAssertTrue(model.cloudAccountSelectionDeferred)"
+            },
+            {
+              "line": 14616,
+              "expression": "XCTAssertEqual(model.pendingCloudServerConfigurationChanges, [change])"
+            },
+            {
+              "line": 14619,
+              "expression": "XCTAssertFalse(nextLaunch.cloudAccountSelectionDeferred)"
+            }
+          ],
+          "synchronizationEvidence": [
+            {
+              "line": 14609,
+              "expression": "let queued = await waitUntil(timeout: .seconds(2)) {"
+            }
+          ],
+          "manualReview": {
+            "status": "source_reviewed",
+            "intendedBehavior": "Keep one-launch cloud account selection deferral on model while later launch starts fresh.",
+            "purpose": "Two AppModel instances sharing service fake.",
+            "actionPostconditions": [
+              {
+                "action": "Queue change, defer, inspect fresh model.",
+                "postcondition": "First model retains pending change and deferral; new model default is not deferred."
+              }
+            ],
+            "timeoutAndToleranceRationale": "Bounded 2-second queue waits assert success; gate completions and service calls are awaited. This is a state-arrival bound, not a product timing tolerance.",
+            "ruleAssessments": {
+              "1": "The action is followed by direct typed/model state or service request assertions specific to this scenario.",
+              "2": "Cloud queue waits use bounded waitUntil and assert success before dependent actions; no fixed scheduler sleeps.",
+              "3": "N/A: no playback timing invariant.",
+              "4": "All gated service work is awaited after release; no framework callback drain is assumed.",
+              "5": "Cloud and account state are service fakes; local reset count is inspected where relevant.",
+              "6": "AppModel/service boundary is deterministic and injected; no live CloudKit account or server is contacted.",
+              "7": "No retry-to-green, assertion suppression, or timeout widening is present.",
+              "8": "Exact values/types are asserted; timeout condition waits are bounded and assert their result.",
+              "9": "No skip condition; app host simulator evidence pending."
+            },
+            "decision": {
+              "outcome": "keep",
+              "reason": "Typed cloud/account transitions are exercised with gated or bounded deterministic setup and exact resulting state."
+            }
+          }
+        },
+        "disposition": "Preserved historical review. Its launch-only dismissal behavior is superseded by this semantic durable-choice regression; historical executions do not validate the candidate fix."
+      }
+    },
+    {
+      "identifier": "AppModelTests/testCloudAccountSelectionDrainsStaleSyncAndBlocksReentrantChoice",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16756
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "ModelLocalState (isolated MacTesting)",
+        "AsyncGate for race only"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "line": 16756,
+          "expression": "Hold sync response; enter selection and drain old callback; assert typed duplicate-choice rejection, blocked sync admission while saving, exactly one commit, and clean explicit resync."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16756,
+          "expression": "Assert bounded model readiness before dependent actions and await public model APIs."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Hold sync response; enter selection and drain old callback; assert typed duplicate-choice rejection, blocked sync admission while saving, exactly one commit, and clean explicit resync.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Exercise chooser lifecycle",
+            "postcondition": "Hold sync response; enter selection and drain old callback; assert typed duplicate-choice rejection, blocked sync admission while saving, exactly one commit, and clean explicit resync."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Two seconds is a model delivery failure budget; the race uses bounded AsyncGate admission and explicit release.",
+        "ruleAssessments": {
+          "1": "Hold sync response; enter selection and drain old callback; assert typed duplicate-choice rejection, blocked sync admission while saving, exactly one commit, and clean explicit resync.",
+          "2": "Assert bounded model readiness before dependent actions and await public model APIs.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "Race teardown releases both gates and awaits caller tasks; other model operations are awaited.",
+          "5": "Fake service plus isolated MacTesting constructor-owned defaults; any iOS execution must use a disposable app container.",
+          "6": "Controlled model fixture evidence only; actual CloudKit and device evidence remain separate.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest reports action/assertion locations and exact typed failures; readiness has a two-second local delivery budget.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testCloudAccountOptionsPutCurrentFirstAndKeepItsLocalData",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16818
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "ModelLocalState (isolated MacTesting)",
+        "AsyncGate for race only"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "expression": "Show Current before cloud alternatives; refresh only local connection metadata before selection; assert the semantic Current choice publishes the fresh authoritative profile once, retains account identity/endpoints and converges on resync.",
+          "line": 16818
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16818,
+          "expression": "Assert bounded model readiness before dependent actions and await public model APIs."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Show Current before cloud alternatives; refresh only local connection metadata before selection; assert the semantic Current choice publishes the fresh authoritative profile once, retains account identity/endpoints and converges on resync.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Select Current after a health-only store update",
+            "postcondition": "Show Current before cloud alternatives; refresh only local connection metadata before selection; assert the semantic Current choice publishes the fresh authoritative profile once, retains account identity/endpoints and converges on resync."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Two seconds is a model delivery failure budget; the race uses bounded AsyncGate admission and explicit release.",
+        "ruleAssessments": {
+          "1": "Show Current before cloud alternatives; refresh only local connection metadata before selection; assert the semantic Current choice publishes the fresh authoritative profile once, retains account identity/endpoints and converges on resync.",
+          "2": "Assert bounded model readiness before dependent actions and await public model APIs.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "Race teardown releases both gates and awaits caller tasks; other model operations are awaited.",
+          "5": "Fake service plus isolated MacTesting constructor-owned defaults; any iOS execution must use a disposable app container.",
+          "6": "Controlled model fixture evidence only; actual CloudKit and device evidence remain separate.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest reports action/assertion locations and exact typed failures; readiness has a two-second local delivery budget.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testCloudAccountOptionsIncludeLocalForDifferentCloudIdentityAndDeduplicate",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16848
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "ModelLocalState (isolated MacTesting)",
+        "AsyncGate for race only"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "line": 16848,
+          "expression": "Offer local Current for a cloud-only alternate identity, deduplicate equivalent health-only descriptor, and omit Current without local accounts."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16848,
+          "expression": "Assert bounded model readiness before dependent actions and await public model APIs."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Offer local Current for a cloud-only alternate identity, deduplicate equivalent health-only descriptor, and omit Current without local accounts.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Exercise chooser lifecycle",
+            "postcondition": "Offer local Current for a cloud-only alternate identity, deduplicate equivalent health-only descriptor, and omit Current without local accounts."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Two seconds is a model delivery failure budget; the race uses bounded AsyncGate admission and explicit release.",
+        "ruleAssessments": {
+          "1": "Offer local Current for a cloud-only alternate identity, deduplicate equivalent health-only descriptor, and omit Current without local accounts.",
+          "2": "Assert bounded model readiness before dependent actions and await public model APIs.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "Race teardown releases both gates and awaits caller tasks; other model operations are awaited.",
+          "5": "Fake service plus isolated MacTesting constructor-owned defaults; any iOS execution must use a disposable app container.",
+          "6": "Controlled model fixture evidence only; actual CloudKit and device evidence remain separate.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest reports action/assertion locations and exact typed failures; readiness has a two-second local delivery budget.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testCurrentCloudChoiceCommittedSendFailureClosesChooser",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16848
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService",
+        "ModelLocalState (isolated MacTesting)",
+        "AsyncGate for race only"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "line": 16848,
+          "expression": "Select Current with a typed post-commit upload failure; assert chooser consumed, original local account retained and exact originating push failure presented externally."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16818,
+          "expression": "Assert bounded model readiness before dependent actions and await public model APIs."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Select Current with a typed post-commit upload failure; assert chooser consumed, original local account retained and exact originating push failure presented externally.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Select Current after fixture sync has queued a conflicting local endpoint",
+            "postcondition": "Select Current with a typed post-commit upload failure; assert chooser consumed, original local account retained and exact originating push failure presented externally."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Two seconds is a model delivery failure budget; the race uses bounded AsyncGate admission and explicit release.",
+        "ruleAssessments": {
+          "1": "Select Current with a typed post-commit upload failure; assert chooser consumed, original local account retained and exact originating push failure presented externally.",
+          "2": "Assert bounded model readiness before dependent actions and await public model APIs.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "Race teardown releases both gates and awaits caller tasks; other model operations are awaited.",
+          "5": "Fake service plus isolated MacTesting constructor-owned defaults; any iOS execution must use a disposable app container.",
+          "6": "Controlled model fixture evidence only; actual CloudKit and device evidence remain separate.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest reports action/assertion locations and exact typed failures; readiness has a two-second local delivery budget.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testExplicitUnitTestHostStaysInert",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 40
+      },
+      "compilerAndSkipConditions": [
+        "Actual process/delegate assertions: #if os(iOS); parser/factory assertions execute on both platforms."
+      ],
+      "setupAndDependencies": [
+        "AppUnitTestHostAdmission",
+        "UnavailableAppService",
+        "UnavailableNearbyServerDiscovery",
+        "Private inert diagnostics and Now Playing publisher"
+      ],
+      "actions": [],
+      "assertions": [
+        {
+          "line": 40,
+          "expression": "Verify explicit inert-host admission, its unavailable model/start with no accounts or pending choices, and on iOS assert actual process marker plus process admission receipt confirms bootstrap used the inert factory."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 40,
+          "expression": "await model.start(); then assert unavailable state, no account and no pending choices."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Verify explicit inert-host admission, its unavailable model/start with no accounts or pending choices, and on iOS assert actual process marker plus process admission receipt confirms bootstrap used the inert factory.",
+        "purpose": "Account chooser fixture regression with cloud and authentication services substituted.",
+        "actionPostconditions": [
+          {
+            "action": "Admit and start inert host",
+            "postcondition": "Verify explicit inert-host admission, its unavailable model/start with no accounts or pending choices, and on iOS assert actual process marker plus process admission receipt confirms bootstrap used the inert factory."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Await inert model start directly; no timed readiness or playback assertion. Actual iOS process admission receipt is an immediate semantic precondition.",
+        "ruleAssessments": {
+          "1": "Verify explicit inert-host admission, its unavailable model/start with no accounts or pending choices, and on iOS assert actual process marker plus process admission receipt confirms bootstrap used the inert factory.",
+          "2": "Await start before asserting terminal unavailable state; direct admission checks need no polling.",
+          "3": "Not applicable: no media playback or position assertion.",
+          "4": "No gated tasks or timers are started; model-owned inert adapters and constructor storage follow their usual scoped lifetime.",
+          "5": "Pure environment fixtures plus an unavailable service/discovery model, private diagnostics and Now Playing publisher; actual iOS host runs in the task-owned Simulator.",
+          "6": "Factory/parser checks on both platforms and actual forwarding/bootstrap checks only on iOS; no live service/device claim.",
+          "7": "No assertion weakening, blind retry or fixed-delay synchronization.",
+          "8": "XCTest failures name missing actual admission/bootstrap state and preserve caller locations.",
+          "9": "Eleven focused signed inert-host cases and the 680-case owning iOS suite passed; exact identities and xcresult outcomes are recorded in docs/release-evidence/cloud-account-choices.md."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Verifies semantic state, option ordering and stale-operation ownership at the reported boundary."
         }
       }
     }
