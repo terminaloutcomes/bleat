@@ -37,6 +37,37 @@ extension DownloadStorageLayout {
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testExplicitUnitTestHostStaysInert() async {
+        XCTAssertFalse(AppUnitTestHostAdmission.isInert(environment: [:]))
+        XCTAssertFalse(
+            AppUnitTestHostAdmission.isInert(environment: [
+                "BLEAT_UNIT_TEST_HOST": "0"
+            ]))
+        XCTAssertTrue(
+            AppUnitTestHostAdmission.isInert(environment: [
+                "BLEAT_UNIT_TEST_HOST": "1"
+            ]))
+        #if os(iOS)
+            XCTAssertTrue(
+                AppUnitTestHostAdmission.isInert(),
+                "The supported runner must explicitly admit the inert unit-test host"
+            )
+            XCTAssertTrue(
+                AppUnitTestHostAdmission.didAdmitProcess,
+                "The actual process must pass through inert composition before tests start"
+            )
+        #endif
+        let model = AppUnitTestHostAdmission.makeModel()
+        await model.start()
+        guard case .unavailable = model.phase else {
+            return XCTFail(
+                "The inert unit-test host must not enter the live login or account lifecycle"
+            )
+        }
+        XCTAssertNil(model.account)
+        XCTAssertTrue(model.accounts.isEmpty)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+    }
     func testLastPlayingRestoresPausedSelectionAndCanonicalPosition()
         async throws
     {
@@ -1248,6 +1279,119 @@ final class AppModelTests: XCTestCase {
             defaults.bool(forKey: "bleat.cloudStorageUpgrade.v2.acknowledged"))
         let requests = await service.privateCloudSynchronizationRequestCount()
         XCTAssertEqual(requests, 0)
+    }
+
+    func testCloudPromptsPreserveNoticeDuringRepeatedAccountSync() throws {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        let notice = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(notice.kind, .storageNotice)
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertEqual(prompts.active?.id, notice.id)
+        prompts.deferNotice()
+        XCTAssertNil(
+            prompts.active, "The next sheet must wait for dismissal completion")
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        let accounts = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(accounts.kind, .accountSelection)
+        prompts.dismiss(notice)
+        XCTAssertEqual(
+            prompts.active?.id, accounts.id,
+            "Retired callbacks cannot dismiss a replacement")
+        prompts.reconcile(notice: true, accounts: false, conflict: true)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptInterruptedNoticeDoesNotAcknowledgeOrLoseEitherRequest()
+        throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        let interrupted = try XCTUnwrap(prompts.active)
+        prompts.dismiss(interrupted)
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
+        XCTAssertNotEqual(prompts.active?.id, interrupted.id)
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .accountSelection)
+        prompts.foreground()
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        XCTAssertEqual(
+            prompts.active?.kind, .accountSelection,
+            "Foreground notice waits for the current choice")
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
+    }
+
+    func testCloudPromptSwipeWaitsForDurableDeferralAndRejectsLateCompletion()
+        throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        let swipe = try XCTUnwrap(prompts.active)
+        prompts.dismiss(swipe, resolving: true)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertNil(
+            prompts.active,
+            "Held persistence must retain ownership after animation ends")
+        prompts.reconcile(notice: true, accounts: false, conflict: true)
+        prompts.didResolve(swipe)
+        let notice = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(notice.kind, .storageNotice)
+        prompts.didResolve(swipe)
+        prompts.dismiss(swipe)
+        XCTAssertEqual(prompts.active?.id, notice.id)
+        prompts.deferNotice()
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptFailureWaitsForDismissalAndReservesNextRequest() throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: true)
+        prompts.reconcile(
+            notice: false, accounts: false, conflict: true, failure: true)
+        XCTAssertNil(prompts.active)
+        XCTAssertFalse(prompts.canPresentFailure)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertTrue(prompts.canPresentFailure)
+        XCTAssertTrue(prompts.isBusy)
+        XCTAssertNil(
+            prompts.active, "Error acknowledgment precedes the next cloud sheet"
+        )
+        prompts.reconcile(
+            notice: false, accounts: false, conflict: true, failure: false)
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptLateDismissalCannotReleaseAnotherSheet() throws {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        let first = try XCTUnwrap(prompts.active)
+        prompts.dismiss(first)
+        prompts.didDismiss(first)
+        let replacement = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(replacement.kind, first.kind)
+        XCTAssertNotEqual(replacement.id, first.id)
+        prompts.dismiss(replacement)
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.didDismiss(first)
+        XCTAssertNil(prompts.active)
+        XCTAssertEqual(prompts.dismissing?.id, replacement.id)
+        prompts.didDismiss(replacement)
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
     }
 
     func testDeferringCloudStorageNoticePreservesPendingAcknowledgment() throws
@@ -16730,7 +16874,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
     }
 
-    func testCloudAccountSelectionDeferralIsSharedByViewsForOneLaunch()
+    func testCloudAccountSelectionDeferralSurvivesSyncAndNextLaunch()
         async throws
     {
         let current = try fixtureAccount()
@@ -16758,12 +16902,17 @@ final class AppModelTests: XCTestCase {
         }
         XCTAssertTrue(queued)
 
-        model.deferCloudAccountSelection()
+        let failure = await model.deferCloudAccountSelection()
+        XCTAssertNil(failure)
         XCTAssertTrue(model.cloudAccountSelectionDeferred)
         XCTAssertEqual(model.pendingCloudServerConfigurationChanges, [change])
 
         let nextLaunch = AppModel(service: service)
-        XCTAssertFalse(nextLaunch.cloudAccountSelectionDeferred)
+        await nextLaunch.start()
+        await nextLaunch.synchronizePrivateCloud()
+        XCTAssertTrue(nextLaunch.pendingCloudServerConfigurationChanges.isEmpty)
+        await model.synchronizePrivateCloud()
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
     }
 
     func testCloudAccountSelectionSendFailureAfterCommitCannotRetryChoice()
@@ -16816,6 +16965,176 @@ final class AppModelTests: XCTestCase {
             .awaitingCredentials(change.id)
         )
         XCTAssertEqual(model.privateCloudState, .failed(failure))
+    }
+
+    func testCloudAccountSelectionDrainsStaleSyncAndBlocksReentrantChoice()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try current.updatingLocalServer(
+            NormalizedServerURL("https://incoming.example"))
+        let change = CloudServerConfigurationChange(
+            current: current, incoming: incoming)
+        let syncGate = AsyncGate()
+        let selectionGate = AsyncGate()
+        await syncGate.release()
+        let service = TestAppService(
+            activeAccount: .success(current), privateCloudSyncGate: syncGate,
+            privateCloudSyncChanges: [change],
+            privateCloudSelectionGate: selectionGate)
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+        await syncGate.reset()
+        let staleSync = Task { await model.synchronizePrivateCloud() }
+        await syncGate.waitUntilEntered()
+        let selection = Task {
+            await model.resolveCloudServerConfigurationSelection(change)
+        }
+        addTeardownBlock {
+            await syncGate.release()
+            await selectionGate.release()
+            await staleSync.value
+            _ = await selection.value
+        }
+        await selectionGate.waitUntilEntered()
+        // Cancellation released the old service callback, but its generation
+        // cannot restore the old candidates while the choice is being saved.
+        await staleSync.value
+        let duplicate = await model.resolveCloudServerConfigurationSelection(
+            change)
+        XCTAssertEqual(
+            duplicate?.cause,
+            .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .resolveServerConfiguration,
+                    cause: .accountSelectionInProgress)))
+        await model.synchronizePrivateCloud()
+        let syncRequestsWhileSaving =
+            await service.privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(syncRequestsWhileSaving, 2)
+        await selectionGate.release()
+        let failure = await selection.value
+        XCTAssertNil(failure)
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        let resolutions = await service.cloudResolutions()
+        XCTAssertEqual(resolutions.count, 1)
+        await model.synchronizePrivateCloud()
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        let syncRequests =
+            await service.privateCloudSynchronizationRequestCount()
+        XCTAssertEqual(syncRequests, 3)
+    }
+
+    func testCloudAccountOptionsPutCurrentFirstAndKeepItsLocalData()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let remote = try current.updatingLocalServer(
+            NormalizedServerURL("https://local.example"))
+        let change = CloudServerConfigurationChange(
+            current: current, incoming: remote)
+        let service = TestAppService(
+            activeAccount: .success(current), privateCloudSyncChanges: [change])
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == [change]
+        }
+        XCTAssertTrue(queued)
+        XCTAssertEqual(
+            model.cloudAccountConfigurationOptions,
+            [.current(current), .iCloud(change)])
+        let refreshed = try current.updatingConnectionState(.offline)
+        XCTAssertTrue(
+            CloudAccountConfigurationOption.current(current).matches(
+                .current(refreshed)))
+        XCTAssertFalse(
+            CloudAccountConfigurationOption.current(current).matches(
+                .iCloud(change)))
+        await service.replaceStoredAccountForCloudChoice(refreshed)
+        let failure = await model.resolveCloudAccountConfigurationOption(
+            .current(current))
+        XCTAssertNil(failure)
+        XCTAssertEqual(model.account, refreshed)
+        XCTAssertEqual(model.accounts, [refreshed])
+        let pushed = await service.forcedCloudAccounts()
+        XCTAssertEqual(pushed, [refreshed])
+        await model.synchronizePrivateCloud()
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+    }
+
+    func testCurrentCloudChoiceCommittedSendFailureClosesChooser() async throws
+    {
+        let current = try fixtureAccount()
+        let incoming = try current.updatingLocalServer(
+            NormalizedServerURL("https://local.example"))
+        let change = CloudServerConfigurationChange(
+            current: current, incoming: incoming)
+        let committed = PrivateCloudSyncFailure(
+            operation: .pushServerConfiguration,
+            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure))),
+            selectionCommitted: true)
+        let service = TestAppService(
+            activeAccount: .success(current), privateCloudSyncChanges: [change],
+            privateCloudForcePushResult: .failure(.privateCloud(committed)))
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            !model.pendingCloudServerConfigurationChanges.isEmpty
+        }
+        XCTAssertTrue(queued)
+        let failure = await model.resolveCloudAccountConfigurationOption(
+            .current(current))
+        XCTAssertEqual(failure?.cause, .privateCloud(committed))
+        XCTAssertTrue(model.pendingCloudServerConfigurationChanges.isEmpty)
+        XCTAssertEqual(model.account, current)
+        XCTAssertEqual(model.privateCloudState, .failed(try XCTUnwrap(failure)))
+    }
+
+    func
+        testCloudAccountOptionsIncludeLocalForDifferentCloudIdentityAndDeduplicate()
+        async throws
+    {
+        let current = try fixtureAccount()
+        let other = try ServerAccount(
+            id: AccountID(rawValue: "other"),
+            server: NormalizedServerURL("https://other.example"),
+            serverVersion: current.serverVersion,
+            authenticationMethods: current.authenticationMethods,
+            user: current.user)
+        let equivalent = try current.updatingConnectionState(.offline)
+        let changes = [
+            CloudServerConfigurationChange(current: nil, incoming: other),
+            CloudServerConfigurationChange(
+                current: current, incoming: equivalent),
+        ]
+        let model = AppModel(
+            service: TestAppService(
+                activeAccount: .success(current),
+                privateCloudSyncChanges: changes))
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudServerConfigurationChanges == changes
+        }
+        XCTAssertTrue(queued)
+        XCTAssertEqual(
+            model.cloudAccountConfigurationOptions,
+            [.current(current), .iCloud(changes[0])])
+        let cloudOnly = AppModel(
+            service: TestAppService(
+                accounts: .success([]), activeAccount: .success(nil),
+                privateCloudSyncChanges: [changes[0]]))
+        await cloudOnly.start()
+        let restored = await waitUntil(timeout: .seconds(2)) {
+            !cloudOnly.pendingCloudServerConfigurationChanges.isEmpty
+        }
+        XCTAssertTrue(restored)
+        XCTAssertEqual(
+            cloudOnly.cloudAccountConfigurationOptions, [.iCloud(changes[0])])
     }
 
     func
@@ -29347,14 +29666,20 @@ final class AppModelTests: XCTestCase {
                     "CarPlayCompleteDownload-\(UUID().uuidString)",
                     isDirectory: true
                 )
-            defer {
-                try? FileManager.default.removeItem(at: root)
-            }
+            addTeardownBlock { try? FileManager.default.removeItem(at: root) }
             try FileManager.default.createDirectory(
                 at: root,
                 withIntermediateDirectories: true
             )
-            let account = try fixtureAccount()
+            let suite = "CarPlayCompleteDownload.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            addTeardownBlock { @MainActor in
+                defaults.removePersistentDomain(forName: suite)
+            }
+            let positions = PlaybackPositionStore(defaults: defaults)
+            let sessions = LocalPlaybackSessionStore(defaults: defaults)
+            let account = try fixtureAccount(
+                accountID: "carplay-\(UUID().uuidString)")
             let library = fixtureLibrary()
             let book = fixturePage(libraryID: library.id).items[0]
             let detail = fixtureBookDetail(item: book)
@@ -29375,15 +29700,39 @@ final class AppModelTests: XCTestCase {
                 ),
                 bookDetail: .success(detail)
             )
+            let activationGate = AsyncGate()
+            let completionCount = Mutex(0)
+            let coverLoader = BookCoverImageLoader(
+                diskCapacity: 0,
+                fetch: { _ in throw URLError(.resourceUnavailable) })
             let onlineModel = AppModel(
                 service: onlineService,
+                cloudStorageNoticeDefaults: defaults,
+                nearbyServerDiscovery: UnavailableNearbyServerDiscovery(),
                 downloadsStorageRootURL: root,
                 downloadsBackgroundSessionIdentifier:
-                    backgroundSessionIdentifier("carplay-complete-download")
+                    backgroundSessionIdentifier("carplay-complete-download"),
+                localSessionStore: sessions,
+                playbackPositionStore: positions,
+                playbackPreferencesStore: PlaybackPreferencesStore(
+                    defaults: defaults),
+                nowPlayingCoordinator: NowPlayingCoordinator(
+                    infoCenter: TestNowPlayingInfoPublisher(),
+                    coverLoader: coverLoader,
+                    registersRemoteCommands: false),
+                audioSession: PlaybackAudioSession(
+                    activate: { await activationGate.enterAndWait() },
+                    deactivate: {})
             )
             await onlineModel.start()
             let onlinePresenter = TestCarPlayPresenter()
-            let onlineCoordinator = CarPlayCoordinator(model: onlineModel)
+            let onlineCoordinator = CarPlayCoordinator(
+                model: onlineModel, coverLoader: coverLoader)
+            addTeardownBlock { @MainActor in
+                await activationGate.release()
+                await onlineModel.playback.stop()
+                onlineCoordinator.disconnect()
+            }
             onlineCoordinator.connect(onlinePresenter)
             await onlineCoordinator.waitForLibraryLoad()
             onlineCoordinator.refreshTemplates()
@@ -29400,9 +29749,22 @@ final class AppModelTests: XCTestCase {
                 description: "Online selection preferred download"
             )
             remoteItem.handler?(remoteItem) {
+                completionCount.withLock { $0 += 1 }
                 onlineCompletion.fulfill()
             }
+            let entered = await activationGate.waitUntilEntered(
+                timeout: .seconds(3))
+            XCTAssertTrue(entered, playbackDiagnostic(onlineModel.playback))
+            XCTAssertEqual(completionCount.withLock { $0 }, 0)
+            await activationGate.release()
             await fulfillment(of: [onlineCompletion], timeout: 3)
+            let session = try XCTUnwrap(
+                sessions.session(accountID: account.id, itemID: book.id))
+            XCTAssertEqual(session.startTime, 0)
+            XCTAssertEqual(onlineModel.playback.audioFiles.count, 1)
+            XCTAssertTrue(
+                onlineModel.playback.audioFiles.allSatisfy { $0.url.isFileURL })
+            XCTAssertEqual(completionCount.withLock { $0 }, 1)
             let onlinePlaybackRequests =
                 await onlineService.playbackOpenRequests()
             XCTAssertTrue(onlinePlaybackRequests.isEmpty)
@@ -30195,6 +30557,11 @@ final class AppModelTests: XCTestCase {
                 )
             )
             buffer.frameLength = 8_000
+            let samples = try XCTUnwrap(buffer.floatChannelData)
+            for channel in 0..<Int(format.channelCount) {
+                samples[channel].initialize(
+                    repeating: 0, count: Int(buffer.frameLength))
+            }
             try audioFile.write(from: buffer)
         }
         let size = try XCTUnwrap(
@@ -31119,6 +31486,8 @@ private actor TestAppService: AppServicing {
     private var privateCloudSyncResult:
         Result<[CloudServerConfigurationChange], AppServiceError>
     private var privateCloudSelectionResults: [Result<Void, AppServiceError>]
+    private let privateCloudForcePushResult: Result<Void, AppServiceError>
+    private let privateCloudSelectionGate: AsyncGate?
     private let cloudAuthenticationResult:
         Result<ServerAccount?, AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?
@@ -31382,6 +31751,9 @@ private actor TestAppService: AppServicing {
             Result<[CloudServerConfigurationChange], AppServiceError>? = nil,
         privateCloudSelectionResults:
             [Result<Void, AppServiceError>] = [],
+        privateCloudForcePushResult: Result<Void, AppServiceError> = .success(
+            ()),
+        privateCloudSelectionGate: AsyncGate? = nil,
         cloudAuthenticationResult:
             Result<ServerAccount?, AppServiceError> = .success(nil),
         endpointDiagnostics: AppEndpointDiagnostics? = nil
@@ -31462,6 +31834,8 @@ private actor TestAppService: AppServicing {
             privateCloudSyncResult
             ?? .success(privateCloudSyncChanges)
         self.privateCloudSelectionResults = privateCloudSelectionResults
+        self.privateCloudForcePushResult = privateCloudForcePushResult
+        self.privateCloudSelectionGate = privateCloudSelectionGate
         self.cloudAuthenticationResult = cloudAuthenticationResult
         self.privateCloudConfigurationConflict =
             privateCloudConfigurationConflict
@@ -31784,6 +32158,25 @@ private actor TestAppService: AppServicing {
         _ account: ServerAccount
     ) async throws(AppServiceError) {
         recordedForcedCloudAccounts.append(account)
+        if case .failure(let error) = privateCloudForcePushResult {
+            if case .privateCloud(let failure) = error,
+                failure.selectionCommitted,
+                case .success(let changes) = privateCloudSyncResult
+            {
+                privateCloudSyncResult = .success(
+                    changes.filter { $0.id != account.id })
+            }
+            throw error
+        }
+        if case .success(let changes) = privateCloudSyncResult {
+            privateCloudSyncResult = .success(
+                changes.filter { $0.id != account.id })
+        }
+    }
+
+    func replaceStoredAccountForCloudChoice(_ account: ServerAccount) {
+        activeAccountResult = .success(account)
+        accountsResult = .success([account])
     }
 
     func resolvePrivateCloudServerConfigurationChange(
@@ -31797,9 +32190,19 @@ private actor TestAppService: AppServicing {
         }
     }
 
+    func deferPrivateCloudServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws(AppServiceError) {
+        if case .success(var pending) = privateCloudSyncResult {
+            pending.removeAll { changes.contains($0) }
+            privateCloudSyncResult = .success(pending)
+        }
+    }
+
     func resolvePrivateCloudServerConfigurationSelection(
         _ account: ServerAccount
     ) async throws(AppServiceError) {
+        await privateCloudSelectionGate?.enterAndWait()
         if !privateCloudSelectionResults.isEmpty {
             try value(from: privateCloudSelectionResults.removeFirst())
         }

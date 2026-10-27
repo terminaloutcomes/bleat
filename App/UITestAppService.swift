@@ -6,6 +6,13 @@
 
     @MainActor
     @Observable
+    final class UITestCloudChoiceSyncProbe {
+        static let shared = UITestCloudChoiceSyncProbe()
+        var completed = false
+    }
+
+    @MainActor
+    @Observable
     final class UITestPlaybackSyncGate {
         enum State {
             case idle
@@ -175,6 +182,12 @@
     }
 
     actor UITestAppService: AppServicing {
+        static func hasExplicitScenario(
+            arguments: [String] = ProcessInfo.processInfo.arguments
+        ) -> Bool {
+            arguments.contains { UITestScenario(rawValue: $0) != nil }
+        }
+
         static func coverImageResponse(for request: URLRequest) throws -> (
             Data, URLResponse
         )? {
@@ -229,7 +242,21 @@
         private var libraryRequests = 0
         private var bookDetailRequests = 0
         private var cloudSelectionAttempts = 0
+        private var cloudNoticeSyncs = 0
         private var cloudSelectionResolved = false
+        private var cloudChoiceDefaults: UserDefaults? {
+            guard
+                let argument = ProcessInfo.processInfo.arguments.first(where: {
+                    $0.hasPrefix("--ui-testing-cloud-choice-session=")
+                }),
+                let session = UUID(
+                    uuidString: String(
+                        argument.dropFirst(
+                            "--ui-testing-cloud-choice-session=".count)))
+            else { return nil }
+            return UserDefaults(
+                suiteName: "BleatCloudChoiceFixture.\(session.uuidString)")
+        }
         private var deletedTranscriptBooks: Set<ChapterTranscriptionBookKey> =
             []
 
@@ -415,10 +442,18 @@
         func synchronizePrivateCloud() async throws(AppServiceError)
             -> [CloudServerConfigurationChange]
         {
+            cloudNoticeSyncs += 1
+            if cloudNoticeSyncs > 1,
+                ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-cloud-notice-after-start")
+            {
+                CloudStorageUpgradeNotice.detectLegacy(in: .standard)
+            }
             guard
                 ProcessInfo.processInfo.arguments.contains(
                     "--ui-testing-cloud-account-selection"
-                ), !cloudSelectionResolved
+                ), !cloudSelectionResolved,
+                cloudChoiceDefaults?.bool(forKey: "resolved") != true
             else { return [] }
             let current: ServerAccount
             switch accountResult {
@@ -485,6 +520,24 @@
                     ))
             }
             cloudSelectionResolved = true
+            do {
+                cloudChoiceDefaults?.set(
+                    try JSONEncoder().encode(account), forKey: "account")
+                cloudChoiceDefaults?.set(true, forKey: "resolved")
+            } catch { throw .accountStore(.profileEncodingFailed) }
+        }
+
+        func forcePushPrivateCloudServerConfiguration(_ account: ServerAccount)
+            async throws(AppServiceError)
+        {
+            try await resolvePrivateCloudServerConfigurationSelection(account)
+        }
+
+        func deferPrivateCloudServerConfigurationChanges(
+            _ changes: [CloudServerConfigurationChange]
+        ) async throws(AppServiceError) {
+            cloudSelectionResolved = true
+            cloudChoiceDefaults?.set(true, forKey: "resolved")
         }
 
         func authenticateRestoredAccountUsingSynchronizedCredential(
@@ -1740,7 +1793,17 @@
         }
 
         private func account() throws(AppServiceError) -> ServerAccount {
-            switch accountResult {
+            if let data = cloudChoiceDefaults?.data(forKey: "account") {
+                do {
+                    return try JSONDecoder().decode(
+                        ServerAccount.self, from: data)
+                } catch {
+                    throw .accountStore(
+                        .invalidStoredAccount(AccountID(rawValue: "ui-account"))
+                    )
+                }
+            }
+            return switch accountResult {
             case .success(let account):
                 account
             case .failure(let error):

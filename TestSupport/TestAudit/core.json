@@ -26307,6 +26307,238 @@
       "classification": "Local SwiftData integration and domain encoding, with no server or device claim.",
       "compiler_skip": "No conditional skip.",
       "reason": "Exercises the actual persisted store/decoder boundary with isolated data."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAcceptedCloudAccountDoesNotPromptAgainOrBecomeAuthenticated",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 11
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Accept a cloud-only account and replay its unchanged payload through original and recreated store actors; assert no chooser, reauthentication still required and no active browsing account.",
+      "rules": {
+        "1": "Accept a cloud-only account and replay its unchanged payload through original and recreated store actors; assert no chooser, reauthentication still required and no active browsing account.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Accept a cloud-only account and replay its unchanged payload through original and recreated store actors; assert no chooser, reauthentication still required and no active browsing account.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCancelledCloudChoicesSurviveReopenedStoreAndChangedConfigurationPrompts",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 49
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Cancel an endpoint conflict, reopen an owned disk-backed store with new repository/container owners, assert unchanged payload remains dismissed and upload paused, then select a different endpoint and assert persisted data and future changed choice.",
+      "rules": {
+        "1": "Cancel an endpoint conflict, reopen an owned disk-backed store with new repository/container owners, assert unchanged payload remains dismissed and upload paused, then select a different endpoint and assert persisted data and future changed choice.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Cancel an endpoint conflict, reopen an owned disk-backed store with new repository/container owners, assert unchanged payload remains dismissed and upload paused, then select a different endpoint and assert persisted data and future changed choice.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudConfigurationKeepsDeviceConnectionAndEndpointValidation",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 136
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Fetch equivalent configurations with different health, endpoint validation, metadata, capability ordering and URL spelling; assert no choice and exact preservation of authoritative local profile.",
+      "rules": {
+        "1": "Fetch equivalent configurations with different health, endpoint validation, metadata, capability ordering and URL spelling; assert no choice and exact preservation of authoritative local profile.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Fetch equivalent configurations with different health, endpoint validation, metadata, capability ordering and URL spelling; assert no choice and exact preservation of authoritative local profile.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testStaleExplicitCloudSelectionDoesNotAcceptAnotherCandidate",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 176
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Attempt an unavailable explicit selection; assert exact stale-selection cause/diagnostic, no imported account and actual candidate still pending.",
+      "rules": {
+        "1": "Attempt an unavailable explicit selection; assert exact stale-selection cause/diagnostic, no imported account and actual candidate still pending.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Attempt an unavailable explicit selection; assert exact stale-selection cause/diagnostic, no imported account and actual candidate still pending.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCurrentAndCloudChoicesRetireAllCompetingSnapshots",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 211
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Exercise Current and cloud selection with two distinct endpoint snapshots. Replay immutable old payloads before/after store recreation; assert chosen profile and no prompt, then a new endpoint must prompt.",
+      "rules": {
+        "1": "Exercise Current and cloud selection with two distinct endpoint snapshots. Replay immutable old payloads before/after store recreation; assert chosen profile and no prompt, then a new endpoint must prompt.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Exercise Current and cloud selection with two distinct endpoint snapshots. Replay immutable old payloads before/after store recreation; assert chosen profile and no prompt, then a new endpoint must prompt.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testReauthenticationRetainsSelectedLocalEndpointAndReturnsSavedProfile",
+      "source": {
+        "path": "Tests/BleatCoreTests/AccountStoreTests.swift",
+        "line": 10
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Use native persist-auth coordinator with memory credentials and fake transport; add/change local URL, authenticate again, and assert returned and reloaded endpoint, validation and connected state.",
+      "rules": {
+        "1": "Use native persist-auth coordinator with memory credentials and fake transport; add/change local URL, authenticate again, and assert returned and reloaded endpoint, validation and connected state.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Use native persist-auth coordinator with memory credentials and fake transport; add/change local URL, authenticate again, and assert returned and reloaded endpoint, validation and connected state.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift::testOpenIDReauthenticationRetainsSelectedLocalEndpoint",
+      "source": {
+        "path": "Tests/BleatCoreTests/OpenIDAuthenticationTests.swift",
+        "line": 11
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Use OIDC persist-auth coordinator with fake browser/transport/credentials; reauthenticate a configured account and assert returned and reloaded endpoint, validation and connected state.",
+      "rules": {
+        "1": "Use OIDC persist-auth coordinator with fake browser/transport/credentials; reauthenticate a configured account and assert returned and reloaded endpoint, validation and connected state.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Use OIDC persist-auth coordinator with fake browser/transport/credentials; reauthenticate a configured account and assert returned and reloaded endpoint, validation and connected state.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testCloudChoiceRemovalPreservesOtherAccountDecisions",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 322
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Exercise local removal, all-device local cleanup primitive, fetched deletion handler and successful zone cleanup with two independent account snapshots; verify scoped preservation, narrow reset preserving unrelated state/migration marker, and re-prompt after reconstructed-store reset. Network deletion and whole-selection interruption are not exercised.",
+      "rules": {
+        "1": "Exercise local removal, all-device local cleanup primitive, fetched deletion handler and successful zone cleanup with two independent account snapshots; verify scoped preservation, narrow reset preserving unrelated state/migration marker, and re-prompt after reconstructed-store reset. Network deletion and whole-selection interruption are not exercised.",
+        "2": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+        "3": "Not applicable: no media playback or progress/time measurement.",
+        "4": "All operations are awaited and owned temporary stores/default domains are cleaned on exit; no detached work is introduced.",
+        "5": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+        "6": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+        "7": "Baseline failures and unsuccessful compiler attempts are retained; no blind retry, assertion weakening or larger waits.",
+        "8": "Caller-located typed/state assertions identify the exact failed boundary; no personal account data enters fixtures.",
+        "9": "Focused and owning outcomes are recorded separately in the local chooser receipt; signed/device evidence remains separate."
+      },
+      "decision": "keep",
+      "reason": "Exercises the observed failure boundary with semantic persistence, identity and state postconditions.",
+      "dependencies_and_setup": "Fresh CloudKit-disabled memory/disk stores, UUID preference domains, nil cloud credentials or memory credential actors and deterministic authentication fakes.",
+      "action_postconditions": "Exercise local removal, all-device local cleanup primitive, fetched deletion handler and successful zone cleanup with two independent account snapshots; verify scoped preservation, narrow reset preserving unrelated state/migration marker, and re-prompt after reconstructed-store reset. Network deletion and whole-selection interruption are not exercised.",
+      "synchronization": "Await every repository/authentication operation before structural state assertions; no sleep or guessed yields.",
+      "timeout_tolerance": "No elapsed-time or playback tolerance applies.",
+      "classification": "Deterministic logic plus local SwiftData framework integration only; no real cloud, Keychain or live server claim.",
+      "compiler_skip": "No skip, opt-in or compiler condition applies."
     }
   ],
   "issue_382": {

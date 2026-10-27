@@ -441,6 +441,28 @@ enum CloudAccountRestoreState: Equatable, Sendable {
     case failed(AppFailure)
 }
 
+enum CloudAccountConfigurationOption: Equatable {
+    case current(ServerAccount)
+    case iCloud(CloudServerConfigurationChange)
+
+    var account: ServerAccount {
+        switch self {
+        case .current(let account): account
+        case .iCloud(let change): change.incoming
+        }
+    }
+
+    var isCurrent: Bool {
+        if case .current = self { return true }
+        return false
+    }
+
+    func matches(_ other: CloudAccountConfigurationOption) -> Bool {
+        isCurrent == other.isCurrent
+            && account.hasSameCloudConfiguration(as: other.account)
+    }
+}
+
 enum AccountRemovalScope: Equatable, Sendable {
     case thisDevice
     case allDevices
@@ -580,6 +602,7 @@ private struct CoordinatedLibraryPageKey: Hashable, Sendable {
 }
 
 enum AppModelOperationEvent: Equatable, Sendable {
+    case privateCloudSynchronizationCompleted
     case liveUpdateConsumed
     case liveRefreshScheduled
     case liveRefreshStarted
@@ -1391,6 +1414,8 @@ extension PrivateCloudSyncFailure {
             }
         case .disabled: "iCloud sync is off"
         case .invalidRecord: "Invalid iCloud data"
+        case .accountSelectionChanged: "iCloud account choice changed"
+        case .accountSelectionInProgress: "Saving iCloud account choice"
         case .storage: "iCloud storage update failed"
         case .persistenceFailed: "Local storage unavailable"
         case .nonPrivateDatabase: "Unsafe iCloud configuration"
@@ -1411,6 +1436,10 @@ extension PrivateCloudSyncFailure {
             "The previous iCloud synchronization is still stopping."
         case .invalidRecord:
             "Bleat received incomplete or inconsistent data from iCloud."
+        case .accountSelectionChanged:
+            "The selected account configuration is no longer pending. Review the current choices."
+        case .accountSelectionInProgress:
+            "Wait for the current account choice to finish saving."
         case .storage(let failure):
             switch failure {
             case .invalidLegacyMetadata:
@@ -1466,6 +1495,7 @@ extension PrivateCloudSyncFailure {
         case .disabled:
             "icloud.slash"
         case .callbackTimedOut, .stopping, .invalidRecord,
+            .accountSelectionChanged, .accountSelectionInProgress,
             .nonPrivateDatabase, .engineUnavailable,
             .unexpected:
             "exclamationmark.triangle"
@@ -1479,7 +1509,8 @@ extension PrivateCloudSyncFailure {
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
-        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+        case .disabled, .stopping, .invalidRecord, .accountSelectionChanged,
+            .accountSelectionInProgress, .nonPrivateDatabase,
             .unexpected:
             false
         }
@@ -1514,6 +1545,7 @@ extension PrivateCloudSyncFailure {
         case .nonPrivateDatabase:
             .sourceBug
         case .cancelled, .stopping, .disabled, .invalidRecord,
+            .accountSelectionChanged, .accountSelectionInProgress,
             .engineUnavailable,
             .unexpected:
             .unknown
@@ -1800,6 +1832,7 @@ final class AppModel {
     private(set) var pendingCloudServerConfigurationChanges:
         [CloudServerConfigurationChange] = []
     private(set) var cloudAccountSelectionDeferred = false
+    private var isResolvingCloudAccountSelection = false
     private(set) var pendingCloudConfigurationConflict:
         CloudConfigurationConflict?
     private(set) var remoteTelemetryEnabled: Bool
@@ -1968,6 +2001,7 @@ final class AppModel {
         remoteTelemetryDownloadLogger: any RemoteTelemetryDownloadLogging =
             InactiveRemoteTelemetryDownloadLogger(),
         playbackPositionStore: PlaybackPositionStore? = nil,
+        playbackPreferencesStore: PlaybackPreferencesStore? = nil,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         audioSession: PlaybackAudioSession = .system,
         bookProgressOperationTimeout: Duration = .seconds(30),
@@ -2046,6 +2080,7 @@ final class AppModel {
                 downloadsBackgroundSessionIdentifier,
             diagnostics: diagnostics,
             playbackPositionStore: playbackPositionStore,
+            playbackPreferencesStore: playbackPreferencesStore,
             nowPlayingCoordinator: nowPlayingCoordinator,
             audioSession: audioSession,
             remoteTelemetryTracer: remoteTelemetryTracer,
@@ -2202,6 +2237,7 @@ final class AppModel {
         downloadsBackgroundSessionIdentifier: String,
         diagnostics: any DiagnosticRecording,
         playbackPositionStore: PlaybackPositionStore,
+        playbackPreferencesStore: PlaybackPreferencesStore?,
         nowPlayingCoordinator: NowPlayingCoordinator?,
         audioSession: PlaybackAudioSession,
         remoteTelemetryTracer: any RemoteTelemetryTracing,
@@ -2214,6 +2250,7 @@ final class AppModel {
             service: service,
             positionStore: playbackPositionStore,
             localSessionStore: localSessionStore,
+            preferencesStore: playbackPreferencesStore,
             nowPlayingCoordinator: nowPlayingCoordinator
                 ?? NowPlayingCoordinator(
                     registersRemoteCommands: ModelLocalState
@@ -7082,7 +7119,8 @@ final class AppModel {
     }
 
     private func beginPrivateCloudSynchronization() -> Task<Void, Never>? {
-        guard privateCloudSyncTask == nil else {
+        guard privateCloudSyncTask == nil, !isResolvingCloudAccountSelection
+        else {
             return nil
         }
         privateCloudSyncGeneration &+= 1
@@ -7139,7 +7177,7 @@ final class AppModel {
             queueCloudServerConfigurationChanges(changes)
             pendingCloudConfigurationConflict = configurationConflict
             accounts = synchronizedAccounts
-            if !changes.isEmpty {
+            if !pendingCloudServerConfigurationChanges.isEmpty {
                 cloudAccountRestoreState = .awaitingSelection
             } else if let pending = synchronizedAccounts.first(where: {
                 $0.connectionState == .reauthenticationRequired
@@ -7157,6 +7195,7 @@ final class AppModel {
             downloads.reloadSyncedPreferences()
             privateCloudState = .idle
             canCancelPrivateCloudSynchronization = false
+            operationObserver?(.privateCloudSynchronizationCompleted)
             return true
         } catch let error {
             guard privateCloudSyncGeneration == generation,
@@ -7281,15 +7320,32 @@ final class AppModel {
     func resolveCloudServerConfigurationSelection(
         _ selected: CloudServerConfigurationChange
     ) async -> AppFailure? {
+        guard !isResolvingCloudAccountSelection else {
+            return AppFailure(
+                operation: .privateCloudSync,
+                serviceError: .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .accountSelectionInProgress)))
+        }
+        isResolvingCloudAccountSelection = true
+        defer { isResolvingCloudAccountSelection = false }
+        await cancelPrivateCloudSynchronization()
+        guard pendingCloudServerConfigurationChanges.contains(selected) else {
+            return AppFailure(
+                operation: .privateCloudSync,
+                serviceError: .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .resolveServerConfiguration,
+                        cause: .accountSelectionChanged)))
+        }
         let candidates = pendingCloudServerConfigurationChanges
         privateCloudState = .syncing
         do {
-            for accountID in Set(candidates.map(\.id))
-            where accountID != selected.id {
-                try await service.resolvePrivateCloudServerConfigurationChange(
-                    accountID: accountID,
-                    accept: false
-                )
+            let otherAccounts = candidates.filter { $0.id != selected.id }
+            if !otherAccounts.isEmpty {
+                try await service.deferPrivateCloudServerConfigurationChanges(
+                    otherAccounts)
             }
             try await service.resolvePrivateCloudServerConfigurationSelection(
                 selected.incoming
@@ -7326,8 +7382,119 @@ final class AppModel {
         }
     }
 
-    func deferCloudAccountSelection() {
-        cloudAccountSelectionDeferred = true
+    var cloudAccountConfigurationOptions: [CloudAccountConfigurationOption] {
+        var options: [CloudAccountConfigurationOption] = []
+        let localAccounts = accounts.sorted {
+            if ($0.id == account?.id) != ($1.id == account?.id) {
+                return $0.id == account?.id
+            }
+            return Self.sortAccounts($0, $1)
+        }
+        for local in localAccounts {
+            if !options.contains(where: {
+                $0.account.hasSameCloudConfiguration(as: local)
+            }) {
+                options.append(.current(local))
+            }
+        }
+        for change in pendingCloudServerConfigurationChanges {
+            if !options.contains(where: {
+                $0.account.hasSameCloudConfiguration(as: change.incoming)
+            }) {
+                options.append(.iCloud(change))
+            }
+        }
+        return options
+    }
+
+    func resolveCloudAccountConfigurationOption(
+        _ option: CloudAccountConfigurationOption
+    ) async -> AppFailure? {
+        switch option {
+        case .iCloud(let change):
+            return await resolveCloudServerConfigurationSelection(change)
+        case .current(let current):
+            guard !isResolvingCloudAccountSelection else {
+                return AppFailure(
+                    operation: .privateCloudSync,
+                    serviceError: .privateCloud(
+                        PrivateCloudSyncFailure(
+                            operation: .resolveServerConfiguration,
+                            cause: .accountSelectionInProgress)))
+            }
+            isResolvingCloudAccountSelection = true
+            defer { isResolvingCloudAccountSelection = false }
+            await cancelPrivateCloudSynchronization()
+            do throws(AppServiceError) {
+                let latest = try await service.accountSelection()
+                accounts = latest.accounts
+                account = latest.activeAccount
+                guard
+                    let local = latest.accounts.first(where: {
+                        $0.hasSameCloudConfiguration(as: current)
+                    })
+                else {
+                    throw AppServiceError.privateCloud(
+                        PrivateCloudSyncFailure(
+                            operation: .resolveServerConfiguration,
+                            cause: .accountSelectionChanged))
+                }
+                // Resolve this account by publishing the explicit device choice;
+                // other cloud accounts are deferred by snapshot, never ignored
+                // permanently or deleted from either device or cloud.
+                let others = pendingCloudServerConfigurationChanges.filter {
+                    $0.id != current.id
+                }
+                if !others.isEmpty {
+                    try await service
+                        .deferPrivateCloudServerConfigurationChanges(others)
+                }
+                try await service.forcePushPrivateCloudServerConfiguration(
+                    local)
+                pendingCloudServerConfigurationChanges.removeAll()
+                cloudAccountRestoreState =
+                    local.connectionState == .reauthenticationRequired
+                    ? .awaitingCredentials(local.id) : .idle
+                privateCloudState = .idle
+                return nil
+            } catch {
+                let failure = AppFailure(
+                    operation: .privateCloudSync, serviceError: error)
+                if case .privateCloud(let cloudFailure) = failure.cause,
+                    cloudFailure.selectionCommitted
+                {
+                    pendingCloudServerConfigurationChanges.removeAll()
+                    cloudAccountRestoreState = .idle
+                }
+                privateCloudState = .failed(failure)
+                return failure
+            }
+        }
+    }
+
+    func deferCloudAccountSelection() async -> AppFailure? {
+        guard !isResolvingCloudAccountSelection else {
+            return AppFailure(
+                operation: .privateCloudSync,
+                serviceError: .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .deferServerConfiguration,
+                        cause: .accountSelectionInProgress)))
+        }
+        isResolvingCloudAccountSelection = true
+        defer { isResolvingCloudAccountSelection = false }
+        await cancelPrivateCloudSynchronization()
+        do {
+            try await service.deferPrivateCloudServerConfigurationChanges(
+                pendingCloudServerConfigurationChanges)
+            cloudAccountSelectionDeferred = true
+            return nil
+        } catch {
+            let failure = AppFailure(
+                operation: .privateCloudSync, serviceError: error)
+            privateCloudState = .failed(failure)
+            return failure
+        }
     }
 
     func resolveCloudConfigurationConflict(
@@ -7356,12 +7523,10 @@ final class AppModel {
     private func queueCloudServerConfigurationChanges(
         _ changes: [CloudServerConfigurationChange]
     ) {
-        for change in changes {
-            pendingCloudServerConfigurationChanges.removeAll {
-                $0.id == change.id
-            }
-            pendingCloudServerConfigurationChanges.append(change)
-        }
+        // The service returns the complete durable pending snapshot. Merging
+        // would retain decisions that a completed import already consumed.
+        pendingCloudServerConfigurationChanges = changes
+        if !changes.isEmpty { cloudAccountSelectionDeferred = false }
     }
 
     func setPrivateCloudSyncEnabled(

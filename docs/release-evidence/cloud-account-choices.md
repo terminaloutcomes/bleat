@@ -1,0 +1,101 @@
+# Cloud account configuration choices
+
+Local verification receipt, 2026-10-27. Tracking: [issue #479](https://github.com/terminaloutcomes/bleat/issues/479). Base: `b7c2615ddcf3caf0f94156297e2455d62e579040` (includes #470 and #475). Local focused, owning, broad Simulator and disposable-server gates completed; publication and exact published-head CI remain separate gates.
+
+## Cause and correction
+
+Cancel previously changed only an in-memory flag. Full account equality then treated device authentication/endpoint-validation metadata as a different cloud configuration. Native and OIDC reauthentication also rebuilt the account without its selected local endpoint, replacing that selection during the next authentication save. Selection-triggered synchronization could deliver stale pending choices while the chooser was resolving.
+
+Meaningful configuration equality now compares account identity, primary and local servers, remote user identity, and username. Device connection health, validation state, capability ordering and other metadata do not trigger another choice. Exact deferred configurations persist across relaunch; genuinely changed configurations remain eligible. Related pending/deferred decisions save together. Choosing a configuration retires competing unchanged snapshots, rejects stale explicit candidates, and drains prior synchronization before applying the choice.
+
+The local configuration appears first as **Current**. Equivalent options are deduplicated. Current retains local account data; selected cloud configuration preserves device authentication and does not trust a newly imported local endpoint as validated. Native/OIDC authentication saves retain that configured endpoint. A committed selection with a subsequent upload failure closes the chooser and reports the upload failure rather than presenting a misleading retry of the completed choice.
+
+Choice cleanup covers local ignore, successful all-device removal, fetched account deletion, and zone reset while preserving unrelated account decisions and cloud state. The all-device test exercises the local cleanup primitive; it does not claim a real CloudKit network deletion.
+
+## Isolation and review
+
+Core fixtures use disposable stores, UUID defaults suites, fake transports and memory/nil credential stores. Chooser UI fixtures use one UUID suite per test, shared only across that test's relaunch. No production preferences, credentials or iCloud records are used.
+
+Review found an adjacent validation isolation gap: ordinary iOS app-unit bootstrap could start Bonjour discovery. Both the supported local runner and separate CI smoke runner now explicitly admit an inert app-unit host before diagnostics, telemetry, discovery and live services. An actual iOS bootstrap receipt is asserted by the host regression. Explicit UI fixture scenarios retain priority. This changes neither the two CI UI smoke selections nor Release product startup. The native test host uses the existing development identity solely for signing, under explicit approval.
+
+Independent source review found the separate CI runner omission, then verified its correction and reported no remaining source-review blockers. Changed and adjacent failure paths were reviewed for recoverable traps, actor ownership, stale callbacks, and typed errors.
+
+## Executed evidence
+
+- Baseline witnesses: three tests failed with eight issues, reproducing unchanged-cloud re-prompting and loss of native/OIDC local endpoints. A preceding baseline compilation attempt executed no tests and is not coverage.
+- Final unsigned core owners: **114 passed**, zero failures/skips: private cloud sync 60, cloud persistence 13, account store 19, OIDC 22. Artifacts: `.build/chooser-ready-owner.xml` and `.log`.
+- Final signed inert native app regressions: **11 passed**, zero failures/skips; exact identities inspected in `.build/chooser-ready-native.xcresult` and exported summary/tests JSON. Includes selection convergence, durable Cancel, Current ordering/deduplication, stale synchronization, and committed failures.
+- Rust runner owners: **5 passed**, including local and separate CI inert-host admission, built-inventory verification and skip identity checks. Artifacts: `.build/chooser-ready-runner.log`; the separate CI smoke owner also passed **3 tests** in `.build/chooser-ready-ci-runner.log`.
+- Strict Swift lint, documentation references, CloudKit schema checks (six validator tests plus desired schema), and test-audit/index parity passed. Audit parity alone is not semantic/execution evidence.
+- Focused chooser UI: **7 passed**, zero failures/skips; exact identities and outcomes inspected in `.build/chooser-ready-ui.xcresult` and exported summary/tests JSON. Includes Current ordering/selection, Cancel/swipe relaunch, retryable/nonretryable failure and committed failure.
+- Unsigned package Release compilation passed (`BLEAT_HOST_SIGNING=unsigned swift build -c release`); `.build/chooser-ready-package-release.log`.
+- Supported local broad Simulator gate: Release Simulator build passed; the complete app-unit target passed **680 tests**, zero failures/skips/runtime warnings. Exact result tree includes `testExplicitUnitTestHostStaysInert`, proving actual iOS process admission. Artifact: `.build/test-core-results/app-tests-19783-1793062701444.xcresult`. Broad UI passed **121 tests**, with exactly **7 permitted gated skips**, zero failures/expected failures/runtime warnings; all 128 discovered identities were reconciled. Artifact: `.build/test-core-results/ui-tests-19783-1793062701444.xcresult`. Skips are the external-host URL confirmation, three live-only cases, release screenshots, and two secret-scan cases; the two required live journeys were exercised separately below.
+- Disposable app-live gate attempted with cloud capabilities disabled. Docker was available, but GHCR denied the pinned Audiobookshelf 2.37.0 digest during pull; **zero live tests executed**. `.build/chooser-ready-app-live.log` retains the error. Diagnosis confirmed the pin and tag both return anonymous HTTP 200 with the exact tracked digest; neither current-stable nor minimum is cached. One exact Docker pull retry after that new evidence still returned denied. The cause within Docker authentication/proxy/daemon routing is unresolved; credentials and access settings were not inspected or changed. The supported app-live command explicitly selects current-stable, so minimum is not a substitute for this gate. Artifacts: `.build/chooser-registry-diagnosis.log`, `.build/chooser-exact-image-pull-retry.log` and `.build/chooser-minimum-image-cache.log`. No alternate image, registry credentials or fixture weakening was used. The supported cleanup ran; exact Compose-project container and volume queries were empty. Failure artifacts remain under `TestSupport/ServerHarness/app-live-artifacts/2044310b-e779-4b62-91a3-2deecb92c70e/`.
+
+The initial chooser fix’s changed Swift/Rust input fingerprint was `4d0ded97db156cb72b23b7dfd14b78a7359d739da7f006000ef97491a5aacab6` (sorted project-relative filename, NUL, file bytes; SHA-256). The native/core results precede only the separate CI constructor correction, which does not affect their inputs. No subsequent Swift changes are included without rerunning affected gates.
+
+- After the user repaired their Docker registry login, the unchanged supported app-live command passed both exact journeys against the tracked Audiobookshelf **2.37.0** digest: online login/playback/download and offline cached playback/local progress, **1 test each**, zero failures/skips/runtime warnings. Result bundles: `TestSupport/ServerHarness/app-live-artifacts/f944413b-8d04-4bcc-9aee-18c6614f1281/online.xcresult` and `offline.xcresult`; log: `.build/chooser-ready-app-live-after-login.log`. The runner completed cleanup and exact-project container/volume queries were empty. The initial registry failures remain recorded above; no image substitution or assistant credential changes occurred.
+
+## Earlier attempts and remaining limits
+
+Intermediate core/native passes on older bases are retained as intermediate evidence, not final acceptance. Initial main-worktree package, native, UI-build and docs attempts exhausted disk before tests; logs retain the resource failure. Obsolete task compiler products and separately authorized completed-task caches were removed; source and result evidence were preserved. Initial compile errors and the pending-account activation regression were corrected before the passing gates; no failed test is counted as coverage.
+
+No real CloudKit, physical iPhone, macOS production-app relaunch, or device account validation is claimed. The account-profile write and cloud-decision write remain separate transactions: the paired pending/deferred decisions are atomic, but there is no crash-injection proof across the whole selection boundary. Signed synchronizable-Keychain coverage is outside this fix's narrow signing approval. Exact published-head CI remains a separate gate.
+
+The focused native/UI result bundles report no runtime warnings or expected failures. Console tooling emitted existing multiple-destination/AppIntents metadata/debugger diagnostics. The iOS 27 runtime also reports duplicate `UIAccessibilityLoaderWebShared` implementations in its WebKit and WebCore accessibility bundles; both paths belong to the installed Apple Simulator runtime, not the app. Both focused and broad UI gates completed without a crash. This upstream console warning is retained as an environment limitation; no system runtime files were changed.
+
+## Exact-head CI fixture correction
+
+The first published head, `1bbe940`, passed unsigned host/Rust validation and the four other workflows, but iOS smoke failed only `testCarPlayCompletedDownloadIsPreferredOnline`: its original three-second callback wait expired. Both actual UI smoke cases passed. The CI result and log are retained; this is not counted as a green CI run.
+
+Independent review found that the pre-existing routing test used shared playback/session/preferences state, real system audio activation and network artwork, and a one-second PCM fixture whose samples were not explicitly zeroed. A controlled witness seeded a prior checkpoint in the disposable Simulator and observed the supposedly fresh selection resume at EOF (`1.0`, rather than `0.0`). The first stage-only probe passed because reconciliation occurs after audio activation; its later post-reconciliation witness failed as intended. Diagnostic collection after that failure itself timed out after 600 seconds. These distinct outcomes are retained in `.build/chooser-carplay-state-witness.xcresult` and `.build/chooser-carplay-checkpoint-witness.xcresult`; the latter summary contains the actual failed checkpoint assertion. The original CI timeout does not establish which native stage was slow or attribute it to inert bootstrap.
+
+The correction gives this test fresh account/defaults/session/position/preferences state, controlled audio activation, private Now Playing publishing, no-network artwork, and explicitly zeroed samples. An optional preferences-store argument is forwarded through AppModel's existing composition boundary; its nil default preserves ordinary app behavior. Ordered asynchronous teardown stops playback before deleting its stores/media. The original three-second completion budget and no-online-request/Now Playing assertions remain; new assertions check callback ownership, local file sources and immutable session start time. Final focused and owning verification is recorded after completion.
+
+The corrected fixture’s final focused run passed one exact case, zero failures/skips/runtime warnings (`.build/chooser-carplay-final.xcresult`). Independent review confirmed ordered cleanup and preference forwarding; the earlier intermediate isolated pass preceded those last corrections. Current correction code fingerprint: `2189936bb02412ccf3a2cebfe838e43d626a1858ca485669b8cb43e3936d6f32`. The complete owning app-unit target then passed **680 tests**, zero failures/skips/runtime warnings (`.build/chooser-ci-repair-owner.xcresult`); the corrected CarPlay identity passed in its full suite. Earlier broad UI/live and native receipts remain credited to their actual tested revision: this correction changes no UI/live callsite inputs, and omitting the new preference argument preserves the prior fallback. Their results are not relabelled as exact-head runs.
+
+## Competing upgrade notice follow-up
+
+The internal build exposed a separate presentation defect: the signed-in view
+owned the upgrade acknowledgment alert while the root owned the account-choice
+sheet. These independent presenters could displace the unanswered notice when
+synchronization delivered account choices. This does not establish that the
+durable acknowledgment flag was written; only the explicit confirmation action
+writes that flag.
+
+The candidate correction gives cloud prompts one root-owned sheet reservation.
+The upgrade notice becomes a sheet with the same confirmation and Later choices;
+account and preference choices wait for its dismissal completion. Later preserves
+the durable pending notice, while foregrounding/relaunch permits it again.
+An already presented account choice likewise finishes before a newly eligible
+notice. Interactive account deferral reserves the presenter until both dismissal
+and the asynchronous durable decision finish, rejecting stale completion IDs.
+Restore-error alerts reserve the presenter after dismissal and before subsequent
+cloud sheets. Signed-in error alerts are suspended without clearing their requests;
+deferred implicit-dismissal callbacks reject a newer cloud generation. Dismissal
+and deferral completions carry immutable entry IDs, including successive sheets
+of the same kind. Independent source review found no remaining blockers in these
+paths; native timing evidence remains a separate requirement.
+
+The initial focused six-case run and subsequent reviewed eleven-case run both
+passed with zero failures, skips or runtime warnings. They predate the final
+dismissal-token and reverse-arrival additions and are not final-source receipts:
+`.build/cloud-prompts-focused.xcresult` and `.build/cloud-prompts-reviewed.xcresult`.
+Final focused validation passed eight exact cases with zero failures, skips or
+runtime warnings in `.build/cloud-prompts-final-focused.xcresult`, including
+reverse alert arrival, queued alerts, combined notice/account flows, swipe,
+committed-send failure, held deferral and stale dismissal identity. The supported local broad gate then passed at `cf8a312`: the Release build,
+**685 app-unit cases** with zero failures/skips, and **132 UI cases** with
+**125 passed, seven canonical gated skips**, zero failures/expected failures or
+runtime warnings. Every individual outcome was checked; the skipped identities
+match the prior gated inventory (external-host handoff, three live cases, two
+release-secret scans and release screenshots). Bundles are
+`.build/test-core-results/app-tests-56086-1793083289942.xcresult` and
+`.build/test-core-results/ui-tests-56086-1793083289942.xcresult`;
+`.build/cloud-prompts-terminal-receipt.json` records the command and source hash.
+The environment remains Xcode 27.0/Swift 6.4 with an arm64 iPhone 17 Pro Simulator
+on iOS 27.0 (24A434). Xcode's existing debugger-version console diagnostics remain;
+no result-bundle runtime warning or crash was reported. Documentation and strict
+Swift-format lint passed. These are Simulator presentation results, not new
+live-server, signed-macOS or physical-device evidence.
+The earlier TestFlight upload contains `a927005`, not this follow-up.
