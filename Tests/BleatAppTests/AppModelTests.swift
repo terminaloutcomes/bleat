@@ -1224,7 +1224,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(alert.title, "Cloud storage update")
         XCTAssertEqual(
             alert.message,
-            "Bleat upgrades its local iCloud sync storage automatically and preserves existing listening history. Use Bleat version 2026.10.14 or later on every device. Confirming below dismisses this notice on this device; it does not rewrite history."
+            "Update every device to Bleat 2026.10.27 or later before confirming. Bleat will combine compatible older listening records into continuous segments, retain measured listening totals and meaningful playback boundaries, and remove original records only after iCloud confirms their replacements. Small timer checkpoints are not retained. Custom resets that cut a combined segment require a wider range. Confirmation enables this conversion and cleanup on this device."
         )
         let queue = SignedInAlertQueue()
         queue.reconcile([
@@ -1244,7 +1244,10 @@ final class AppModelTests: XCTestCase {
         let cloudRequests =
             await service.privateCloudSynchronizationRequestCount()
         XCTAssertEqual(
-            cloudRequests, 0, "Confirmation must not initiate a cloud rewrite")
+            cloudRequests, 0,
+            "Confirmation enables conversion on the next synchronization")
+        XCTAssertTrue(
+            CloudStorageUpgradeNotice.hasConfirmedRetirement(in: defaults))
     }
 
     func
@@ -15203,6 +15206,22 @@ final class AppModelTests: XCTestCase {
         await secondSync.value
 
         XCTAssertEqual(model.privateCloudState, .idle)
+    }
+
+    func testAccountMigrationRetainsSegmentFailureAndDiagnosticStage() {
+        let cause = ListeningSegmentFailure(.resolution, .sourceConflict)
+        let failure = AppFailure(
+            operation: .appStart,
+            serviceError: .accountStore(.segmentFailure(cause)))
+        XCTAssertEqual(failure.operation, .appStart)
+        XCTAssertEqual(failure.cause, .statistics(.segmentFailure(cause)))
+        XCTAssertEqual(failure.listeningSegmentFailure, cause)
+        let event = DiagnosticEvent.failed(
+            .appStart, category: .app,
+            failureCode: failure.diagnosticFailureCode,
+            listeningSegmentFailure: failure.listeningSegmentFailure)
+        XCTAssertTrue(
+            event.text.contains("listening_segment.resolution.sourceConflict"))
     }
 
     func testCloudKitFailureIsNotPresentedAsAudiobookshelfOutage() async {

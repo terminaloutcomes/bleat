@@ -231,6 +231,7 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case statisticsInvalidSample = "statistics_sample_invalid"
     case statisticsInvalidSlice = "statistics_slice_invalid"
     case statisticsInvalidCompletion = "statistics_completion_invalid"
+    case statisticsSegmentFailure = "statistics_segment_failure"
     case statisticsPersistenceFailed = "statistics_persistence_failed"
     case statisticsInvalidArchive = "statistics_archive_invalid"
     case statisticsInvalidAccountMapping = "statistics_account_mapping_invalid"
@@ -304,6 +305,7 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
     public let cloudKitCode: String?
     public let partialFailureCodes: [String]
     public let retryAfterMilliseconds: Int?
+    public let segmentFailure: ListeningSegmentFailure?
     public let unexpectedErrorDomain: String?
     public let unexpectedErrorCode: Int?
 
@@ -312,6 +314,11 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
         failure: PrivateCloudSyncError? = nil
     ) {
         self.operation = operation
+        if case .segmentFailure(let value) = failure {
+            segmentFailure = value
+        } else {
+            segmentFailure = nil
+        }
         switch failure {
         case .cloudKit(let failure):
             cloudKitCode = failure.code.diagnosticCode
@@ -329,6 +336,12 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
             retryAfterMilliseconds = nil
             unexpectedErrorDomain = error.domain
             unexpectedErrorCode = error.code
+        case .segmentFailure(let failure):
+            cloudKitCode = nil
+            partialFailureCodes = []
+            retryAfterMilliseconds = nil
+            unexpectedErrorDomain = failure.systemError?.domain
+            unexpectedErrorCode = failure.systemError?.code
         case .storage(let failure):
             cloudKitCode = nil
             partialFailureCodes = []
@@ -478,6 +491,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let nativeErrorDomain: DiagnosticNativeErrorDomain?
     public let nativeErrorCode: Int?
     public let privateCloud: PrivateCloudDiagnosticDetail?
+    public let listeningSegmentFailure: ListeningSegmentFailure?
 
     private init(
         category: DiagnosticCategory,
@@ -497,7 +511,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         stage: DiagnosticStage? = nil,
         nativeErrorDomain: DiagnosticNativeErrorDomain? = nil,
         nativeErrorCode: Int? = nil,
-        privateCloud: PrivateCloudDiagnosticDetail? = nil
+        privateCloud: PrivateCloudDiagnosticDetail? = nil,
+        listeningSegmentFailure: ListeningSegmentFailure? = nil
     ) {
         self.category = category
         self.level = level
@@ -517,6 +532,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.nativeErrorDomain = nativeErrorDomain
         self.nativeErrorCode = nativeErrorCode
         self.privateCloud = privateCloud
+        self.listeningSegmentFailure = listeningSegmentFailure
     }
 
     public static func network(
@@ -584,7 +600,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         durationMilliseconds: Int? = nil,
         stage: DiagnosticStage? = nil,
         nativeErrorDomain: DiagnosticNativeErrorDomain? = nil,
-        nativeErrorCode: Int? = nil
+        nativeErrorCode: Int? = nil,
+        listeningSegmentFailure: ListeningSegmentFailure? = nil
     ) -> DiagnosticEvent {
         DiagnosticEvent(
             category: category,
@@ -598,7 +615,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
             failureCode: failureCode,
             stage: stage,
             nativeErrorDomain: nativeErrorDomain,
-            nativeErrorCode: nativeErrorCode
+            nativeErrorCode: nativeErrorCode,
+            listeningSegmentFailure: listeningSegmentFailure
         )
     }
 
@@ -720,8 +738,15 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         if let failureCode {
             fields.append("failure=\(failureCode.rawValue)")
         }
+        if let listeningSegmentFailure {
+            fields.append(
+                "segment_failure=\(listeningSegmentFailure.diagnosticCode)")
+        }
         if let privateCloud {
             fields.append("cloud_operation=\(privateCloud.operation.rawValue)")
+            if let segment = privateCloud.segmentFailure {
+                fields.append("segment_failure=\(segment.diagnosticCode)")
+            }
             if let cloudKitCode = privateCloud.cloudKitCode {
                 fields.append("cloudkit_code=\(cloudKitCode)")
             }
@@ -751,6 +776,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
 extension PrivateCloudSyncError {
     public var diagnosticFailureCode: DiagnosticFailureCode {
         switch self {
+        case .segmentFailure: .statisticsSegmentFailure
         case .disabled: .privateCloudDisabled
         case .cancelled: .privateCloudCancelled
         case .callbackTimedOut: .privateCloudCallbackTimedOut

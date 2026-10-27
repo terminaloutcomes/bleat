@@ -1754,7 +1754,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertFalse(cancel.exists)
         let response = notice.buttons[
-            selectCurrent ? "All my devices are updated" : "Later"]
+            selectCurrent ? "All devices updated — convert history" : "Later"]
         XCTAssertTrue(response.isEnabled)
         XCTAssertTrue(response.isHittable)
         response.tap()
@@ -1845,7 +1845,8 @@ final class BleatUITests: XCTestCase {
             "cloudStorageUpgradeNotice"
         ].firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
-        XCTAssertTrue(notice.buttons["All my devices are updated"].exists)
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].exists)
         XCTAssertTrue(notice.buttons["Later"].isEnabled)
         XCTAssertTrue(notice.buttons["Later"].isHittable)
         notice.buttons["Later"].tap()
@@ -1872,9 +1873,11 @@ final class BleatUITests: XCTestCase {
         XCUIDevice.shared.press(.home)
         app.activate()
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
-        XCTAssertTrue(notice.buttons["All my devices are updated"].isEnabled)
-        XCTAssertTrue(notice.buttons["All my devices are updated"].isHittable)
-        notice.buttons["All my devices are updated"].tap()
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].isEnabled)
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].isHittable)
+        notice.buttons["All devices updated — convert history"].tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()

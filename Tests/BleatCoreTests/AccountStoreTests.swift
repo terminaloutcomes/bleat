@@ -211,7 +211,7 @@ final class AccountStoreTests {
         let migratedAccount = try await fixture.store.account(id: canonicalID)
         #expect(removedLegacy == nil)
         #expect(migratedAccount?.id == canonicalID)
-        let archive = try await statistics.privateCloudArchive()
+        let archive = try await statistics.privateCloudSnapshot().archive
         #expect(archive.slices.map(\.accountID) == [canonicalID])
         let aliases = try await fixture.store.identityAliases()
         #expect(

@@ -3,6 +3,138 @@
   "baseline": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
   "declarations": [
     {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "diagnosticsRetainExactSegmentStageAndCause",
+      "line": 9,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "fractionalMeasuredQuantitiesSurviveCanonicalTransportExactly",
+      "line": 26,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "retirementWaitsForExactSavedPayloadAndSurvivesActorRecreation",
+      "line": 103,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "corruptAndUnknownCanonicalPayloadNeverFallsBackToScalarColumns",
+      "line": 146,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "resetFencesPreparedUploadsAndLateSavesWaitForDurableAnchors",
+      "line": 176,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "uncoveredCloudDeletionRepairsHistoryAndPermanentResetAnchors",
+      "line": 218,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "accountRekeyRebuildsCanonicalPayloadAndReceiptDependencies",
+      "line": 248,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "pendingPreconsentResetDoesNotActivateAnotherAccountsProtocol",
+      "line": 289,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "localAccountHistoryRemovalDoesNotCreateCloudReset",
+      "line": 312,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "wallToleranceHasExplicitHalfSecondBoundary",
+      "line": 359,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "representationNoiseDoesNotCreateAFalseGap",
+      "line": 367,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "knownBoundariesAlwaysWin",
+      "line": 389,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "wallGapNeverAddsListeningAndMediaSeekRemainsSeparate",
+      "line": 396,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "deterministicSharedCodecPreservesLocalCloudLocalPayload",
+      "line": 414,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping",
+      "line": 434,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+      "name": "syntheticHistoryShowsActualRecordAndPayloadReduction",
+      "line": 456,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PersistenceMigrationTests.swift",
+      "name": "canonicalSegmentSchemaPreservesReleased019Rows",
+      "line": 9,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testRunlessCallbackCancellationIsOwnedUntilReplacementCanProceed",
+      "line": 545,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testConcurrentCancellationWaitersCannotReleaseReplacementOwnership",
+      "line": 2975,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "accountRemovalRetainsVerifiedResetMetadataAgainstOfflineReupload",
+      "line": 2871,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "explicitAccountReaddResumesUploadsAndRejectsRetiredFetchState",
+      "line": 2912,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "ignoredAccountStillRetainsRemoteResetProtectionForReadd",
+      "line": 2947,
+      "language": "swift"
+    },
+    {
       "path": "TestSupport/HostTests/test_reports.py",
       "name": "test_exact_success",
       "line": 22,

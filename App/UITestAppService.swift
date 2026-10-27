@@ -272,6 +272,8 @@
                     "bleat.cloudStorageUpgrade.v2.detected",
                     "bleat.cloudStorageUpgrade.v2.acknowledged",
                     "bleat.cloudStorageUpgrade.v3.acknowledged",
+                    "bleat.cloudStorageUpgrade.v4.canonicalRetirementConfirmed",
+                    "bleat.cloudStorageUpgrade.canonicalSegments.v1.seen",
                 ]
                 if arguments.contains("--ui-testing-cloud-storage-notice-reset")
                     || arguments.contains(
