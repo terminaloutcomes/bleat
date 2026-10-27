@@ -53,3 +53,37 @@ Independent review found that the pre-existing routing test used shared playback
 The correction gives this test fresh account/defaults/session/position/preferences state, controlled audio activation, private Now Playing publishing, no-network artwork, and explicitly zeroed samples. An optional preferences-store argument is forwarded through AppModel's existing composition boundary; its nil default preserves ordinary app behavior. Ordered asynchronous teardown stops playback before deleting its stores/media. The original three-second completion budget and no-online-request/Now Playing assertions remain; new assertions check callback ownership, local file sources and immutable session start time. Final focused and owning verification is recorded after completion.
 
 The corrected fixture’s final focused run passed one exact case, zero failures/skips/runtime warnings (`.build/chooser-carplay-final.xcresult`). Independent review confirmed ordered cleanup and preference forwarding; the earlier intermediate isolated pass preceded those last corrections. Current correction code fingerprint: `2189936bb02412ccf3a2cebfe838e43d626a1858ca485669b8cb43e3936d6f32`. The complete owning app-unit target then passed **680 tests**, zero failures/skips/runtime warnings (`.build/chooser-ci-repair-owner.xcresult`); the corrected CarPlay identity passed in its full suite. Earlier broad UI/live and native receipts remain credited to their actual tested revision: this correction changes no UI/live callsite inputs, and omitting the new preference argument preserves the prior fallback. Their results are not relabelled as exact-head runs.
+
+## Competing upgrade notice follow-up
+
+The internal build exposed a separate presentation defect: the signed-in view
+owned the upgrade acknowledgment alert while the root owned the account-choice
+sheet. These independent presenters could displace the unanswered notice when
+synchronization delivered account choices. This does not establish that the
+durable acknowledgment flag was written; only the explicit confirmation action
+writes that flag.
+
+The candidate correction gives cloud prompts one root-owned sheet reservation.
+The upgrade notice becomes a sheet with the same confirmation and Later choices;
+account and preference choices wait for its dismissal completion. Later preserves
+the durable pending notice, while foregrounding/relaunch permits it again.
+An already presented account choice likewise finishes before a newly eligible
+notice. Interactive account deferral reserves the presenter until both dismissal
+and the asynchronous durable decision finish, rejecting stale completion IDs.
+Restore-error alerts reserve the presenter after dismissal and before subsequent
+cloud sheets. Signed-in error alerts are suspended without clearing their requests;
+deferred implicit-dismissal callbacks reject a newer cloud generation. Dismissal
+and deferral completions carry immutable entry IDs, including successive sheets
+of the same kind. Independent source review found no remaining blockers in these
+paths; native timing evidence remains a separate requirement.
+
+The initial focused six-case run and subsequent reviewed eleven-case run both
+passed with zero failures, skips or runtime warnings. They predate the final
+dismissal-token and reverse-arrival additions and are not final-source receipts:
+`.build/cloud-prompts-focused.xcresult` and `.build/cloud-prompts-reviewed.xcresult`.
+Final focused validation passed eight exact cases with zero failures, skips or
+runtime warnings in `.build/cloud-prompts-final-focused.xcresult`, including
+reverse alert arrival, queued alerts, combined notice/account flows, swipe,
+committed-send failure, held deferral and stale dismissal identity. Owning and
+local broad UI evidence remains pending.
+The earlier TestFlight upload contains `a927005`, not this follow-up.

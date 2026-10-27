@@ -1281,6 +1281,119 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(requests, 0)
     }
 
+    func testCloudPromptsPreserveNoticeDuringRepeatedAccountSync() throws {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        let notice = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(notice.kind, .storageNotice)
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertEqual(prompts.active?.id, notice.id)
+        prompts.deferNotice()
+        XCTAssertNil(
+            prompts.active, "The next sheet must wait for dismissal completion")
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        let accounts = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(accounts.kind, .accountSelection)
+        prompts.dismiss(notice)
+        XCTAssertEqual(
+            prompts.active?.id, accounts.id,
+            "Retired callbacks cannot dismiss a replacement")
+        prompts.reconcile(notice: true, accounts: false, conflict: true)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptInterruptedNoticeDoesNotAcknowledgeOrLoseEitherRequest()
+        throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        let interrupted = try XCTUnwrap(prompts.active)
+        prompts.dismiss(interrupted)
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
+        XCTAssertNotEqual(prompts.active?.id, interrupted.id)
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        XCTAssertNil(prompts.active)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .accountSelection)
+        prompts.foreground()
+        prompts.reconcile(notice: true, accounts: true, conflict: false)
+        XCTAssertEqual(
+            prompts.active?.kind, .accountSelection,
+            "Foreground notice waits for the current choice")
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
+    }
+
+    func testCloudPromptSwipeWaitsForDurableDeferralAndRejectsLateCompletion()
+        throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        let swipe = try XCTUnwrap(prompts.active)
+        prompts.dismiss(swipe, resolving: true)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        prompts.reconcile(notice: true, accounts: true, conflict: true)
+        XCTAssertNil(
+            prompts.active,
+            "Held persistence must retain ownership after animation ends")
+        prompts.reconcile(notice: true, accounts: false, conflict: true)
+        prompts.didResolve(swipe)
+        let notice = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(notice.kind, .storageNotice)
+        prompts.didResolve(swipe)
+        prompts.dismiss(swipe)
+        XCTAssertEqual(prompts.active?.id, notice.id)
+        prompts.deferNotice()
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptFailureWaitsForDismissalAndReservesNextRequest() throws
+    {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: true)
+        prompts.reconcile(
+            notice: false, accounts: false, conflict: true, failure: true)
+        XCTAssertNil(prompts.active)
+        XCTAssertFalse(prompts.canPresentFailure)
+        prompts.didDismiss(try XCTUnwrap(prompts.dismissing))
+        XCTAssertTrue(prompts.canPresentFailure)
+        XCTAssertTrue(prompts.isBusy)
+        XCTAssertNil(
+            prompts.active, "Error acknowledgment precedes the next cloud sheet"
+        )
+        prompts.reconcile(
+            notice: false, accounts: false, conflict: true, failure: false)
+        XCTAssertEqual(prompts.active?.kind, .configurationConflict)
+    }
+
+    func testCloudPromptLateDismissalCannotReleaseAnotherSheet() throws {
+        let prompts = CloudPromptPresentation()
+        prompts.reconcile(notice: false, accounts: true, conflict: false)
+        let first = try XCTUnwrap(prompts.active)
+        prompts.dismiss(first)
+        prompts.didDismiss(first)
+        let replacement = try XCTUnwrap(prompts.active)
+        XCTAssertEqual(replacement.kind, first.kind)
+        XCTAssertNotEqual(replacement.id, first.id)
+        prompts.dismiss(replacement)
+        prompts.reconcile(notice: true, accounts: false, conflict: false)
+        prompts.didDismiss(first)
+        XCTAssertNil(prompts.active)
+        XCTAssertEqual(prompts.dismissing?.id, replacement.id)
+        prompts.didDismiss(replacement)
+        XCTAssertEqual(prompts.active?.kind, .storageNotice)
+    }
+
     func testDeferringCloudStorageNoticePreservesPendingAcknowledgment() throws
     {
         let suite = UUID().uuidString

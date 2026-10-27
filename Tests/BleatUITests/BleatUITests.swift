@@ -1640,6 +1640,170 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testCloudNoticeArrivingOverSignedInErrorPreservesItsRequest() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-storage-notice-reset",
+                "--ui-testing-cloud-notice-after-start",
+                "--ui-testing-signed-in-alert-queue",
+            ])
+        defer {
+            app.terminate()
+            app.launchArguments = [
+                "--ui-testing-signed-in",
+                "--ui-testing-cloud-storage-notice-clear",
+            ]
+            app.launch()
+            app.terminate()
+        }
+        let playback = app.alerts["Playback unavailable"]
+        XCTAssertTrue(playback.waitForExistence(timeout: 10))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        let notice = app.descendants(matching: .any)[
+            "cloudStorageUpgradeNotice"
+        ].firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.buttons["Later"].isEnabled)
+        XCTAssertTrue(notice.buttons["Later"].isHittable)
+        notice.buttons["Later"].tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(playback.waitForExistence(timeout: 10))
+        XCTAssertTrue(playback.buttons["OK"].isHittable)
+        playback.buttons["OK"].tap()
+        XCTAssertTrue(
+            app.alerts["Server unavailable"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCloudNoticePreservesQueuedSignedInErrors() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-storage-notice",
+                "--ui-testing-cloud-storage-notice-reset",
+                "--ui-testing-signed-in-alert-queue",
+            ])
+        defer {
+            app.terminate()
+            app.launchArguments = [
+                "--ui-testing-signed-in",
+                "--ui-testing-cloud-storage-notice-clear",
+            ]
+            app.launch()
+            app.terminate()
+        }
+        let notice = app.descendants(matching: .any)[
+            "cloudStorageUpgradeNotice"
+        ].firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.alerts["Playback unavailable"].exists)
+        let later = notice.buttons["Later"]
+        XCTAssertTrue(later.isEnabled)
+        XCTAssertTrue(later.isHittable)
+        later.tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
+        for title in ["Playback unavailable", "Server unavailable"] {
+            let alert = app.alerts[title]
+            XCTAssertTrue(alert.waitForExistence(timeout: 10))
+            XCTAssertTrue(alert.buttons["OK"].isEnabled)
+            XCTAssertTrue(alert.buttons["OK"].isHittable)
+            alert.buttons["OK"].tap()
+        }
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCloudStorageNoticeFinishesBeforeCurrentAccountSelection() {
+        assertCloudNoticeAndAccountSequence(selectCurrent: true)
+    }
+
+    @MainActor
+    func testCloudStorageNoticeLaterAndAccountCancelRemainIndependent() {
+        assertCloudNoticeAndAccountSequence(selectCurrent: false)
+    }
+
+    @MainActor
+    private func assertCloudNoticeAndAccountSequence(selectCurrent: Bool) {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-cloud-account-selection",
+                "--ui-testing-cloud-storage-notice",
+                "--ui-testing-cloud-storage-notice-reset",
+            ])
+        defer {
+            app.terminate()
+            app.launchArguments = [
+                "--ui-testing-signed-in",
+                "--ui-testing-cloud-storage-notice-clear",
+            ]
+            app.launch()
+            app.terminate()
+        }
+        let notice = app.descendants(matching: .any)[
+            "cloudStorageUpgradeNotice"
+        ].firstMatch
+        let cancel = app.buttons["icloud.accountSelection.cancel"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertFalse(cancel.exists)
+        // Foreground/background sync must not replace the unanswered notice.
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertFalse(cancel.exists)
+        let response = notice.buttons[
+            selectCurrent ? "All my devices are updated" : "Later"]
+        XCTAssertTrue(response.isEnabled)
+        XCTAssertTrue(response.isHittable)
+        response.tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        if selectCurrent {
+            let current = app.buttons[
+                "icloud.accountCandidate.current.ui-account"]
+            XCTAssertTrue(current.isEnabled)
+            XCTAssertTrue(current.isHittable)
+            current.tap()
+            let use = app.buttons["icloud.accountSelection.useSelected"]
+            XCTAssertTrue(use.isEnabled)
+            XCTAssertTrue(use.isHittable)
+            use.tap()
+        } else {
+            XCTAssertTrue(cancel.isEnabled)
+            XCTAssertTrue(cancel.isHittable)
+            cancel.tap()
+        }
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll {
+            $0 == "--ui-testing-cloud-storage-notice-reset"
+        }
+        app.launch()
+        if selectCurrent {
+            XCTAssertTrue(
+                tabButton("Settings", in: app).wait(
+                    for: \.isHittable, toEqual: true, timeout: 10))
+            XCTAssertFalse(notice.exists)
+        } else {
+            XCTAssertTrue(
+                notice.waitForExistence(timeout: 10),
+                "Later must not persist an acknowledgment")
+            XCTAssertTrue(notice.buttons["Later"].isHittable)
+            notice.buttons["Later"].tap()
+            XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
+            XCTAssertTrue(
+                tabButton("Settings", in: app).wait(
+                    for: \.isHittable, toEqual: true, timeout: 10))
+        }
+        XCTAssertFalse(
+            cancel.exists,
+            "Resolved or deferred account choices remain resolved across relaunch"
+        )
+    }
+
+    @MainActor
     func testCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch() {
         assertCloudStorageNoticeAcknowledgmentSurvivesForegroundAndRelaunch(
             legacyAcknowledged: false)
@@ -1677,7 +1841,9 @@ final class BleatUITests: XCTestCase {
             app.launch()
             app.terminate()
         }
-        let notice = app.alerts["Cloud storage update"]
+        let notice = app.descendants(matching: .any)[
+            "cloudStorageUpgradeNotice"
+        ].firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertTrue(notice.buttons["All my devices are updated"].exists)
         XCTAssertTrue(notice.buttons["Later"].isEnabled)
