@@ -22108,7 +22108,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 74
+        "line": 103
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22158,7 +22158,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 112
+        "line": 153
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22206,7 +22206,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::observationHistoryAndPresentationAreAccountScoped",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 147
+        "line": 188
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22299,7 +22299,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 237
+        "line": 363
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22347,7 +22347,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 281
+        "line": 407
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22395,7 +22395,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 299
+        "line": 425
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22443,7 +22443,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 323
+        "line": 449
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22491,7 +22491,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 352
+        "line": 478
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22539,7 +22539,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::duplicateCompletionEventsCountOneHistoricalRuntime",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 365
+        "line": 491
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22587,7 +22587,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 382
+        "line": 508
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22635,7 +22635,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 408
+        "line": 534
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22683,7 +22683,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeResetDiscardsGrowingSegmentAfterCheckpoint",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 444
+        "line": 570
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22725,13 +22725,23 @@
         "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
         "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      },
+      "resetClockReassessment20261028": {
+        "base": "9003d638cd7d53a0cf14a1dee6a96c6c1edd2e6c",
+        "decision": "correct fixture clock; retain production stale-sample fence",
+        "failureEvidence": "PR #481 CI run 40605719978 failed both second=5/7 cases; unchanged-source focused reproduction also failed. The prior 139-test subset omitted this suite.",
+        "setup": "Fresh in-memory store; repository clock fixed at second + 0.5 in the synthetic sample clock domain; existing sample times and other-account fixture retained.",
+        "postconditions": "Two advancing samples newer than the last accepted sample but at/before reset fence cannot create an accumulator or resurrect the checkpoint. Wall timestamp, media position and monotonic time share fractional fixture values: accepting only the exact-fence sample also changes the later replacement duration, failing its five-second assertion. Six later samples create a distinct five-second replacement, preserving its start, both account totals and account isolation.",
+        "productionClockReview": "PlaybackModel and StatisticsRepository both default to ProcessInfo.processInfo.systemUptime; no production behavior changed.",
+        "executionEvidence": "Final refined-source complete unsigned scripts/test-host.sh passed: verifier 643 passed, one named synchronizable-Keychain exclusion, 644 inventory functions; BleatCore 639 declared tests across 43 suites in 57.635s with four expected cleanup issues, BleatTranscription five tests across two suites in 0.096s; coverage exported. Both reset arguments passed. Audit parity and strict changed-file Swift lint passed. Independent review confirmed both production clock defaults match and stale/equal-fence acceptance would fail the retained assertions. Original failed CI/reproduction and intermediate successful run retained separately. Detailed execution receipt is in PR #481 comments.",
+        "scope": "Unsigned host fixture only; no signed Keychain, device, live CloudKit or migration UI responsiveness claim."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 503
+        "line": 644
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22777,7 +22787,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 541
+        "line": 679
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22825,7 +22835,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 564
+        "line": 702
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22873,7 +22883,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 612
+        "line": 750
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22921,7 +22931,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::stored250000SlicesArchiveResetAndCachedRelaunch",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 641
+        "line": 779
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
