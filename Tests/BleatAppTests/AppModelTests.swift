@@ -16917,6 +16917,41 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(acceptedEmptyPassword)
     }
 
+    func testChangedCloudSettingsChoiceRetainsNewerPromptAndTypedFailure()
+        async throws
+    {
+        let local = cloudConfigurationSnapshot(
+            previousCommandAction: .previousChapter,
+            nextCommandAction: .nextChapter)
+        let cloud = cloudConfigurationSnapshot(
+            previousCommandAction: .nextChapter,
+            nextCommandAction: .previousChapter)
+        let original = CloudConfigurationConflict(local: local, iCloud: cloud)
+        let newer = CloudConfigurationConflict(local: cloud, iCloud: local)
+        let service = TestAppService(
+            activeAccount: .success(nil),
+            privateCloudConfigurationConflict: original)
+        let model = AppModel(service: service)
+        await model.start()
+        let queued = await waitUntil(timeout: .seconds(2)) {
+            model.pendingCloudConfigurationConflict == original
+        }
+        XCTAssertTrue(queued)
+        let underlying = AppServiceError.privateCloud(
+            PrivateCloudSyncFailure(
+                operation: .acceptCloudConfiguration,
+                cause: .configurationSelectionChanged))
+        await service.stageCloudSettingsResolutionFailure(
+            underlying, newerConflict: newer)
+        let failure = await model.resolveCloudConfigurationConflict(.useICloud)
+        let expected = AppFailure(
+            operation: .privateCloudSync, serviceError: underlying)
+        XCTAssertEqual(failure, expected)
+        XCTAssertEqual(model.pendingCloudConfigurationConflict, newer)
+        XCTAssertEqual(model.privateCloudState, .failed(expected))
+        XCTAssertEqual(expected.title, "iCloud settings choice changed")
+    }
+
     func testCloudConfigurationConflictWaitsForExplicitResolution()
         async throws
     {
@@ -31122,6 +31157,7 @@ private actor TestAppService: AppServicing {
     private let cloudAuthenticationResult:
         Result<ServerAccount?, AppServiceError>
     private var privateCloudConfigurationConflict: CloudConfigurationConflict?
+    private var cloudSettingsResolutionFailure: AppServiceError?
     private let configuredEndpointDiagnostics: AppEndpointDiagnostics?
     private var endpointDiagnosticsContinuations:
         [UUID:
@@ -31773,7 +31809,17 @@ private actor TestAppService: AppServicing {
         _ resolution: CloudConfigurationConflictResolution
     ) async throws(AppServiceError) {
         recordedCloudConfigurationResolutions.append(resolution)
+        if let cloudSettingsResolutionFailure {
+            throw cloudSettingsResolutionFailure
+        }
         privateCloudConfigurationConflict = nil
+    }
+
+    func stageCloudSettingsResolutionFailure(
+        _ failure: AppServiceError, newerConflict: CloudConfigurationConflict
+    ) {
+        cloudSettingsResolutionFailure = failure
+        privateCloudConfigurationConflict = newerConflict
     }
 
     func privateCloudCancellationRequestCount() -> Int {

@@ -6219,7 +6219,7 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testEveryPrivateCloudErrorPreservesDiagnosticFailureCode",
-      "line": 72,
+      "line": 151,
       "language": "swift"
     },
     {
@@ -6351,7 +6351,7 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testFetchedConfigurationConflictWaitsForUserDecision",
-      "line": 854,
+      "line": 1352,
       "language": "swift"
     },
     {
@@ -6375,13 +6375,13 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testUsingICloudResolvesConfigurationConflict",
-      "line": 1066,
+      "line": 1577,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testKeepingThisDevicePreparesCurrentConfigurationForUpload",
-      "line": 1099,
+      "line": 1618,
       "language": "swift"
     },
     {
@@ -11350,6 +11350,60 @@
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testFinishedConflictConfirmedReadbackPersistsServerClock",
       "line": 21310,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testUnchangedCloudSettingsPreserveRecentLocalEditAfterRelaunch",
+      "line": 984,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testServerSettingsConflictDistinguishesEchoAndConcurrentEdit",
+      "line": 1036,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testDurableSettingsBaselineSurvivesMissingTransportMetadata",
+      "line": 1112,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testOlderCloudSettingsSelectionCannotCompleteOverNewerConflict",
+      "line": 1142,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testMissingBaselineNeverTreatsUnsentSettingsAsAcknowledged",
+      "line": 1208,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testConfigurationBaselineRecoversFromAcknowledgedMetadata",
+      "line": 1253,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testInvalidConfigurationBaselineFailsWithoutReplacingLocalSettings",
+      "line": 1301,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+      "name": "testRemoteOnlyConfigurationEditAppliesAfterPreparation",
+      "line": 1323,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testChangedCloudSettingsChoiceRetainsNewerPromptAndTypedFailure",
+      "line": 16920,
       "language": "swift"
     }
   ],
