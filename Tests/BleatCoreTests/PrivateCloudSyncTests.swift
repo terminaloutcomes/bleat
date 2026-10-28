@@ -542,6 +542,43 @@ final class PrivateCloudSyncTests {
     }
 
     @Test
+    func testRunlessCallbackCancellationIsOwnedUntilReplacementCanProceed()
+        async throws
+    {
+        let owner = PrivateCloudEngineCancellations()
+        let probe = CloudKitCancellationProbe(holdCompletion: true)
+        let identity = ObjectIdentifier(probe)
+        await CloudKitDelegateTestContext.$isInsideDelegate.withValue(true) {
+            await owner.request(for: identity) { await probe.cancel() }
+            await owner.request(for: identity) { await probe.cancel() }
+        }
+        let returned = BoundedTestCounter()
+        let replacement = Task {
+            await owner.drain()
+            await returned.increment()
+        }
+        try await withTestCleanup {
+            await probe.release()
+            let cleanup = await returned.wait(untilAtLeast: 1)
+            #expect(cleanup.reached)
+            if cleanup.reached { await replacement.value }
+        } operation: {
+            let entered = await probe.waitForEntry()
+            #expect(entered.reached)
+            guard entered.reached else { return }
+            let premature = await returned.wait(
+                untilAtLeast: 1, timeout: .milliseconds(100))
+            #expect(!premature.reached)
+            #expect(await probe.calls == 1)
+            #expect(await !probe.inheritedDelegateContext)
+            await probe.release()
+            let completed = await returned.wait(untilAtLeast: 1)
+            #expect(completed.reached)
+            if completed.reached { await replacement.value }
+        }
+    }
+
+    @Test
     func testEveryPrivateCloudErrorPreservesDiagnosticFailureCode() {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
             (.accountSelectionChanged, .privateCloudAccountSelectionChanged),
@@ -2489,9 +2526,16 @@ final class PrivateCloudSyncTests {
         )
 
         #expect(
-            recordIDs.map(\.recordName) == [
-                "slice.\(slice.id.uuidString.lowercased())"
-            ])
+            Set(recordIDs.map(\.recordName)).contains(
+                "slice.\(slice.id.uuidString.lowercased())"))
+        let resetIDs =
+            try await fixture.statistics.archive().resetEnvelopes?.map {
+                "slice.\($0.id.uuidString.lowercased())"
+            } ?? []
+        #expect(
+            Set(recordIDs.map(\.recordName))
+                == Set(resetIDs + ["slice.\(slice.id.uuidString.lowercased())"])
+        )
     }
 
     @Test
@@ -2821,6 +2865,195 @@ final class PrivateCloudSyncTests {
             author: "Author",
             duration: 60
         )
+    }
+
+    @Test
+    func accountRemovalRetainsVerifiedResetMetadataAgainstOfflineReupload()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        CloudStorageUpgradeNotice.confirmCanonicalRetirement(
+            in: fixture.defaults)
+        let original = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [original], completions: [], remoteSessions: []))
+        let resets = try await fixture.store.prepareAccountHistoryRetirement(
+            original.accountID, zoneID: fixture.zoneID)
+        #expect(!resets.isEmpty)
+        await #expect(throws: StatisticsRepositoryError.self) {
+            try await fixture.store.requireAccountHistoryRetirementReceipt(
+                original.accountID)
+        }
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: resets, deletedRecordIDs: [], failedRecordSaves: [],
+            failedRecordDeletes: [:])
+        try await fixture.store.requireAccountHistoryRetirementReceipt(
+            original.accountID)
+        let deleted = try await fixture.store.recordIDs(
+            for: original.accountID, includeStatistics: true,
+            zoneID: fixture.zoneID)
+        #expect(Set(deleted).isDisjoint(with: Set(resets.map(\.recordID))))
+        #expect(
+            deleted.contains {
+                $0.recordName == "slice.\(original.id.uuidString.lowercased())"
+            })
+        let relaunched = StatisticsRepository(modelContainer: fixture.container)
+        try await relaunched.importArchive(
+            StatisticsArchive(
+                slices: [original], completions: [], remoteSessions: []))
+        #expect(try await relaunched.archive().slices.isEmpty)
+        #expect(!(try await relaunched.archive().resetEnvelopes ?? []).isEmpty)
+    }
+
+    @Test func explicitAccountReaddResumesUploadsAndRejectsRetiredFetchState()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let original = makeSlice(index: 0)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [original], completions: [], remoteSessions: []))
+        _ = try await fixture.store.prepareRecords(zoneID: fixture.zoneID)
+        let id = CKRecord.ID(
+            recordName: "slice.\(original.id.uuidString.lowercased())",
+            zoneID: fixture.zoneID)
+        try await fixture.store.ignoreAccountOnThisDevice(
+            original.accountID, includeStatistics: true)
+        #expect(try await fixture.store.recordForUpload(for: id) == nil)
+        #expect(
+            try await fixture.store.accountNeedsSynchronizationResume(
+                original.accountID))
+        let generation = try await fixture.store
+            .resumeAccountAfterAuthentication(original.accountID)
+        #expect(
+            try await !fixture.store.accountNeedsSynchronizationResume(
+                original.accountID))
+        #expect(try await fixture.store.recordForUpload(for: id) != nil)
+        try await fixture.store.saveEngineState(
+            Data("retired".utf8), generation: generation - 1)
+        #expect(try await fixture.store.engineState() == nil)
+        try await fixture.store.saveEngineState(
+            Data("current".utf8), generation: generation)
+        #expect(try await fixture.store.engineState() == Data("current".utf8))
+    }
+
+    @Test func ignoredAccountStillRetainsRemoteResetProtectionForReadd()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let original = makeSlice(index: 0)
+        let action = ListeningResetAction(
+            id: UUID(), start: nil, end: nil, issuedAt: Date())
+        let roots = try ListeningSegmentCodec.resetEnvelopes(
+            accountID: original.accountID, action: action, ids: [original.id])
+        let records = try roots.map {
+            try ListeningSegmentCodec.cloudRecord($0, zoneID: fixture.zoneID)
+        }
+        try await fixture.store.ignoreAccountOnThisDevice(
+            original.accountID, includeStatistics: true)
+        _ = try await fixture.store.applyFetchedRecords(records)
+        #expect(try await fixture.statistics.archive().resetEnvelopes == roots)
+        _ = try await fixture.store.resumeAccountAfterAuthentication(
+            original.accountID)
+        try await fixture.statistics.importArchive(
+            StatisticsArchive(
+                slices: [original], completions: [], remoteSessions: []))
+        #expect(try await fixture.statistics.archive().slices.isEmpty)
+    }
+
+    @Test
+    func testConcurrentCancellationWaitersCannotReleaseReplacementOwnership()
+        async throws
+    {
+        let owner = PrivateCloudEngineCancellations()
+        let first = CloudKitCancellationProbe(holdCompletion: true)
+        let second = CloudKitCancellationProbe(holdCompletion: true)
+        let lateRelease = CloudKitCancellationProbe(holdCompletion: true)
+        let identity = ObjectIdentifier(first)
+        await owner.request(for: identity) { await first.cancel() }
+        let old = try #require(await owner.snapshot(for: identity))
+        let firstCompleted = BoundedTestCounter()
+        let secondCompleted = BoundedTestCounter()
+        let firstWaiter = Task {
+            await owner.wait(for: identity, release: true)
+            await firstCompleted.increment()
+        }
+        // Hold one actual ownership release after its awaited task completes.
+        let secondWaiter = Task {
+            await old.task.value
+            await lateRelease.cancel()
+            await owner.release(for: identity, token: old.token)
+            await secondCompleted.increment()
+        }
+        try await withTestCleanup {
+            await first.release()
+            await second.release()
+            await lateRelease.release()
+            firstWaiter.cancel()
+            secondWaiter.cancel()
+            let firstExit = await firstCompleted.wait(untilAtLeast: 1)
+            let secondExit = await secondCompleted.wait(untilAtLeast: 1)
+            #expect(
+                firstExit.reached,
+                "First cancellation waiter cleanup: \(firstExit)")
+            #expect(
+                secondExit.reached,
+                "Late cancellation waiter cleanup: \(secondExit)")
+            if firstExit.reached { await firstWaiter.value }
+            if secondExit.reached { await secondWaiter.value }
+            // All held callbacks have been released on both throwing exits
+            // and success. A drain regression must fail rather than hang.
+            let drained = BoundedTestCounter()
+            let drain = Task {
+                await owner.drain()
+                await drained.increment()
+            }
+            defer { drain.cancel() }
+            let cleanup = await drained.wait(untilAtLeast: 1)
+            #expect(cleanup.reached, "Cancellation owner cleanup: \(cleanup)")
+            if cleanup.reached { await drain.value }
+        } operation: {
+            #expect(await first.waitForEntry().reached)
+            await first.release()
+            let firstExit = await firstCompleted.wait(untilAtLeast: 1)
+            try #require(
+                firstExit.reached, "First cancellation waiter: \(firstExit)")
+            await firstWaiter.value
+            #expect(await lateRelease.waitForEntry().reached)
+            await owner.request(for: identity) { await second.cancel() }
+            let current = try #require(await owner.snapshot(for: identity))
+            #expect(current.token != old.token)
+            await lateRelease.release()
+            let secondExit = await secondCompleted.wait(untilAtLeast: 1)
+            try #require(
+                secondExit.reached, "Late cancellation waiter: \(secondExit)")
+            await secondWaiter.value
+            #expect(await owner.snapshot(for: identity)?.token == current.token)
+            #expect(await second.waitForEntry().reached)
+            await second.release()
+            let drained = BoundedTestCounter()
+            let drain = Task {
+                await owner.drain()
+                await drained.increment()
+            }
+            defer { drain.cancel() }
+            let completed = await drained.wait(untilAtLeast: 1)
+            try #require(
+                completed.reached,
+                "Replacement cancellation drain: \(completed)")
+            await drain.value
+            #expect(await owner.snapshot(for: identity) == nil)
+        }
     }
 
     private func makeSyncStoreFixture(

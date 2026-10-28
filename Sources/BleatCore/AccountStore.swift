@@ -285,6 +285,7 @@ public enum AccountStoreError: Error, Equatable, Sendable {
         requestedCanonicalID: AccountID
     )
     case persistenceFailed
+    case segmentFailure(ListeningSegmentFailure)
 }
 
 public struct AccountIdentityMigration: Equatable, Sendable {
@@ -455,12 +456,46 @@ public actor AccountStore {
             {
                 modelContext.delete(cache)
             }
+            for cleanup in try modelContext.fetch(
+                FetchDescriptor<ListeningSegmentCleanupRecord>())
+            {
+                if let canonical = mapping[cleanup.accountID] {
+                    cleanup.accountID = canonical
+                }
+            }
             for record in try modelContext.fetch(
                 FetchDescriptor<ListeningSliceRecord>()
             ) {
                 if let canonical = mapping[record.accountID] {
-                    record.accountID = canonical
-                    record.privateCloudSynchronized = false
+                    let previous = try record.validatedValue()
+                    let migrated = previous.reidentified(
+                        as: AccountID(rawValue: canonical))
+                    if previous.lineage != nil {
+                        let observed = record.segmentProtocolObserved
+                        modelContext.delete(record)
+                        try ListeningSegmentPersistence.insert(
+                            migrated, in: modelContext)
+                        let id = migrated.id
+                        if let replacement = try modelContext.fetch(
+                            FetchDescriptor<ListeningSliceRecord>(
+                                predicate: #Predicate { $0.eventID == id })
+                        ).first {
+                            replacement.segmentProtocolObserved =
+                                replacement.segmentProtocolObserved == true
+                                || observed == true
+                        }
+                        try ListeningSegmentPersistence.redirectDependencies(
+                            from: previous.id, to: [migrated.id],
+                            in: modelContext)
+                        try ListeningSegmentPersistence.enqueue(
+                            name:
+                                "slice.\(previous.id.uuidString.lowercased())",
+                            accountID: migrated.accountID,
+                            requiring: [migrated.id], in: modelContext)
+                    } else {
+                        record.accountID = canonical
+                        record.privateCloudSynchronized = false
+                    }
                 }
             }
             for record in try modelContext.fetch(
@@ -519,6 +554,10 @@ public actor AccountStore {
             let residuals = try migrateLegacyCaches(mapping: mapping)
             try saveContext()
             return AccountIdentityMigrationReport(residuals: residuals)
+        } catch let error as ListeningSegmentFailure {
+            modelContext.rollback()
+            accountRecords = nil
+            throw .segmentFailure(error)
         } catch let error as AccountStoreError {
             modelContext.rollback()
             accountRecords = nil

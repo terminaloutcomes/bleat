@@ -570,24 +570,26 @@ struct StatisticsExplorationTests {
     func rangeResetDiscardsGrowingSegmentAfterCheckpoint(second: Int)
         async throws
     {
-        let repository = try repository()
+        let resetTime = Double(second) + 0.5
+        let repository = StatisticsRepository(
+            modelContainer: try container(), monotonicNow: { resetTime })
         let other = AccountID(rawValue: "other")
         let session = PlaybackSessionID(rawValue: "range-reset")
-        func sample(accountID: AccountID, second: Int)
+        func sample(accountID: AccountID, second: Double)
             -> StatisticsPlaybackSample
         {
             StatisticsPlaybackSample(
                 accountID: accountID, itemID: item, sessionID: session,
-                observedAt: date.addingTimeInterval(Double(second)),
-                monotonicTime: Double(second),
-                wholeBookPosition: Double(second), playbackRate: 1,
+                observedAt: date.addingTimeInterval(second),
+                monotonicTime: second,
+                wholeBookPosition: second, playbackRate: 1,
                 playbackGeneration: 1, isAudibleAndAdvancing: true,
                 chapter: nil, title: "Book", author: "Author", duration: 100)
         }
         for selectedAccount in [account, other] {
             for time in 0...second {
                 try await repository.record(
-                    sample(accountID: selectedAccount, second: time))
+                    sample(accountID: selectedAccount, second: Double(time)))
             }
         }
         let original = try #require(
@@ -602,12 +604,25 @@ struct StatisticsExplorationTests {
         #expect(
             try await repository.summary().localRealSeconds == 5)
 
+        // These samples are newer than the last accepted sample, but were
+        // captured before/at reset. The reset fence must reject both without
+        // starting an accumulator or recreating the retired checkpoint.
+        for staleTime in [Double(second) + 0.25, resetTime] {
+            try await repository.record(
+                sample(accountID: account, second: staleTime))
+        }
+        #expect(await repository.uncommittedSlice(accountID: account) == nil)
+        #expect(
+            try await repository.archive().slices.allSatisfy {
+                $0.accountID != account
+            })
+
         // Continuing playback must start a new segment without resurrecting
         // the deleted checkpoint or affecting the other account's segment.
         for time in (second + 1)...(second + 6) {
             for selectedAccount in [account, other] {
                 try await repository.record(
-                    sample(accountID: selectedAccount, second: time))
+                    sample(accountID: selectedAccount, second: Double(time)))
             }
         }
         try await repository.finish(sessionID: session)

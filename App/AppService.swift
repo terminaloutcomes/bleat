@@ -1656,7 +1656,11 @@ actor LiveAppService: AppServicing {
             modelContainer: modelContainer
         )
         statisticsRepository = StatisticsRepository(
-            modelContainer: modelContainer
+            modelContainer: modelContainer,
+            canonicalHistoryEnabled: {
+                CloudStorageUpgradeNotice.supportsCanonicalHistory(
+                    in: .standard)
+            }
         )
         if privateCloudAvailable {
             privateCloudSync = PrivateCloudSyncCoordinator(
@@ -1720,9 +1724,17 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             suspendedStatisticsHistoryAccounts.remove(account.id)
+            try await privateCloudSync?.resumeAccountAfterAuthentication(
+                account.id)
             return account
-        } catch let error {
+        } catch let error as PrivateCloudSyncFailure {
+            throw .privateCloud(error)
+        } catch let error as AccountOnboardingError {
             throw .onboarding(error)
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .synchronize, error: error))
         }
     }
 
@@ -2296,6 +2308,7 @@ actor LiveAppService: AppServicing {
                 )
             }
             try await accountStore.applyIdentityMigrations(migrations)
+            await statisticsRepository.accountOwnershipDidChange()
             for migration in migrations {
                 try await credentialStore.removeLegacyCredentials(
                     after: migration
@@ -2505,6 +2518,7 @@ actor LiveAppService: AppServicing {
                         from: account.id,
                         with: persisted
                     )
+                    await statisticsRepository.accountOwnershipDidChange()
                     try await credentialStore.removeLegacyCredentials(
                         after: migration
                     )
@@ -2543,6 +2557,7 @@ actor LiveAppService: AppServicing {
                         from: account.id,
                         with: persisted
                     )
+                    await statisticsRepository.accountOwnershipDidChange()
                     try await credentialStore.removeLegacyCredentials(
                         after: migration
                     )
@@ -2638,9 +2653,17 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             suspendedStatisticsHistoryAccounts.remove(account.id)
+            try await privateCloudSync?.resumeAccountAfterAuthentication(
+                account.id)
             return account
-        } catch let error {
+        } catch let error as PrivateCloudSyncFailure {
+            throw .privateCloud(error)
+        } catch let error as AccountOnboardingError {
             throw .onboarding(error)
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .synchronize, error: error))
         }
     }
 
@@ -2665,9 +2688,17 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             suspendedStatisticsHistoryAccounts.remove(authenticated.id)
+            try await privateCloudSync?.resumeAccountAfterAuthentication(
+                authenticated.id)
             return authenticated
-        } catch let error {
+        } catch let error as PrivateCloudSyncFailure {
+            throw .privateCloud(error)
+        } catch let error as AccountOnboardingError {
             throw .onboarding(error)
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .synchronize, error: error))
         }
     }
 
@@ -2708,9 +2739,17 @@ actor LiveAppService: AppServicing {
                 usage: .primary
             )
             suspendedStatisticsHistoryAccounts.remove(authenticated.id)
+            try await privateCloudSync?.resumeAccountAfterAuthentication(
+                authenticated.id)
             return authenticated
-        } catch let error {
+        } catch let error as PrivateCloudSyncFailure {
+            throw .privateCloud(error)
+        } catch let error as AccountOnboardingError {
             throw .onboarding(error)
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .synchronize, error: error))
         }
     }
 
@@ -3581,6 +3620,7 @@ actor LiveAppService: AppServicing {
             try context.delete(model: CachedChapterTranscriptionJobRecord.self)
             try context.delete(model: StatisticsSnapshotRecord.self)
             try context.delete(model: ListeningSliceRecord.self)
+            try context.delete(model: ListeningSegmentCleanupRecord.self)
             try context.delete(model: CompletionMilestoneRecord.self)
             try context.delete(model: RemoteListeningSessionRecord.self)
             try context.delete(model: PrivateCloudStatisticsDeletionRecord.self)
@@ -3662,9 +3702,8 @@ actor LiveAppService: AppServicing {
         accountID: AccountID
     ) async throws(AppServiceError) {
         do {
-            try await statisticsRepository.reset(
-                query: StatisticsQuery(accountID: accountID)
-            )
+            try await statisticsRepository.removeAccountHistoryLocally(
+                accountID)
         } catch let error {
             throw .statistics(error)
         }
@@ -3952,7 +3991,8 @@ actor LiveAppService: AppServicing {
             }
         }
         do {
-            try await statisticsRepository.reset(query: query)
+            try await statisticsRepository.reset(
+                query: query, knownAccountIDs: affected)
         } catch let error {
             throw .statistics(error)
         }

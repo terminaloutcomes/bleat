@@ -497,7 +497,8 @@ final class StatisticsTests {
                 #expect(
                     abs(archive.slices[0].realSeconds - Double(second)) < 0.001)
                 #expect(
-                    try await repository.privateCloudArchive().slices.isEmpty)
+                    try await repository.privateCloudSnapshot().archive.slices
+                        .isEmpty)
                 #expect(
                     abs(
                         try await repository.summary().localRealSeconds
@@ -506,7 +507,7 @@ final class StatisticsTests {
         }
         let id = try #require(try await repository.archive().slices.first?.id)
         try await repository.finishAll()
-        let cloud = try await repository.privateCloudArchive()
+        let cloud = try await repository.privateCloudSnapshot().archive
         #expect(cloud.slices.count == 1)
         #expect(cloud.slices[0].id == id)
         #expect(cloud.slices[0].recordingState == .finalized)
@@ -527,12 +528,13 @@ final class StatisticsTests {
         let before = try await writer.archive()
         let reader = StatisticsRepository(
             modelContainer: await writer.modelContainer)
-        let recovered = try await reader.privateCloudArchive()
+        let recovered = try await reader.privateCloudSnapshot().archive
         #expect(recovered.slices.map(\.id) == before.slices.map(\.id))
         #expect(recovered.slices.first?.realSeconds == 5)
         #expect(recovered.slices.first?.recordingState == .finalized)
         #expect(
-            try await reader.privateCloudArchive().slices == recovered.slices)
+            try await reader.privateCloudSnapshot().archive.slices
+                == recovered.slices)
     }
 
     @Test func pausesRateChangesAndStaleSamplesPreserveExactTotals()
@@ -550,7 +552,9 @@ final class StatisticsTests {
             sample(
                 observedAt: start.addingTimeInterval(6), monotonicTime: 6,
                 position: 9, audible: false))
-        #expect(try await repository.privateCloudArchive().slices.count == 1)
+        #expect(
+            try await repository.privateCloudSnapshot().archive.slices.count
+                == 1)
         try await repository.record(
             sample(
                 observedAt: start.addingTimeInterval(10), monotonicTime: 10,
@@ -626,6 +630,7 @@ final class StatisticsTests {
     private func repository() throws -> StatisticsRepository {
         let schema = Schema([
             ListeningSliceRecord.self,
+            ListeningSegmentCleanupRecord.self,
             CompletionMilestoneRecord.self,
             RemoteListeningSessionRecord.self,
             PrivateCloudStatisticsDeletionRecord.self,
@@ -642,7 +647,8 @@ final class StatisticsTests {
                 )
             ]
         )
-        return StatisticsRepository(modelContainer: container)
+        return StatisticsRepository(
+            modelContainer: container, monotonicNow: { 0 })
     }
 
     private func sample(

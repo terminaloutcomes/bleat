@@ -438,6 +438,10 @@ struct PrivateCloudPersistenceTests {
             CloudStorageUpgradeNotice.detectLegacy(in: reopened)
             #expect(CloudStorageUpgradeNotice.isPending(in: reopened))
             CloudStorageUpgradeNotice.acknowledge(in: reopened)
+            #expect(CloudStorageUpgradeNotice.isPending(in: reopened))
+            #expect(
+                !CloudStorageUpgradeNotice.hasConfirmedRetirement(in: reopened))
+            CloudStorageUpgradeNotice.confirmCanonicalRetirement(in: reopened)
             let confirmed = try #require(UserDefaults(suiteName: name))
             CloudStorageUpgradeNotice.detectLegacy(in: confirmed)
             #expect(!CloudStorageUpgradeNotice.isPending(in: confirmed))

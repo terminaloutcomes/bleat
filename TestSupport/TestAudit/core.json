@@ -1,10 +1,19 @@
 {
   "issue": "https://github.com/terminaloutcomes/bleat/issues/362",
-  "scope": "Tests/BleatCoreTests and Tests/BleatTranscriptionTests. All 562 source-index declarations are individually reviewed; execution and unresolved follow-ups are separate.",
+  "scope": "Tests/BleatCoreTests and Tests/BleatTranscriptionTests. Retains 621 pre-existing source-reviewed audit records and adds 24 canonical-migration records; execution and unresolved follow-ups are separate.",
   "source_index": "TestSupport/TestAudit/source-index.json",
   "review_revision": "d33a30a767d047b6a12e6f737b07e513e57aaf1c",
-  "declaration_count": 562,
-  "reviewed_count": 562,
+  "declaration_count": 645,
+  "reviewed_count": 645,
+  "candidate_review": {
+    "date": "2026-10-27",
+    "base_revision": "76492149b0c8a5fd708d2ac095f8890e201541fb",
+    "added_functions": 24,
+    "pre_existing_records": 621,
+    "historical_reviewed_functions": 562,
+    "scope": "Uncommitted canonical-history migration plus two approved test-only safeguards; independent source review is separate from executed argument counts and device/cloud evidence.",
+    "record": "docs/design/cloud-sync-storage.md#candidate-validation-scope"
+  },
   "pending_source_review_count": 0,
   "execution": {
     "status": "signed_host_pass_opt_in_not_run",
@@ -121,6 +130,726 @@
     }
   ],
   "tests": [
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 334
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve native mixed-format filtering and bounded mutation progress.",
+      "dependencies_and_setup": "New in-memory container: finalized continuous and active rows, two already represented legacy rows with an envelope, and8194 pending observations; legacy nil state preserved.",
+      "action_postconditions": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup.",
+      "synchronization": "Pure synchronous codec calls or directly awaited repository actor operations; no test-owned task, observer, guessed yield or readiness sleep.",
+      "timeout_tolerance": "No low-CPU or duration pass threshold. Finite owned execution and measured runtime/resource receipts are separate from semantic assertions.",
+      "classification": "Isolated Swift Testing host regression with synthetic data.",
+      "compiler_skip": "No opt-in or skip guard; current host inventory includes this function.",
+      "rules": {
+        "1": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup.",
+        "2": "Inspect actual operation completion and full native/codec results; no delay replaces a postcondition.",
+        "3": "Inapplicable: no advancing player, seek or actual UI responsiveness is measured.",
+        "4": "No unstructured task or callback created by the body; test-scoped container and awaited repository operations.",
+        "5": "New in-memory container: finalized continuous and active rows, two already represented legacy rows with an envelope, and8194 pending observations; legacy nil state preserved.",
+        "6": "Actual native SwiftData host operations, not CloudKit. Writes per pass are bounded; history reads remain unbounded.",
+        "7": "Preserve the original crash and interrupted scaling attempt. Retain8194/58008 scales and exact assertions; no retry-to-green or arbitrary speed requirement.",
+        "8": "Caller/value or typed stage/cause assertions plus whole-command time/resources and owned-process sample retain diagnostic evidence.",
+        "9": "Final acceptance:139 declarations/seven suites. Representative timings and parameter cases are in docs/design/cloud-sync-storage.md; CI/device results remain separate."
+      },
+      "decision": "keep",
+      "reason": "First pass represents8192 eligible sources; second reaches every pending source; third is idempotent. Current/active values and all originals survive, with no unconfirmed cleanup. Actual native SwiftData host operations, not CloudKit. Writes per pass are bounded; history reads remain unbounded.",
+      "shared_helper_review": "Reviewed restored optional-nil slice defaults, isolated repository factory, shared codec and persistence callers. No credentials, user storage or production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::resolutionPreservesAccountSeparationAndTypedConflictBoundaries",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 522
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve account isolation and exact rejection causes in overlap resolution.",
+      "dependencies_and_setup": "Six synthetic observations; local JSON-derived malformed envelopes are decoded by the real shared codec.",
+      "action_postconditions": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders.",
+      "synchronization": "Pure synchronous codec calls or directly awaited repository actor operations; no test-owned task, observer, guessed yield or readiness sleep.",
+      "timeout_tolerance": "No low-CPU or duration pass threshold. Finite owned execution and measured runtime/resource receipts are separate from semantic assertions.",
+      "classification": "Isolated Swift Testing host regression with synthetic data.",
+      "compiler_skip": "No opt-in or skip guard; current host inventory includes this function.",
+      "rules": {
+        "1": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders.",
+        "2": "Inspect actual operation completion and full native/codec results; no delay replaces a postcondition.",
+        "3": "Inapplicable: no advancing player, seek or actual UI responsiveness is measured.",
+        "4": "No unstructured task or callback created by the body; test-scoped container and awaited repository operations.",
+        "5": "Six synthetic observations; local JSON-derived malformed envelopes are decoded by the real shared codec.",
+        "6": "A small semantic rejection matrix, not exhaustive corruption fuzzing or live-cloud evidence.",
+        "7": "Preserve the original crash and interrupted scaling attempt. Retain8194/58008 scales and exact assertions; no retry-to-green or arbitrary speed requirement.",
+        "8": "Caller/value or typed stage/cause assertions plus whole-command time/resources and owned-process sample retain diagnostic evidence.",
+        "9": "Final acceptance:139 declarations/seven suites. Representative timings and parameter cases are in docs/design/cloud-sync-storage.md; CI/device results remain separate."
+      },
+      "decision": "keep",
+      "reason": "Separate identical IDs by account; assert metadataConflict,sourceConflict,incompatibleBounds. Reject intermediate malformed bounds despite a later spanning bridge; verify context-before-proof priority in two delivery orders. A small semantic rejection matrix, not exhaustive corruption fuzzing or live-cloud evidence.",
+      "shared_helper_review": "Reviewed restored optional-nil slice defaults, isolated repository factory, shared codec and persistence callers. No credentials, user storage or production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::diagnosticsRetainExactSegmentStageAndCause",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 9
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retain the specific segment failure stage/cause through diagnostics.",
+      "dependencies_and_setup": "A constructed retirement/partial-range failure becomes a DiagnosticEvent.",
+      "action_postconditions": "Check the exact diagnostic code and Codable preservation.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Check the exact diagnostic code and Codable preservation.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "A constructed retirement/partial-range failure becomes a DiagnosticEvent.",
+        "6": "Constructed diagnostic only; does not exercise actual partial-range rejection.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Check the exact diagnostic code and Codable preservation. Scope limit: Constructed diagnostic only; does not exercise actual partial-range rejection.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::fractionalMeasuredQuantitiesSurviveCanonicalTransportExactly",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 26
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve fractional quantities and timestamps through the shared local/cloud codec.",
+      "dependencies_and_setup": "Two synthetic slices with fractional Date/Double fields; UUID temporary disk store removed by defer.",
+      "action_postconditions": "Compare restored segment, each contribution's numeric values, summed totals and exact retained payload bytes after disk reopen.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Compare restored segment, each contribution's numeric values, summed totals and exact retained payload bytes after disk reopen.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Two synthetic slices with fractional Date/Double fields; UUID temporary disk store removed by defer.",
+        "6": "Local CKRecord transport and actual local SwiftData reopen; no network or device evidence. Contribution cardinality is not asserted separately.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Compare restored segment, each contribution's numeric values, summed totals and exact retained payload bytes after disk reopen. Scope limit: Local CKRecord transport and actual local SwiftData reopen; no network or device evidence. Contribution cardinality is not asserted separately.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::retirementWaitsForExactSavedPayloadAndSurvivesActorRecreation",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 103
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Gate source retirement on a confirmed replacement upload receipt.",
+      "dependencies_and_setup": "Eight synthetic slices in a new in-memory repository; a second repository shares that container.",
+      "action_postconditions": "Absent/fetched receipts leave cleanup empty; confirmed payload receipt permits eight deletions; replay preserves 40 measured seconds.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Absent/fetched receipts leave cleanup empty; confirmed payload receipt permits eight deletions; replay preserves 40 measured seconds.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Eight synthetic slices in a new in-memory repository; a second repository shares that container.",
+        "6": "Recreates an actor, not a process/disk store. No mismatched receipt bytes are supplied by this case.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Absent/fetched receipts leave cleanup empty; confirmed payload receipt permits eight deletions; replay preserves 40 measured seconds. Scope limit: Recreates an actor, not a process/disk store. No mismatched receipt bytes are supplied by this case.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::corruptAndUnknownCanonicalPayloadNeverFallsBackToScalarColumns",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 146
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reject unusable canonical payloads while recovering absent optional metadata from valid bytes.",
+      "dependencies_and_setup": "A synthetic combined segment and a native row; corrupt/missing payload and version99 variants.",
+      "action_postconditions": "Valid bytes recover absent marker; invalid variants throw ListeningSegmentFailure rather than exposing scalar fallback.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Valid bytes recover absent marker; invalid variants throw ListeningSegmentFailure rather than exposing scalar fallback.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "A synthetic combined segment and a native row; corrupt/missing payload and version99 variants.",
+        "6": "Asserts failure type, not each exact stage/cause.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Valid bytes recover absent marker; invalid variants throw ListeningSegmentFailure rather than exposing scalar fallback. Scope limit: Asserts failure type, not each exact stage/cause.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::resetFencesPreparedUploadsAndLateSavesWaitForDurableAnchors",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 176
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve reset protection across stale preparation and late save transitions.",
+      "dependencies_and_setup": "Eight synthetic observations, prepared replacement, account reset and actor recreation over the same in-memory container.",
+      "action_postconditions": "Reject stale generation, suppress retired upload, defer deletion until root receipt, and suppress replay.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Reject stale generation, suppress retired upload, defer deletion until root receipt, and suppress replay.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Eight synthetic observations, prepared replacement, account reset and actor recreation over the same in-memory container.",
+        "6": "Sequential repository state-machine evidence; no concurrent CKSyncEngine/provider delivery.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Reject stale generation, suppress retired upload, defer deletion until root receipt, and suppress replay. Scope limit: Sequential repository state-machine evidence; no concurrent CKSyncEngine/provider delivery.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::uncoveredCloudDeletionRepairsHistoryAndPermanentResetAnchors",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 218
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prevent remote physical deletion from discarding uncovered history or reset roots.",
+      "dependencies_and_setup": "An isolated aggregate, simulated cloud deletion, account reset and replay.",
+      "action_postconditions": "Retain/repair the uncovered aggregate and roots; originals remain logically suppressed.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Retain/repair the uncovered aggregate and roots; originals remain logically suppressed.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "An isolated aggregate, simulated cloud deletion, account reset and replay.",
+        "6": "Exercises actual repository deletion handling, not a native fetch or server.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Retain/repair the uncovered aggregate and roots; originals remain logically suppressed. Scope limit: Exercises actual repository deletion handling, not a native fetch or server.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::accountRekeyRebuildsCanonicalPayloadAndReceiptDependencies",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 248
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preserve ownership and cleanup receipt dependencies while rekeying history.",
+      "dependencies_and_setup": "A shared isolated repository/AccountStore and a canonical replacement.",
+      "action_postconditions": "Rekey identity/payload, require replacement receipt for cleanup, and prevent a late old save restoring old ownership.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Rekey identity/payload, require replacement receipt for cleanup, and prevent a late old save restoring old ownership.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "A shared isolated repository/AccountStore and a canonical replacement.",
+        "6": "Does not separately prove every monotonic observed-marker merge variant.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Rekey identity/payload, require replacement receipt for cleanup, and prevent a late old save restoring old ownership. Scope limit: Does not separately prove every monotonic observed-marker merge variant.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::pendingPreconsentResetDoesNotActivateAnotherAccountsProtocol",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 289
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keep pending reset capability account scoped.",
+      "dependencies_and_setup": "An unsent accountA root and an unrelated accountB legacy observation in an isolated repository.",
+      "action_postconditions": "Deleting accountB legacy data does not activate accountB canonical repair.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Deleting accountB legacy data does not activate accountB canonical repair.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "An unsent accountA root and an unrelated accountB legacy observation in an isolated repository.",
+        "6": "Repository account-separation oracle; no remote account switching.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Deleting accountB legacy data does not activate accountB canonical repair. Scope limit: Repository account-separation oracle; no remote account switching.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::localAccountHistoryRemovalDoesNotCreateCloudReset",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 312
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Distinguish local history erasure from synchronized reset.",
+      "dependencies_and_setup": "New in-memory repository with synthetic observations, then separately created reset roots.",
+      "action_postconditions": "Local removal permits reimport, creates no global reset and retains existing roots.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Local removal permits reimport, creates no global reset and retains existing roots.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "New in-memory repository with synthetic observations, then separately created reset roots.",
+        "6": "Does not test coordinator ignore/drain ordering.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Local removal permits reimport, creates no global reset and retains existing roots. Scope limit: Does not test coordinator ignore/drain ordering.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::wallToleranceHasExplicitHalfSecondBoundary",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 425
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Exercise the user-selected half-second wall adjacency threshold.",
+      "dependencies_and_setup": "Four parameterized gaps:0.499999,0.5,0.500001,-0.001 seconds.",
+      "action_postconditions": "Join exactly the nonnegative values at or below0.5 seconds.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Join exactly the nonnegative values at or below0.5 seconds.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Four parameterized gaps:0.499999,0.5,0.500001,-0.001 seconds.",
+        "6": "Four argument invocations, not one executed case; this is pure policy evidence.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Join exactly the nonnegative values at or below0.5 seconds. Scope limit: Four argument invocations, not one executed case; this is pure policy evidence.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::representationNoiseDoesNotCreateAFalseGap",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 433
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Accept representational endpoint noise without accepting substantial overlaps/gaps.",
+      "dependencies_and_setup": "Synthetic endpoints perturbed by -1e-12 wall and1e-12 media seconds, plus -0.01 and30 wall seconds.",
+      "action_postconditions": "Accept the noise input and reject the substantial overlap and gap.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Accept the noise input and reject the substantial overlap and gap.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Synthetic endpoints perturbed by -1e-12 wall and1e-12 media seconds, plus -0.01 and30 wall seconds.",
+        "6": "The tiny Date perturbation can round away at this epoch; not proof of nonzero wall delta.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Accept the noise input and reject the substantial overlap and gap. Scope limit: The tiny Date perturbation can round away at this epoch; not proof of nonzero wall delta.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::knownBoundariesAlwaysWin",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 455
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keep explicit meaningful boundaries stronger than gap tolerance.",
+      "dependencies_and_setup": "Ten parameterized boundaries:inaudibleSample,explicitStop,rateChanged,chapterChanged,accountChanged,bookChanged,sessionChanged,playbackGenerationChanged,positionDiscontinuity,processInterrupted.",
+      "action_postconditions": "Every supplied boundary rejects joining despite a0.1-second wall gap.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Every supplied boundary rejects joining despite a0.1-second wall gap.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Ten parameterized boundaries:inaudibleSample,explicitStop,rateChanged,chapterChanged,accountChanged,bookChanged,sessionChanged,playbackGenerationChanged,positionDiscontinuity,processInterrupted.",
+        "6": "Ten argument invocations; not an exhaustive claim for future enum variants.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Every supplied boundary rejects joining despite a0.1-second wall gap. Scope limit: Ten argument invocations; not an exhaustive claim for future enum variants.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::wallGapNeverAddsListeningAndMediaSeekRemainsSeparate",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 462
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keep measured quantities independent from the outer wall span and seek displacement.",
+      "dependencies_and_setup": "Synthetic adjacent observations, a bridged wall gap, media displacement and excessive wall gap.",
+      "action_postconditions": "Compare exact summed real/audiobook totals, outer bounds and compact lineage; reject seek and excessive gap.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Compare exact summed real/audiobook totals, outer bounds and compact lineage; reject seek and excessive gap.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Synthetic adjacent observations, a bridged wall gap, media displacement and excessive wall gap.",
+        "6": "Controlled model values, not a measured advancing player.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Compare exact summed real/audiobook totals, outer bounds and compact lineage; reject seek and excessive gap. Scope limit: Controlled model values, not a measured advancing player.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::deterministicSharedCodecPreservesLocalCloudLocalPayload",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 480
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Use deterministic canonical construction and exact shared transport bytes.",
+      "dependencies_and_setup": "Same synthetic observations in reversed order and a local CKRecord.",
+      "action_postconditions": "Compare canonical aggregates and exact local/cloud/local encoded bytes.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Compare canonical aggregates and exact local/cloud/local encoded bytes.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Same synthetic observations in reversed order and a local CKRecord.",
+        "6": "Byte comparison deliberately tests the shared storage/transport contract; no CloudKit network.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Compare canonical aggregates and exact local/cloud/local encoded bytes. Scope limit: Byte comparison deliberately tests the shared storage/transport contract; no CloudKit network.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 500
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Deduplicate overlapping device groups without retaining checkpoint timelines.",
+      "dependencies_and_setup": "Twenty fixed observations in overlapping prefix/suffix groups, with duplicates and reversed delivery.",
+      "action_postconditions": "Require exactly one resolved group before indexing; assert100 real seconds,150 audiobook seconds,20 sources and compact JSON shape.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Require exactly one resolved group before indexing; assert100 real seconds,150 audiobook seconds,20 sources and compact JSON shape.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Twenty fixed observations in overlapping prefix/suffix groups, with duplicates and reversed delivery.",
+        "6": "Required count guard now fails cleanly on empty/multiple groups. Two delivery sequences are deterministic, not device concurrency.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Require exactly one resolved group before indexing; assert100 real seconds,150 audiobook seconds,20 sources and compact JSON shape. Scope limit: Required count guard now fails cleanly on empty/multiple groups. Two delivery sequences are deterministic, not device concurrency.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift::syntheticHistoryShowsActualRecordAndPayloadReduction",
+      "source": {
+        "path": "Tests/BleatCoreTests/ListeningContinuityPolicyTests.swift",
+        "line": 616
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Measure final canonical envelope count and encoded payload reduction.",
+      "dependencies_and_setup": "58,008 generated observations grouped by supported continuity and metadata.",
+      "action_postconditions": "Assert retained totals and compare final envelope count and JSON payload bytes against original observations.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Assert retained totals and compare final envelope count and JSON payload bytes against original observations.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "58,008 generated observations grouped by supported continuity and metadata.",
+        "6": "Synthetic payload-size evidence only; not runtime, memory, battery, CloudKit billing or actual-user storage.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Assert retained totals and compare final envelope count and JSON payload bytes against original observations. Scope limit: Synthetic payload-size evidence only; not runtime, memory, battery, CloudKit billing or actual-user storage.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PersistenceMigrationTests.swift::canonicalSegmentSchemaPreservesReleased019Rows",
+      "source": {
+        "path": "Tests/BleatCoreTests/PersistenceMigrationTests.swift",
+        "line": 9
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Upgrade released019 listening rows without inventing optional metadata.",
+      "dependencies_and_setup": "UUID temporary SQLite store populated through frozen0.1.9 schema with missing chapter and sync metadata; deferred removal.",
+      "action_postconditions": "Open through current migration plan and compare the complete observation, nil canonical payload/sync flag and empty cleanup table.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Open through current migration plan and compare the complete observation, nil canonical payload/sync flag and empty cleanup table.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "UUID temporary SQLite store populated through frozen0.1.9 schema with missing chapter and sync metadata; deferred removal.",
+        "6": "A synthetic frozen-schema store, not an extracted shipped-device store; one ownership/shape.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Open through current migration plan and compare the complete observation, nil canonical payload/sync flag and empty cleanup table. Scope limit: A synthetic frozen-schema store, not an extracted shipped-device store; one ownership/shape.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testRunlessCallbackCancellationIsOwnedUntilReplacementCanProceed",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 545
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Own/coalesce callback cancellation without inheriting delegate task-local context.",
+      "dependencies_and_setup": "Fresh cancellation owner and held probe, task-local marker and an owned drain task.",
+      "action_postconditions": "Assert one cancellation, escaped task-local context, no premature drain during the deliberate negative window, then bounded completion.",
+      "synchronization": "Held probes use the existing five-second BoundedTestCounter completion budget. Operation/cleanup release held probes on both exits. Joins occur only after completion signals. The runless case's100ms wait deliberately observes noncompletion while held; it is not a readiness delay.",
+      "timeout_tolerance": "Five seconds is the shared test harness failure bound; the held callback is explicitly released during cleanup. The deliberate 100ms negative window observes blocked drainage rather than readiness.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Assert one cancellation, escaped task-local context, no premature drain during the deliberate negative window, then bounded completion.",
+        "2": "Held probes use the existing five-second BoundedTestCounter completion budget. Operation/cleanup release held probes on both exits. Joins occur only after completion signals. The runless case's100ms wait deliberately observes noncompletion while held; it is not a readiness delay.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "The owned drain task is joined only after bounded completion observation. Cleanup releases its held probe on both exits. A broken noncooperative drain can remain pending after a reported timeout; this case does not cancel its wrapper.",
+        "5": "Fresh cancellation owner and held probe, task-local marker and an owned drain task.",
+        "6": "Helper boundary, not an actual CKSyncEngine delegate callback.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing identifies the caller and failed reached-state assertion. The counter carries elapsed/timeout data internally, but this unchanged runless case does not print those fields separately.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Assert one cancellation, escaped task-local context, no premature drain during the deliberate negative window, then bounded completion. Scope limit: Helper boundary, not an actual CKSyncEngine delegate callback.",
+      "shared_helper_review": "Reviewed CloudKitCancellationProbe, BoundedTestCounter, owned cancellation actor and withTestCleanup. Held continuations are released on all paths; no real CloudKit calls."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConcurrentCancellationWaitersCannotReleaseReplacementOwnership",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 2975
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Prevent a stale cancellation waiter from releasing a newer owned task.",
+      "dependencies_and_setup": "Fresh owner plus first, replacement and late-release held probes; owned wrapper tasks and completion counters.",
+      "action_postconditions": "Hold stale release while installing a new token, release stale waiter, retain new token, then drain and prove empty ownership.",
+      "synchronization": "Held probes use the existing five-second BoundedTestCounter completion budget. Operation/cleanup release held probes on both exits. Joins occur only after completion signals. The runless case's100ms wait deliberately observes noncompletion while held; it is not a readiness delay.",
+      "timeout_tolerance": "Five seconds is the shared test harness failure bound; held callback completions are explicitly released. Cancellation wrappers are canceled on exit.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Hold stale release while installing a new token, release stale waiter, retain new token, then drain and prove empty ownership.",
+        "2": "Held probes use the existing five-second BoundedTestCounter completion budget. Operation/cleanup release held probes on both exits. Joins occur only after completion signals. The runless case's100ms wait deliberately observes noncompletion while held; it is not a readiness delay.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "Owned tasks have bounded completion observation before joining. Cleanup releases every held probe and cancels wrappers on success and failure; incomplete joins report a bounded failure.",
+        "5": "Fresh owner plus first, replacement and late-release held probes; owned wrapper tasks and completion counters.",
+        "6": "Signals bound operation and cleanup joins; cancellation cannot force a deliberately broken noncooperative task to finish.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing caller locations and bounded completion results retain reached state, elapsed time and timeout in diagnostics.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Hold stale release while installing a new token, release stale waiter, retain new token, then drain and prove empty ownership. Scope limit: Signals bound operation and cleanup joins; cancellation cannot force a deliberately broken noncooperative task to finish.",
+      "shared_helper_review": "Reviewed CloudKitCancellationProbe, BoundedTestCounter, owned cancellation actor and withTestCleanup. Held continuations are released on all paths; no real CloudKit calls."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::accountRemovalRetainsVerifiedResetMetadataAgainstOfflineReupload",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 2871
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Retain acknowledged reset roots when deleting account observations.",
+      "dependencies_and_setup": "Isolated SyncStoreFixture and synthetic saved-record receipt/reset metadata.",
+      "action_postconditions": "Exclude roots from physical deletion and suppress old observation reimport.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Exclude roots from physical deletion and suppress old observation reimport.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Isolated SyncStoreFixture and synthetic saved-record receipt/reset metadata.",
+        "6": "Store-level receipt simulation; does not execute native coordinator send/cancel ordering.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Exclude roots from physical deletion and suppress old observation reimport. Scope limit: Store-level receipt simulation; does not execute native coordinator send/cancel ordering.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::explicitAccountReaddResumesUploadsAndRejectsRetiredFetchState",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 2912
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Resume explicitly re-added account history while rejecting stale state writes.",
+      "dependencies_and_setup": "Isolated store/defaults fixture with ignored account and retained fetch generation.",
+      "action_postconditions": "Ignoring blocks upload provider, explicit resume restores it and retired state save is rejected.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Ignoring blocks upload provider, explicit resume restores it and retired state save is rejected.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Isolated store/defaults fixture with ignored account and retained fetch generation.",
+        "6": "Store transition only; not actual authentication or CloudKit engine replay.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Ignoring blocks upload provider, explicit resume restores it and retired state save is rejected. Scope limit: Store transition only; not actual authentication or CloudKit engine replay.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::ignoredAccountStillRetainsRemoteResetProtectionForReadd",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 2947
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keep fetched reset protection while account observation transport is ignored.",
+      "dependencies_and_setup": "Isolated store/defaults fixture, synthetic fetched root and later observation.",
+      "action_postconditions": "Import root while ignored, then resume/replay without restoring reset history.",
+      "synchronization": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+      "timeout_tolerance": "No elapsed playback/OS readiness is inferred. Numeric policy thresholds use fixed synthetic inputs.",
+      "classification": "Isolated Swift Testing host test; synthetic CloudKit objects and local persistence only as stated.",
+      "compiler_skip": "No test-specific compiler or opt-in skip guard; Swift Testing host discovery includes this function.",
+      "rules": {
+        "1": "Import root while ignored, then resume/replay without restoring reset history.",
+        "2": "Pure codec/model work is synchronous; repository/store actor operations are awaited directly. No guessed yields, sleeps or task-group timeouts establish readiness.",
+        "3": "Inapplicable: no actual advancing player, seek completion or rate sampling is measured. Controlled observation fields test domain behavior.",
+        "4": "No unstructured task or callback is created by this body; actor operations complete through awaited APIs. Temporary disk resources, when used, are scoped and removed by defer.",
+        "5": "Isolated store/defaults fixture, synthetic fetched root and later observation.",
+        "6": "Fetched-record application boundary; not live CloudKit.",
+        "7": "Fixed deterministic inputs and direct assertions; no retry-to-green, threshold relaxation or actual-user data is used.",
+        "8": "Swift Testing assertions retain caller and observed values. Typed-error/transport limits are stated explicitly rather than inferred from broad passing counts.",
+        "9": "Source review is separate from execution. The prior137-test acceptance and final affected-suite unsigned rerun are recorded in docs/design/cloud-sync-storage.md; parameter argument invocations must be counted independently."
+      },
+      "decision": "keep",
+      "reason": "Import root while ignored, then resume/replay without restoring reset history. Scope limit: Fetched-record application boundary; not live CloudKit.",
+      "shared_helper_review": "Reviewed synthetic slice/repository or SyncStoreFixture helpers and relevant codec/persistence callers. Per-test isolated containers/defaults/temp directories; CKRecords remain local objects."
+    },
     {
       "identifier": "Tests/BleatCoreTests/AccountStoreTests.swift::testStoresMultipleUsersAndServersWithOneActiveContext",
       "source": {
@@ -21379,7 +22108,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 74
+        "line": 103
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21429,7 +22158,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 112
+        "line": 153
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21477,7 +22206,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::observationHistoryAndPresentationAreAccountScoped",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 147
+        "line": 188
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21570,7 +22299,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::failedHistorySaveDoesNotReplaceObservedProgress",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 237
+        "line": 363
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21618,7 +22347,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 281
+        "line": 407
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21666,7 +22395,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 299
+        "line": 425
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21714,7 +22443,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 323
+        "line": 449
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21762,7 +22491,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 352
+        "line": 478
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21810,7 +22539,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::duplicateCompletionEventsCountOneHistoricalRuntime",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 365
+        "line": 491
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21858,7 +22587,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 382
+        "line": 508
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21906,7 +22635,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 408
+        "line": 534
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21954,7 +22683,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::rangeResetDiscardsGrowingSegmentAfterCheckpoint",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 444
+        "line": 570
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -21996,13 +22725,23 @@
         "synchronizationAndOwnership": "Direct awaited operations and independently owned value/store fixtures. Observation cases retain explicit normal-path stops; no full native task-graph clearance. The corrected opt-in heartbeat is cancelled and joined on both import exits. Performance and compile-guard execution boundaries remain explicit.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#remaining-core-observation-export-and-cleanup-context-372",
         "historicalAssessment": "Prior primary fields and revision-bound execution remain historical; this annotation records current scoped conclusions."
+      },
+      "resetClockReassessment20261028": {
+        "base": "9003d638cd7d53a0cf14a1dee6a96c6c1edd2e6c",
+        "decision": "correct fixture clock; retain production stale-sample fence",
+        "failureEvidence": "PR #481 CI run 40605719978 failed both second=5/7 cases; unchanged-source focused reproduction also failed. The prior 139-test subset omitted this suite.",
+        "setup": "Fresh in-memory store; repository clock fixed at second + 0.5 in the synthetic sample clock domain; existing sample times and other-account fixture retained.",
+        "postconditions": "Two advancing samples newer than the last accepted sample but at/before reset fence cannot create an accumulator or resurrect the checkpoint. Wall timestamp, media position and monotonic time share fractional fixture values: accepting only the exact-fence sample also changes the later replacement duration, failing its five-second assertion. Six later samples create a distinct five-second replacement, preserving its start, both account totals and account isolation.",
+        "productionClockReview": "PlaybackModel and StatisticsRepository both default to ProcessInfo.processInfo.systemUptime; no production behavior changed.",
+        "executionEvidence": "Final refined-source complete unsigned scripts/test-host.sh passed: verifier 643 passed, one named synchronizable-Keychain exclusion, 644 inventory functions; BleatCore 639 declared tests across 43 suites in 57.635s with four expected cleanup issues, BleatTranscription five tests across two suites in 0.096s; coverage exported. Both reset arguments passed. Audit parity and strict changed-file Swift lint passed. Independent review confirmed both production clock defaults match and stale/equal-fence acceptance would fail the retained assertions. Original failed CI/reproduction and intermediate successful run retained separately. Detailed execution receipt is in PR #481 comments.",
+        "scope": "Unsigned host fixture only; no signed Keychain, device, live CloudKit or migration UI responsiveness claim."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::dailyBucketsAndCachedRangesUseUTCReportingCalendar",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 503
+        "line": 644
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22048,7 +22787,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 541
+        "line": 679
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22096,7 +22835,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 564
+        "line": 702
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22144,7 +22883,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 612
+        "line": 750
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -22192,7 +22931,7 @@
       "identifier": "Tests/BleatCoreTests/StatisticsExplorationTests.swift::stored250000SlicesArchiveResetAndCachedRelaunch",
       "source": {
         "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
-        "line": 641
+        "line": 779
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
