@@ -7071,19 +7071,19 @@
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "boundedObservationRetainsInvalidationAndHistoryAcrossLiveSamples",
-      "line": 74,
+      "line": 103,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "liveObservationUsesPreparedMemoryAndReleasesItAfterLastSubscriber",
-      "line": 112,
+      "line": 153,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "observationHistoryAndPresentationAreAccountScoped",
-      "line": 147,
+      "line": 188,
       "language": "swift"
     },
     {
@@ -7095,85 +7095,85 @@
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "failedHistorySaveDoesNotReplaceObservedProgress",
-      "line": 237,
+      "line": 363,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "importedHistoryAppearsInChartBookAndSessionWithoutInventingRate",
-      "line": 281,
+      "line": 407,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "portableSessionsReconcileAcrossRelaunchAndPreserveNewerObservedTime",
-      "line": 299,
+      "line": 425,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "rangeAndAccountScopesDoNotCollideAndCacheInvalidatesOnReset",
-      "line": 323,
+      "line": 449,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "repeatedChapterSegmentsDoNotCompleteUnheardTimeline",
-      "line": 352,
+      "line": 478,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "duplicateCompletionEventsCountOneHistoricalRuntime",
-      "line": 365,
+      "line": 491,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "presentationKeepsPersistedAndLiveSlicesConsistentAcrossFlush",
-      "line": 382,
+      "line": 508,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "resetRemovesLiveSliceAndAccountCollisionKeepsBothAccumulators",
-      "line": 408,
+      "line": 534,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "rangeResetDiscardsGrowingSegmentAfterCheckpoint",
-      "line": 444,
+      "line": 570,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "dailyBucketsAndCachedRangesUseUTCReportingCalendar",
-      "line": 503,
+      "line": 644,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "cacheOnlyPollingDoesNotBuildMissingOrInvalidatedSnapshot",
-      "line": 541,
+      "line": 679,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "incrementalSnapshotsMatchRebuildAfterPlaybackAndSync",
-      "line": 564,
+      "line": 702,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "repeatedRangeLoadsKeepOnlyLifetimeAndLatestRangePerAccount",
-      "line": 612,
+      "line": 750,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/StatisticsExplorationTests.swift",
       "name": "stored250000SlicesArchiveResetAndCachedRelaunch",
-      "line": 641,
+      "line": 779,
       "language": "swift"
     },
     {
