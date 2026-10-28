@@ -482,8 +482,9 @@ private struct CloudConfigurationConflictView: View {
                     }
                 } footer: {
                     Text(
-                        "Choose which complete set of settings Bleat should "
-                            + "keep. The other set will be replaced."
+                        "Keep This Device uploads this device’s complete settings "
+                            + "to iCloud. Use iCloud replaces this device’s settings "
+                            + "with the iCloud settings. Future changes still sync."
                     )
                 }
 

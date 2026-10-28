@@ -24,6 +24,33 @@ The user explicitly approved synchronous native SwiftData fetch/save on the owni
 
 Metadata, engine state, pending conflicts, identity mappings and deletion ledgers are data in SwiftData. Pending uploads retain their complete payload until CloudKit confirms the save, so retries and later batches can reload it after memory-cache eviction or relaunch. Confirmed statistics discard that redundant payload; their authoritative history remains in the statistics rows. The synchronization-enabled setting and the one-time upgrade-notice acknowledgment remain device-local preferences. CloudKit remains the cross-device transport; this is not automatic SwiftData-to-CloudKit synchronization.
 
+## Settings baseline and conflict choices
+
+[Issue #484](https://github.com/terminaloutcomes/bleat/issues/484) tracks a recent
+local playback-rate edit followed by a prompt showing an older cloud rate. The
+reported screen establishes the symptom, not its exact fetch/upload sequence.
+The previous conflict check did not require incoming cloud settings to change.
+Preparing an upload also mutated the cached transport record, so that cache
+could not stand in for the last acknowledged cloud settings.
+
+A small decoded settings baseline is retained in existing local SwiftData sync
+state. Only server-observed/saved snapshots update it; preparation does not.
+Older metadata recovers a missing baseline only when its retained payload matches
+the acknowledged digest. An unsent retained payload is insufficient evidence;
+preserve local settings and request a choice. A valid baseline remains usable
+even when transport metadata is missing. Corrupt baseline state fails explicitly.
+Settings compare structurally; payload hashes remain exact synchronization
+identities, not semantic equality checks.
+
+An unchanged cloud value preserves a local-only edit for upload. A remote-only
+edit applies when local settings equal the baseline. Different concurrent edits
+still require an explicit complete-settings choice. Keep This Device attempts
+the upload immediately; errors retain retry state. Use iCloud applies the chosen
+cloud snapshot. A newer pending revision survives stale completion. Neither
+button establishes a permanent preferred device, and local cloud-state reset
+clears the baseline. Isolated host/app evidence is separate from real CloudKit,
+multi-device ordering and physical-device acceptance.
+
 ## Upgrade notice and required evidence
 
 Successful legacy reconciliation queues a native **Cloud storage update** notice. New finalized payloads carry an optional continuous-segment format marker; absent markers identify legacy history without proving that an outdated device is currently running. The UI observes the persisted detection flag independently of the ongoing CloudKit sync, so a long cloud catch-up cannot delay the notice. Native notifications may arrive on an arbitrary executor and explicitly hop to MainActor. Acknowledgment is retained once per installation across accounts/relaunches. The minimum client version is fixed to the introducing marketing release, not the current version of a later update. The notice never blocks synchronization or deletes history.

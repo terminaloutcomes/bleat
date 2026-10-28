@@ -150,6 +150,10 @@ final class PrivateCloudSyncTests {
     @Test
     func testEveryPrivateCloudErrorPreservesDiagnosticFailureCode() {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
+            (
+                .configurationSelectionChanged,
+                .privateCloudConfigurationSelectionChanged
+            ),
             (.disabled, .privateCloudDisabled),
             (.cancelled, .privateCloudCancelled),
             (.callbackTimedOut, .privateCloudCallbackTimedOut),
@@ -976,6 +980,374 @@ final class PrivateCloudSyncTests {
         #expect(payload.legacyAccountIDs == [firstLegacy.id, secondLegacy.id])
     }
 
+    @Test(arguments: [false, true])
+    func testUnchangedCloudSettingsPreserveRecentLocalEditAfterRelaunch(
+        prepareBeforeFetch: Bool
+    ) async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            records.first { $0.recordType == "Configuration" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        if prepareBeforeFetch {
+            _ = try await fixture.store.prepareRecords(zoneID: fixture.zoneID)
+        }
+        let relaunched = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil, configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        let incoming = CKRecord(
+            recordType: "Configuration", recordID: baseline.recordID)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted]
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            try encoder.encode(
+                makeSnapshot(
+                    previousCommandAction: .skipBackward,
+                    nextCommandAction: .skipForward)) as CKRecordValue
+        #expect(
+            try await relaunched.applyFetchedRecord(
+                incoming, persistSystemFields: true))
+        #expect(await fixture.configuration.snapshot() == local)
+        #expect(await relaunched.configurationConflict() == nil)
+        let pending = try await relaunched.prepareRecords(
+            zoneID: fixture.zoneID)
+        let outgoing = try #require(
+            pending.first { $0.recordType == "Configuration" })
+        let data = try #require(
+            outgoing[PrivateCloudSyncStore.payloadKey] as? Data)
+        #expect(
+            try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self, from: data) == local)
+    }
+
+    @Test(arguments: [1.0, 1.75], [false, true])
+    func testServerSettingsConflictDistinguishesEchoAndConcurrentEdit(
+        serverRate: Double, fetchBeforeFailure: Bool
+    )
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            initial.first { $0.recordType == "Configuration" })
+        let server = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        server[PrivateCloudSyncStore.payloadKey] =
+            baseline[PrivateCloudSyncStore.payloadKey]
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let client = try #require(
+            prepared.first { $0.recordType == "Configuration" })
+        let newerLocal = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward, defaultPlaybackRate: 1.5)
+        try await fixture.configuration.apply(newerLocal)
+        let cloud = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward, defaultPlaybackRate: serverRate)
+        server[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(cloud) as CKRecordValue
+        if fetchBeforeFailure {
+            let fetched = CKRecord(
+                recordType: server.recordType, recordID: server.recordID)
+            fetched[PrivateCloudSyncStore.payloadKey] =
+                server[PrivateCloudSyncStore.payloadKey]
+            try await fixture.store.applyFetchedRecord(
+                fetched, persistSystemFields: true)
+        }
+        let retry = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [], deletedRecordIDs: [],
+            failedRecordSaves: [
+                (
+                    record: client,
+                    error: serverConflictError(
+                        clientRecord: client, serverRecord: server)
+                )
+            ], failedRecordDeletes: [:])
+        if serverRate == 1 {
+            #expect(retry == [.saveRecord(client.recordID)])
+            #expect(await fixture.store.configurationConflict() == nil)
+            let cached = try #require(
+                try await fixture.store.record(for: client.recordID))
+            let data = try #require(
+                cached[PrivateCloudSyncStore.payloadKey] as? Data)
+            #expect(
+                try JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self, from: data) == newerLocal)
+        } else {
+            #expect(retry.isEmpty)
+            #expect(
+                await fixture.store.configurationConflict()
+                    == CloudConfigurationConflict(
+                        local: newerLocal, iCloud: cloud))
+        }
+        #expect(await fixture.configuration.snapshot() == newerLocal)
+    }
+
+    @Test
+    func testDurableSettingsBaselineSurvivesMissingTransportMetadata()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let baseline = await fixture.configuration.snapshot()
+        try PrivateCloudPersistence(container: fixture.container).set(
+            JSONEncoder().encode(baseline),
+            forKey: PrivateCloudPersistence.configurationBaselineKey)
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        let incoming = CKRecord(
+            recordType: "Configuration",
+            recordID: CKRecord.ID(
+                recordName: "configuration.singleton", zoneID: fixture.zoneID))
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(baseline) as CKRecordValue
+        #expect(
+            try await fixture.store.applyFetchedRecord(
+                incoming, persistSystemFields: true))
+        #expect(await fixture.configuration.snapshot() == local)
+        #expect(await fixture.store.configurationConflict() == nil)
+    }
+
+    @Test
+    func testOlderCloudSettingsSelectionCannotCompleteOverNewerConflict()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            records.first { $0.recordType == "Configuration" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        let first = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.5)
+        let newer = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.75)
+        // Deliver a newer conflict at the old selection’s post-apply completion boundary.
+        let incoming = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(first) as CKRecordValue
+        try await fixture.store.applyFetchedRecord(
+            incoming, persistSystemFields: true)
+        let oldRevision = try #require(
+            await fixture.store.configurationConflictRevision())
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(newer) as CKRecordValue
+        try await fixture.store.applyFetchedRecord(
+            incoming, persistSystemFields: true)
+        let current = await fixture.store.configurationConflict()
+        let persistence = PrivateCloudPersistence(container: fixture.container)
+        let baselineBefore = try persistence.data(
+            forKey: PrivateCloudPersistence.configurationBaselineKey)
+        do {
+            try await fixture.store.completeCloudConfigurationSelection(
+                revision: oldRevision, snapshot: first)
+            Issue.record(
+                "Older settings selection must not clear a newer conflict")
+        } catch let error as PrivateCloudSyncError {
+            #expect(error == .configurationSelectionChanged)
+        }
+        #expect(await fixture.store.configurationConflict() == current)
+        #expect(current?.iCloud == newer)
+        let baselineAfter = try #require(
+            try persistence.data(
+                forKey: PrivateCloudPersistence.configurationBaselineKey))
+        let before = try #require(baselineBefore)
+        #expect(
+            try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self, from: baselineAfter)
+                == JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self, from: before))
+    }
+
+    @Test
+    func testMissingBaselineNeverTreatsUnsentSettingsAsAcknowledged()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            initial.first { $0.recordType == "Configuration" })
+        let incoming = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            baseline[PrivateCloudSyncStore.payloadKey]
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        let prepared = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let unsent = try #require(
+            prepared.first { $0.recordType == "Configuration" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [], deletedRecordIDs: [],
+            failedRecordSaves: [(unsent, CKError(.batchRequestFailed))],
+            failedRecordDeletes: [:])
+        try PrivateCloudPersistence(container: fixture.container).removeObject(
+            forKey: PrivateCloudPersistence.configurationBaselineKey)
+        let relaunched = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil, configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        #expect(
+            try await !relaunched.applyFetchedRecord(
+                incoming, persistSystemFields: true))
+        #expect(await fixture.configuration.snapshot() == local)
+        #expect(await relaunched.configurationConflict()?.local == local)
+    }
+
+    @Test
+    func testConfigurationBaselineRecoversFromAcknowledgedMetadata()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let records = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            records.first { $0.recordType == "Configuration" })
+        let incoming = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            baseline[PrivateCloudSyncStore.payloadKey]
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let persistence = PrivateCloudPersistence(container: fixture.container)
+        try persistence.removeObject(
+            forKey: PrivateCloudPersistence.configurationBaselineKey)
+        let local = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.25)
+        try await fixture.configuration.apply(local)
+        let relaunched = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil, configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        _ = try await relaunched.prepareRecords(zoneID: fixture.zoneID)
+        #expect(
+            try await relaunched.applyFetchedRecord(
+                incoming, persistSystemFields: true))
+        #expect(await relaunched.configurationConflict() == nil)
+        #expect(await fixture.configuration.snapshot() == local)
+        #expect(
+            try persistence.data(
+                forKey: PrivateCloudPersistence.configurationBaselineKey) != nil
+        )
+        try await relaunched.removeAllRecords()
+        #expect(
+            try persistence.data(
+                forKey: PrivateCloudPersistence.configurationBaselineKey) == nil
+        )
+    }
+
+    @Test
+    func testInvalidConfigurationBaselineFailsWithoutReplacingLocalSettings()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let original = await fixture.configuration.snapshot()
+        try PrivateCloudPersistence(container: fixture.container).set(
+            Data("{".utf8),
+            forKey: PrivateCloudPersistence.configurationBaselineKey)
+        do {
+            _ = try await fixture.store.prepareRecords(zoneID: fixture.zoneID)
+            Issue.record(
+                "Invalid settings baseline must not be used for reconciliation")
+        } catch let error as PrivateCloudSyncError {
+            #expect(error == .storage(.invalidStoredState))
+        }
+        #expect(await fixture.configuration.snapshot() == original)
+    }
+
+    @Test
+    func testRemoteOnlyConfigurationEditAppliesAfterPreparation() async throws {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let initial = try await fixture.store.prepareRecords(
+            zoneID: fixture.zoneID)
+        let baseline = try #require(
+            initial.first { $0.recordType == "Configuration" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        _ = try await fixture.store.prepareRecords(zoneID: fixture.zoneID)
+        let remote = makeSnapshot(
+            previousCommandAction: .skipBackward,
+            nextCommandAction: .skipForward,
+            defaultPlaybackRate: 1.5)
+        let incoming = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        incoming[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(remote) as CKRecordValue
+        #expect(
+            try await !fixture.store.applyFetchedRecord(
+                incoming, persistSystemFields: true))
+        #expect(await fixture.configuration.snapshot() == remote)
+        #expect(await fixture.store.configurationConflict() == nil)
+    }
+
     @Test
     func testFetchedConfigurationConflictWaitsForUserDecision()
         async throws
@@ -989,8 +1361,18 @@ final class PrivateCloudSyncTests {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let cloudConfigurationRecord = try #require(
+        let baseline = try #require(
             records.first { $0.recordType == "Configuration" })
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [baseline], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        let cloudConfigurationRecord = CKRecord(
+            recordType: baseline.recordType, recordID: baseline.recordID)
+        cloudConfigurationRecord[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(
+                makeSnapshot(
+                    previousCommandAction: .nextChapter,
+                    nextCommandAction: .previousChapter)) as CKRecordValue
         let localEdit = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -1010,8 +1392,8 @@ final class PrivateCloudSyncTests {
                 == CloudConfigurationConflict(
                     local: localEdit,
                     iCloud: makeSnapshot(
-                        previousCommandAction: .skipBackward,
-                        nextCommandAction: .skipForward
+                        previousCommandAction: .nextChapter,
+                        nextCommandAction: .previousChapter
                     )
                 ))
     }
@@ -1085,6 +1467,9 @@ final class PrivateCloudSyncTests {
         )
         serverRecord[PrivateCloudSyncStore.payloadKey] =
             try JSONEncoder().encode(serverSnapshot) as CKRecordValue
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [serverRecord], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
         let localEdit = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -1199,16 +1584,24 @@ final class PrivateCloudSyncTests {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let record = try #require(
+        let prepared = try #require(
             records.first { $0.recordType == "Configuration" })
+        let record = CKRecord(
+            recordType: prepared.recordType, recordID: prepared.recordID)
         let cloud = makeSnapshot(
             previousCommandAction: .nextChapter,
             nextCommandAction: .previousChapter
         )
         record[PrivateCloudSyncStore.payloadKey] =
             try JSONEncoder().encode(cloud) as CKRecordValue
+        try await fixture.configuration.apply(
+            makeSnapshot(
+                previousCommandAction: .skipBackward,
+                nextCommandAction: .skipForward,
+                defaultPlaybackRate: 1.25))
         try await fixture.store.applyFetchedRecord(
             record, persistSystemFields: true)
+        #expect(await fixture.store.configurationConflict() != nil)
 
         let outgoing = try await fixture.store.resolveConfigurationConflict(
             .useICloud
@@ -1234,8 +1627,15 @@ final class PrivateCloudSyncTests {
         let records = try await fixture.store.prepareRecords(
             zoneID: fixture.zoneID
         )
-        let record = try #require(
+        let prepared = try #require(
             records.first { $0.recordType == "Configuration" })
+        let record = CKRecord(
+            recordType: prepared.recordType, recordID: prepared.recordID)
+        record[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(
+                makeSnapshot(
+                    previousCommandAction: .nextChapter,
+                    nextCommandAction: .previousChapter)) as CKRecordValue
         let local = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -1257,6 +1657,51 @@ final class PrivateCloudSyncTests {
             ) == local)
         let remainingConflict = await fixture.store.configurationConflict()
         #expect(remainingConflict != nil)
+        let revision = try #require(
+            await fixture.store.configurationConflictRevision())
+        _ = try await fixture.store.reconcileSentRecordZoneChanges(
+            savedRecords: [], deletedRecordIDs: [],
+            failedRecordSaves: [(outgoing, CKError(.batchRequestFailed))],
+            failedRecordDeletes: [:])
+        let relaunched = PrivateCloudSyncStore(
+            statistics: fixture.statistics, accounts: fixture.accounts,
+            credentialStore: nil, configuration: fixture.configuration,
+            defaults: PrivateCloudDefaultsReference(fixture.defaults))
+        try await relaunched.prepareStorage()
+        #expect(await relaunched.configurationConflict() == remainingConflict)
+        let currentRevision = try #require(
+            await relaunched.configurationConflictRevision())
+        #expect(currentRevision != revision)
+        try await relaunched.completeConfigurationConflictResolution(
+            revision: revision)
+        #expect(await relaunched.configurationConflict() == remainingConflict)
+        let retry = try #require(
+            try await relaunched.resolveConfigurationConflict(.keepThisDevice))
+        let unchangedServer = CKRecord(
+            recordType: retry.recordType, recordID: retry.recordID)
+        unchangedServer[PrivateCloudSyncStore.payloadKey] =
+            try JSONEncoder().encode(
+                try #require(remainingConflict).iCloud) as CKRecordValue
+        let authorizedRetry =
+            try await relaunched.reconcileSentRecordZoneChanges(
+                savedRecords: [], deletedRecordIDs: [],
+                failedRecordSaves: [
+                    (
+                        retry,
+                        serverConflictError(
+                            clientRecord: retry, serverRecord: unchangedServer)
+                    )
+                ], failedRecordDeletes: [:])
+        #expect(authorizedRetry == [.saveRecord(retry.recordID)])
+        #expect(
+            await relaunched.configurationConflictRevision() == currentRevision)
+        _ = try await relaunched.reconcileSentRecordZoneChanges(
+            savedRecords: [retry], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
+        try await relaunched.completeConfigurationConflictResolution(
+            revision: currentRevision)
+        #expect(await relaunched.configurationConflict() == nil)
+        #expect(await fixture.configuration.snapshot() == local)
     }
 
     @Test
@@ -2304,10 +2749,11 @@ final class PrivateCloudSyncTests {
         previousCommandAction: HeadphoneCommandAction,
         nextCommandAction: HeadphoneCommandAction,
         maximumConcurrentDownloads: Int = 5,
-        automaticDownloadLookahead: Int = 5
+        automaticDownloadLookahead: Int = 5,
+        defaultPlaybackRate: Double = 1
     ) -> CloudConfigurationSnapshot {
         CloudConfigurationSnapshot(
-            defaultPlaybackRate: 1,
+            defaultPlaybackRate: defaultPlaybackRate,
             resumeRewindSeconds: 10,
             skipBackwardSeconds: 15,
             skipForwardSeconds: 30,

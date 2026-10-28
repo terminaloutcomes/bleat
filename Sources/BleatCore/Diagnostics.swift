@@ -272,6 +272,8 @@ public enum DiagnosticFailureCode: String, Codable, Sendable {
     case privateCloudCallbackTimedOut = "private_cloud_callback_timed_out"
     case privateCloudStopping = "private_cloud_stopping"
     case privateCloudInvalidRecord = "private_cloud_invalid_record"
+    case privateCloudConfigurationSelectionChanged =
+        "private_cloud_configuration_selection_changed"
     case privateCloudStorageInvalidLegacyMetadata =
         "private_cloud_invalid_legacy_metadata"
     case privateCloudStorageInvalidStoredState =
@@ -332,7 +334,9 @@ public struct PrivateCloudDiagnosticDetail: Codable, Equatable, Sendable {
             unexpectedErrorDomain = failure.systemError?.domain
             unexpectedErrorCode = failure.systemError?.code
         case .disabled, .cancelled, .callbackTimedOut, .stopping,
-            .invalidRecord, .persistenceFailed,
+            .invalidRecord,
+            .configurationSelectionChanged,
+            .persistenceFailed,
             .nonPrivateDatabase, .engineUnavailable, .none:
             cloudKitCode = nil
             partialFailureCodes = []
@@ -751,6 +755,8 @@ extension PrivateCloudSyncError {
         case .callbackTimedOut: .privateCloudCallbackTimedOut
         case .stopping: .privateCloudStopping
         case .invalidRecord: .privateCloudInvalidRecord
+        case .configurationSelectionChanged:
+            .privateCloudConfigurationSelectionChanged
         case .storage(let failure):
             switch failure {
             case .invalidLegacyMetadata:
