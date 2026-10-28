@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Prepare CI environment file
         run: touch .envrc
-      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           install: false
       - name: Install zsh
@@ -58,7 +58,7 @@ jobs:
           key: ${{ steps.cache-keys.outputs.build }}-${{ github.sha }}
           restore-keys: |
             ${{ steps.cache-keys.outputs.build }}-
-      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # 14594264cd68ce8a2345dd349bc3d138a4ef85c8
+      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # 14594264cd68ce8a2345dd349bc3d138a4ef85c8
         with:
           ruby-version: "3.4"
           bundler-cache: true
@@ -183,8 +183,8 @@ jobs:
         with:
           components: rustfmt,clippy
           rust-src-dir: bleat-api/
-      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # c2a87611a18de5b3828c5652fe268e992400cb5c
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: Install zsh for coverage scripts
         run: sudo apt-get install -y zsh
       - name: Check documentation references
