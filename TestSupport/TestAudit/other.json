@@ -2510,12 +2510,16 @@
         "decision": "keep",
         "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
       },
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; native picker candidate correction; fresh owning execution pending", "record": "docs/release-evidence/finished-progress-conflicts.md#native-file-picker-handoff-reassessment-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-27",
+        "status": "historical sign-off qualified; both native handoffs source-reviewed; standalone main-based execution receipts are recorded separately in PR #482 comments",
+        "record": "docs/release-evidence/transcript-share-readiness.md"
+      },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-partial-transcription-cache, --ui-testing-playback, --ui-testing-transcription-available. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by app.signedIn, The Test Audiobook, book.detail.actions, book.detail.transcription, transcription.export, transcription.export.subRip, Export SRT, Save to Files. Body-specific asserted postconditions: XCTAssertTrue( XCTAssertTrue(export.waitForExistence(timeout: 3)) XCTAssertTrue(subRip.waitForExistence(timeout: 3)) XCTAssertTrue(confirmExport.exists) XCTAssertTrue(saveToFiles.waitForExistence(timeout: 3)) XCTAssertTrue(saveToFilesLabel.waitForExistence(timeout: 3)) XCTAssertTrue(saveToFilesLabel.isHittable)",
-      "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds."
+      "action_postconditions": "Book/transcription/export actions retain enabled/hittable checks and the partial-coverage warning. Export SRT must yield exactly one enabled native Save to Files cell with exactly one enabled/hittable descendant label simultaneously. Timeout retains elapsed time, hierarchy and screenshot, then returns without tapping. The real label tap must yield native picker navigation and a hittable filename field whose value is The Test Audiobook together. Historical picker-only reassessment remains in docs/release-evidence/finished-progress-conflicts.md.",
+      "synchronization_timeout": "App controls use bounded 3-second waits. Export SRT to usable share action and Save to Files to intended native picker each have a separate 15-second system-handoff failure budget. State predicates establish readiness; there are no sleeps or retry loops."
     },
     {
       "id": "BleatUITests::testTranscriptGoToCurrentPositionHighlightsSavedSegment",

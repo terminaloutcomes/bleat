@@ -4108,13 +4108,34 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(confirmExport.isHittable)
         confirmExport.tap()
 
-        let saveToFiles = app.cells["Save to Files"]
-        XCTAssertTrue(saveToFiles.waitForExistence(timeout: 3))
-        // The system share grid's cell can extend below its visible action.
-        let saveToFilesLabel = saveToFiles.staticTexts["Save to Files"]
-        XCTAssertTrue(saveToFilesLabel.waitForExistence(timeout: 3))
-        XCTAssertTrue(saveToFilesLabel.isEnabled)
-        XCTAssertTrue(saveToFilesLabel.isHittable)
+        let saveToFiles = app.cells.matching(identifier: "Save to Files")
+        // Export confirmation presents a remote system service. Its container
+        // can exist before its actions arrive; wait for the action we can use,
+        // within the same 15-second budget as the native picker handoff below.
+        // The share grid cell can extend below its visible, tappable label.
+        let saveToFilesLabels = saveToFiles.firstMatch.staticTexts.matching(
+            identifier: "Save to Files")
+        let saveToFilesLabel = saveToFilesLabels.firstMatch
+        let shareStarted = ContinuousClock.now
+        let shareReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                saveToFiles.count == 1 && saveToFiles.firstMatch.isEnabled
+                    && saveToFilesLabels.count == 1
+                    && saveToFilesLabel.isEnabled
+                    && saveToFilesLabel.isHittable
+            }, object: nil)
+        let shareOutcome = XCTWaiter.wait(for: [shareReady], timeout: 15)
+        if shareOutcome != .completed {
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Partial transcript native share action readiness"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(
+            shareOutcome, .completed,
+            "Expected one usable native Save to Files action within 15 seconds; elapsed=\(shareStarted.duration(to: ContinuousClock.now)); \(app.debugDescription)"
+        )
+        guard shareOutcome == .completed else { return }
         saveToFilesLabel.tap()
         let files = XCUIApplication(
             bundleIdentifier: "com.apple.DocumentManagerUICore.SaveToFiles"
