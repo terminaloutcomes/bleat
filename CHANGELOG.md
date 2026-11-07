@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.07 - 2026-11-07
+
+### Changed
+
+- Explain the listening-history storage upgrade in plain language, with conversion details under “What changes?”.
+
 ## 2026.10.27 - 2026-10-27
 
 ### Fixed
