@@ -49,6 +49,7 @@
 - [Broader UI regression repair](release-evidence/broader-ui-regressions.md)
 - [Callback and cancellation audit](release-evidence/callback-cancellation-audit.md)
 - [Cloud account configuration choices](release-evidence/cloud-account-choices.md)
+- [Listening-history upgrade prompt](release-evidence/listening-history-prompt-copy.md)
 - [Explicit finished-progress conflicts](release-evidence/finished-progress-conflicts.md)
 - [iOS 27 CarPlay and audio compatibility](release-evidence/ios27-carplay-audio.md)
 - [macOS account-editor AutoFill](release-evidence/macos-account-editor-autofill.md)
