@@ -1221,10 +1221,15 @@ final class AppModelTests: XCTestCase {
             service: service, cloudStorageNoticeDefaults: defaults)
         XCTAssertTrue(model.cloudStorageUpgradeNoticePending)
         let alert = SignedInAlert.cloudStorageUpgrade
-        XCTAssertEqual(alert.title, "Cloud storage update")
+        XCTAssertEqual(alert.title, "Update listening history")
         XCTAssertEqual(
             alert.message,
-            "Update every device to Bleat 2026.10.27 or later before confirming. Bleat will combine compatible older listening records into continuous segments, retain measured listening totals and meaningful playback boundaries, and remove original records only after iCloud confirms their replacements. Small timer checkpoints are not retained. Custom resets that cut a combined segment require a wider range. Confirmation enables this conversion and cleanup on this device."
+            "We need to upgrade how your listening stats are stored. Your listening time will be kept.\n\nBefore you continue, update Bleat on all your devices to version 2026.10.27 or later."
+        )
+        XCTAssertEqual(ListeningHistoryUpgradeCopy.confirm, "Update now")
+        XCTAssertEqual(
+            ListeningHistoryUpgradeCopy.details,
+            "Bleat will combine compatible older listening records into continuous segments, keeping your measured listening totals and meaningful playback boundaries. Original records are removed only after iCloud confirms their replacements.\n\nSmall timer checkpoints are not kept. Custom resets that cut through a combined segment will need a wider range.\n\nChoosing Update now enables this conversion and cleanup on this device."
         )
         let queue = SignedInAlertQueue()
         queue.reconcile([

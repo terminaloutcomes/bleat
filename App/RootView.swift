@@ -362,7 +362,12 @@ struct RootView: View {
                 NavigationStack {
                     Form {
                         Text(SignedInAlert.cloudStorageUpgrade.message)
-                        Button("All devices updated — convert history") {
+                        DisclosureGroup("What changes?") {
+                            Text(ListeningHistoryUpgradeCopy.details)
+                                .accessibilityIdentifier(
+                                    "listeningHistoryUpgradeDetails")
+                        }
+                        Button(ListeningHistoryUpgradeCopy.confirm) {
                             model.acknowledgeCloudStorageUpgradeNotice()
                             cloudPrompts.deferNotice()
                         }
@@ -370,7 +375,7 @@ struct RootView: View {
                             cloudPrompts.deferNotice()
                         }
                     }
-                    .navigationTitle("Cloud storage update")
+                    .navigationTitle(ListeningHistoryUpgradeCopy.title)
                 }
                 .accessibilityIdentifier("cloudStorageUpgradeNotice")
                 .interactiveDismissDisabled()
@@ -1825,6 +1830,15 @@ struct DiagnosticsView: View {
     }
 }
 
+enum ListeningHistoryUpgradeCopy {
+    static let title = "Update listening history"
+    static let message =
+        "We need to upgrade how your listening stats are stored. Your listening time will be kept.\n\nBefore you continue, update Bleat on all your devices to version \(CloudStorageUpgradeNotice.canonicalSegmentsIntroducedInVersion) or later."
+    static let details =
+        "Bleat will combine compatible older listening records into continuous segments, keeping your measured listening totals and meaningful playback boundaries. Original records are removed only after iCloud confirms their replacements.\n\nSmall timer checkpoints are not kept. Custom resets that cut through a combined segment will need a wider range.\n\nChoosing Update now enables this conversion and cleanup on this device."
+    static let confirm = "Update now"
+}
+
 enum SignedInAlert: Equatable {
     case cloudStorageUpgrade
     case series(AppFailure)
@@ -1851,7 +1865,7 @@ enum SignedInAlert: Equatable {
 
     var title: String {
         switch self {
-        case .cloudStorageUpgrade: "Cloud storage update"
+        case .cloudStorageUpgrade: ListeningHistoryUpgradeCopy.title
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.title
@@ -1863,7 +1877,7 @@ enum SignedInAlert: Equatable {
     var message: String {
         switch self {
         case .cloudStorageUpgrade:
-            "Update every device to Bleat \(CloudStorageUpgradeNotice.canonicalSegmentsIntroducedInVersion) or later before confirming. Bleat will combine compatible older listening records into continuous segments, retain measured listening totals and meaningful playback boundaries, and remove original records only after iCloud confirms their replacements. Small timer checkpoints are not retained. Custom resets that cut a combined segment require a wider range. Confirmation enables this conversion and cleanup on this device."
+            ListeningHistoryUpgradeCopy.message
         case .series(let failure), .playback(let failure),
             .progress(let failure):
             failure.message
@@ -2074,9 +2088,13 @@ private struct SignedInView: View {
             case .cloudStorageUpgrade:
                 Alert(
                     title: Text(entry.alert.title),
-                    message: Text(entry.alert.message),
+                    // Native alerts cannot expand details, so retain the full
+                    // consent information in this compatibility presentation.
+                    message: Text(
+                        entry.alert.message + "\n\n"
+                            + ListeningHistoryUpgradeCopy.details),
                     primaryButton: .default(
-                        Text("All devices updated — convert history")
+                        Text(ListeningHistoryUpgradeCopy.confirm)
                     ) {
                         model.acknowledgeCloudStorageUpgradeNotice()
                         alertQueue.finish(entry)

@@ -1754,7 +1754,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertFalse(cancel.exists)
         let response = notice.buttons[
-            selectCurrent ? "All devices updated — convert history" : "Later"]
+            selectCurrent ? "Update now" : "Later"]
         XCTAssertTrue(response.isEnabled)
         XCTAssertTrue(response.isHittable)
         response.tap()
@@ -1845,8 +1845,23 @@ final class BleatUITests: XCTestCase {
             "cloudStorageUpgradeNotice"
         ].firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        let details = notice.staticTexts["listeningHistoryUpgradeDetails"]
+        let disclosure = notice.buttons["What changes?"]
+        XCTAssertFalse(details.exists)
+        XCTAssertTrue(disclosure.isHittable)
+        disclosure.tap()
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertTrue(details.label.contains("only after iCloud confirms"))
         XCTAssertTrue(
-            notice.buttons["All devices updated — convert history"].exists)
+            details.label.contains("Small timer checkpoints are not kept"))
+        XCTAssertTrue(details.label.contains("will need a wider range"))
+        XCTAssertTrue(details.label.contains("on this device"))
+        disclosure.tap()
+        XCTAssertTrue(details.waitForNonExistence(timeout: 5))
+        // Reading or hiding the details must not confirm the upgrade.
+        XCTAssertTrue(notice.exists)
+        XCTAssertTrue(
+            notice.buttons["Update now"].exists)
         XCTAssertTrue(notice.buttons["Later"].isEnabled)
         XCTAssertTrue(notice.buttons["Later"].isHittable)
         notice.buttons["Later"].tap()
@@ -1874,10 +1889,10 @@ final class BleatUITests: XCTestCase {
         app.activate()
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertTrue(
-            notice.buttons["All devices updated — convert history"].isEnabled)
+            notice.buttons["Update now"].isEnabled)
         XCTAssertTrue(
-            notice.buttons["All devices updated — convert history"].isHittable)
-        notice.buttons["All devices updated — convert history"].tap()
+            notice.buttons["Update now"].isHittable)
+        notice.buttons["Update now"].tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()
