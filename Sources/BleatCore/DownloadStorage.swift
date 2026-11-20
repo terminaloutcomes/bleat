@@ -380,11 +380,27 @@ public struct DownloadStorageLayout: Sendable {
 
 public actor DownloadStorage {
     private let layout: DownloadStorageLayout
+    private let readCapacity:
+        @Sendable (DownloadStorageLayout) throws(DownloadStorageError) -> Int64
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     public init(layout: DownloadStorageLayout) {
+        self.init(
+            layout: layout,
+            readCapacity: { layout throws(DownloadStorageError) in
+                try layout.availableCapacity()
+            })
+    }
+
+    init(
+        layout: DownloadStorageLayout,
+        readCapacity:
+            @escaping @Sendable (DownloadStorageLayout)
+            throws(DownloadStorageError) -> Int64
+    ) {
         self.layout = layout
+        self.readCapacity = readCapacity
     }
 
     public func migrateAccountIdentity(
@@ -712,7 +728,7 @@ public actor DownloadStorage {
         _ requirement: DownloadStorageRequirement
     ) throws(DownloadStorageError) -> DownloadStorageRequirement {
         try requirement.validate(
-            availableBytes: layout.availableCapacity()
+            availableBytes: readCapacity(layout)
         )
         return requirement
     }
