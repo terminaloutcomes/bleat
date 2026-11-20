@@ -37,7 +37,7 @@ let package = Package(
             exact: "2.6.0"
         ),
         .package(
-            url: "https://github.com/apple/swift-protobuf.git", exact: "1.39.0"),
+            url: "https://github.com/apple/swift-protobuf.git", exact: "1.41.0"),
     ],
     targets: [
         .target(
