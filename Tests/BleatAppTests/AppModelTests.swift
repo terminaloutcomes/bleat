@@ -1087,6 +1087,66 @@ final class AppModelTests: XCTestCase {
         await model.playback.stop()
     }
 
+    func testLastPlayingMiniPlayerResumesDownloadBeforeStartupCompletes()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let store = PlaybackPositionStore(defaults: defaults)
+        let account = try fixtureAccount()
+        let detail = fixtureBookDetail(
+            item: fixturePage(libraryID: fixtureLibrary().id).items[0])
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true)
+        try await prepareCompleteDownload(
+            root: root, account: account, detail: detail, purpose: .manual)
+        try store.select(
+            LastPlayingRecord(accountID: account.id, book: detail.summary))
+        try store.save(0.5, accountID: account.id, itemID: detail.id)
+        let gate = AsyncGate()
+        let service = TestAppService(
+            activeAccount: .success(account), librariesGate: gate)
+        let model = AppModel(
+            service: service, downloadsStorageRootURL: root,
+            downloadsBackgroundSessionIdentifier: backgroundSessionIdentifier(
+                "last-playing"), playbackPositionStore: store)
+        let bootstrap = Task { await model.start() }
+        guard await gate.waitUntilEntered(timeout: .seconds(10)) else {
+            await gate.release()
+            await bootstrap.value
+            XCTFail("Startup did not reach the library request")
+            return
+        }
+        XCTAssertEqual(model.phase, .signedIn)
+        XCTAssertEqual(model.playback.itemID, detail.id)
+        XCTAssertFalse(model.playback.isPlaybackRequested)
+        let completion = model.selectionResumeCompletionSequenceForTesting
+        model.playback.togglePlayback()
+        let resumed = await waitUntil(timeout: .seconds(5)) {
+            model.selectionResumeCompletionSequenceForTesting > completion
+        }
+        XCTAssertTrue(resumed)
+        XCTAssertTrue(
+            model.playback.isPrepared(accountID: account.id, itemID: detail.id))
+        XCTAssertTrue(model.playback.isPlaybackRequested)
+        XCTAssertGreaterThanOrEqual(model.playback.currentTime, 0.49)
+        let requests = await service.playbackOpenRequests()
+        XCTAssertTrue(requests.isEmpty)
+        let detailRequests = await service.bookDetailRequests()
+        XCTAssertTrue(detailRequests.isEmpty)
+        await gate.release()
+        await bootstrap.value
+        model.playback.pause()
+        XCTAssertEqual(try store.lastPlaying()?.book.id, detail.id)
+        await model.playback.stop()
+    }
+
     func testPlaybackTimeFormatterUsesOneBookmarkAndPlayerFormat() {
         XCTAssertEqual(PlaybackTimeFormatter.string(0), "0:00")
         XCTAssertEqual(PlaybackTimeFormatter.string(1_234.5), "20:34")
@@ -31077,6 +31137,7 @@ private actor TestAppService: AppServicing {
     private let privateCloudSyncGate: AsyncGate?
     private let privateCloudDrainGate: AsyncGate?
     private var privateCloudDrainRequests = 0
+    private let librariesGate: AsyncGate?
     private let accountsGate: AsyncGate?
     private let activeAccountGate: AsyncGate?
     private let bookmarksGate: AsyncGate?
@@ -31337,6 +31398,7 @@ private actor TestAppService: AppServicing {
         serverEndpointRouterGate: AsyncGate? = nil,
         privateCloudSyncGate: AsyncGate? = nil,
         privateCloudDrainGate: AsyncGate? = nil,
+        librariesGate: AsyncGate? = nil,
         accountsGate: AsyncGate? = nil,
         activeAccountGate: AsyncGate? = nil,
         bookmarksGate: AsyncGate? = nil,
@@ -31425,6 +31487,7 @@ private actor TestAppService: AppServicing {
         self.serverEndpointRouterGate = serverEndpointRouterGate
         self.privateCloudSyncGate = privateCloudSyncGate
         self.privateCloudDrainGate = privateCloudDrainGate
+        self.librariesGate = librariesGate
         self.accountsGate = accountsGate
         self.activeAccountGate = activeAccountGate
         self.bookmarksGate = bookmarksGate
@@ -32009,6 +32072,7 @@ private actor TestAppService: AppServicing {
         for account: ServerAccount
     ) async throws(AppServiceError) -> [LibrarySummary] {
         libraryRequests += 1
+        if let librariesGate { await librariesGate.enterAndWait() }
         return try value(from: librariesResult)
     }
 
