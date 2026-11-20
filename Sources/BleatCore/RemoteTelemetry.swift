@@ -439,6 +439,8 @@ extension PrivateCloudSyncError {
         case .nonPrivateDatabase:
             .sourceBug
         case .cancelled, .stopping, .disabled, .invalidRecord,
+            .configurationSelectionChanged,
+
             .engineUnavailable,
             .unexpected:
             .unknown

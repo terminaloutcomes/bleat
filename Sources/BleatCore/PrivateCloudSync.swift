@@ -249,6 +249,7 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
     case callbackTimedOut
     case stopping
     case invalidRecord
+    case configurationSelectionChanged
     case persistenceFailed
     case storage(PrivateCloudStorageFailure)
     case nonPrivateDatabase
@@ -272,7 +273,9 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
-        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+        case .disabled, .stopping, .invalidRecord,
+            .configurationSelectionChanged,
+            .nonPrivateDatabase,
             .unexpected:
             false
         }
@@ -816,6 +819,9 @@ actor PrivateCloudSyncStore {
         "bleat.cloudKit.ignoredStatisticsAccounts.v1"
     private let pendingConfigurationConflictKey =
         "bleat.cloudKit.pendingConfigurationConflict.v1"
+    private let synchronizedConfigurationKey =
+        PrivateCloudPersistence.configurationBaselineKey
+    private var synchronizedConfigurationData: Data?
     private let pendingAccountChangesKey =
         "bleat.cloudKit.pendingAccountChanges.v1"
     private let legacyAccountIdentityMappingsKey =
@@ -828,6 +834,8 @@ actor PrivateCloudSyncStore {
         [AccountID: [CloudServerConfigurationChange]] = [:]
     private var pendingConfigurationConflict: CloudConfigurationConflict?
     private var pendingConfigurationConflictRevision: UUID?
+    private var configurationUploadChoice:
+        (revision: UUID, snapshot: CloudConfigurationSnapshot)?
     private var pendingConfigurationConflictIsInvalid = false
     private var legacyAccountIdentityMappings: [String: String] = [:]
     private var pendingLegacyRecordDeletions: [String: Set<String>] = [:]
@@ -1056,6 +1064,24 @@ actor PrivateCloudSyncStore {
                     .mapValues {
                         $0.sorted { $0.structuralKey < $1.structuralKey }
                     }
+            } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
+        }
+        synchronizedConfigurationData = try defaults.data(
+            forKey: synchronizedConfigurationKey)
+        if synchronizedConfigurationData == nil,
+            let previous = try recordNamed("configuration.singleton"),
+            let data = previous[Self.payloadKey] as? Data,
+            synchronizedPayloadDigests[previous.recordID.recordName]
+                == Self.payloadDigest(data)
+        {
+            // Recover only an acknowledged payload, never an unsent local edit.
+            synchronizedConfigurationData = data
+            try defaults.set(data, forKey: synchronizedConfigurationKey)
+        }
+        if let data = synchronizedConfigurationData {
+            do {
+                _ = try JSONDecoder().decode(
+                    CloudConfigurationSnapshot.self, from: data)
             } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
         }
         storageReady = true
@@ -1683,28 +1709,40 @@ actor PrivateCloudSyncStore {
             markSynchronized(serverRecord)
             return false
         }
-        if local == client {
-            let conflict = CloudConfigurationConflict(
-                local: local,
-                iCloud: server
-            )
+        let explicitlyChosen =
+            configurationUploadChoice.map {
+                $0.revision == pendingConfigurationConflictRevision
+                    && $0.snapshot == client && $0.snapshot == local
+            } ?? false
+        if pendingConfigurationConflict == nil || explicitlyChosen,
+            let baseline = try synchronizedConfiguration(), server == baseline
+        {
+            do {
+                serverRecord[Self.payloadKey] =
+                    try Self.encodePayload(local) as CKRecordValue
+            } catch { throw PrivateCloudSyncError.persistenceFailed }
             records[serverRecord.recordID] = serverRecord
             synchronizedRecords.remove(serverRecord.recordID)
             dirtyRecords.insert(serverRecord.recordID)
-            try setPendingConfigurationConflict(conflict)
+            return true
+        }
+        if pendingConfigurationConflict == nil,
+            let baseline = try synchronizedConfiguration(), local == baseline
+        {
+            try await configuration.apply(server)
+            records[serverRecord.recordID] = serverRecord
+            synchronizedRecords.remove(serverRecord.recordID)
+            dirtyRecords.insert(serverRecord.recordID)
             markSynchronized(serverRecord)
             return false
         }
-        do {
-            serverRecord[Self.payloadKey] =
-                try Self.encodePayload(local) as CKRecordValue
-        } catch {
-            throw PrivateCloudSyncError.persistenceFailed
-        }
+        let conflict = CloudConfigurationConflict(local: local, iCloud: server)
         records[serverRecord.recordID] = serverRecord
         synchronizedRecords.remove(serverRecord.recordID)
         dirtyRecords.insert(serverRecord.recordID)
-        return true
+        try setPendingConfigurationConflict(conflict)
+        markSynchronized(serverRecord)
+        return false
     }
 
     func prepareAccountRecord(
@@ -1796,7 +1834,13 @@ actor PrivateCloudSyncStore {
         }
         switch resolution {
         case .keepThisDevice:
+            guard let revision = pendingConfigurationConflictRevision else {
+                throw PrivateCloudSyncError.invalidRecord
+            }
             let local = await configuration.snapshot()
+            guard revision == pendingConfigurationConflictRevision else {
+                throw PrivateCloudSyncError.configurationSelectionChanged
+            }
             do {
                 record[Self.payloadKey] =
                     try Self.encodePayload(local) as CKRecordValue
@@ -1806,8 +1850,10 @@ actor PrivateCloudSyncStore {
             records[record.recordID] = record
             synchronizedRecords.remove(record.recordID)
             dirtyRecords.insert(record.recordID)
+            configurationUploadChoice = (revision, local)
             return record
         case .useICloud:
+            let revision = pendingConfigurationConflictRevision
             do {
                 try await configuration.apply(conflict.iCloud)
             } catch let error as PrivateCloudSyncError {
@@ -1815,9 +1861,24 @@ actor PrivateCloudSyncStore {
             } catch {
                 throw PrivateCloudSyncError.persistenceFailed
             }
-            try clearPendingConfigurationConflict()
+            try completeCloudConfigurationSelection(
+                revision: revision, snapshot: conflict.iCloud)
             return nil
         }
+    }
+
+    // Called after the configuration actor hop. A newer conflict owns its
+    // baseline and prompt even if an older selection has finished applying.
+    func completeCloudConfigurationSelection(
+        revision: UUID?, snapshot: CloudConfigurationSnapshot
+    ) throws {
+        guard pendingConfigurationConflictRevision == revision else {
+            throw PrivateCloudSyncError.configurationSelectionChanged
+        }
+        let data = try Self.encodePayload(snapshot)
+        try defaults.set(data, forKey: synchronizedConfigurationKey)
+        synchronizedConfigurationData = data
+        try clearPendingConfigurationConflict()
     }
 
     func completeConfigurationConflictResolution(
@@ -1911,6 +1972,7 @@ actor PrivateCloudSyncStore {
         for key in [
             pendingConfigurationConflictKey, recordSystemFieldsKey,
             synchronizedPayloadDigestsKey, retainedRecordPayloadsKey,
+            synchronizedConfigurationKey,
             PrivateCloudPersistence.engineKey,
         ] {
             legacyDefaults.removeObject(forKey: key)
@@ -1924,6 +1986,7 @@ actor PrivateCloudSyncStore {
         dirtyRecords.removeAll()
         deletedRecords.removeAll()
         synchronizedPayloadDigests.removeAll()
+        synchronizedConfigurationData = nil
         if pendingConfigurationConflictIsInvalid {
             try clearPendingConfigurationConflict()
         }
@@ -2557,21 +2620,25 @@ actor PrivateCloudSyncStore {
                     )
                 )
             case "Configuration":
-                guard let previousRecord,
-                    let previousData = previousRecord[Self.payloadKey] as? Data
-                else {
-                    return .applyRemote
-                }
-                let previous = try JSONDecoder().decode(
-                    CloudConfigurationSnapshot.self,
-                    from: previousData
-                )
                 let incoming = try JSONDecoder().decode(
                     CloudConfigurationSnapshot.self,
                     from: incomingData
                 )
                 let local = await configuration.snapshot()
-                guard local != previous, local != incoming else {
+                if pendingConfigurationConflict == nil, local != incoming {
+                    if let baseline = try synchronizedConfiguration() {
+                        if incoming == baseline {
+                            return .preserveLocal(try Self.encodePayload(local))
+                        }
+                        if local == baseline { return .applyRemote }
+                    } else if previousRecord == nil {
+                        return .applyRemote
+                    }
+                    return .requestConfigurationConfirmation(
+                        CloudConfigurationConflict(
+                            local: local, iCloud: incoming))
+                }
+                guard local != incoming else {
                     return .applyRemote
                 }
                 return .requestConfigurationConfirmation(
@@ -2708,11 +2775,17 @@ actor PrivateCloudSyncStore {
         guard let data = record[Self.payloadKey] as? Data else {
             return
         }
+        if record.recordType == "Configuration" {
+            synchronizedConfigurationData = data
+        }
         synchronizedPayloadDigests[record.recordID.recordName] =
             Self.payloadDigest(data)
     }
 
     private func persistRecordState() throws {
+        if let data = synchronizedConfigurationData {
+            try defaults.set(data, forKey: synchronizedConfigurationKey)
+        }
         try persistPendingLegacyRecordDeletions()
         try defaults.commit(
             records: dirtyRecords.compactMap { records[$0] },
@@ -2744,6 +2817,7 @@ actor PrivateCloudSyncStore {
             )
             pendingConfigurationConflict = conflict
             pendingConfigurationConflictRevision = UUID()
+            configurationUploadChoice = nil
         } catch let error as PrivateCloudSyncError {
             throw error
         } catch {
@@ -2752,10 +2826,21 @@ actor PrivateCloudSyncStore {
         }
     }
 
+    private func synchronizedConfiguration() throws
+        -> CloudConfigurationSnapshot?
+    {
+        guard let data = synchronizedConfigurationData else { return nil }
+        do {
+            return try JSONDecoder().decode(
+                CloudConfigurationSnapshot.self, from: data)
+        } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
+    }
+
     private func clearPendingConfigurationConflict() throws {
         try defaults.removeObject(forKey: pendingConfigurationConflictKey)
         pendingConfigurationConflict = nil
         pendingConfigurationConflictRevision = nil
+        configurationUploadChoice = nil
         pendingConfigurationConflictIsInvalid = false
     }
 

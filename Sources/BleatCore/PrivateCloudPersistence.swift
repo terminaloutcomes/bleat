@@ -79,11 +79,14 @@ struct PrivateCloudPersistence: Sendable {
     static let digestKey = "bleat.cloudKit.synchronizedPayloadDigests.v1"
     static let retainedKey = "bleat.cloudKit.retainedRecordPayloads.v1"
     static let engineKey = "bleat.cloudKit.syncEngineState.v1"
+    static let configurationBaselineKey =
+        "bleat.cloudKit.synchronizedConfiguration.v1"
     static let stateKeys = [
         engineKey,
         "bleat.cloudKit.ignoredAccounts.v1",
         "bleat.cloudKit.ignoredStatisticsAccounts.v1",
         "bleat.cloudKit.pendingConfigurationConflict.v1",
+        configurationBaselineKey,
         "bleat.cloudKit.pendingAccountChanges.v1",
         "bleat.cloudKit.legacyAccountIdentityMappings.v1",
         "bleat.cloudKit.pendingLegacyRecordDeletions.v1",

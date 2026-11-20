@@ -474,7 +474,15 @@
     "testInvalidPersistedConfigurationConflictFailsClosed()",
     "testDeletingCloudDataClearsInvalidPersistedConfigurationConflict()",
     "testFailedPendingStateSavesPreserveRetryState()",
-    "testAccountDeletionAfterCacheEvictionPreservesHistory()"
+    "testAccountDeletionAfterCacheEvictionPreservesHistory()",
+    "testUnchangedCloudSettingsPreserveRecentLocalEditAfterRelaunch(prepareBeforeFetch:)",
+    "testServerSettingsConflictDistinguishesEchoAndConcurrentEdit(serverRate:fetchBeforeFailure:)",
+    "testDurableSettingsBaselineSurvivesMissingTransportMetadata()",
+    "testOlderCloudSettingsSelectionCannotCompleteOverNewerConflict()",
+    "testMissingBaselineNeverTreatsUnsentSettingsAsAcknowledged()",
+    "testConfigurationBaselineRecoversFromAcknowledgedMetadata()",
+    "testInvalidConfigurationBaselineFailsWithoutReplacingLocalSettings()",
+    "testRemoteOnlyConfigurationEditAppliesAfterPreparation()"
   ],
   "BleatCoreTests.ProgressSyncTests": [
     "incompleteFinishedCheckpointPreservesStoredPayload()",

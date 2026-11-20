@@ -1391,6 +1391,7 @@ extension PrivateCloudSyncFailure {
             }
         case .disabled: "iCloud sync is off"
         case .invalidRecord: "Invalid iCloud data"
+        case .configurationSelectionChanged: "iCloud settings choice changed"
         case .storage: "iCloud storage update failed"
         case .persistenceFailed: "Local storage unavailable"
         case .nonPrivateDatabase: "Unsafe iCloud configuration"
@@ -1411,6 +1412,8 @@ extension PrivateCloudSyncFailure {
             "The previous iCloud synchronization is still stopping."
         case .invalidRecord:
             "Bleat received incomplete or inconsistent data from iCloud."
+        case .configurationSelectionChanged:
+            "The iCloud settings changed while your choice was being applied. Review the current settings choices."
         case .storage(let failure):
             switch failure {
             case .invalidLegacyMetadata:
@@ -1466,6 +1469,8 @@ extension PrivateCloudSyncFailure {
         case .disabled:
             "icloud.slash"
         case .callbackTimedOut, .stopping, .invalidRecord,
+            .configurationSelectionChanged,
+
             .nonPrivateDatabase, .engineUnavailable,
             .unexpected:
             "exclamationmark.triangle"
@@ -1479,7 +1484,9 @@ extension PrivateCloudSyncFailure {
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
-        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+        case .disabled, .stopping, .invalidRecord,
+            .configurationSelectionChanged,
+            .nonPrivateDatabase,
             .unexpected:
             false
         }
@@ -1514,6 +1521,8 @@ extension PrivateCloudSyncFailure {
         case .nonPrivateDatabase:
             .sourceBug
         case .cancelled, .stopping, .disabled, .invalidRecord,
+            .configurationSelectionChanged,
+
             .engineUnavailable,
             .unexpected:
             .unknown
@@ -7344,6 +7353,8 @@ final class AppModel {
             privateCloudState = .idle
             return nil
         } catch let error {
+            pendingCloudConfigurationConflict =
+                await service.pendingPrivateCloudConfigurationConflict()
             let failure = AppFailure(
                 operation: .privateCloudSync,
                 serviceError: error

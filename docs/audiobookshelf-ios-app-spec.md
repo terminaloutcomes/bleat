@@ -1949,6 +1949,16 @@ complete current device snapshot or complete iCloud snapshot. The pending
 choice survives relaunch, suppresses automatic configuration uploads, and each
 typed resolution operation emits the same local and consent-gated remote
 diagnostic lifecycle as other CloudKit operations.
+Settings reconciliation uses a durable acknowledged server snapshot independently
+of the mutable prepared-upload cache. An unchanged cloud snapshot preserves a
+local-only edit for upload; a remote-only edit applies when local settings still
+equal that baseline. Different changes on both sides require a choice. Missing
+baseline evidence must not promote an unsent payload to acknowledged state:
+preserve local settings and request reconciliation. Keep This Device immediately
+attempts to upload the complete current settings; Use iCloud replaces local
+settings with the selected cloud snapshot. Neither establishes a permanent device
+preference. A stale selection cannot clear a newer conflict revision. Resetting
+local cloud metadata clears the settings baseline.
 `BLEAT_APP_ATTEST_MODE` likewise accepts only `enabled` or `disabled` and
 defaults to `enabled`. `BUILD_WITHOUT_PAID_DEVELOPER` accepts only `YES` or
 `NO`, defaults to `NO`, and when `YES` overrides both effective capability

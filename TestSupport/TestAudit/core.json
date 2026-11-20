@@ -16029,7 +16029,7 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testEveryPrivateCloudErrorPreservesDiagnosticFailureCode",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 72
+        "line": 151
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -16071,6 +16071,12 @@
         "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
         "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      },
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "decision": "update genuine-conflict fixture, retry/revision assertions or typed diagnostic map",
+        "assessment": "Distinct independent remote records represent real concurrent changes rather than an unchanged echo; keeping local retains pending choice across failed save/recreation and rejects stale completion before confirmed retry. Existing diagnostic mapping includes the new settings-choice revision cause.",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
       }
     },
     {
@@ -17081,7 +17087,7 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testFetchedConfigurationConflictWaitsForUserDecision",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 854
+        "line": 1352
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -17123,6 +17129,12 @@
         "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
         "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      },
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "decision": "update genuine-conflict fixture, retry/revision assertions or typed diagnostic map",
+        "assessment": "Distinct independent remote records represent real concurrent changes rather than an unchanged echo; keeping local retains pending choice across failed save/recreation and rejects stale completion before confirmed retry. Existing diagnostic mapping includes the new settings-choice revision cause.",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
       }
     },
     {
@@ -17273,7 +17285,7 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUsingICloudResolvesConfigurationConflict",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 1066
+        "line": 1577
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -17315,13 +17327,19 @@
         "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
         "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      },
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "decision": "update genuine-conflict fixture, retry/revision assertions or typed diagnostic map",
+        "assessment": "Distinct independent remote records represent real concurrent changes rather than an unchanged echo; keeping local retains pending choice across failed save/recreation and rejects stale completion before confirmed retry. Existing diagnostic mapping includes the new settings-choice revision cause.",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
       }
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testKeepingThisDevicePreparesCurrentConfigurationForUpload",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 1099
+        "line": 1618
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
@@ -17363,6 +17381,12 @@
         "synchronizationAndOwnership": "Independent current-schema in-memory containers and owned UUID defaults; awaited actor/store operations. Reconstructed stores share the same container/dependencies. The read-only failure case alone owns a temporary disk store. Synthetic records do not establish live CloudKit, process durability, UI decisions or measured write amplification.",
         "executionEvidence": "docs/release-evidence/test-reliability-core-followups.md#private-cloud-record-and-persistence-context-review-372",
         "historicalAssessment": "Original primary fields remain historical; this scoped review states only current observable assertions and explicit limits."
+      },
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "decision": "update genuine-conflict fixture, retry/revision assertions or typed diagnostic map",
+        "assessment": "Independent remote settings create a real conflict. Current local payload is retained through batch failure and recreation; stale completion cannot clear the current revision. Renewed explicit Keep authorization allows only the matching revision/snapshot echo retry; confirmed save precedes final completion.",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
       }
     },
     {
@@ -26307,6 +26331,366 @@
       "classification": "Local SwiftData integration and domain encoding, with no server or device claim.",
       "compiler_skip": "No conditional skip.",
       "reason": "Exercises the actual persisted store/decoder boundary with isolated data."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testUnchangedCloudSettingsPreserveRecentLocalEditAfterRelaunch",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 984
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Both prepare-before-fetch arguments retain a local 1.25 rate against a structurally equal old cloud value after actor recreation, without conflict, and prepare the local upload.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "Both prepare-before-fetch arguments retain a local 1.25 rate against a structurally equal old cloud value after actor recreation, without conflict, and prepare the local upload."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "Both prepare-before-fetch arguments retain a local 1.25 rate against a structurally equal old cloud value after actor recreation, without conflict, and prepare the local upload.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "Both prepare-before-fetch arguments retain a local 1.25 rate against a structurally equal old cloud value after actor recreation, without conflict, and prepare the local upload.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "Both prepare-before-fetch arguments retain a local 1.25 rate against a structurally equal old cloud value after actor recreation, without conflict, and prepare the local upload.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testServerSettingsConflictDistinguishesEchoAndConcurrentEdit",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1036
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Four cases combine server rate 1.0/1.75 and fetched-before-failure false/true with acknowledged 1.0, submitted 1.25 and newer local 1.5. Only unchanged cloud permits retry; genuinely concurrent/pending choices stay explicit. Independent fetch/failure CKRecords prevent accidental fixture mutation.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "Four cases combine server rate 1.0/1.75 and fetched-before-failure false/true with acknowledged 1.0, submitted 1.25 and newer local 1.5. Only unchanged cloud permits retry; genuinely concurrent/pending choices stay explicit. Independent fetch/failure CKRecords prevent accidental fixture mutation."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "Four cases combine server rate 1.0/1.75 and fetched-before-failure false/true with acknowledged 1.0, submitted 1.25 and newer local 1.5. Only unchanged cloud permits retry; genuinely concurrent/pending choices stay explicit. Independent fetch/failure CKRecords prevent accidental fixture mutation.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "Four cases combine server rate 1.0/1.75 and fetched-before-failure false/true with acknowledged 1.0, submitted 1.25 and newer local 1.5. Only unchanged cloud permits retry; genuinely concurrent/pending choices stay explicit. Independent fetch/failure CKRecords prevent accidental fixture mutation.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "An unchanged server payload in a serverRecordChanged response retains and retries the 1.25 local edit without a prompt; outgoing decoded snapshot matches.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testDurableSettingsBaselineSurvivesMissingTransportMetadata",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1112
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "A valid persisted baseline without record metadata still preserves a subsequent 1.25 local edit when old cloud state arrives.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "A valid persisted baseline without record metadata still preserves a subsequent 1.25 local edit when old cloud state arrives."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "A valid persisted baseline without record metadata still preserves a subsequent 1.25 local edit when old cloud state arrives.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "A valid persisted baseline without record metadata still preserves a subsequent 1.25 local edit when old cloud state arrives.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "A valid persisted baseline without record metadata still preserves a subsequent 1.25 local edit when old cloud state arrives.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testOlderCloudSettingsSelectionCannotCompleteOverNewerConflict",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1142
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Deterministically staged post-apply continuation rejects an older conflict revision with configurationSelectionChanged, retaining the newer prompt and structurally equal baseline; this is not a live actor-scheduler/device claim.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "Deterministically staged post-apply continuation rejects an older conflict revision with configurationSelectionChanged, retaining the newer prompt and structurally equal baseline; this is not a live actor-scheduler/device claim."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "Deterministically staged post-apply continuation rejects an older conflict revision with configurationSelectionChanged, retaining the newer prompt and structurally equal baseline; this is not a live actor-scheduler/device claim.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "Deterministically staged post-apply continuation rejects an older conflict revision with configurationSelectionChanged, retaining the newer prompt and structurally equal baseline; this is not a live actor-scheduler/device claim.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "Deterministically staged post-apply continuation rejects an older conflict revision with configurationSelectionChanged, retaining the newer prompt and structurally equal baseline; this is not a live actor-scheduler/device claim.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testMissingBaselineNeverTreatsUnsentSettingsAsAcknowledged",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1208
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Older retained unsent 1.25 payload with synchronized digest for 1.0 and absent new baseline preserves local and prompts rather than treating dirty metadata as acknowledged.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "Older retained unsent 1.25 payload with synchronized digest for 1.0 and absent new baseline preserves local and prompts rather than treating dirty metadata as acknowledged."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "Older retained unsent 1.25 payload with synchronized digest for 1.0 and absent new baseline preserves local and prompts rather than treating dirty metadata as acknowledged.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "Older retained unsent 1.25 payload with synchronized digest for 1.0 and absent new baseline preserves local and prompts rather than treating dirty metadata as acknowledged.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "Older retained unsent 1.25 payload with synchronized digest for 1.0 and absent new baseline preserves local and prompts rather than treating dirty metadata as acknowledged.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testConfigurationBaselineRecoversFromAcknowledgedMetadata",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1253
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "A missing new baseline recovers only a payload matching synchronized metadata digest, survives local preparation/recreation, and is cleared by cloud metadata reset.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "A missing new baseline recovers only a payload matching synchronized metadata digest, survives local preparation/recreation, and is cleared by cloud metadata reset."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "A missing new baseline recovers only a payload matching synchronized metadata digest, survives local preparation/recreation, and is cleared by cloud metadata reset.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "A missing new baseline recovers only a payload matching synchronized metadata digest, survives local preparation/recreation, and is cleared by cloud metadata reset.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "A missing new baseline recovers only a payload matching synchronized metadata digest, survives local preparation/recreation, and is cleared by cloud metadata reset.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testInvalidConfigurationBaselineFailsWithoutReplacingLocalSettings",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1301
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Corrupt persisted baseline bytes produce typed invalidStoredState while local settings remain unchanged.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "Corrupt persisted baseline bytes produce typed invalidStoredState while local settings remain unchanged."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "Corrupt persisted baseline bytes produce typed invalidStoredState while local settings remain unchanged.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "Corrupt persisted baseline bytes produce typed invalidStoredState while local settings remain unchanged.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "Corrupt persisted baseline bytes produce typed invalidStoredState while local settings remain unchanged.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testRemoteOnlyConfigurationEditAppliesAfterPreparation",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
+        "line": 1323
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "A remote-only 1.5 rate applies without prompting when local equals the acknowledged baseline, even after preparation.",
+      "dependencies_setup_actions_postconditions": {
+        "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
+        "action_postconditions": "A remote-only 1.5 rate applies without prompting when local equals the acknowledged baseline, even after preparation."
+      },
+      "synchronization_timeout_tolerance": {
+        "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "timeout_tolerance": "N/A: no elapsed-time assertion or timed condition wait."
+      },
+      "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "rules": {
+        "1": "A remote-only 1.5 rate applies without prompting when local equals the acknowledged baseline, even after preparation.",
+        "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+        "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
+        "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
+        "5": "State is local to a fresh in-memory persistence fixture and unique UserDefaults suite; value-only tests construct all inputs in the body.",
+        "6": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+        "7": "No elapsed-time thresholds, retry-to-green or timeout changes.",
+        "8": "Typed operation/cause, state, values, and counts are asserted; deadline failure paths assert operation and cause.",
+        "9": "Individually inspected body and scoped fixture helpers; execution evidence remains separate from inventory parity."
+      },
+      "decision": "keep",
+      "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
+      "action_postconditions": "A remote-only 1.5 rate applies without prompting when local equals the acknowledged baseline, even after preparation.",
+      "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
+      "timeout_tolerance": "N/A: no time tolerance.",
+      "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
+      "compiler_skip": "No per-test compiler guard, opt-in flag, or skip applies.",
+      "reason": "A remote-only 1.5 rate applies without prompting when local equals the acknowledged baseline, even after preparation.",
+      "shared_helper_review": "Inspected makeSyncStoreFixture (in-memory ModelContainer, unique UserDefaults suite, scoped store/account/statistics/configuration dependencies), value builders, and actor spies/checkpoint. CloudKitCancellationProbe.waitForEntry uses an unbounded continuation; both callers are explicitly tracked.",
+      "settingsConflictReview20261028": {
+        "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+        "base": "483f85e38221a6c59fe5e3f975bbdaffd7729607",
+        "decision": "add deterministic settings baseline regression",
+        "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
+      }
     }
   ],
   "issue_382": {
@@ -26593,5 +26977,11 @@
     "addedSourceReviews": 3,
     "scope": "Checkpoint actor persistence/removal, shipped-schema upgrade with absent baseline, and incomplete-payload preservation. Historical audit counts above remain historical; execution is in docs/release-evidence/finished-progress-conflicts.md.",
     "accountRemovalReview": "The existing AccountStoreTests.testRemovingActiveAccountSelectsDeterministicReplacement now seeds canonical, legacy-alias and other-account checkpoints. Account removal must erase both owned namespaces while retaining the other account; APIs are awaited and storage is fresh/in-memory."
+  },
+  "settingsConflictCandidateReview": {
+    "issue": "https://github.com/terminaloutcomes/bleat/issues/484",
+    "addedFunctions": 8,
+    "currentStructuredRecords": 621,
+    "evidence": "Standalone unsigned host gate: 619 passed, one named synchronizable-Keychain exclusion; coverage exported. Focused cloud/persistence: 75 declared tests across two suites. Independent review found no blocker. Earlier stacked results, initial standalone compile failure and mutable-fixture alias failure remain retained separately; no source correctness failure was hidden."
   }
 }

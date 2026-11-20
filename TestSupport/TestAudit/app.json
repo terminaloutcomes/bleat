@@ -8,7 +8,7 @@
     ]
   },
   "status": "665 current in-scope structured method records; this repair individually source-reviewed the 25 previously omitted existing bodies and referenced helpers at 82e3fdf. Historical 593-method audit counts are preserved separately. The distinct 71-app existing-record semantic recheck queue remains open; current record coverage does not certify complete nine-rule compliance or current-head execution. Nine issue #146 conflict regressions have separate source records; broader acceptance remains unchanged.",
-  "methodCount": 665,
+  "methodCount": 666,
   "sourceIndex": "TestSupport/TestAudit/source-index.json",
   "asyncGateReview": "See parent audit of TestAsyncGates.swift and TestAsyncGateTests.swift. Current diff also adds a source-located, bounded MainActor XCTest condition helper and an AppModel operation-event probe; owning app-suite validation is pending.",
   "methods": [
@@ -695,7 +695,11 @@
     },
     {
       "identifier": "AppModelTests/testLastPlayingFailureSurvivesRelaunchAndRetriesLocalCheckpoint",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 101,
@@ -35231,7 +35235,11 @@
     },
     {
       "identifier": "AppModelTests/testPlaybackStartReusesMatchingActivePlayerAndResumes",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 20571,
@@ -50971,7 +50979,11 @@
     },
     {
       "identifier": "AppModelTests/testStopCompletionDoesNotRetireNewerSelection",
-      "reassessment": {"date": "2026-10-26", "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution", "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"},
+      "reassessment": {
+        "date": "2026-10-26",
+        "status": "historical sign-off qualified; #476 candidate unmerged; no fresh execution",
+        "record": "docs/release-evidence/test-reliability-current-status.md#sign-offs-revisited-after-476-26-october-2026"
+      },
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
         "line": 11995
@@ -53515,6 +53527,62 @@
         "decision": {
           "outcome": "keep",
           "reason": "Checks semantic state and actual service request admission with isolated fixtures."
+        }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testChangedCloudSettingsChoiceRetainsNewerPromptAndTypedFailure",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 16920
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "TestAppService"
+      ],
+      "actions": [
+        {
+          "line": 16920,
+          "expression": "await model.start(); await bounded prompt readiness; stage typed failure/newer conflict; await model.resolveCloudConfigurationConflict(.useICloud)"
+        }
+      ],
+      "assertions": [
+        {
+          "line": 16920,
+          "expression": "Exact AppFailure, newer pending conflict, failed private-cloud state and settings-specific title are asserted."
+        }
+      ],
+      "synchronizationEvidence": [
+        {
+          "line": 16920,
+          "expression": "Bounded waitUntil(.seconds(2)) asserts readiness; subsequent actor/model actions are directly awaited."
+        }
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "An older cloud settings selection fails with its specific typed cause and refreshes the newer pending conflict without clearing it.",
+        "purpose": "Fresh TestAppService with isolated configuration values and staged typed selection failure; bounded initial prompt readiness followed by awaited resolution.",
+        "actionPostconditions": [
+          {
+            "action": "Start, await original conflict, stage newer conflict and configurationSelectionChanged error, choose Use iCloud.",
+            "postcondition": "Returned typed failure, failed sync state, newer pending prompt and settings-specific title all match."
+          }
+        ],
+        "timeoutAndToleranceRationale": "Bounded 2-second queue waits assert success; gate completions and service calls are awaited. This is a state-arrival bound, not a product timing tolerance.",
+        "ruleAssessments": {
+          "1": "The action is followed by direct typed/model state or service request assertions specific to this scenario.",
+          "2": "Cloud queue waits use bounded waitUntil and assert success before dependent actions; no fixed scheduler sleeps.",
+          "3": "N/A: no playback timing invariant.",
+          "4": "All gated service work is awaited after release; no framework callback drain is assumed.",
+          "5": "Cloud and account state are service fakes; local reset count is inspected where relevant.",
+          "6": "AppModel/service boundary is deterministic and injected; no live CloudKit account or server is contacted.",
+          "7": "No retry-to-green, assertion suppression, or timeout widening is present.",
+          "8": "Exact values/types are asserted; timeout condition waits are bounded and assert their result.",
+          "9": "Focused exact Simulator identity passed once; owning app gate 676 passed, zero failures/skips/test warnings. Broad UI gate 120 passed/seven named workflow skips. Built discovery/result verifier and xcresult identities/outcomes inspected. No real CloudKit or physical-device claim."
+        },
+        "decision": {
+          "outcome": "keep",
+          "reason": "Typed cloud/account transitions are exercised with gated or bounded deterministic setup and exact resulting state."
         }
       }
     }
