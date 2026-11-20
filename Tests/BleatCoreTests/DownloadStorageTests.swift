@@ -659,13 +659,21 @@ final class DownloadStorageTests {
     @Test
     func testStoragePreflightReadsCapacityFromVolume() async throws {
         try await withFixture { fixture in
-
-            let requirement = try await fixture.storage.preflight(
-                plan: fixture.plan
-            )
-
-            #expect(requirement.expectedBytes == 4)
-            #expect(requirement.requiredBytes > 4)
+            let expected = try DownloadStorageRequirement(expectedBytes: 4)
+            do {
+                let requirement = try await fixture.storage.preflight(
+                    plan: fixture.plan
+                )
+                #expect(requirement == expected)
+            } catch let DownloadStorageError.insufficientSpace(
+                requiredBytes, availableBytes
+            ) {
+                // Important-usage free space is supplied by the host volume.
+                // Zero is valid, and CI does not guarantee 256 MiB headroom.
+                #expect(requiredBytes == expected.requiredBytes)
+                #expect(availableBytes >= 0)
+                #expect(availableBytes < requiredBytes)
+            }
         }
     }
 
@@ -912,12 +920,18 @@ final class DownloadStorageTests {
                 expectedChunkLength: 2
             )
 
-            let requirement = try await fixture.storage.preflightRemaining(
+            let expected = try DownloadStorageRequirement(expectedBytes: 2)
+            let storage = DownloadStorage(
+                layout: fixture.layout,
+                readCapacity: { _ in
+                    expected.requiredBytes
+                })
+            let requirement = try await storage.preflightRemaining(
                 record: record,
                 tracks: fixture.plan.tracks
             )
 
-            #expect(requirement.expectedBytes == 2)
+            #expect(requirement == expected)
         }
     }
 
