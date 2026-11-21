@@ -2954,7 +2954,9 @@ final class BleatUITests: XCTestCase {
         review.tap()
         let confirm = app.buttons["settings.icloud.restoreConfirm"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
-        app.buttons["Cancel"].firstMatch.tap()
+        let cancel = app.buttons["settings.icloud.restoreCancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
         XCTAssertFalse(
             app.staticTexts["Restored to this device’s isolated test target."]
                 .exists)

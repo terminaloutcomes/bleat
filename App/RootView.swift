@@ -6706,9 +6706,9 @@ private struct PrivateCloudBackupSection: View {
                     }
                 }
             }
-            .confirmationDialog(
+            .alert(
                 "Disable Sync and Restore to the Test Target?",
-                isPresented: $confirmingRestore, titleVisibility: .visible
+                isPresented: $confirmingRestore
             ) {
                 Button("Disable Sync and Restore", role: .destructive) {
                     failure = nil
@@ -6716,6 +6716,7 @@ private struct PrivateCloudBackupSection: View {
                 }
                 .accessibilityIdentifier("settings.icloud.restoreConfirm")
                 Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("settings.icloud.restoreCancel")
             } message: {
                 Text(
                     "Bleat will turn off and finish normal iCloud syncing on this device before replacing the isolated test data. It won’t change iCloud or other devices. Normal sync will stay off until you turn it on."
