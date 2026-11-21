@@ -6494,78 +6494,186 @@ private struct RemoteTelemetryDiagnosticsSection: View {
     }
 }
 
-private struct PrivateCloudHistoryExportSection: View {
+private struct PrivateCloudBackupSection: View {
     let model: AppModel
     @State private var confirming = false
     @State private var capturing = false
     @State private var exporting = false
-    @State private var failed = false
+    @State private var importing = false
+    @State private var previewURL: URL?
+    private var previewing: Bool { previewURL != nil }
+    @State private var failure: String?
     @State private var document: StatisticsJSONDocument?
+    @State private var preview: PrivateCloudBackup.ReplacePlan?
 
     var body: some View {
         Section {
-            Button(
-                "Export iCloud Listening Slices",
-                systemImage: "square.and.arrow.up"
-            ) {
+            Button("Export Backup…", systemImage: "square.and.arrow.up") {
                 confirming = true
             }
-            .disabled(capturing || exporting)
-            .accessibilityIdentifier("settings.icloud.exportListeningSlices")
+            .disabled(capturing || exporting || previewing)
+            .accessibilityIdentifier("settings.icloud.exportBackup")
+            Button("Preview Restore…", systemImage: "doc.text.magnifyingglass")
+            {
+                failure = nil
+                preview = nil
+                importing = true
+            }
+            .disabled(capturing || exporting || previewing)
+            .accessibilityIdentifier("settings.icloud.previewRestore")
             if capturing {
-                ProgressView("Reading listening slices from iCloud…")
+                ProgressView("Reading Bleat data from iCloud…")
+            } else if previewing {
+                ProgressView("Comparing backup with current iCloud data…")
             }
-            if failed {
-                Text(
-                    "Could not export iCloud listening slices. No archive was saved."
-                )
-                .foregroundStyle(.red)
+            if let failure {
+                Text(failure).foregroundStyle(.red)
             }
+            if let preview {
+                previewDetails(preview)
+            }
+        } header: {
+            Text("iCloud Data")
         } footer: {
             Text(
-                "This archive is for migration testing. It is not a backup and does not include accounts, settings, or book completions."
+                "Backs up Bleat’s CloudKit data only. It excludes Keychain credentials, local downloads, and data held by Audiobookshelf. Restore preview does not change any data."
             )
         }
         .confirmationDialog(
-            "Export Private Listening Data?",
+            "Export Private iCloud Data?",
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
             Button("Continue to Save") {
-                failed = false
+                failure = nil
                 capturing = true
             }
         } message: {
             Text(
-                "The file contains private listening titles, dates, and identifiers. Choose a device-local destination to keep it off cloud storage. Do not attach it to public support issues."
+                "The backup contains private listening history and server account details. Choose a device-local destination to keep it off cloud storage. Do not share it publicly."
             )
         }
         .task(id: capturing) {
             guard capturing else { return }
             defer { capturing = false }
             do {
-                let data = try await model.capturePrivateCloudHistoryArchive()
+                let data = try await model.capturePrivateCloudBackup()
                 try Task.checkCancellation()
                 document = StatisticsJSONDocument(data: data)
                 exporting = true
-            } catch is CancellationError {
-                // Leaving Settings cancels a pending capture.
             } catch {
                 if !Task.isCancelled {
-                    failed = true
+                    failure = failureMessage(error)
                 }
             }
         }
         .fileExporter(
-            isPresented: $exporting,
-            document: document,
-            contentTypes: [.json],
-            defaultFilename: "bleat-private-icloud-listening-slices"
+            isPresented: $exporting, document: document, contentTypes: [.json],
+            defaultFilename: "bleat-private-icloud-backup"
         ) { result in
             document = nil
-            if case .failure = result { failed = true }
+            if case .failure = result {
+                failure = "Could not save the iCloud backup."
+            }
         } onCancellation: {
             document = nil
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) {
+            result in
+            guard case .success(let url) = result, !previewing else { return }
+            previewURL = url
+        }
+        .task(id: previewURL) {
+            guard let url = previewURL else { return }
+            defer { previewURL = nil }
+            do {
+                let bytes = try await Self.readBackup(at: url)
+                let result = try await model.previewPrivateCloudRestore(bytes)
+                try Task.checkCancellation()
+                preview = result
+            } catch {
+                if !Task.isCancelled { failure = failureMessage(error) }
+            }
+        }
+    }
+
+    private func previewDetails(_ plan: PrivateCloudBackup.ReplacePlan)
+        -> some View
+    {
+        Group {
+            LabeledContent(
+                "Records in backup", value: plan.source.recordCount.formatted())
+            LabeledContent(
+                "Records now in iCloud",
+                value: plan.current.recordCount.formatted())
+            LabeledContent("Would add", value: plan.create.formatted())
+            LabeledContent("Would replace", value: plan.replace.formatted())
+            LabeledContent("Would remove", value: plan.remove.formatted())
+            DisclosureGroup("Records by type") {
+                recordCount("Server accounts", .account, plan)
+                recordCount("Settings", .configuration, plan)
+                recordCount("Listening slices", .listening, plan)
+                recordCount("Book completions", .completion, plan)
+                recordCount("Remote listening sessions", .remoteSession, plan)
+            }
+            if plan.accountRecordsAddedOrChanged > 0 {
+                Text("New or changed server accounts may need sign-in again.")
+                    .foregroundStyle(.secondary)
+            }
+            if plan.accountRecordsRemoved > 0 {
+                Text(
+                    "Removing server accounts can also remove saved credentials on older Bleat builds."
+                )
+                .foregroundStyle(.secondary)
+            }
+            Text(
+                "Preview only. This version does not replace live iCloud data."
+            )
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func recordCount(
+        _ label: String, _ kind: PrivateCloudBackup.Kind,
+        _ plan: PrivateCloudBackup.ReplacePlan
+    ) -> some View {
+        let current = plan.current.recordsByType[kind.rawValue, default: 0]
+        let backup = plan.source.recordsByType[kind.rawValue, default: 0]
+        return LabeledContent(
+            label,
+            value: "\(current.formatted()) now, \(backup.formatted()) in backup"
+        )
+    }
+
+    @concurrent
+    private nonisolated static func readBackup(at url: URL) async throws -> Data
+    {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var data = Data()
+        for try await byte in handle.bytes {
+            guard data.count < PrivateCloudBackup.maximumArchiveBytes else {
+                throw PrivateCloudBackup.Failure.archiveTooLarge
+            }
+            data.append(byte)
+        }
+        return data
+    }
+
+    private func failureMessage(_ error: any Error) -> String {
+        switch error as? PrivateCloudBackup.Failure {
+        case .accountMismatch:
+            "This backup belongs to a different iCloud account."
+        case .unsupportedVersion:
+            "This is not a supported full iCloud backup."
+        case .archiveTooLarge:
+            "This backup exceeds the supported size."
+        case .unsafeAccountPayload, .unsupportedData, .incompleteCapture:
+            "Bleat cannot verify that this iCloud backup is complete and safe. No data changed."
+        default:
+            "Could not prepare the iCloud backup. No data changed."
         }
     }
 }
@@ -6628,7 +6736,7 @@ private struct SettingsView: View {
 
                 if model.privateCloudSyncAvailable {
                     cloudSection
-                    PrivateCloudHistoryExportSection(model: model)
+                    PrivateCloudBackupSection(model: model)
                 }
 
                 Section("Appearance") {

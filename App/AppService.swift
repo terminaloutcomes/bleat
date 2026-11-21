@@ -839,7 +839,9 @@ protocol AppServicing: Sendable {
 
     func isPrivateCloudSyncAvailable() async -> Bool
 
-    func capturePrivateCloudHistoryArchive() async throws -> Data
+    func capturePrivateCloudBackup() async throws -> Data
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> PrivateCloudBackup.ReplacePlan
 
     func isPrivateCloudSyncEnabled() async -> Bool
 
@@ -1284,8 +1286,14 @@ extension AppServicing {
         true
     }
 
-    func capturePrivateCloudHistoryArchive() async throws -> Data {
-        throw PrivateCloudHistoryArchive.Failure.captureFailed
+    func capturePrivateCloudBackup() async throws -> Data {
+        throw PrivateCloudBackup.Failure.captureFailed
+    }
+
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> PrivateCloudBackup.ReplacePlan
+    {
+        throw PrivateCloudBackup.Failure.captureFailed
     }
 
     func isPrivateCloudSyncEnabled() async -> Bool {
@@ -4077,12 +4085,23 @@ actor LiveAppService: AppServicing {
         privateCloudSync != nil
     }
 
-    func capturePrivateCloudHistoryArchive() async throws -> Data {
+    func capturePrivateCloudBackup() async throws -> Data {
         guard let privateCloudSync else {
-            throw PrivateCloudHistoryArchive.Failure.captureFailed
+            throw PrivateCloudBackup.Failure.captureFailed
         }
-        return try await privateCloudSync.captureListeningHistoryArchive()
+        return try await privateCloudSync.captureCloudBackup()
             .encoded()
+    }
+
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> PrivateCloudBackup.ReplacePlan
+    {
+        guard let privateCloudSync else {
+            throw PrivateCloudBackup.Failure.captureFailed
+        }
+        let backup = try PrivateCloudBackup.decode(data)
+        return try await backup.planReplacing(
+            privateCloudSync.captureCloudBackup())
     }
 
     func isPrivateCloudSyncEnabled() async -> Bool {

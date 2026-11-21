@@ -111,7 +111,7 @@ public struct PrivateCloudHistoryArchive: Codable, Sendable {
 
     // Compare structure to the codec's typed representation. Preserve original
     // bytes but reject unknown keys (including nested opaque future fields).
-    private static func matchesShape(_ source: Any, _ typed: Any) -> Bool {
+    static func matchesShape(_ source: Any, _ typed: Any) -> Bool {
         if let source = source as? [String: Any],
             let typed = typed as? [String: Any]
         {

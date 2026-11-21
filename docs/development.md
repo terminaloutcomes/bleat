@@ -904,62 +904,83 @@ for evidence. Mixed-version physical testing with Bleat 0.1.3 verified explicitl
 records in both directions and preserved original history; see traceability.
 Host and simulator tests alone do not prove that journey.
 
-### Listening-history CloudKit archive (format 1)
+### iCloud Data backups (format 2)
 
-Issue #494's first increment is a **listening-slice-only diagnostic archive**.
-It is not a complete or restorable CloudKit backup. The explicit
-`PrivateCloudSyncCoordinator.captureListeningHistoryArchive()` API reads the
-actual private zone, independently of the local SwiftData cache. It walks zone
-pages from a fresh cursor, folds deletions, and returns no archive if fetching
-or validating any page fails. To bound memory, format 1 refuses captures above
-50,000 records, 40 MiB of raw payloads or 64 MiB of archive JSON. In the app, choose **Settings → Export iCloud Listening Slices**, review the
-privacy warning, then choose a file destination. Choose a device-local
-destination if you do not want a file provider to synchronize it. No capture
-runs automatically. The source build
-when known is the **capture app's** build, not necessarily the producer build of
-any record.
+In **Settings → iCloud Data**, choose **Export Backup…**, review the privacy
+warning, then choose where to save the file. Choose a device-local destination
+if you do not want a file provider to synchronize it. No capture runs
+automatically.
 
-The version-1 JSON envelope has `version`, `scope` (`listeningSlices`),
-`completeForScope`, optional `sourceBuild`, and `records`. For every current
-zone `ListeningSlice` record it preserves its logical name and exact base64
-application payload bytes, including legacy observations, canonical lineage,
-reset envelopes, timestamps, and boundaries. The current lineage schema
-version remains inside its own payload. The archive excludes completion
-milestones, imported remote sessions, settings, server-account descriptors,
-CloudKit system fields and sync tokens, credentials, and device-local stores.
-Source account identifiers inside listening payloads are retained for replay.
+Format 2 backs up the record data in Bleat's `BleatPrivateData` private
+CloudKit zone, not the device's cache. It verifies the zone inventory, fetches
+all keys and all change pages from a fresh cursor, folds deletions, and keeps
+the exact application bytes and logical name for each supported record:
 
-Developer use: decode with `PrivateCloudHistoryArchive.decode`, inspect
-`preview()` and separately compare the private `sourceAccountIDs()` to the
-expected exact source scope. Call `replay(confirmedAccountIDs:)` only after
-confirming that scope. The replay creates its own in-memory store with
-CloudKit disabled, no credentials, no pre-existing data, and fresh synthetic
-record IDs in an offline zone. It passes the original payloads through real
-ingestion and the app's canonical compaction path. It refuses cross-account
-remapping, duplicate names, incompatible records and incomplete or future
-archives. There is no merge into an existing target. Reapplying the same
-records is checked before compaction, and failed or cancelled staging is
-discarded. This does not simulate server acknowledgement for source retirement,
-recover old local SQLite metadata, or write to any CloudKit environment.
+- `ServerAccount`: non-secret server/account descriptors, including known
+  legacy/current account formats and account aliases.
+- `Configuration`: CloudKit-synced playback and download preferences.
+- `ListeningSlice`: legacy observations, canonical segments, boundaries,
+  lineage and reset records.
+- `CompletionMilestone`: completion IDs, timestamps and evidence.
+- `RemoteListeningSession`: remote listening-session IDs and data.
 
-The archive includes private listening titles, timestamps and identifiers.
-Keep it private and do not attach it to GitHub issues or logs. The separate
-`preview()` summary contains only versions, scope and counts; failures expose
-category codes rather than payload or provider error text. There is no
-automatic sharing or upload. The remaining record types and a signed isolated
-CloudKit capture test are not part of this increment.
+Neither checked-in CloudKit schema contains an app asset field. An unexpected
+custom zone, record type, extra field, encrypted field, asset, or share/parent
+reference prevents export rather than being silently omitted. A missing zone
+is not an empty verified backup. Per-record/page failures and observed iCloud
+account changes also fail capture. The archive excludes system `Users` records
+in the default zone, CloudKit change tags, system fields and sync tokens. It
+does not back up passwords, tokens or native login items held in Keychain
+(including iCloud Keychain), downloads, bookmarks or other device-local data
+not written to this zone, or anything stored only in Audiobookshelf. Archives
+that contain unsupported payloads or account URLs with credentials, query
+strings or fragments are refused. The format is unencrypted and still
+contains private server details and listening history. Keep it in a private
+location and do not attach it to public support issues.
 
-### Offline history archive tool (macOS)
+The JSON contains `version`, `zone`, `complete`, optionally the capture app's
+`sourceBuild`, a pseudonymous `accountBinding`, an unkeyed `contentDigest`, and sorted `records` with
+`kind`, `name` and the exact base64 payload. It is limited to 120,000 records,
+128 MiB of total payload and 224 MiB of archive JSON. The digest detects
+accidental edits or truncation; it does not authenticate the file. Format 1 was
+listening-slices only and is not a full backup or a restore source.
+
+**Preview Restore…** validates the whole file and compares it with a fresh
+capture for the same iCloud account. It reports records that would be added,
+replaced, or removed, including account changes. It does not write anything.
+A large backup can be exported even when replacing it exceeds a conservative
+single-operation budget. This build intentionally has no live replace action:
+old clients can re-upload local records, keep some slices deleted from the
+cloud, or delete stored credentials when a server account record disappears.
+CloudKit cannot make a large multi-operation overwrite atomic. A production
+restore must first have supported writer quiescence and local rebootstrap,
+a retained pre-restore backup, explicit user confirmation and recovery
+verification. This preview is not permission to use CloudKit Console for a
+live overwrite.
+
+### Offline archive tools (macOS)
 
 ```sh
-swift run bleat-cloud-history preview /path/to/archive.json
-swift run bleat-cloud-history private-scope-file /path/to/archive.json /private/new-scope.json
-# Review the private list against the account IDs you expect to replay.
-swift run bleat-cloud-history replay /path/to/archive.json /private/reviewed-scope.json
+swift run bleat-cloud-history backup-preview /path/to/backup.json
+swift run bleat-cloud-history backup-rehearse /path/to/backup.json /path/to/current-backup.json
 ```
 
-The optional scope helper requires a new file and creates it owner-readable
-only. It is not a substitute for reviewing the scope. For a fully synthetic
-run, use `Tests/BleatCoreTests/Fixtures/cloud-history-legacy-v1.json` as the
-archive. Preview and successful replay print only the redacted summary. The replay summary also counts prepared canonical upload records, not the full
-post-replay inventory. The tool has no command to write to CloudKit or an existing app store.
+The tool prints only redacted version information and counts. Full-backup
+rehearsal applies inserts, edits, and removals in disposable memory and
+compares a re-export byte-for-byte. It is not a CloudKit or local-app-store
+restore.
+
+To exercise listening-history migration itself, the format-1 synthetic fixture
+`Tests/BleatCoreTests/Fixtures/cloud-history-legacy-v1.json` remains available:
+
+```sh
+swift run bleat-cloud-history preview /path/to/history-archive.json
+swift run bleat-cloud-history private-scope-file /path/to/history-archive.json /private/new-scope.json
+# Review the private list against the account IDs you expect to replay.
+swift run bleat-cloud-history replay /path/to/history-archive.json /private/reviewed-scope.json
+```
+
+The scope file helper creates a new mode-0600 file and refuses to overwrite
+a file. Replay uses the real ingestion and canonical compaction code in a
+disposable SwiftData store with CloudKit disabled. It neither simulates
+server acknowledgement for source retirement nor recovers old SQLite metadata.

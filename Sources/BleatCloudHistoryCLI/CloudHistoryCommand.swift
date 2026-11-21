@@ -11,6 +11,8 @@ struct CloudHistoryCommand {
     static func main() async {
         do {
             try await run(Array(CommandLine.arguments.dropFirst()))
+        } catch let error as PrivateCloudBackup.Failure {
+            stop(error.rawValue)
         } catch let error as PrivateCloudHistoryArchive.Failure {
             stop(error.rawValue)
         } catch let error as Failure {
@@ -25,6 +27,26 @@ struct CloudHistoryCommand {
     private static func run(_ arguments: [String]) async throws {
         guard arguments.count >= 2 else { throw Failure.usage }
         let mode = arguments[0]
+        if mode == "backup-preview" || mode == "backup-rehearse" {
+            guard arguments.count == (mode == "backup-preview" ? 2 : 3) else {
+                throw Failure.usage
+            }
+            let desired = try PrivateCloudBackup.decode(
+                read(
+                    arguments[1], limit: PrivateCloudBackup.maximumArchiveBytes)
+            )
+            if mode == "backup-preview" {
+                try printJSON(desired.preview())
+            } else {
+                let current = try PrivateCloudBackup.decode(
+                    read(
+                        arguments[2],
+                        limit: PrivateCloudBackup.maximumArchiveBytes)
+                )
+                try printJSON(desired.rehearseReplacing(current))
+            }
+            return
+        }
         let archive = try PrivateCloudHistoryArchive.decode(read(arguments[1]))
         switch (mode, arguments.count) {
         case ("preview", 2):
@@ -117,7 +139,9 @@ struct CloudHistoryCommand {
         if usage {
             message += """
                 Usage:
-                  bleat-cloud-history preview ARCHIVE.json
+                  bleat-cloud-history backup-preview BACKUP.json
+                  bleat-cloud-history backup-rehearse BACKUP.json CURRENT-BACKUP.json
+                  bleat-cloud-history preview HISTORY-ARCHIVE.json
                   bleat-cloud-history private-scope-file ARCHIVE.json PRIVATE-SCOPE.json
                   bleat-cloud-history replay ARCHIVE.json CONFIRMED-SCOPE.json
 

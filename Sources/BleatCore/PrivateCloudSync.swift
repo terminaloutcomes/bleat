@@ -721,7 +721,7 @@ public actor CloudConfigurationStore {
         )
     }
 
-    public func apply(_ snapshot: CloudConfigurationSnapshot) throws {
+    static func validate(_ snapshot: CloudConfigurationSnapshot) throws {
         guard snapshot.defaultPlaybackRate.isFinite,
             (0.5...3).contains(snapshot.defaultPlaybackRate),
             [0, 5, 10, 15, 30].contains(
@@ -747,6 +747,10 @@ public actor CloudConfigurationStore {
         else {
             throw PrivateCloudSyncError.invalidRecord
         }
+    }
+
+    public func apply(_ snapshot: CloudConfigurationSnapshot) throws {
+        try Self.validate(snapshot)
         defaults.set(
             snapshot.defaultPlaybackRate,
             forKey: Key.defaultPlaybackRate
@@ -3439,85 +3443,100 @@ public actor PrivateCloudSyncCoordinator:
     private var engineCallbackDrain: [CheckedContinuation<Void, Never>] = []
     private let engineCancellations = PrivateCloudEngineCancellations()
 
-    /// Explicit, read-only capture of the private zone's current listening
-    /// payloads. Never uses the local cache or persists the page tokens.
-    public func captureListeningHistoryArchive() async throws
-        -> PrivateCloudHistoryArchive
-    {
+    /// Explicit full read of the Bleat-owned private zone. Fetch every user
+    /// field instead of projecting payload, so a new field/type fails closed.
+    public func captureCloudBackup() async throws -> PrivateCloudBackup {
         guard configurationFailure == nil, !deletingAccount,
             !clearingArchiveSource
-        else {
-            throw PrivateCloudHistoryArchive.Failure.captureFailed
-        }
+        else { throw PrivateCloudBackup.Failure.captureFailed }
+
         let database = container.privateCloudDatabase
-        let captureGeneration = engineStateGeneration
-        let captureRevision = archiveCaptureRevision
+        let generation = engineStateGeneration
+        let revision = archiveCaptureRevision
         var token: CKServerChangeToken?
-        var records: [CKRecord.ID: CKRecord] = [:]
-        var payloadBytes = 0
+        var records: [CKRecord.ID: PrivateCloudBackup.Entry] = [:]
+        var bytes = 0
+        var pageCount = 0
         do {
             let sourceUser = try await container.userRecordID()
+            let initialZones = try await database.allRecordZones()
+            try requireBackupZone(initialZones)
             while true {
                 try Task.checkCancellation()
+                pageCount += 1
+                guard pageCount <= 2_000 else {
+                    throw PrivateCloudBackup.Failure.incompleteCapture
+                }
                 let page = try await database.recordZoneChanges(
-                    inZoneWith: zoneID, since: token, desiredKeys: ["payload"]
-                )
+                    inZoneWith: zoneID, since: token)
                 guard try await container.userRecordID() == sourceUser,
-                    captureGeneration == engineStateGeneration,
-                    captureRevision == archiveCaptureRevision,
+                    generation == engineStateGeneration,
+                    revision == archiveCaptureRevision,
                     !deletingAccount, !clearingArchiveSource,
                     page.deletions.allSatisfy({
                         page.modificationResultsByID[$0.recordID] == nil
                     })
-                else { throw PrivateCloudHistoryArchive.Failure.captureFailed }
+                else { throw PrivateCloudBackup.Failure.captureFailed }
                 for deletion in page.deletions {
                     if let removed = records.removeValue(
-                        forKey: deletion.recordID),
-                        let payload = removed["payload"] as? Data
+                        forKey: deletion.recordID)
                     {
-                        payloadBytes -= payload.count
+                        bytes -= removed.payload.count
                     }
                 }
-                for result in page.modificationResultsByID.values {
-                    let record = try result.get().record
-                    if record.recordType == "ListeningSlice" {
-                        guard let payload = record["payload"] as? Data else {
-                            throw PrivateCloudHistoryArchive.Failure
-                                .invalidRecord
-                        }
-                        let previous = records.updateValue(
-                            record, forKey: record.recordID)
-                        payloadBytes +=
-                            payload.count
-                            - ((previous?["payload"] as? Data)?.count ?? 0)
-                        guard
-                            payloadBytes
-                                <= PrivateCloudHistoryArchive
-                                .maximumPayloadBytes,
-                            records.count
-                                <= PrivateCloudHistoryArchive.maximumRecords
-                        else {
-                            throw PrivateCloudHistoryArchive.Failure
-                                .archiveTooLarge
-                        }
+                for (id, result) in page.modificationResultsByID {
+                    let cloudRecord = try result.get().record
+                    guard cloudRecord.recordID == id, id.zoneID == zoneID else {
+                        throw PrivateCloudBackup.Failure.unsupportedData
                     }
+                    let record = try PrivateCloudBackup.Entry(
+                        cloudRecord: cloudRecord)
+                    let previous = records.updateValue(record, forKey: id)
+                    bytes +=
+                        record.payload.count - (previous?.payload.count ?? 0)
+                    guard bytes <= PrivateCloudBackup.maximumPayloadBytes,
+                        records.count <= PrivateCloudBackup.maximumRecords
+                    else { throw PrivateCloudBackup.Failure.archiveTooLarge }
                 }
                 guard page.moreComing else { break }
                 token = page.changeToken
             }
+            let finalZones = try await database.allRecordZones()
+            try requireBackupZone(finalZones)
+            guard try await container.userRecordID() == sourceUser,
+                generation == engineStateGeneration,
+                revision == archiveCaptureRevision,
+                !deletingAccount, !clearingArchiveSource
+            else { throw PrivateCloudBackup.Failure.captureFailed }
+            try Task.checkCancellation()
+            return try PrivateCloudBackup.capture(
+                records: Array(records.values),
+                accountBinding: PrivateCloudBackup.binding(
+                    container: Self.containerIdentifier,
+                    cloudUserRecordName: sourceUser.recordName
+                ),
+                sourceBuild: Bundle.main.object(
+                    forInfoDictionaryKey: "CFBundleVersion") as? String
+            )
         } catch is CancellationError {
             throw CancellationError()
-        } catch let failure as PrivateCloudHistoryArchive.Failure {
+        } catch let failure as PrivateCloudBackup.Failure {
             throw failure
         } catch {
-            throw PrivateCloudHistoryArchive.Failure.captureFailed
+            throw PrivateCloudBackup.Failure.captureFailed
         }
-        try Task.checkCancellation()
-        return try PrivateCloudHistoryArchive.capture(
-            Array(records.values),
-            sourceBuild: Bundle.main.object(
-                forInfoDictionaryKey: "CFBundleVersion") as? String
-        )
+    }
+
+    private func requireBackupZone(_ zones: [CKRecordZone]) throws {
+        let custom = Set(zones.map(\.zoneID)).subtracting([
+            CKRecordZone.default().zoneID
+        ])
+        guard custom.isSubset(of: [zoneID]) else {
+            throw PrivateCloudBackup.Failure.unsupportedData
+        }
+        guard custom.contains(zoneID) else {
+            throw PrivateCloudBackup.Failure.incompleteCapture
+        }
     }
 
     private func cancelEngine(_ candidate: CKSyncEngine) async {

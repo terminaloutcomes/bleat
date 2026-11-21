@@ -1795,14 +1795,15 @@ Store the completion time, duration snapshot, title/author snapshot, and evidenc
 
 ### 12.6 Retention, reset, and portability
 
-The CloudKit migration diagnostic archive is distinct from statistics
-portability. Format 1 covers only the actual private-zone `ListeningSlice`
-payloads, including legacy observations and canonical/reset envelopes. The
-explicit export is user-owned, not an automatic upload or complete backup.
-Offline replay validates and confirms the exact source-account scope before
-staging in a clean, non-CloudKit store; it never merges into existing app data.
-See [the archive format and offline workflow](development.md#listening-history-cloudkit-archive-format-1)
-for exclusions and privacy handling.
+The iCloud Data backup is distinct from statistics portability. Format 2
+captures the five supported record types in Bleat's private CloudKit zone,
+including non-secret account data, settings, completions, remote sessions and
+legacy/canonical listening records. Export is explicit and user-owned; it does
+not include Keychain credentials or device-local files. Restore preview checks
+the same iCloud account and reports the proposed changes without writing data.
+Live replacement is not supported until old-client writes and local recovery
+can be safely coordinated. Format 1 remains a history-only migration fixture.
+See [the archive format and offline workflow](development.md#icloud-data-backups-format-2).
 
 Listening history contains personal behavioral data. It receives the same file protection as other structured app data and is never written to logs or analytics.
 
