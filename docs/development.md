@@ -1021,3 +1021,28 @@ not promised by the CloudKit transport. Separately, the journal and
 materializer tests exercise restart, stable payload digestion, and the real
 local app record-ingestion path in disposable SwiftData stores. The simulator
 test uses a synthetic restore service and never joins an iCloud account.
+
+### Signed development CloudKit verification matrix (#492)
+
+The 101 host tests at `7b944a1` cover format-2 payload validation and
+round-tripping, model-only interrupted staging and selector outcomes, and
+durable local confirmation against the expected account and full digest.
+The iOS simulator test covers pause acknowledgement, cancel, confirmation,
+and sync-off through the synthetic app service. None exercise Apple's
+pagination or per-record results. In the shipped adapter the fetch and
+batch-save loops call concrete `CKDatabase` APIs; the offline coordinator's
+mock transport is not this adapter.
+
+Run the following only in a provisioned, signed **development** CloudKit
+environment using a disposable Apple Account and synthetic data. No
+production container data or personal account is a test target. Verify the
+entitlement/environment and both simulator accounts before seeding. If the
+test setup cannot inject a specific per-record/provider error into the real
+adapter path, record that row as **not run**. Do not fill an account's quota
+or treat an arbitrary network error or mock coordinator result as equivalent.
+
+| Scenario | Setup and action | Verify |
+| --- | --- | --- |
+| Complete export includes cloud-only data | Seed over 100 synthetic app records in the selected private zone, including a uniquely identified supported record known to be absent from simulator A's local store. Leave sync off on A, then export in Settings. | Compare the version-2 archive against a separate full read of the selected development zone. The known cloud-only record is present with exact payload bytes; all pages and per-type counts match. |
+| Page-two per-record failure | With the same multi-page fixture, return a successful first page and a second page containing an individual record failure in the otherwise successful result map. | The Settings export reports failure and never offers a complete archive or Save sheet. Earlier successful pages do not become a partial artifact labeled complete. The source remains unchanged. |
+| Staging quota failure after batch one | Start with a readable previous generation and reviewed backup large enough for at least two staging saves. Accept the first save to the fresh candidate, then inject provider `quotaExceeded` on the second (not `limitExceeded`). | Read active selector and previous payload independently: both are unchanged, no selector publication or local pending activation occurred, and sync on the restoring device stays off. An unselected candidate may remain. After the fault is removed, make a fresh review and explicitly retry; a different candidate is staged, verified and selected. There is no automatic split/retry of the quota-failed batch or deletion of the old generation. |
