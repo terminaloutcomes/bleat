@@ -2951,12 +2951,16 @@ final class BleatUITests: XCTestCase {
         )
         let paused = app.switches["settings.icloud.restoreOtherDevicesPaused"]
         XCTAssertTrue(paused.exists)
-        paused.tap()
+        XCTAssertEqual(paused.value as? String, "0")
+        paused.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        XCTAssertEqual(paused.value as? String, "1")
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.restoreReview",
             direction: .up)
         let review = app.buttons["settings.icloud.restoreReview"]
         XCTAssertTrue(review.waitForExistence(timeout: 5))
+        XCTAssertTrue(review.isEnabled)
         review.tap()
         let confirm = app.buttons["settings.icloud.restoreConfirm"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
