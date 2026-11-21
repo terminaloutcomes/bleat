@@ -6494,6 +6494,82 @@ private struct RemoteTelemetryDiagnosticsSection: View {
     }
 }
 
+private struct PrivateCloudHistoryExportSection: View {
+    let model: AppModel
+    @State private var confirming = false
+    @State private var capturing = false
+    @State private var exporting = false
+    @State private var failed = false
+    @State private var document: StatisticsJSONDocument?
+
+    var body: some View {
+        Section {
+            Button(
+                "Export iCloud Listening Slices",
+                systemImage: "square.and.arrow.up"
+            ) {
+                confirming = true
+            }
+            .disabled(capturing || exporting)
+            .accessibilityIdentifier("settings.icloud.exportListeningSlices")
+            if capturing {
+                ProgressView("Reading listening slices from iCloud…")
+            }
+            if failed {
+                Text(
+                    "Could not export iCloud listening slices. No archive was saved."
+                )
+                .foregroundStyle(.red)
+            }
+        } footer: {
+            Text(
+                "This archive is for migration testing. It is not a backup and does not include accounts, settings, or book completions."
+            )
+        }
+        .confirmationDialog(
+            "Export Private Listening Data?",
+            isPresented: $confirming,
+            titleVisibility: .visible
+        ) {
+            Button("Continue to Save") {
+                failed = false
+                capturing = true
+            }
+        } message: {
+            Text(
+                "The file contains private listening titles, dates, and identifiers. Choose a device-local destination to keep it off cloud storage. Do not attach it to public support issues."
+            )
+        }
+        .task(id: capturing) {
+            guard capturing else { return }
+            defer { capturing = false }
+            do {
+                let data = try await model.capturePrivateCloudHistoryArchive()
+                try Task.checkCancellation()
+                document = StatisticsJSONDocument(data: data)
+                exporting = true
+            } catch is CancellationError {
+                // Leaving Settings cancels a pending capture.
+            } catch {
+                if !Task.isCancelled {
+                    failed = true
+                }
+            }
+        }
+        .fileExporter(
+            isPresented: $exporting,
+            document: document,
+            contentTypes: [.json],
+            defaultFilename: "bleat-private-icloud-listening-slices"
+        ) { result in
+            document = nil
+            if case .failure = result { failed = true }
+        } onCancellation: {
+            document = nil
+        }
+    }
+}
+
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
@@ -6552,6 +6628,7 @@ private struct SettingsView: View {
 
                 if model.privateCloudSyncAvailable {
                     cloudSection
+                    PrivateCloudHistoryExportSection(model: model)
                 }
 
                 Section("Appearance") {

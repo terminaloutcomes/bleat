@@ -839,6 +839,8 @@ protocol AppServicing: Sendable {
 
     func isPrivateCloudSyncAvailable() async -> Bool
 
+    func capturePrivateCloudHistoryArchive() async throws -> Data
+
     func isPrivateCloudSyncEnabled() async -> Bool
 
     func synchronizePrivateCloud() async throws(AppServiceError)
@@ -1280,6 +1282,10 @@ extension AppServicing {
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         true
+    }
+
+    func capturePrivateCloudHistoryArchive() async throws -> Data {
+        throw PrivateCloudHistoryArchive.Failure.captureFailed
     }
 
     func isPrivateCloudSyncEnabled() async -> Bool {
@@ -4069,6 +4075,14 @@ actor LiveAppService: AppServicing {
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         privateCloudSync != nil
+    }
+
+    func capturePrivateCloudHistoryArchive() async throws -> Data {
+        guard let privateCloudSync else {
+            throw PrivateCloudHistoryArchive.Failure.captureFailed
+        }
+        return try await privateCloudSync.captureListeningHistoryArchive()
+            .encoded()
     }
 
     func isPrivateCloudSyncEnabled() async -> Bool {

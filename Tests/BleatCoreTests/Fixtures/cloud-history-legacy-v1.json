@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "scope": "listeningSlices",
+  "completeForScope": true,
+  "sourceBuild": "20261027.0000.00",
+  "records": [
+    {
+      "name": "slice.f0000000-0000-4000-8000-000000000001",
+      "payload": "eyJpZCI6IkYwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsImFjY291bnRJRCI6ImZpeHR1cmUtYWNjb3VudCIsIml0ZW1JRCI6ImZpeHR1cmUtaXRlbSIsInNlc3Npb25JRCI6ImZpeHR1cmUtc2Vzc2lvbiIsInN0YXJ0ZWRBdCI6ODEwMDAwMDAwLCJlbmRlZEF0Ijo4MTAwMDAwMDUsInN0YXJ0UG9zaXRpb24iOjQwLCJlbmRQb3NpdGlvbiI6NDUsInJlYWxTZWNvbmRzIjo1LCJhdWRpb2Jvb2tTZWNvbmRzIjo1LCJwbGF5YmFja1JhdGUiOjEsInRpdGxlIjoiU3ludGhldGljIHRpdGxlIiwiYXV0aG9yIjoiU3ludGhldGljIGF1dGhvciIsImR1cmF0aW9uIjo2MDB9"
+    },
+    {
+      "name": "slice.f0000000-0000-4000-8000-000000000002",
+      "payload": "eyJpZCI6IkYwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiIsImFjY291bnRJRCI6ImZpeHR1cmUtYWNjb3VudCIsIml0ZW1JRCI6ImZpeHR1cmUtaXRlbSIsInNlc3Npb25JRCI6ImZpeHR1cmUtc2Vzc2lvbiIsInN0YXJ0ZWRBdCI6ODEwMDAwMDA1LCJlbmRlZEF0Ijo4MTAwMDAwMTAsInN0YXJ0UG9zaXRpb24iOjQ1LCJlbmRQb3NpdGlvbiI6NTAsInJlYWxTZWNvbmRzIjo1LCJhdWRpb2Jvb2tTZWNvbmRzIjo1LCJwbGF5YmFja1JhdGUiOjEsInRpdGxlIjoiU3ludGhldGljIHRpdGxlIiwiYXV0aG9yIjoiU3ludGhldGljIGF1dGhvciIsImR1cmF0aW9uIjo2MDB9"
+    }
+  ]
+}

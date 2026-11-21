@@ -3432,10 +3432,93 @@ public actor PrivateCloudSyncCoordinator:
     private var engine: CKSyncEngine?
     private var deletingAccount = false
     private var engineStateGeneration: UInt64 = 0
+    private var archiveCaptureRevision = UUID()
+    private var clearingArchiveSource = false
     private let lifecycle = PrivateCloudSyncLifecycle()
     private var activeEngineCallbacks: Set<UUID> = []
     private var engineCallbackDrain: [CheckedContinuation<Void, Never>] = []
     private let engineCancellations = PrivateCloudEngineCancellations()
+
+    /// Explicit, read-only capture of the private zone's current listening
+    /// payloads. Never uses the local cache or persists the page tokens.
+    public func captureListeningHistoryArchive() async throws
+        -> PrivateCloudHistoryArchive
+    {
+        guard configurationFailure == nil, !deletingAccount,
+            !clearingArchiveSource
+        else {
+            throw PrivateCloudHistoryArchive.Failure.captureFailed
+        }
+        let database = container.privateCloudDatabase
+        let captureGeneration = engineStateGeneration
+        let captureRevision = archiveCaptureRevision
+        var token: CKServerChangeToken?
+        var records: [CKRecord.ID: CKRecord] = [:]
+        var payloadBytes = 0
+        do {
+            let sourceUser = try await container.userRecordID()
+            while true {
+                try Task.checkCancellation()
+                let page = try await database.recordZoneChanges(
+                    inZoneWith: zoneID, since: token, desiredKeys: ["payload"]
+                )
+                guard try await container.userRecordID() == sourceUser,
+                    captureGeneration == engineStateGeneration,
+                    captureRevision == archiveCaptureRevision,
+                    !deletingAccount, !clearingArchiveSource,
+                    page.deletions.allSatisfy({
+                        page.modificationResultsByID[$0.recordID] == nil
+                    })
+                else { throw PrivateCloudHistoryArchive.Failure.captureFailed }
+                for deletion in page.deletions {
+                    if let removed = records.removeValue(
+                        forKey: deletion.recordID),
+                        let payload = removed["payload"] as? Data
+                    {
+                        payloadBytes -= payload.count
+                    }
+                }
+                for result in page.modificationResultsByID.values {
+                    let record = try result.get().record
+                    if record.recordType == "ListeningSlice" {
+                        guard let payload = record["payload"] as? Data else {
+                            throw PrivateCloudHistoryArchive.Failure
+                                .invalidRecord
+                        }
+                        let previous = records.updateValue(
+                            record, forKey: record.recordID)
+                        payloadBytes +=
+                            payload.count
+                            - ((previous?["payload"] as? Data)?.count ?? 0)
+                        guard
+                            payloadBytes
+                                <= PrivateCloudHistoryArchive
+                                .maximumPayloadBytes,
+                            records.count
+                                <= PrivateCloudHistoryArchive.maximumRecords
+                        else {
+                            throw PrivateCloudHistoryArchive.Failure
+                                .archiveTooLarge
+                        }
+                    }
+                }
+                guard page.moreComing else { break }
+                token = page.changeToken
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let failure as PrivateCloudHistoryArchive.Failure {
+            throw failure
+        } catch {
+            throw PrivateCloudHistoryArchive.Failure.captureFailed
+        }
+        try Task.checkCancellation()
+        return try PrivateCloudHistoryArchive.capture(
+            Array(records.values),
+            sourceBuild: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleVersion") as? String
+        )
+    }
 
     private func cancelEngine(_ candidate: CKSyncEngine) async {
         let identity = ObjectIdentifier(candidate)
@@ -3446,6 +3529,7 @@ public actor PrivateCloudSyncCoordinator:
     }
 
     private func retireEngineForAccountTransition() async {
+        archiveCaptureRevision = UUID()
         await cancelSynchronization()
         // Reject callbacks not yet admitted, then drain every callback admitted
         // before retirement, including one suspended in diagnostic recording.
@@ -3877,6 +3961,17 @@ public actor PrivateCloudSyncCoordinator:
             return
         }
 
+        if deleteCloudData {
+            guard !clearingArchiveSource else {
+                throw PrivateCloudSyncFailure(
+                    operation: .deleteCloudData, cause: .stopping)
+            }
+            clearingArchiveSource = true
+            archiveCaptureRevision = UUID()
+        }
+        defer {
+            if deleteCloudData { clearingArchiveSource = false }
+        }
         try await perform(deleteCloudData ? .deleteCloudData : .disable) {
             guard !deletingAccount else { throw PrivateCloudSyncError.stopping }
             // Persist opt-out before cancellation or deletion can suspend or
@@ -3914,6 +4009,7 @@ public actor PrivateCloudSyncCoordinator:
             throw PrivateCloudSyncFailure(
                 operation: .deleteAccount, cause: .stopping)
         }
+        archiveCaptureRevision = UUID()
         deletingAccount = true
         defer { deletingAccount = false }
         await retireEngineForAccountTransition()
@@ -3971,6 +4067,7 @@ public actor PrivateCloudSyncCoordinator:
             throw PrivateCloudSyncFailure(
                 operation: .deleteAccount, cause: .stopping)
         }
+        archiveCaptureRevision = UUID()
         deletingAccount = true
         defer { deletingAccount = false }
         await retireEngineForAccountTransition()
@@ -3991,6 +4088,7 @@ public actor PrivateCloudSyncCoordinator:
             guard try await store.accountNeedsSynchronizationResume(accountID)
             else { return }
             guard !deletingAccount else { throw PrivateCloudSyncError.stopping }
+            archiveCaptureRevision = UUID()
             deletingAccount = true
             defer { deletingAccount = false }
             await retireEngineForAccountTransition()

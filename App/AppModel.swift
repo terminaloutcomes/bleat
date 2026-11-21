@@ -7097,6 +7097,10 @@ final class AppModel {
         }
     }
 
+    func capturePrivateCloudHistoryArchive() async throws -> Data {
+        try await service.capturePrivateCloudHistoryArchive()
+    }
+
     func synchronizePrivateCloud() async {
         guard privateCloudSyncAvailable,
             privateCloudSyncEnabled,

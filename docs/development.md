@@ -903,3 +903,63 @@ preserved the extracted history and imported metadata; see the traceability row
 for evidence. Mixed-version physical testing with Bleat 0.1.3 verified explicitly matched
 records in both directions and preserved original history; see traceability.
 Host and simulator tests alone do not prove that journey.
+
+### Listening-history CloudKit archive (format 1)
+
+Issue #494's first increment is a **listening-slice-only diagnostic archive**.
+It is not a complete or restorable CloudKit backup. The explicit
+`PrivateCloudSyncCoordinator.captureListeningHistoryArchive()` API reads the
+actual private zone, independently of the local SwiftData cache. It walks zone
+pages from a fresh cursor, folds deletions, and returns no archive if fetching
+or validating any page fails. To bound memory, format 1 refuses captures above
+50,000 records, 40 MiB of raw payloads or 64 MiB of archive JSON. In the app, choose **Settings → Export iCloud Listening Slices**, review the
+privacy warning, then choose a file destination. Choose a device-local
+destination if you do not want a file provider to synchronize it. No capture
+runs automatically. The source build
+when known is the **capture app's** build, not necessarily the producer build of
+any record.
+
+The version-1 JSON envelope has `version`, `scope` (`listeningSlices`),
+`completeForScope`, optional `sourceBuild`, and `records`. For every current
+zone `ListeningSlice` record it preserves its logical name and exact base64
+application payload bytes, including legacy observations, canonical lineage,
+reset envelopes, timestamps, and boundaries. The current lineage schema
+version remains inside its own payload. The archive excludes completion
+milestones, imported remote sessions, settings, server-account descriptors,
+CloudKit system fields and sync tokens, credentials, and device-local stores.
+Source account identifiers inside listening payloads are retained for replay.
+
+Developer use: decode with `PrivateCloudHistoryArchive.decode`, inspect
+`preview()` and separately compare the private `sourceAccountIDs()` to the
+expected exact source scope. Call `replay(confirmedAccountIDs:)` only after
+confirming that scope. The replay creates its own in-memory store with
+CloudKit disabled, no credentials, no pre-existing data, and fresh synthetic
+record IDs in an offline zone. It passes the original payloads through real
+ingestion and the app's canonical compaction path. It refuses cross-account
+remapping, duplicate names, incompatible records and incomplete or future
+archives. There is no merge into an existing target. Reapplying the same
+records is checked before compaction, and failed or cancelled staging is
+discarded. This does not simulate server acknowledgement for source retirement,
+recover old local SQLite metadata, or write to any CloudKit environment.
+
+The archive includes private listening titles, timestamps and identifiers.
+Keep it private and do not attach it to GitHub issues or logs. The separate
+`preview()` summary contains only versions, scope and counts; failures expose
+category codes rather than payload or provider error text. There is no
+automatic sharing or upload. The remaining record types and a signed isolated
+CloudKit capture test are not part of this increment.
+
+### Offline history archive tool (macOS)
+
+```sh
+swift run bleat-cloud-history preview /path/to/archive.json
+swift run bleat-cloud-history private-scope-file /path/to/archive.json /private/new-scope.json
+# Review the private list against the account IDs you expect to replay.
+swift run bleat-cloud-history replay /path/to/archive.json /private/reviewed-scope.json
+```
+
+The optional scope helper requires a new file and creates it owner-readable
+only. It is not a substitute for reviewing the scope. For a fully synthetic
+run, use `Tests/BleatCoreTests/Fixtures/cloud-history-legacy-v1.json` as the
+archive. Preview and successful replay print only the redacted summary. The replay summary also counts prepared canonical upload records, not the full
+post-replay inventory. The tool has no command to write to CloudKit or an existing app store.
