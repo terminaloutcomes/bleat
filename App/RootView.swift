@@ -6827,7 +6827,7 @@ private struct PrivateCloudBackupSection: View {
                     "The isolated target has too many retained generations. Start with a fresh test app container before restoring again."
             }
         #endif
-        switch error as? PrivateCloudBackup.Failure {
+        return switch error as? PrivateCloudBackup.Failure {
         case .accountMismatch:
             "This backup belongs to a different iCloud account."
         case .unsupportedVersion:
