@@ -51,6 +51,9 @@ import Testing
                 .defaultPlaybackRate == 1.25)
         try await reopened.markSettingsApplied(generation: generation)
         #expect(try !Activation(root: root).current().settingsPending)
+        #expect(try Activation(root: root).current().syncResumeRequired)
+        try await reopened.markSyncExplicitlyResumed(generation: generation)
+        #expect(try !Activation(root: root).current().syncResumeRequired)
     }
 
     @Test func replacingAgainRetainsPriorMaterializedStore() async throws {

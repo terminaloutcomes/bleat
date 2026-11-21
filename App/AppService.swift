@@ -1643,6 +1643,13 @@ actor LiveAppService: AppServicing {
                 let activation = try PrivateCloudRestoreLocalActivation(
                     root: activationRoot)
                 let state = try activation.current()
+                // The restore journal is durable independently of the
+                // preferences write. A crash before restart must not resume
+                // sync while publication is pending or a new store is loading.
+                if state.pending != nil || state.syncResumeRequired {
+                    UserDefaults.standard.set(
+                        false, forKey: "bleat.cloudKit.enabled.v1")
+                }
                 localActivation = activation
                 selectedCloudZone = state.selected
                 if let selected = state.selected {
@@ -4563,7 +4570,17 @@ actor LiveAppService: AppServicing {
                     enabled,
                     deleteCloudData: deleteCloudData
                 )
+                if enabled, launchedCloudZone != "BleatPrivateData",
+                    let cloudRestoreActivation
+                {
+                    try await cloudRestoreActivation.markSyncExplicitlyResumed(
+                        generation: launchedCloudZone)
+                }
             } catch {
+                if enabled, launchedCloudZone != "BleatPrivateData" {
+                    try? await privateCloudSync.setEnabled(
+                        false, deleteCloudData: false)
+                }
                 if !deleteCloudData {
                     try? await credentialStore.setSynchronizesNativeLogin(
                         !enabled,

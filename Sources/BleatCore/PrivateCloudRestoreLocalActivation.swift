@@ -14,6 +14,7 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
         fileprivate let pendingAttempt: String?
         fileprivate let pendingDigest: String?
         public let settingsPending: Bool
+        public let syncResumeRequired: Bool
     }
 
     public enum Failure: String, Error, Sendable {
@@ -164,6 +165,10 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
         try await journal.markSettingsApplied(generation: generation)
     }
 
+    public func markSyncExplicitlyResumed(generation: String) async throws {
+        try await journal.markSyncExplicitlyResumed(generation: generation)
+    }
+
     fileprivate static func read(from context: ModelContext) throws -> State {
         let rows = try context.fetch(FetchDescriptor<ActivationRow>())
         guard rows.count <= 1 else { throw Failure.invalidJournal }
@@ -176,7 +181,8 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
             pendingAccountBinding: row?.pendingAccountBinding,
             pendingAttempt: row?.pendingAttempt,
             pendingDigest: row?.pendingDigest,
-            settingsPending: row?.settingsPending ?? false
+            settingsPending: row?.settingsPending ?? false,
+            syncResumeRequired: row?.syncResumeRequired ?? false
         )
         guard state.selected.map(Self.isGeneration) != false,
             state.pending.map(Self.isGeneration) != false,
@@ -191,7 +197,8 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
             state.selectedAccountBinding.map(Self.validBinding) != false,
             state.pendingAccountBinding.map(Self.validBinding) != false,
             state.selected == nil || state.selected != state.pending,
-            !state.settingsPending || state.selected != nil
+            (!state.settingsPending && !state.syncResumeRequired)
+                || state.selected != nil
         else { throw Failure.invalidJournal }
         return state
     }
@@ -214,6 +221,7 @@ private final class ActivationRow {
     var pendingAttempt: String?
     var pendingDigest: String?
     var settingsPending: Bool = false
+    var syncResumeRequired: Bool = false
 
     init() {}
 }
@@ -270,6 +278,7 @@ private actor JournalOwner {
             row.pendingAttempt = nil
             row.pendingDigest = nil
             row.settingsPending = true
+            row.syncResumeRequired = true
         }
     }
 
@@ -290,6 +299,16 @@ private actor JournalOwner {
             throw Activation.Failure.staleJournal
         }
         try update { $0.settingsPending = false }
+    }
+
+    func markSyncExplicitlyResumed(generation: String) throws {
+        let state = try read()
+        guard state.selected == generation, state.pending == nil,
+            !state.settingsPending
+        else {
+            throw Activation.Failure.staleJournal
+        }
+        try update { $0.syncResumeRequired = false }
     }
 
     private func update(_ action: (ActivationRow) -> Void) throws {
@@ -313,7 +332,8 @@ private actor JournalOwner {
             pendingAccountBinding: row.pendingAccountBinding,
             pendingAttempt: row.pendingAttempt,
             pendingDigest: row.pendingDigest,
-            settingsPending: row.settingsPending
+            settingsPending: row.settingsPending,
+            syncResumeRequired: row.syncResumeRequired
         )
         try context.save()
         guard try read() == expected else {
