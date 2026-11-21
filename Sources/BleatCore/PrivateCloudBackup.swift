@@ -228,6 +228,19 @@ public struct PrivateCloudBackup: Codable, Sendable {
         )
     }
 
+    struct RestoreMaterial: Equatable, Sendable {
+        let accountBinding: String
+        let digest: String
+        let records: [Entry]
+    }
+
+    func restoreMaterial() throws -> RestoreMaterial {
+        try validate()
+        return RestoreMaterial(
+            accountBinding: accountBinding, digest: contentDigest,
+            records: records)
+    }
+
     /// Only plans replacement; it never produces CloudKit write requests.
     public func planReplacing(_ current: Self) throws -> ReplacePlan {
         try validate()

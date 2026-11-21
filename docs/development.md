@@ -984,3 +984,41 @@ The scope file helper creates a new mode-0600 file and refuses to overwrite
 a file. Replay uses the real ingestion and canonical compaction code in a
 disposable SwiftData store with CloudKit disabled. It neither simulates
 server acknowledgement for source retirement nor recovers old SQLite metadata.
+
+### Generation restore prototype (synthetic only)
+
+`PrivateCloudGenerationRestore` is an internal model with no CloudKit
+transport, schema, command, or Settings action. Its synthetic transport
+creates a fresh candidate, stages bounded batches outside the active store,
+seals the candidate, and independently reads and verifies its full contents.
+It preserves the previous generation rather than deleting individual
+records. The reviewed plan binds the authenticated account/session, active
+selector and write revision, and current/desired content digests. A conditional
+selector change is the publication step. Cancellation or verification failure
+before publication leaves the active store unchanged. If the publish result
+is unknown, readback of this candidate's unique pointer confirms success;
+seeing the old or a third pointer does not prove failure. No auto-retry or
+cleanup runs. The current process blocks further mutations until readback
+resolves its pending receipt.
+
+**This is not a production restore protocol.** The simulated conditional
+publication linearizes with ordinary writes. A CloudKit selector CAS alone
+does not provide that fence: a selector in one zone cannot atomically fence
+writes in another zone. Upgraded writers would need a real same-zone write
+gate during ordinary record writes, and coordinated activation/recovery that
+never makes a new generation writable before it is selected. The older
+`a52b431` build ignores any new gate/selector and continues writing to fixed
+`BleatPrivateData`; those late writes would stay behind after cutover.
+A supported handoff must actually quiesce those old clients or explicitly
+resolve their divergent edits before promising an exact restore.
+
+Production work additionally needs a durable operation journal and separately
+retained private pre-restore backup, retries/recovery rules for every activation
+phase and authenticated account transition, and generation-aware backup and
+ordinary synchronization. Each client must stop/drain old sync, open the
+selected generation cleanly, isolate or discard the previous generation's
+pending changes, and rebootstrap without applying old/new differences as
+normal account deletion events. Otherwise old local history can be reuploaded,
+and account deletion can remove synchronized native login material in Keychain.
+The model calls no credential or sync APIs and neither migrates local app data
+nor reuses an old generation as a rollback target.
