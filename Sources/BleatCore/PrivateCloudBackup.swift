@@ -241,6 +241,13 @@ public struct PrivateCloudBackup: Codable, Sendable {
             records: records)
     }
 
+    func reboundForIsolatedTesting(to targetBinding: String) throws -> Self {
+        try validate()
+        return try Self.capture(
+            records: records, accountBinding: targetBinding,
+            sourceBuild: sourceBuild)
+    }
+
     /// Only plans replacement; it never produces CloudKit write requests.
     public func planReplacing(_ current: Self) throws -> ReplacePlan {
         try validate()

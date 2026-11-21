@@ -906,7 +906,7 @@ Host and simulator tests alone do not prove that journey.
 
 ### iCloud Data backups (format 2)
 
-In **Settings → iCloud Data**, choose **Export Backup…**, review the privacy
+In **Settings → iCloud Data**, choose **Export iCloud Data…**, review the privacy
 warning, then choose where to save the file. Choose a device-local destination
 if you do not want a file provider to synchronize it. No capture runs
 automatically.
@@ -945,11 +945,11 @@ The JSON contains `version`, `zone`, `complete`, optionally the capture app's
 accidental edits or truncation; it does not authenticate the file. Format 1 was
 listening-slices only and is not a full backup or a restore source.
 
-**Preview Restore…** validates the whole file and compares it with a fresh
+**Restore from Export…** validates the whole file and compares it with a fresh
 capture for the same iCloud account. It reports records that would be added,
 replaced, or removed, including account changes. It does not write anything.
 A large backup can be exported even when replacing it exceeds a conservative
-single-operation budget. This build intentionally has no live replace action:
+single-operation budget. There is no live iCloud replace action:
 old clients can re-upload local records, keep some slices deleted from the
 cloud, or delete stored credentials when a server account record disappears.
 CloudKit cannot make a large multi-operation overwrite atomic. A production
@@ -984,6 +984,36 @@ The scope file helper creates a new mode-0600 file and refuses to overwrite
 a file. Replay uses the real ingestion and canonical compaction code in a
 disposable SwiftData store with CloudKit disabled. It neither simulates
 server acknowledgement for source retirement nor recovers old SQLite metadata.
+
+### Isolated restore in a Debug development build
+
+Launch a Debug build with the argument `--bleat-isolated-icloud-restore`.
+For an unsigned simulator or fully offline rehearsal, use
+`BLEAT_CLOUDKIT_MODE=disabled` (and disable App Attest for synthetic testing).
+In **Settings → iCloud Data → Restore from Export…**, pick a private format-2
+file. Review the proposed additions, replacements and removals against the
+isolated target, then choose **Review Sync Pause and Restore…**. Cancelling
+leaves sync and the target unchanged. Confirming **Disable Sync and Restore**
+first turns off and drains ordinary sync on this device without using the
+normal toggle's Keychain-migration path. Sync does not re-enable automatically.
+Other devices and normal iCloud data are not touched. An export from a
+different Apple Account can be used here: the export's owner binding is
+explicitly replaced with an offline test namespace, without rewriting the
+application payloads or using the source account as authentication.
+
+A restore stores the five app record types in a new generation in the app's
+private Caches directory (not in iCloud/device backup). Before selection,
+Bleat independently re-reads the raw staged rows and materializes the
+candidate through its real CloudKit record ingestion into a separate
+SwiftData store with CloudKit disabled. Immutable earlier generations are
+retained, and a failed candidate never becomes selected. **Restored test app
+data** shows the materialized app projections again after a normal relaunch.
+Its accounts are offline profiles, never authenticated; it never uses normal
+sync queues, credentials or the user's normal app store. The OS can purge
+Caches, and the isolated store bounds retained candidates rather than
+deleting one automatically. Keep the original export. Non-testing builds
+offer same-account preview only. No CloudKit development or production
+write adapter is present.
 
 ### Generation restore prototype (synthetic only)
 

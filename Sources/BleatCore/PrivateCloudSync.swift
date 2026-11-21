@@ -3437,6 +3437,9 @@ public actor PrivateCloudSyncCoordinator:
     private var deletingAccount = false
     private var engineStateGeneration: UInt64 = 0
     private var archiveCaptureRevision = UUID()
+    #if DEBUG
+        private var isolatedRestorePause = false
+    #endif
     private var clearingArchiveSource = false
     private let lifecycle = PrivateCloudSyncLifecycle()
     private var activeEngineCallbacks: Set<UUID> = []
@@ -3560,6 +3563,30 @@ public actor PrivateCloudSyncCoordinator:
         await lifecycle.waitForDrain()
     }
 
+    #if DEBUG
+        /// Read/replace only the separately owned local test target while
+        /// normal iCloud sync is disabled and drained. Unlike the ordinary
+        /// toggle, this does not alter any credential synchronizability.
+        public func runWithSyncPausedForIsolatedRestore<Result: Sendable>(
+            _ job: @Sendable () async throws -> Result
+        ) async throws -> Result {
+            guard !isolatedRestorePause, !deletingAccount,
+                !clearingArchiveSource
+            else {
+                throw PrivateCloudSyncError.stopping
+            }
+            isolatedRestorePause = true
+            defaults.set(false, forKey: enabledKey)
+            defer { isolatedRestorePause = false }
+            await retireEngineForAccountTransition()
+            try Task.checkCancellation()
+            guard !isEnabled, engine == nil else {
+                throw PrivateCloudSyncError.stopping
+            }
+            return try await job()
+        }
+    #endif
+
     public init(
         statistics: StatisticsRepository,
         accounts: AccountStore,
@@ -3621,6 +3648,9 @@ public actor PrivateCloudSyncCoordinator:
         async throws(PrivateCloudSyncError)
         -> CKSyncEngine
     {
+        #if DEBUG
+            guard !isolatedRestorePause else { throw .stopping }
+        #endif
         guard !deletingAccount || allowAccountTransition else {
             throw .stopping
         }
@@ -3631,6 +3661,9 @@ public actor PrivateCloudSyncCoordinator:
         if let engine {
             await engineCancellations.wait(
                 for: ObjectIdentifier(engine), release: true)
+            #if DEBUG
+                guard !isolatedRestorePause else { throw .stopping }
+            #endif
             guard self.engine === engine, generation == engineStateGeneration,
                 !deletingAccount || allowAccountTransition
             else { throw .stopping }
@@ -3647,6 +3680,9 @@ public actor PrivateCloudSyncCoordinator:
         } catch let error as PrivateCloudSyncError { throw error } catch {
             throw .storage(.invalidStoredState)
         }
+        #if DEBUG
+            guard !isolatedRestorePause else { throw .stopping }
+        #endif
         // Actor reentrancy permits another caller to initialize while awaiting storage.
         guard generation == engineStateGeneration,
             !deletingAccount || allowAccountTransition
@@ -3726,6 +3762,11 @@ public actor PrivateCloudSyncCoordinator:
             guard isEnabled else { throw PrivateCloudSyncError.disabled }
             let engine = try await configuredEngine()
             try await perform(.setupZone) {
+                #if DEBUG
+                    guard !isolatedRestorePause else {
+                        throw PrivateCloudSyncError.stopping
+                    }
+                #endif
                 // Creating the zone must not flush restored record saves before
                 // remote reset anchors and replacements have been fetched.
                 _ = try await container.privateCloudDatabase.save(
@@ -3916,6 +3957,7 @@ public actor PrivateCloudSyncCoordinator:
         accept: Bool
     ) async throws(PrivateCloudSyncFailure) {
         try await perform(.resolveServerConfiguration) {
+            guard isEnabled else { throw PrivateCloudSyncError.disabled }
             let engine = try await configuredEngine()
             let record: CKRecord?
             if accept {
@@ -3963,6 +4005,12 @@ public actor PrivateCloudSyncCoordinator:
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(PrivateCloudSyncFailure) {
+        #if DEBUG
+            guard !isolatedRestorePause else {
+                throw PrivateCloudSyncFailure(
+                    operation: enabled ? .enable : .disable, cause: .stopping)
+            }
+        #endif
         guard !deletingAccount else {
             throw PrivateCloudSyncFailure(
                 operation: enabled ? .enable : .disable, cause: .stopping)
@@ -3970,6 +4018,11 @@ public actor PrivateCloudSyncCoordinator:
         if enabled {
             try await perform(.enable) {
                 _ = try await configuredEngine()
+                #if DEBUG
+                    guard !isolatedRestorePause else {
+                        throw PrivateCloudSyncError.stopping
+                    }
+                #endif
                 defaults.set(true, forKey: enabledKey)
                 do {
                     try await synchronize()
@@ -4024,6 +4077,12 @@ public actor PrivateCloudSyncCoordinator:
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(PrivateCloudSyncFailure) {
+        #if DEBUG
+            guard !isolatedRestorePause else {
+                throw PrivateCloudSyncFailure(
+                    operation: .deleteAccount, cause: .stopping)
+            }
+        #endif
         guard !deletingAccount else {
             throw PrivateCloudSyncFailure(
                 operation: .deleteAccount, cause: .stopping)
@@ -4122,6 +4181,9 @@ public actor PrivateCloudSyncCoordinator:
         _ event: CKSyncEngine.Event,
         syncEngine: CKSyncEngine
     ) async {
+        #if DEBUG
+            guard !isolatedRestorePause else { return }
+        #endif
         guard engine === syncEngine else { return }
         let stateGeneration = engineStateGeneration
         let admittedCallback = UUID()
@@ -4371,6 +4433,11 @@ public actor PrivateCloudSyncCoordinator:
         for attempt in 0...1 {
             await engineCancellations.wait(
                 for: ObjectIdentifier(engine), release: true)
+            #if DEBUG
+                guard !isolatedRestorePause else {
+                    throw PrivateCloudSyncError.stopping
+                }
+            #endif
             guard engine === self.engine,
                 !deletingAccount || allowAccountTransition
             else { throw PrivateCloudSyncError.stopping }
@@ -4488,6 +4555,9 @@ public actor PrivateCloudSyncCoordinator:
     }
 
     private func acceptsEngine(_ candidate: CKSyncEngine) -> Bool {
-        engine === candidate
+        #if DEBUG
+            guard !isolatedRestorePause else { return false }
+        #endif
+        return engine === candidate
     }
 }

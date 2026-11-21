@@ -6506,25 +6506,72 @@ private struct PrivateCloudBackupSection: View {
     @State private var document: StatisticsJSONDocument?
     @State private var preview: PrivateCloudBackup.ReplacePlan?
 
+    #if DEBUG
+        @State private var isolatedReview: PrivateCloudIsolatedRestore.Review?
+        @State private var isolatedResult: PrivateCloudIsolatedRestore.Result?
+        @State private var inspection:
+            PrivateCloudIsolatedMaterializer.Inspection?
+        @State private var confirmingRestore = false
+        @State private var restoring = false
+    #endif
+    private var working: Bool {
+        #if DEBUG
+            capturing || exporting || previewing || restoring
+        #else
+            capturing || exporting || previewing
+        #endif
+    }
+
     var body: some View {
         Section {
-            Button("Export Backup…", systemImage: "square.and.arrow.up") {
+            Button("Export iCloud Data…", systemImage: "square.and.arrow.up") {
                 confirming = true
             }
-            .disabled(capturing || exporting || previewing)
+            .disabled(working || !model.privateCloudSyncAvailable)
             .accessibilityIdentifier("settings.icloud.exportBackup")
-            Button("Preview Restore…", systemImage: "doc.text.magnifyingglass")
-            {
+            Button(
+                "Restore from Export…", systemImage: "doc.text.magnifyingglass"
+            ) {
                 failure = nil
                 preview = nil
+                #if DEBUG
+                    isolatedReview = nil
+                    isolatedResult = nil
+                #endif
+                #if DEBUG
+                    if UITestAppService.hasExplicitScenario(),
+                        ProcessInfo.processInfo.arguments.contains(where: {
+                            $0.hasPrefix(
+                                "--ui-testing-isolated-restore-fixture=")
+                        })
+                    {
+                        Task {
+                            do {
+                                let data =
+                                    try PrivateCloudIsolatedRestore
+                                    .syntheticUITestExport()
+                                let review =
+                                    try await model.previewIsolatedCloudRestore(
+                                        data)
+                                isolatedReview = review
+                                preview = review.plan
+                            } catch { failure = failureMessage(error) }
+                        }
+                        return
+                    }
+                #endif
                 importing = true
             }
-            .disabled(capturing || exporting || previewing)
+            .disabled(
+                working
+                    || (!model.privateCloudSyncAvailable
+                        && !model.isolatedCloudRestoreAvailable)
+            )
             .accessibilityIdentifier("settings.icloud.previewRestore")
             if capturing {
                 ProgressView("Reading Bleat data from iCloud…")
             } else if previewing {
-                ProgressView("Comparing backup with current iCloud data…")
+                ProgressView("Checking the selected backup…")
             }
             if let failure {
                 Text(failure).foregroundStyle(.red)
@@ -6532,11 +6579,54 @@ private struct PrivateCloudBackupSection: View {
             if let preview {
                 previewDetails(preview)
             }
+            #if DEBUG
+                if restoring {
+                    ProgressView("Restoring to the isolated test target…")
+                } else if isolatedReview != nil {
+                    Button("Review Sync Pause and Restore…") {
+                        confirmingRestore = true
+                    }
+                    .accessibilityIdentifier("settings.icloud.restoreReview")
+                }
+                if let isolatedResult {
+                    VStack(alignment: .leading) {
+                        Text("Restored to this device’s isolated test target.")
+                        Text(
+                            "\(isolatedResult.restored.recordCount) records verified. The restore did not send anything to iCloud."
+                        )
+                    }
+                    .accessibilityIdentifier("settings.icloud.restoreResult")
+                }
+                if let inspection {
+                    DisclosureGroup("Restored test app data") {
+                        LabeledContent(
+                            "Server accounts",
+                            value: inspection.accounts.formatted())
+                        LabeledContent(
+                            "Settings",
+                            value: inspection.configurations.formatted())
+                        LabeledContent(
+                            "Listening slices",
+                            value: inspection.listeningSlices.formatted())
+                        LabeledContent(
+                            "Reset boundaries",
+                            value: inspection.resetEnvelopes.formatted())
+                        LabeledContent(
+                            "Book completions",
+                            value: inspection.completions.formatted())
+                        LabeledContent(
+                            "Remote sessions",
+                            value: inspection.remoteSessions.formatted())
+                    }
+                    .accessibilityIdentifier(
+                        "settings.icloud.isolatedInspection")
+                }
+            #endif
         } header: {
             Text("iCloud Data")
         } footer: {
             Text(
-                "Backs up Bleat’s CloudKit data only. It excludes Keychain credentials, local downloads, and data held by Audiobookshelf. Restore preview does not change any data."
+                "Backs up Bleat’s CloudKit data only. It excludes Keychain credentials, local downloads, and data held by Audiobookshelf. Restore is available only in an isolated testing build."
             )
         }
         .confirmationDialog(
@@ -6588,6 +6678,16 @@ private struct PrivateCloudBackupSection: View {
             defer { previewURL = nil }
             do {
                 let bytes = try await Self.readBackup(at: url)
+                #if DEBUG
+                    if model.isolatedCloudRestoreAvailable {
+                        let review =
+                            try await model.previewIsolatedCloudRestore(bytes)
+                        try Task.checkCancellation()
+                        isolatedReview = review
+                        preview = review.plan
+                        return
+                    }
+                #endif
                 let result = try await model.previewPrivateCloudRestore(bytes)
                 try Task.checkCancellation()
                 preview = result
@@ -6595,6 +6695,53 @@ private struct PrivateCloudBackupSection: View {
                 if !Task.isCancelled { failure = failureMessage(error) }
             }
         }
+        #if DEBUG
+            .task {
+                guard model.isolatedCloudRestoreAvailable else { return }
+                do {
+                    inspection = try await model.inspectIsolatedCloudRestore()
+                } catch {
+                    if !Task.isCancelled {
+                        failure = "Could not inspect the isolated test target."
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Disable Sync and Restore to the Test Target?",
+                isPresented: $confirmingRestore, titleVisibility: .visible
+            ) {
+                Button("Disable Sync and Restore", role: .destructive) {
+                    failure = nil
+                    restoring = true
+                }
+                .accessibilityIdentifier("settings.icloud.restoreConfirm")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "Bleat will turn off and finish normal iCloud syncing on this device before replacing the isolated test data. It won’t change iCloud or other devices. Normal sync will stay off until you turn it on."
+                )
+            }
+            .task(id: restoring) {
+                guard restoring, let review = isolatedReview else { return }
+                defer {
+                    restoring = false
+                    isolatedReview = nil
+                }
+                do {
+                    let result = try await model.replaceIsolatedCloudRestore(
+                        review)
+                    isolatedResult = result
+                    inspection = result.inspection
+                    preview = nil
+                } catch {
+                    if !Task.isCancelled {
+                        failure =
+                            "Could not verify the isolated restore. Normal iCloud data was not changed. Reopen the restore preview to inspect the test target."
+                    }
+                }
+            }
+        #endif
+
     }
 
     private func previewDetails(_ plan: PrivateCloudBackup.ReplacePlan)
@@ -6604,7 +6751,9 @@ private struct PrivateCloudBackupSection: View {
             LabeledContent(
                 "Records in backup", value: plan.source.recordCount.formatted())
             LabeledContent(
-                "Records now in iCloud",
+                model.isolatedCloudRestoreAvailable
+                    ? "Records now in the test target"
+                    : "Records now in iCloud",
                 value: plan.current.recordCount.formatted())
             LabeledContent("Would add", value: plan.create.formatted())
             LabeledContent("Would replace", value: plan.replace.formatted())
@@ -6616,20 +6765,28 @@ private struct PrivateCloudBackupSection: View {
                 recordCount("Book completions", .completion, plan)
                 recordCount("Remote listening sessions", .remoteSession, plan)
             }
-            if plan.accountRecordsAddedOrChanged > 0 {
-                Text("New or changed server accounts may need sign-in again.")
-                    .foregroundStyle(.secondary)
-            }
-            if plan.accountRecordsRemoved > 0 {
+            if model.isolatedCloudRestoreAvailable {
                 Text(
-                    "Removing server accounts can also remove saved credentials on older Bleat builds."
+                    "Restore replaces the isolated local test target, not live iCloud. Exported account profiles never sign in."
                 )
                 .foregroundStyle(.secondary)
+            } else {
+                if plan.accountRecordsAddedOrChanged > 0 {
+                    Text(
+                        "New or changed server accounts may need sign-in again."
+                    )
+                    .foregroundStyle(.secondary)
+                }
+                if plan.accountRecordsRemoved > 0 {
+                    Text(
+                        "Removing accounts can remove saved credentials on older Bleat builds."
+                    )
+                    .foregroundStyle(.secondary)
+                }
+                Text("Preview only. Live iCloud replacement is not available.")
+                    .foregroundStyle(.secondary)
             }
-            Text(
-                "Preview only. This version does not replace live iCloud data."
-            )
-            .foregroundStyle(.secondary)
+
         }
     }
 
@@ -6663,6 +6820,12 @@ private struct PrivateCloudBackupSection: View {
     }
 
     private func failureMessage(_ error: any Error) -> String {
+        #if DEBUG
+            if case .capacity = error as? PrivateCloudIsolatedRestore.Failure {
+                return
+                    "The isolated target has too many retained generations. Start with a fresh test app container before restoring again."
+            }
+        #endif
         switch error as? PrivateCloudBackup.Failure {
         case .accountMismatch:
             "This backup belongs to a different iCloud account."
@@ -6736,6 +6899,10 @@ private struct SettingsView: View {
 
                 if model.privateCloudSyncAvailable {
                     cloudSection
+                }
+                if model.privateCloudSyncAvailable
+                    || model.isolatedCloudRestoreAvailable
+                {
                     PrivateCloudBackupSection(model: model)
                 }
 

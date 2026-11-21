@@ -843,6 +843,17 @@ protocol AppServicing: Sendable {
     func previewPrivateCloudRestore(_ data: Data) async throws
         -> PrivateCloudBackup.ReplacePlan
 
+    #if DEBUG
+        func inspectIsolatedCloudRestore() async throws
+            -> PrivateCloudIsolatedMaterializer.Inspection?
+        func previewIsolatedCloudRestore(_ data: Data) async throws
+            -> PrivateCloudIsolatedRestore.Review
+        func replaceIsolatedCloudRestore(
+            _ review: PrivateCloudIsolatedRestore.Review
+        ) async throws
+            -> PrivateCloudIsolatedRestore.Result
+    #endif
+
     func isPrivateCloudSyncEnabled() async -> Bool
 
     func synchronizePrivateCloud() async throws(AppServiceError)
@@ -1296,6 +1307,28 @@ extension AppServicing {
         throw PrivateCloudBackup.Failure.captureFailed
     }
 
+    #if DEBUG
+        func inspectIsolatedCloudRestore() async throws
+            -> PrivateCloudIsolatedMaterializer.Inspection?
+        {
+            nil
+        }
+
+        func previewIsolatedCloudRestore(_ data: Data) async throws
+            -> PrivateCloudIsolatedRestore.Review
+        {
+            throw PrivateCloudIsolatedRestore.Failure.invalidTarget
+        }
+
+        func replaceIsolatedCloudRestore(
+            _ review: PrivateCloudIsolatedRestore.Review
+        ) async throws
+            -> PrivateCloudIsolatedRestore.Result
+        {
+            throw PrivateCloudIsolatedRestore.Failure.invalidTarget
+        }
+    #endif
+
     func isPrivateCloudSyncEnabled() async -> Bool {
         true
     }
@@ -1397,6 +1430,11 @@ actor LiveAppService: AppServicing {
     private var suspendedStatisticsHistoryAccounts: Set<AccountID> = []
     private var statisticsHistorySkipAutomaticAccounts: Set<AccountID> = []
     private var statisticsHistoryResetAll = false
+    #if DEBUG
+        private var isolatedCloudRestoreTarget: PrivateCloudIsolatedRestore?
+        private var isolatedCloudRestoreApplying = false
+        private var normalCloudToggleInFlight = false
+    #endif
     private let privateCloudSync: PrivateCloudSyncCoordinator?
     private var didMigrateAccountIdentities = false
     private var networkPathMonitor: AppNetworkPathMonitor?
@@ -4104,6 +4142,62 @@ actor LiveAppService: AppServicing {
             privateCloudSync.captureCloudBackup())
     }
 
+    #if DEBUG
+        private func isolatedRestoreTarget() throws
+            -> PrivateCloudIsolatedRestore
+        {
+            guard
+                ProcessInfo.processInfo.arguments.contains(
+                    "--bleat-isolated-icloud-restore")
+            else {
+                throw PrivateCloudIsolatedRestore.Failure.invalidTarget
+            }
+            if let isolatedCloudRestoreTarget {
+                return isolatedCloudRestoreTarget
+            }
+            let target = try PrivateCloudIsolatedRestore(
+                directory: .cachesDirectory)
+            isolatedCloudRestoreTarget = target
+            return target
+        }
+
+        func inspectIsolatedCloudRestore() async throws
+            -> PrivateCloudIsolatedMaterializer.Inspection?
+        {
+            try await isolatedRestoreTarget().inspection()
+        }
+
+        func previewIsolatedCloudRestore(_ data: Data) async throws
+            -> PrivateCloudIsolatedRestore.Review
+        {
+            try await isolatedRestoreTarget().preview(data)
+        }
+
+        func replaceIsolatedCloudRestore(
+            _ review: PrivateCloudIsolatedRestore.Review
+        ) async throws
+            -> PrivateCloudIsolatedRestore.Result
+        {
+            guard !isolatedCloudRestoreApplying, !normalCloudToggleInFlight
+            else {
+                throw PrivateCloudIsolatedRestore.Failure.rejected
+            }
+            isolatedCloudRestoreApplying = true
+            defer { isolatedCloudRestoreApplying = false }
+            let target = try isolatedRestoreTarget()
+            if let privateCloudSync {
+                return
+                    try await privateCloudSync
+                    .runWithSyncPausedForIsolatedRestore {
+                        try await target.replace(review)
+                    }
+            }
+            // CloudKit-disabled builds have no normal sync engine to pause.
+            try Task.checkCancellation()
+            return try await target.replace(review)
+        }
+    #endif
+
     func isPrivateCloudSyncEnabled() async -> Bool {
         await privateCloudSync?.isEnabled ?? false
     }
@@ -4111,6 +4205,13 @@ actor LiveAppService: AppServicing {
     func synchronizePrivateCloud() async throws(AppServiceError)
         -> [CloudServerConfigurationChange]
     {
+        #if DEBUG
+            guard !isolatedCloudRestoreApplying else {
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .synchronize, cause: .stopping))
+            }
+        #endif
         guard let privateCloudSync else {
             throw .privateCloud(
                 PrivateCloudSyncFailure(
@@ -4248,6 +4349,16 @@ actor LiveAppService: AppServicing {
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(AppServiceError) {
+        #if DEBUG
+            guard !isolatedCloudRestoreApplying, !normalCloudToggleInFlight
+            else {
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: .synchronize, cause: .stopping))
+            }
+            normalCloudToggleInFlight = true
+            defer { normalCloudToggleInFlight = false }
+        #endif
         guard let privateCloudSync else {
             throw .privateCloud(
                 PrivateCloudSyncFailure(

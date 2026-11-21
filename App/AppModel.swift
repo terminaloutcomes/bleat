@@ -7107,6 +7107,65 @@ final class AppModel {
         try await service.previewPrivateCloudRestore(data)
     }
 
+    var isolatedCloudRestoreAvailable: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains(
+                "--bleat-isolated-icloud-restore")
+        #else
+            false
+        #endif
+    }
+
+    #if DEBUG
+        func inspectIsolatedCloudRestore() async throws
+            -> PrivateCloudIsolatedMaterializer.Inspection?
+        {
+            try await service.inspectIsolatedCloudRestore()
+        }
+
+        func previewIsolatedCloudRestore(_ data: Data) async throws
+            -> PrivateCloudIsolatedRestore.Review
+        {
+            try await service.previewIsolatedCloudRestore(data)
+        }
+
+        func replaceIsolatedCloudRestore(
+            _ review: PrivateCloudIsolatedRestore.Review
+        ) async throws
+            -> PrivateCloudIsolatedRestore.Result
+        {
+            guard isolatedCloudRestoreAvailable, !isResettingLocalData,
+                privateCloudDataClearState != .clearing
+            else { throw PrivateCloudIsolatedRestore.Failure.rejected }
+            let inFlight = privateCloudSyncTask
+            privateCloudSyncGeneration &+= 1
+            inFlight?.cancel()
+            do {
+                let result = try await service.replaceIsolatedCloudRestore(
+                    review)
+                await finishIsolatedCloudRestore(inFlight)
+                return result
+            } catch {
+                await finishIsolatedCloudRestore(inFlight)
+                throw error
+            }
+        }
+
+        private func finishIsolatedCloudRestore(_ inFlight: Task<Void, Never>?)
+            async
+        {
+            await inFlight?.value
+            privateCloudSyncTask = nil
+            canCancelPrivateCloudSynchronization = false
+            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+            if !privateCloudSyncEnabled {
+                pendingCloudServerConfigurationChanges.removeAll()
+                pendingCloudConfigurationConflict = nil
+            }
+            privateCloudState = privateCloudSyncEnabled ? .idle : .disabled
+        }
+    #endif
+
     func synchronizePrivateCloud() async {
         guard privateCloudSyncAvailable,
             privateCloudSyncEnabled,

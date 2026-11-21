@@ -172,6 +172,57 @@ import Testing
         #expect(!plan.fitsSingleOperation)
     }
 
+    #if DEBUG
+        @Test
+        func
+            isolatedRestoreMaterializesFiveTypesAndRetainsPreviousGenerationAfterReopen()
+            async throws
+        {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let entries = try makeRecords()
+            let original = try PrivateCloudBackup.capture(
+                records: entries, accountBinding: Self.otherBinding)
+            var target: PrivateCloudIsolatedRestore? =
+                try PrivateCloudIsolatedRestore(directory: directory)
+            #expect(throws: PrivateCloudIsolatedRestore.Failure.self) {
+                try PrivateCloudIsolatedRestore(directory: directory)
+            }
+            let review = try await #require(target).preview(original.encoded())
+            #expect(review.plan.create == 5)
+            #expect(try await #require(target).readback().recordCount == 0)
+            let restored = try await #require(target).replace(review)
+            #expect(restored.restored.recordCount == 5)
+            #expect(restored.inspection?.accounts == 1)
+            #expect(restored.inspection?.configurations == 1)
+            #expect(restored.inspection?.listeningSlices == 1)
+            #expect(restored.inspection?.completions == 1)
+            #expect(restored.inspection?.remoteSessions == 1)
+            target = nil
+            let reopened = try PrivateCloudIsolatedRestore(directory: directory)
+            #expect(try await reopened.inspection() == restored.inspection)
+            let raw = try await reopened.testReadbackArchive()
+            #expect(
+                try raw.restoreMaterial().records
+                    == original.restoreMaterial().records)
+
+            let empty = try PrivateCloudBackup.capture(
+                records: [], accountBinding: Self.otherBinding)
+            let remove = try await reopened.preview(empty.encoded())
+            #expect(remove.plan.remove == 5)
+            let replaced = try await reopened.replace(remove)
+            #expect(replaced.restored.recordCount == 0)
+            #expect(replaced.inspection?.accounts == 0)
+            let predecessors = try await reopened.testRetainedArchives()
+            #expect(
+                try predecessors.map { try $0.restoreMaterial().records }
+                    .contains(entries.sorted { $0.name < $1.name }))
+        }
+    #endif
+
     private static let otherBinding = PrivateCloudBackup.binding(
         container: "synthetic-container", cloudUserRecordName: "other-account"
     )

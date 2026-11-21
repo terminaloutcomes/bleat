@@ -1801,8 +1801,11 @@ including non-secret account data, settings, completions, remote sessions and
 legacy/canonical listening records. Export is explicit and user-owned; it does
 not include Keychain credentials or device-local files. Restore preview checks
 the same iCloud account and reports the proposed changes without writing data.
-Live replacement is not supported until old-client writes and local recovery
-can be safely coordinated. Format 1 remains a history-only migration fixture.
+Debug builds can opt into a persistent local test restore, which first stops sync
+without using normal credential paths and materializes the records in an
+isolated app store. Live iCloud replacement is not supported until old-client
+writes and local recovery can be safely coordinated. Format 1 remains a
+history-only migration fixture.
 See [the archive format and offline workflow](development.md#icloud-data-backups-format-2).
 
 Listening history contains personal behavioral data. It receives the same file protection as other structured app data and is never written to logs or analytics.

@@ -182,6 +182,55 @@
     }
 
     actor UITestAppService: AppServicing {
+        #if DEBUG
+            private var fixtureIsolatedTarget: PrivateCloudIsolatedRestore?
+            private var fixtureCloudSyncEnabled = true
+
+            private func isolatedFixtureTarget() throws
+                -> PrivateCloudIsolatedRestore
+            {
+                let prefix = "--ui-testing-isolated-restore-fixture="
+                guard
+                    let argument = ProcessInfo.processInfo.arguments.first(
+                        where: { $0.hasPrefix(prefix) }),
+                    let session = UUID(
+                        uuidString: String(argument.dropFirst(prefix.count)))
+                else { throw PrivateCloudIsolatedRestore.Failure.invalidTarget }
+                if let fixtureIsolatedTarget { return fixtureIsolatedTarget }
+                let root = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "bleat-ui-testing-restore-\(session.uuidString)")
+                let target = try PrivateCloudIsolatedRestore(directory: root)
+                fixtureIsolatedTarget = target
+                return target
+            }
+
+            func inspectIsolatedCloudRestore() async throws
+                -> PrivateCloudIsolatedMaterializer.Inspection?
+            {
+                try await isolatedFixtureTarget().inspection()
+            }
+
+            func previewIsolatedCloudRestore(_ data: Data) async throws
+                -> PrivateCloudIsolatedRestore.Review
+            {
+                try await isolatedFixtureTarget().preview(data)
+            }
+
+            func replaceIsolatedCloudRestore(
+                _ review: PrivateCloudIsolatedRestore.Review
+            ) async throws
+                -> PrivateCloudIsolatedRestore.Result
+            {
+                fixtureCloudSyncEnabled = false
+                return try await isolatedFixtureTarget().replace(review)
+            }
+
+            func isPrivateCloudSyncEnabled() async -> Bool {
+                fixtureCloudSyncEnabled
+            }
+        #endif
+
         static func hasExplicitScenario(
             arguments: [String] = ProcessInfo.processInfo.arguments
         ) -> Bool {
