@@ -205,25 +205,37 @@
                 return target
             }
 
-            func inspectIsolatedCloudRestore() async throws
-                -> PrivateCloudIsolatedMaterializer.Inspection?
+            private var fixtureRestoreReview:
+                (UUID, PrivateCloudIsolatedRestore.Review)?
+            private var fixtureDidRestore = false
+
+            func previewPrivateCloudRestore(_ data: Data) async throws
+                -> AppCloudRestoreReview
             {
-                try await isolatedFixtureTarget().inspection()
+                let review = try await isolatedFixtureTarget().preview(data)
+                let id = UUID()
+                fixtureRestoreReview = (id, review)
+                return AppCloudRestoreReview(id: id, plan: review.plan)
             }
 
-            func previewIsolatedCloudRestore(_ data: Data) async throws
-                -> PrivateCloudIsolatedRestore.Review
+            func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+                async throws -> AppCloudRestoreResult
             {
-                try await isolatedFixtureTarget().preview(data)
-            }
-
-            func replaceIsolatedCloudRestore(
-                _ review: PrivateCloudIsolatedRestore.Review
-            ) async throws
-                -> PrivateCloudIsolatedRestore.Result
-            {
+                guard let (id, known) = fixtureRestoreReview, id == review.id
+                else {
+                    throw AppCloudRestoreFailure.staleReview
+                }
+                fixtureRestoreReview = nil
                 fixtureCloudSyncEnabled = false
-                return try await isolatedFixtureTarget().replace(review)
+                _ = try await isolatedFixtureTarget().replace(known)
+                fixtureDidRestore = true
+                return .restartRequired
+            }
+
+            func verifyPendingPrivateCloudRestore() async throws
+                -> AppCloudRestoreResult
+            {
+                fixtureDidRestore ? .restartRequired : .unchanged
             }
 
             func isPrivateCloudSyncEnabled() async -> Bool {

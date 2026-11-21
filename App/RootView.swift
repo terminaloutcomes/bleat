@@ -6496,48 +6496,39 @@ private struct RemoteTelemetryDiagnosticsSection: View {
 
 private struct PrivateCloudBackupSection: View {
     let model: AppModel
-    @State private var confirming = false
+    @State private var confirmingExport = false
     @State private var capturing = false
     @State private var exporting = false
     @State private var importing = false
     @State private var previewURL: URL?
-    private var previewing: Bool { previewURL != nil }
+    @State private var reviewing = false
+    @State private var otherDevicesPaused = false
+    @State private var confirmingRestore = false
+    @State private var confirmingAdoption = false
+    @State private var restoring = false
     @State private var failure: String?
     @State private var document: StatisticsJSONDocument?
-    @State private var preview: PrivateCloudBackup.ReplacePlan?
-
-    #if DEBUG
-        @State private var isolatedReview: PrivateCloudIsolatedRestore.Review?
-        @State private var isolatedResult: PrivateCloudIsolatedRestore.Result?
-        @State private var inspection:
-            PrivateCloudIsolatedMaterializer.Inspection?
-        @State private var confirmingRestore = false
-        @State private var restoring = false
-    #endif
+    @State private var review: AppCloudRestoreReview?
+    @State private var restoreResult: AppCloudRestoreResult?
     private var working: Bool {
-        #if DEBUG
-            capturing || exporting || previewing || restoring
-        #else
-            capturing || exporting || previewing
-        #endif
+        capturing || exporting || previewURL != nil || reviewing || restoring
     }
 
     var body: some View {
-        Section {
+        Section("iCloud Data") {
             Button("Export iCloud Data…", systemImage: "square.and.arrow.up") {
-                confirming = true
+                confirmingExport = true
             }
-            .disabled(working || !model.privateCloudSyncAvailable)
+            .disabled(working)
             .accessibilityIdentifier("settings.icloud.exportBackup")
+
             Button(
                 "Restore from Export…", systemImage: "doc.text.magnifyingglass"
             ) {
                 failure = nil
-                preview = nil
-                #if DEBUG
-                    isolatedReview = nil
-                    isolatedResult = nil
-                #endif
+                review = nil
+                restoreResult = nil
+                otherDevicesPaused = false
                 #if DEBUG
                     if UITestAppService.hasExplicitScenario(),
                         ProcessInfo.processInfo.arguments.contains(where: {
@@ -6545,16 +6536,14 @@ private struct PrivateCloudBackupSection: View {
                                 "--ui-testing-isolated-restore-fixture=")
                         })
                     {
+                        reviewing = true
                         Task {
+                            defer { reviewing = false }
                             do {
-                                let data =
-                                    try PrivateCloudIsolatedRestore
-                                    .syntheticUITestExport()
-                                let review =
-                                    try await model.previewIsolatedCloudRestore(
-                                        data)
-                                isolatedReview = review
-                                preview = review.plan
+                                review =
+                                    try await model.previewPrivateCloudRestore(
+                                        PrivateCloudIsolatedRestore
+                                            .syntheticUITestExport())
                             } catch { failure = failureMessage(error) }
                         }
                         return
@@ -6562,76 +6551,102 @@ private struct PrivateCloudBackupSection: View {
                 #endif
                 importing = true
             }
-            .disabled(
-                working
-                    || (!model.privateCloudSyncAvailable
-                        && !model.isolatedCloudRestoreAvailable)
-            )
+            .disabled(working)
             .accessibilityIdentifier("settings.icloud.previewRestore")
-            if capturing {
-                ProgressView("Reading Bleat data from iCloud…")
-            } else if previewing {
-                ProgressView("Checking the selected backup…")
-            }
-            if let failure {
-                Text(failure).foregroundStyle(.red)
-            }
-            if let preview {
-                previewDetails(preview)
-            }
-            #if DEBUG
-                if restoring {
-                    ProgressView("Restoring to the isolated test target…")
-                } else if isolatedReview != nil {
-                    Button("Review Sync Pause and Restore…") {
-                        confirmingRestore = true
+
+            if restoreResult == nil || restoreResult == .unchanged {
+                Button("Check for a Restore from Another Device") {
+                    Task {
+                        do {
+                            if try await model.checkForRestoreFromAnotherDevice()
+                            {
+                                restoreResult = .restoreFromAnotherDevice
+                            } else {
+                                failure = nil
+                                restoreResult = nil
+                            }
+                        } catch { failure = failureMessage(error) }
                     }
-                    .accessibilityIdentifier("settings.icloud.restoreReview")
                 }
-                if let isolatedResult {
-                    VStack(alignment: .leading) {
-                        Text("Restored to this device’s isolated test target.")
-                        Text(
-                            "\(isolatedResult.restored.recordCount) records verified. The restore did not send anything to iCloud."
-                        )
-                    }
-                    .accessibilityIdentifier("settings.icloud.restoreResult")
+                .disabled(working)
+            }
+            if capturing { ProgressView("Reading Bleat data from iCloud…") }
+            if previewURL != nil || reviewing {
+                ProgressView("Checking the backup…")
+            }
+            if restoring {
+                ProgressView("Preparing and verifying the replacement…")
+            }
+            if let failure { Text(failure).foregroundStyle(.red) }
+            if let review, !restoring {
+                previewDetails(review.plan)
+                Toggle(
+                    "I’ve turned off Bleat iCloud sync on my other devices",
+                    isOn: $otherDevicesPaused
+                )
+                .accessibilityIdentifier(
+                    "settings.icloud.restoreOtherDevicesPaused")
+                Text(
+                    "Keep sync off on other devices. Older Bleat versions cannot follow the restored data."
+                )
+                .foregroundStyle(.secondary)
+                Button("Review Sync Pause and Restore…") {
+                    confirmingRestore = true
                 }
-                if let inspection {
-                    DisclosureGroup("Restored test app data") {
-                        LabeledContent(
-                            "Server accounts",
-                            value: inspection.accounts.formatted())
-                        LabeledContent(
-                            "Settings",
-                            value: inspection.configurations.formatted())
-                        LabeledContent(
-                            "Listening slices",
-                            value: inspection.listeningSlices.formatted())
-                        LabeledContent(
-                            "Reset boundaries",
-                            value: inspection.resetEnvelopes.formatted())
-                        LabeledContent(
-                            "Book completions",
-                            value: inspection.completions.formatted())
-                        LabeledContent(
-                            "Remote sessions",
-                            value: inspection.remoteSessions.formatted())
-                    }
+                .disabled(!otherDevicesPaused)
+                .accessibilityIdentifier("settings.icloud.restoreReview")
+            }
+            if let restoreResult {
+                switch restoreResult {
+                case .unchanged:
+                    Text(
+                        "The same backup is already selected. Sync is off on this device."
+                    )
+                case .restartRequired:
+                    Text(
+                        "iCloud data was restored. Close and reopen Bleat to load it. Sync will stay off."
+                    )
                     .accessibilityIdentifier(
-                        "settings.icloud.isolatedInspection")
+                        "settings.icloud.restoreRestartRequired")
+                case .restoreFromAnotherDevice:
+                    Text(
+                        "Another device restored Bleat’s iCloud data. Load it here before turning sync on."
+                    )
+                    Button("Load Restored iCloud Data…") {
+                        confirmingAdoption = true
+                    }
+                case .pendingVerification:
+                    Text(
+                        "Bleat hasn’t verified the restore outcome. Keep sync off and check the result before trying another restore."
+                    )
+                    Button("Check Restore Status") {
+                        Task { await checkRestoreStatus() }
+                    }
                 }
-            #endif
-        } header: {
-            Text("iCloud Data")
-        } footer: {
+            }
+        }
+        .confirmationDialog(
+            "Disable Sync and Load Restored iCloud Data?",
+            isPresented: $confirmingAdoption, titleVisibility: .visible
+        ) {
+            Button("Disable Sync and Load", role: .destructive) {
+                Task {
+                    restoring = true
+                    defer { restoring = false }
+                    do {
+                        restoreResult =
+                            try await model.adoptRestoreFromAnotherDevice()
+                    } catch { failure = failureMessage(error) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
             Text(
-                "Backs up Bleat’s CloudKit data only. It excludes Keychain credentials, local downloads, and data held by Audiobookshelf. Restore is available only in an isolated testing build."
+                "Bleat will use a new local app store. Existing downloads and local-only data are kept separately, but will not appear in the restored state. Close and reopen Bleat after loading; sync stays off."
             )
         }
         .confirmationDialog(
-            "Export Private iCloud Data?",
-            isPresented: $confirming,
+            "Export Private iCloud Data?", isPresented: $confirmingExport,
             titleVisibility: .visible
         ) {
             Button("Continue to Save") {
@@ -6640,8 +6655,28 @@ private struct PrivateCloudBackupSection: View {
             }
         } message: {
             Text(
-                "The backup contains private listening history and server account details. Choose a device-local destination to keep it off cloud storage. Do not share it publicly."
+                "The backup contains private listening history and server profiles, not Keychain credentials or downloads. Keep it private and choose a device-local destination if you don’t want it synced."
             )
+        }
+        .alert(
+            "Disable Sync and Replace iCloud Data?",
+            isPresented: $confirmingRestore
+        ) {
+            Button("Disable Sync and Restore", role: .destructive) {
+                guard otherDevicesPaused, review != nil else { return }
+                failure = nil
+                restoring = true
+            }
+            .accessibilityIdentifier("settings.icloud.restoreConfirm")
+            Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("settings.icloud.restoreCancel")
+        } message: {
+            Text(
+                "Bleat will turn off sync on this device, verify the entire replacement, and switch which iCloud data it uses. The previous cloud and local data are kept separately. Old downloads and local-only data won’t appear in the restored app. Close and reopen Bleat afterward; sync stays off."
+            )
+        }
+        .task {
+            await checkRestoreStatus()
         }
         .task(id: capturing) {
             guard capturing else { return }
@@ -6652,9 +6687,23 @@ private struct PrivateCloudBackupSection: View {
                 document = StatisticsJSONDocument(data: data)
                 exporting = true
             } catch {
-                if !Task.isCancelled {
-                    failure = failureMessage(error)
-                }
+                if !Task.isCancelled { failure = failureMessage(error) }
+            }
+        }
+        .task(id: restoring) {
+            guard restoring, let review else { return }
+            defer {
+                restoring = false
+                self.review = nil
+                otherDevicesPaused = false
+            }
+            do {
+                restoreResult = try await model.replacePrivateCloudRestore(
+                    review)
+            } catch AppCloudRestoreFailure.pendingVerification {
+                restoreResult = .pendingVerification
+            } catch {
+                if !Task.isCancelled { failure = failureMessage(error) }
             }
         }
         .fileExporter(
@@ -6670,7 +6719,7 @@ private struct PrivateCloudBackupSection: View {
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) {
             result in
-            guard case .success(let url) = result, !previewing else { return }
+            guard case .success(let url) = result, !working else { return }
             previewURL = url
         }
         .task(id: previewURL) {
@@ -6678,71 +6727,28 @@ private struct PrivateCloudBackupSection: View {
             defer { previewURL = nil }
             do {
                 let bytes = try await Self.readBackup(at: url)
-                #if DEBUG
-                    if model.isolatedCloudRestoreAvailable {
-                        let review =
-                            try await model.previewIsolatedCloudRestore(bytes)
-                        try Task.checkCancellation()
-                        isolatedReview = review
-                        preview = review.plan
-                        return
-                    }
-                #endif
                 let result = try await model.previewPrivateCloudRestore(bytes)
                 try Task.checkCancellation()
-                preview = result
+                review = result
+            } catch AppCloudRestoreFailure.pendingVerification {
+                restoreResult = .pendingVerification
             } catch {
                 if !Task.isCancelled { failure = failureMessage(error) }
             }
         }
-        #if DEBUG
-            .task {
-                guard model.isolatedCloudRestoreAvailable else { return }
-                do {
-                    inspection = try await model.inspectIsolatedCloudRestore()
-                } catch {
-                    if !Task.isCancelled {
-                        failure = "Could not inspect the isolated test target."
-                    }
-                }
-            }
-            .alert(
-                "Disable Sync and Restore to the Test Target?",
-                isPresented: $confirmingRestore
-            ) {
-                Button("Disable Sync and Restore", role: .destructive) {
-                    failure = nil
-                    restoring = true
-                }
-                .accessibilityIdentifier("settings.icloud.restoreConfirm")
-                Button("Cancel", role: .cancel) {}
-                .accessibilityIdentifier("settings.icloud.restoreCancel")
-            } message: {
-                Text(
-                    "Bleat will turn off and finish normal iCloud syncing on this device before replacing the isolated test data. It won’t change iCloud or other devices. Normal sync will stay off until you turn it on."
-                )
-            }
-            .task(id: restoring) {
-                guard restoring, let review = isolatedReview else { return }
-                defer {
-                    restoring = false
-                    isolatedReview = nil
-                }
-                do {
-                    let result = try await model.replaceIsolatedCloudRestore(
-                        review)
-                    isolatedResult = result
-                    inspection = result.inspection
-                    preview = nil
-                } catch {
-                    if !Task.isCancelled {
-                        failure =
-                            "Could not verify the isolated restore. Normal iCloud data was not changed. Reopen the restore preview to inspect the test target."
-                    }
-                }
-            }
-        #endif
+    }
 
+    private func checkRestoreStatus() async {
+        guard !restoring else { return }
+        do {
+            let result = try await model.verifyPendingPrivateCloudRestore()
+            if result != .unchanged { restoreResult = result }
+        } catch {
+            if restoreResult == .pendingVerification {
+                failure =
+                    "Could not verify the previous restore. Sync should stay off."
+            }
+        }
     }
 
     private func previewDetails(_ plan: PrivateCloudBackup.ReplacePlan)
@@ -6752,9 +6758,7 @@ private struct PrivateCloudBackupSection: View {
             LabeledContent(
                 "Records in backup", value: plan.source.recordCount.formatted())
             LabeledContent(
-                model.isolatedCloudRestoreAvailable
-                    ? "Records now in the test target"
-                    : "Records now in iCloud",
+                "Records now in iCloud",
                 value: plan.current.recordCount.formatted())
             LabeledContent("Would add", value: plan.create.formatted())
             LabeledContent("Would replace", value: plan.replace.formatted())
@@ -6766,28 +6770,10 @@ private struct PrivateCloudBackupSection: View {
                 recordCount("Book completions", .completion, plan)
                 recordCount("Remote listening sessions", .remoteSession, plan)
             }
-            if model.isolatedCloudRestoreAvailable {
-                Text(
-                    "Restore replaces the isolated local test target, not live iCloud. Exported account profiles never sign in."
-                )
-                .foregroundStyle(.secondary)
-            } else {
-                if plan.accountRecordsAddedOrChanged > 0 {
-                    Text(
-                        "New or changed server accounts may need sign-in again."
-                    )
-                    .foregroundStyle(.secondary)
-                }
-                if plan.accountRecordsRemoved > 0 {
-                    Text(
-                        "Removing accounts can remove saved credentials on older Bleat builds."
-                    )
-                    .foregroundStyle(.secondary)
-                }
-                Text("Preview only. Live iCloud replacement is not available.")
-                    .foregroundStyle(.secondary)
-            }
-
+            Text(
+                "This replaces the iCloud data Bleat uses. Local-only data and the previous cloud generation are retained separately."
+            )
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -6821,23 +6807,16 @@ private struct PrivateCloudBackupSection: View {
     }
 
     private func failureMessage(_ error: any Error) -> String {
-        #if DEBUG
-            if case .capacity = error as? PrivateCloudIsolatedRestore.Failure {
-                return
-                    "The isolated target has too many retained generations. Start with a fresh test app container before restoring again."
-            }
-        #endif
+        if case .staleReview = error as? AppCloudRestoreFailure {
+            return
+                "iCloud data changed since this preview. Select the backup again to review a fresh restore."
+        }
         return switch error as? PrivateCloudBackup.Failure {
         case .accountMismatch:
             "This backup belongs to a different iCloud account."
-        case .unsupportedVersion:
-            "This is not a supported full iCloud backup."
-        case .archiveTooLarge:
-            "This backup exceeds the supported size."
-        case .unsafeAccountPayload, .unsupportedData, .incompleteCapture:
-            "Bleat cannot verify that this iCloud backup is complete and safe. No data changed."
-        default:
-            "Could not prepare the iCloud backup. No data changed."
+        case .unsupportedVersion: "This is not a supported full iCloud backup."
+        case .archiveTooLarge: "This backup exceeds the supported size."
+        default: "Bleat could not complete the iCloud data operation."
         }
     }
 }
@@ -6901,9 +6880,7 @@ private struct SettingsView: View {
                 if model.privateCloudSyncAvailable {
                     cloudSection
                 }
-                if model.privateCloudSyncAvailable
-                    || model.isolatedCloudRestoreAvailable
-                {
+                if model.privateCloudSyncAvailable {
                     PrivateCloudBackupSection(model: model)
                 }
 

@@ -911,8 +911,8 @@ warning, then choose where to save the file. Choose a device-local destination
 if you do not want a file provider to synchronize it. No capture runs
 automatically.
 
-Format 2 backs up the record data in Bleat's `BleatPrivateData` private
-CloudKit zone, not the device's cache. It verifies the zone inventory, fetches
+Format 2 backs up the record data in Bleat's selected private CloudKit data
+generation, not the device's cache. Existing accounts start in `BleatPrivateData`. It verifies the zone inventory, fetches
 all keys and all change pages from a fresh cursor, folds deletions, and keeps
 the exact application bytes and logical name for each supported record:
 
@@ -929,7 +929,8 @@ custom zone, record type, extra field, encrypted field, asset, or share/parent
 reference prevents export rather than being silently omitted. A missing zone
 is not an empty verified backup. Per-record/page failures and observed iCloud
 account changes also fail capture. The archive excludes system `Users` records
-in the default zone, CloudKit change tags, system fields and sync tokens. It
+in the default zone, the restore control selector, CloudKit change tags,
+system fields and sync tokens. It
 does not back up passwords, tokens or native login items held in Keychain
 (including iCloud Keychain), downloads, bookmarks or other device-local data
 not written to this zone, or anything stored only in Audiobookshelf. Archives
@@ -945,18 +946,44 @@ The JSON contains `version`, `zone`, `complete`, optionally the capture app's
 accidental edits or truncation; it does not authenticate the file. Format 1 was
 listening-slices only and is not a full backup or a restore source.
 
-**Restore from Export…** validates the whole file and compares it with a fresh
-capture for the same iCloud account. It reports records that would be added,
-replaced, or removed, including account changes. It does not write anything.
-A large backup can be exported even when replacing it exceeds a conservative
-single-operation budget. There is no live iCloud replace action:
-old clients can re-upload local records, keep some slices deleted from the
-cloud, or delete stored credentials when a server account record disappears.
-CloudKit cannot make a large multi-operation overwrite atomic. A production
-restore must first have supported writer quiescence and local rebootstrap,
-a retained pre-restore backup, explicit user confirmation and recovery
-verification. This preview is not permission to use CloudKit Console for a
-live overwrite.
+**Restore from Export…** validates the whole file and compares it with a
+fresh capture for the same Apple Account. It previews records to add,
+replace, or remove and does not write until you confirm. Turn off Bleat iCloud
+sync on all other devices first; Bleat cannot verify that remotely. Then
+confirm **Disable Sync and Restore**. Bleat disables and drains this
+device's sync without moving Keychain items. Sync stays off after the
+attempt, including when an announced replacement fails. Do not re-enable
+sync on old builds.
+
+Bleat stages and independently verifies the five record types in a fresh
+private data zone and materializes the backup in a new local app store before
+changing a small, account-scoped selector conditionally. Older data zones and
+local stores are retained; the operation does not delete account records from
+an old zone, send tombstones to old clients, or delete saved credentials.
+Close and reopen Bleat to use the new local store. Old downloads and other
+local-only data are not merged into the restored app and may not appear, but
+their prior storage is retained. Restored server profiles may require a
+fresh sign-in. Retain the original backup and consider exporting the current
+state separately before replacing it.
+
+If publication cannot be verified, use **Check Restore Status** instead of
+retrying. It compares the active generation's full record digest and account
+against the pending receipt before activating your new local store. Definitive
+pre-publication failures allow a fresh review; an ambiguous nonmatching
+outcome deliberately leaves sync blocked rather than retrying or clearing the
+old state. A separate upgraded device can use **Check for a Restore from
+Another Device** and explicitly load the selected data into its own fresh
+store before re-enabling sync. Devices on older builds do not see the control
+selector and must stay paused.
+
+This is a generation change, not a cross-zone atomic overwrite. A last-second
+write on another device to the previous zone can be left behind despite the
+pre-publication drift check. Large data is sent in bounded batches only to
+the unselected candidate; the prior zone stays selected if staging fails. The
+previous zones are not automatically deleted. Clear iCloud Data is not
+available on a restored generation until it can clear the selector and its
+data safely. The production path requires a CloudKit-capable build; fixture
+validation is synthetic, not validation on a real Apple Account.
 
 ### Offline archive tools (macOS)
 
@@ -985,70 +1012,12 @@ a file. Replay uses the real ingestion and canonical compaction code in a
 disposable SwiftData store with CloudKit disabled. It neither simulates
 server acknowledgement for source retirement nor recovers old SQLite metadata.
 
-### Isolated restore in a Debug development build
+### Synthetic generation tests
 
-Launch a Debug build with the argument `--bleat-isolated-icloud-restore`.
-For an unsigned simulator or fully offline rehearsal, use
-`BLEAT_CLOUDKIT_MODE=disabled` (and disable App Attest for synthetic testing).
-In **Settings → iCloud Data → Restore from Export…**, pick a private format-2
-file. Review the proposed additions, replacements and removals against the
-isolated target, then choose **Review Sync Pause and Restore…**. Cancelling
-leaves sync and the target unchanged. Confirming **Disable Sync and Restore**
-first turns off and drains ordinary sync on this device without using the
-normal toggle's Keychain-migration path. Sync does not re-enable automatically.
-Other devices and normal iCloud data are not touched. An export from a
-different Apple Account can be used here: the export's owner binding is
-explicitly replaced with an offline test namespace, without rewriting the
-application payloads or using the source account as authentication.
-
-A restore stores the five app record types in a new generation in the app's
-private Caches directory (not in iCloud/device backup). Before selection,
-Bleat independently re-reads the raw staged rows and materializes the
-candidate through its real CloudKit record ingestion into a separate
-SwiftData store with CloudKit disabled. Immutable earlier generations are
-retained, and a failed candidate never becomes selected. **Restored test app
-data** shows the materialized app projections again after a normal relaunch.
-Its accounts are offline profiles, never authenticated; it never uses normal
-sync queues, credentials or the user's normal app store. The OS can purge
-Caches, and the isolated store bounds retained candidates rather than
-deleting one automatically. Keep the original export. Non-testing builds
-offer same-account preview only. No CloudKit development or production
-write adapter is present.
-
-### Generation restore prototype (synthetic only)
-
-`PrivateCloudGenerationRestore` is an internal model with no CloudKit
-transport, schema, command, or Settings action. Its synthetic transport
-creates a fresh candidate, stages bounded batches outside the active store,
-seals the candidate, and independently reads and verifies its full contents.
-It preserves the previous generation rather than deleting individual
-records. The reviewed plan binds the authenticated account/session, active
-selector and write revision, and current/desired content digests. A conditional
-selector change is the publication step. Cancellation or verification failure
-before publication leaves the active store unchanged. If the publish result
-is unknown, readback of this candidate's unique pointer confirms success;
-seeing the old or a third pointer does not prove failure. No auto-retry or
-cleanup runs. The current process blocks further mutations until readback
-resolves its pending receipt.
-
-**This is not a production restore protocol.** The simulated conditional
-publication linearizes with ordinary writes. A CloudKit selector CAS alone
-does not provide that fence: a selector in one zone cannot atomically fence
-writes in another zone. Upgraded writers would need a real same-zone write
-gate during ordinary record writes, and coordinated activation/recovery that
-never makes a new generation writable before it is selected. The older
-`a52b431` build ignores any new gate/selector and continues writing to fixed
-`BleatPrivateData`; those late writes would stay behind after cutover.
-A supported handoff must actually quiesce those old clients or explicitly
-resolve their divergent edits before promising an exact restore.
-
-Production work additionally needs a durable operation journal and separately
-retained private pre-restore backup, retries/recovery rules for every activation
-phase and authenticated account transition, and generation-aware backup and
-ordinary synchronization. Each client must stop/drain old sync, open the
-selected generation cleanly, isolate or discard the previous generation's
-pending changes, and rebootstrap without applying old/new differences as
-normal account deletion events. Otherwise old local history can be reuploaded,
-and account deletion can remove synchronized native login material in Keychain.
-The model calls no credential or sync APIs and neither migrates local app data
-nor reuses an old generation as a rollback target.
+The offline generation coordinator exercises staged replacement, interrupted
+batches, races, and lost/unknown publication responses without a cloud
+connection. Its mock can fence ordinary writes; that stronger capability is
+not promised by the CloudKit transport. Separately, the journal and
+materializer tests exercise restart, stable payload digestion, and the real
+local app record-ingestion path in disposable SwiftData stores. The simulator
+test uses a synthetic restore service and never joins an iCloud account.

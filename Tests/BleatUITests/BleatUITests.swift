@@ -2933,12 +2933,11 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
-    func testIsolatedICloudRestoreRequiresConfirmationAndPersistsInspection() {
+    func testICloudRestoreRequiresOtherDevicePauseAndConfirmation() {
         let app = launch(
             scenario: "--ui-testing-signed-in",
             additionalArguments: [
-                "--bleat-isolated-icloud-restore",
-                "--ui-testing-isolated-restore-fixture=\(UUID().uuidString)",
+                "--ui-testing-isolated-restore-fixture=\(UUID().uuidString)"
             ])
         tabButton("Settings", in: app).tap()
         Self.scrollUntilHittable(
@@ -2946,6 +2945,13 @@ final class BleatUITests: XCTestCase {
             direction: .up)
         XCTAssertTrue(app.buttons["settings.icloud.exportBackup"].exists)
         app.buttons["settings.icloud.previewRestore"].tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.restoreOtherDevicesPaused",
+            direction: .up
+        )
+        let paused = app.switches["settings.icloud.restoreOtherDevicesPaused"]
+        XCTAssertTrue(paused.exists)
+        paused.tap()
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.restoreReview",
             direction: .up)
@@ -2958,29 +2964,18 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         cancel.tap()
         XCTAssertFalse(
-            app.staticTexts["Restored to this device’s isolated test target."]
-                .exists)
+            app.staticTexts["settings.icloud.restoreRestartRequired"].exists)
         review.tap()
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(
-            app.staticTexts["Restored to this device’s isolated test target."]
+            app.staticTexts["settings.icloud.restoreRestartRequired"]
                 .waitForExistence(timeout: 20))
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.enabled", direction: .down)
         XCTAssertEqual(
             app.switches["settings.icloud.enabled"].value as? String, "0")
 
-        app.terminate()
-        app.launch()
-        tabButton("Settings", in: app).tap()
-        Self.scrollUntilHittable(
-            app: app, identifier: "settings.icloud.isolatedInspection",
-            direction: .up)
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "settings.icloud.isolatedInspection"
-            ].firstMatch.exists)
     }
 
     @MainActor

@@ -2353,6 +2353,10 @@ final class AppModel {
         )
 
         do {
+            if try await service.prepareRestoredCloudPreferences() {
+                playback.reloadSyncedPreferences()
+                downloads.reloadSyncedPreferences()
+            }
             await BookCoverImageLoader.shared.setTracer(remoteTelemetryTracer)
             if let endpointRouter = await service.serverEndpointRouter() {
                 await BookCoverImageLoader.shared.setEndpointRouter(
@@ -7102,69 +7106,71 @@ final class AppModel {
     }
 
     func previewPrivateCloudRestore(_ data: Data) async throws
-        -> PrivateCloudBackup.ReplacePlan
+        -> AppCloudRestoreReview
     {
         try await service.previewPrivateCloudRestore(data)
     }
 
-    var isolatedCloudRestoreAvailable: Bool {
-        #if DEBUG
-            ProcessInfo.processInfo.arguments.contains(
-                "--bleat-isolated-icloud-restore")
-        #else
-            false
-        #endif
+    func verifyPendingPrivateCloudRestore() async throws
+        -> AppCloudRestoreResult
+    {
+        try await service.verifyPendingPrivateCloudRestore()
     }
 
-    #if DEBUG
-        func inspectIsolatedCloudRestore() async throws
-            -> PrivateCloudIsolatedMaterializer.Inspection?
-        {
-            try await service.inspectIsolatedCloudRestore()
+    func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+        async throws -> AppCloudRestoreResult
+    {
+        guard !isResettingLocalData, privateCloudDataClearState != .clearing
+        else {
+            throw AppCloudRestoreFailure.unavailable
         }
+        let inFlight = privateCloudSyncTask
+        privateCloudSyncGeneration &+= 1
+        inFlight?.cancel()
+        do {
+            let result = try await service.replacePrivateCloudRestore(review)
+            await finishPrivateCloudRestore(inFlight)
+            return result
+        } catch {
+            await finishPrivateCloudRestore(inFlight)
+            throw error
+        }
+    }
 
-        func previewIsolatedCloudRestore(_ data: Data) async throws
-            -> PrivateCloudIsolatedRestore.Review
-        {
-            try await service.previewIsolatedCloudRestore(data)
-        }
+    func checkForRestoreFromAnotherDevice() async throws -> Bool {
+        try await service.checkForRestoreFromAnotherDevice()
+    }
 
-        func replaceIsolatedCloudRestore(
-            _ review: PrivateCloudIsolatedRestore.Review
-        ) async throws
-            -> PrivateCloudIsolatedRestore.Result
-        {
-            guard isolatedCloudRestoreAvailable, !isResettingLocalData,
-                privateCloudDataClearState != .clearing
-            else { throw PrivateCloudIsolatedRestore.Failure.rejected }
-            let inFlight = privateCloudSyncTask
-            privateCloudSyncGeneration &+= 1
-            inFlight?.cancel()
-            do {
-                let result = try await service.replaceIsolatedCloudRestore(
-                    review)
-                await finishIsolatedCloudRestore(inFlight)
-                return result
-            } catch {
-                await finishIsolatedCloudRestore(inFlight)
-                throw error
-            }
+    func adoptRestoreFromAnotherDevice() async throws -> AppCloudRestoreResult {
+        guard !isResettingLocalData, privateCloudDataClearState != .clearing
+        else {
+            throw AppCloudRestoreFailure.unavailable
         }
+        let inFlight = privateCloudSyncTask
+        privateCloudSyncGeneration &+= 1
+        inFlight?.cancel()
+        do {
+            let result = try await service.adoptRestoreFromAnotherDevice()
+            await finishPrivateCloudRestore(inFlight)
+            return result
+        } catch {
+            await finishPrivateCloudRestore(inFlight)
+            throw error
+        }
+    }
 
-        private func finishIsolatedCloudRestore(_ inFlight: Task<Void, Never>?)
-            async
-        {
-            await inFlight?.value
-            privateCloudSyncTask = nil
-            canCancelPrivateCloudSynchronization = false
-            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
-            if !privateCloudSyncEnabled {
-                pendingCloudServerConfigurationChanges.removeAll()
-                pendingCloudConfigurationConflict = nil
-            }
-            privateCloudState = privateCloudSyncEnabled ? .idle : .disabled
+    private func finishPrivateCloudRestore(_ inFlight: Task<Void, Never>?) async
+    {
+        await inFlight?.value
+        privateCloudSyncTask = nil
+        canCancelPrivateCloudSynchronization = false
+        privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+        if !privateCloudSyncEnabled {
+            pendingCloudServerConfigurationChanges.removeAll()
+            pendingCloudConfigurationConflict = nil
         }
-    #endif
+        privateCloudState = privateCloudSyncEnabled ? .idle : .disabled
+    }
 
     func synchronizePrivateCloud() async {
         guard privateCloudSyncAvailable,

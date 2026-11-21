@@ -3429,116 +3429,137 @@ public actor PrivateCloudSyncCoordinator:
     private let configurationFailure: PrivateCloudSyncError?
     private let container: CKContainer
     private let enabledKey = "bleat.cloudKit.enabled.v1"
-    private let zoneID = CKRecordZone.ID(
-        zoneName: PrivateCloudSyncStore.zoneName,
-        ownerName: CKCurrentUserDefaultName
-    )
+    private let zoneID: CKRecordZone.ID
+    private let generationTransport: PrivateCloudGenerationTransport
     private var engine: CKSyncEngine?
     private var deletingAccount = false
     private var engineStateGeneration: UInt64 = 0
     private var archiveCaptureRevision = UUID()
-    #if DEBUG
-        private var isolatedRestorePause = false
-    #endif
+    private var restorePause = false
     private var clearingArchiveSource = false
     private let lifecycle = PrivateCloudSyncLifecycle()
     private var activeEngineCallbacks: Set<UUID> = []
     private var engineCallbackDrain: [CheckedContinuation<Void, Never>] = []
     private let engineCancellations = PrivateCloudEngineCancellations()
 
-    /// Explicit full read of the Bleat-owned private zone. Fetch every user
-    /// field instead of projecting payload, so a new field/type fails closed.
+    public struct RestoreReview: Sendable {
+        public let plan: PrivateCloudBackup.ReplacePlan
+        fileprivate let source: PrivateCloudBackup
+        fileprivate let reviewed: PrivateCloudGenerationTransport.Active
+    }
+
     public func captureCloudBackup() async throws -> PrivateCloudBackup {
         guard configurationFailure == nil, !deletingAccount,
-            !clearingArchiveSource
+            !clearingArchiveSource, !restorePause
         else { throw PrivateCloudBackup.Failure.captureFailed }
+        return try await generationTransport.readActive().archive
+    }
 
-        let database = container.privateCloudDatabase
-        let generation = engineStateGeneration
-        let revision = archiveCaptureRevision
-        var token: CKServerChangeToken?
-        var records: [CKRecord.ID: PrivateCloudBackup.Entry] = [:]
-        var bytes = 0
-        var pageCount = 0
-        do {
-            let sourceUser = try await container.userRecordID()
-            let initialZones = try await database.allRecordZones()
-            try requireBackupZone(initialZones)
-            while true {
-                try Task.checkCancellation()
-                pageCount += 1
-                guard pageCount <= 2_000 else {
-                    throw PrivateCloudBackup.Failure.incompleteCapture
-                }
-                let page = try await database.recordZoneChanges(
-                    inZoneWith: zoneID, since: token)
-                guard try await container.userRecordID() == sourceUser,
-                    generation == engineStateGeneration,
-                    revision == archiveCaptureRevision,
-                    !deletingAccount, !clearingArchiveSource,
-                    page.deletions.allSatisfy({
-                        page.modificationResultsByID[$0.recordID] == nil
-                    })
-                else { throw PrivateCloudBackup.Failure.captureFailed }
-                for deletion in page.deletions {
-                    if let removed = records.removeValue(
-                        forKey: deletion.recordID)
-                    {
-                        bytes -= removed.payload.count
-                    }
-                }
-                for (id, result) in page.modificationResultsByID {
-                    let cloudRecord = try result.get().record
-                    guard cloudRecord.recordID == id, id.zoneID == zoneID else {
-                        throw PrivateCloudBackup.Failure.unsupportedData
-                    }
-                    let record = try PrivateCloudBackup.Entry(
-                        cloudRecord: cloudRecord)
-                    let previous = records.updateValue(record, forKey: id)
-                    bytes +=
-                        record.payload.count - (previous?.payload.count ?? 0)
-                    guard bytes <= PrivateCloudBackup.maximumPayloadBytes,
-                        records.count <= PrivateCloudBackup.maximumRecords
-                    else { throw PrivateCloudBackup.Failure.archiveTooLarge }
-                }
-                guard page.moreComing else { break }
-                token = page.changeToken
-            }
-            let finalZones = try await database.allRecordZones()
-            try requireBackupZone(finalZones)
-            guard try await container.userRecordID() == sourceUser,
-                generation == engineStateGeneration,
-                revision == archiveCaptureRevision,
-                !deletingAccount, !clearingArchiveSource
-            else { throw PrivateCloudBackup.Failure.captureFailed }
-            try Task.checkCancellation()
-            return try PrivateCloudBackup.capture(
-                records: Array(records.values),
-                accountBinding: PrivateCloudBackup.binding(
-                    container: Self.containerIdentifier,
-                    cloudUserRecordName: sourceUser.recordName
-                ),
-                sourceBuild: Bundle.main.object(
-                    forInfoDictionaryKey: "CFBundleVersion") as? String
-            )
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let failure as PrivateCloudBackup.Failure {
-            throw failure
-        } catch {
+    public func reviewRestore(_ data: Data) async throws -> RestoreReview {
+        let source = try PrivateCloudBackup.decode(data)
+        guard configurationFailure == nil, !deletingAccount,
+            !clearingArchiveSource, !restorePause
+        else {
             throw PrivateCloudBackup.Failure.captureFailed
+        }
+        let reviewed = try await generationTransport.readActive(
+            allowMissingLegacy: true)
+        guard reviewed.zoneID == zoneID else {
+            throw PrivateCloudSyncError.stopping
+        }
+        return RestoreReview(
+            plan: try source.planReplacing(reviewed.archive),
+            source: source, reviewed: reviewed
+        )
+    }
+
+    public struct RestoreSelection: Sendable {
+        public let zoneName: String
+        public let accountBinding: String
+        public let archive: PrivateCloudBackup
+    }
+
+    public enum RestoreFailure: Error, Sendable {
+        case staleTarget
+        case notPublished
+        case indeterminate
+    }
+
+    public func replaceBackup(
+        _ review: RestoreReview,
+        prepareLocal:
+            @Sendable (PrivateCloudBackup, String) async throws -> Void
+    ) async throws -> RestoreSelection {
+        try await runWithSyncPausedForRestore {
+            do {
+                let selected = try await self.generationTransport.replace(
+                    review.source, reviewed: review.reviewed
+                ) { zone in
+                    try await prepareLocal(review.source, zone)
+                }
+                return RestoreSelection(
+                    zoneName: selected.zoneID.zoneName,
+                    accountBinding: selected.selection.accountBinding,
+                    archive: selected.archive
+                )
+            } catch PrivateCloudGenerationTransport.Failure.staleTarget {
+                throw RestoreFailure.staleTarget
+            } catch PrivateCloudGenerationTransport.Failure.notPublished {
+                throw RestoreFailure.notPublished
+            } catch PrivateCloudGenerationTransport.Failure.indeterminate {
+                throw RestoreFailure.indeterminate
+            }
         }
     }
 
-    private func requireBackupZone(_ zones: [CKRecordZone]) throws {
-        let custom = Set(zones.map(\.zoneID)).subtracting([
-            CKRecordZone.default().zoneID
-        ])
-        guard custom.isSubset(of: [zoneID]) else {
-            throw PrivateCloudBackup.Failure.unsupportedData
+    public func selectedCloudRestore() async throws -> RestoreSelection {
+        let selected = try await generationTransport.readActive()
+        return RestoreSelection(
+            zoneName: selected.zoneID.zoneName,
+            accountBinding: selected.selection.accountBinding,
+            archive: selected.archive
+        )
+    }
+
+    public func hasRestoreFromAnotherDevice() async throws -> Bool {
+        let selected = try await generationTransport.readSelection()
+        return selected.revision != nil && selected.zoneID != zoneID
+    }
+
+    public func adoptRestoreFromAnotherDevice(
+        prepareLocal:
+            @Sendable (PrivateCloudBackup, String) async throws -> Void
+    ) async throws -> RestoreSelection {
+        try await runWithSyncPausedForRestore {
+            let target = try await self.generationTransport.readActive()
+            guard target.selection.revision != nil, target.zoneID != self.zoneID
+            else {
+                throw RestoreFailure.staleTarget
+            }
+            try await prepareLocal(target.archive, target.zoneID.zoneName)
+            let verified = try await self.generationTransport.readActive()
+            guard target.selection == verified.selection,
+                try target.archive.restoreMaterial()
+                    == verified.archive.restoreMaterial()
+            else { throw RestoreFailure.staleTarget }
+            return RestoreSelection(
+                zoneName: verified.zoneID.zoneName,
+                accountBinding: verified.selection.accountBinding,
+                archive: verified.archive
+            )
         }
-        guard custom.contains(zoneID) else {
-            throw PrivateCloudBackup.Failure.incompleteCapture
+    }
+
+    public func requireSelectedGeneration() async throws(PrivateCloudSyncError)
+    {
+        guard !restorePause else { throw .stopping }
+        do {
+            let selection = try await generationTransport.readSelection()
+            guard selection.zoneID == zoneID, !restorePause else {
+                throw PrivateCloudSyncError.stopping
+            }
+        } catch {
+            throw .stopping
         }
     }
 
@@ -3563,29 +3584,27 @@ public actor PrivateCloudSyncCoordinator:
         await lifecycle.waitForDrain()
     }
 
-    #if DEBUG
-        /// Read/replace only the separately owned local test target while
-        /// normal iCloud sync is disabled and drained. Unlike the ordinary
-        /// toggle, this does not alter any credential synchronizability.
-        public func runWithSyncPausedForIsolatedRestore<Result: Sendable>(
-            _ job: @Sendable () async throws -> Result
-        ) async throws -> Result {
-            guard !isolatedRestorePause, !deletingAccount,
-                !clearingArchiveSource
-            else {
-                throw PrivateCloudSyncError.stopping
-            }
-            isolatedRestorePause = true
-            defaults.set(false, forKey: enabledKey)
-            defer { isolatedRestorePause = false }
-            await retireEngineForAccountTransition()
-            try Task.checkCancellation()
-            guard !isEnabled, engine == nil else {
-                throw PrivateCloudSyncError.stopping
-            }
-            return try await job()
+    /// Run the explicit restore operation while
+    /// normal iCloud sync is disabled and drained. Unlike the ordinary
+    /// toggle, this does not alter any credential synchronizability.
+    public func runWithSyncPausedForRestore<Result: Sendable>(
+        _ job: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        guard !restorePause, !deletingAccount,
+            !clearingArchiveSource
+        else {
+            throw PrivateCloudSyncError.stopping
         }
-    #endif
+        restorePause = true
+        defaults.set(false, forKey: enabledKey)
+        defer { restorePause = false }
+        await retireEngineForAccountTransition()
+        try Task.checkCancellation()
+        guard !isEnabled, engine == nil else {
+            throw PrivateCloudSyncError.stopping
+        }
+        return try await job()
+    }
 
     public init(
         statistics: StatisticsRepository,
@@ -3594,6 +3613,8 @@ public actor PrivateCloudSyncCoordinator:
         configuration: CloudConfigurationStore =
             CloudConfigurationStore(),
         defaults: UserDefaults = .standard,
+        generationDefaults: UserDefaults? = nil,
+        dataZoneName: String = "BleatPrivateData",
         eventRecorder: any PrivateCloudSyncEventRecording =
             DisabledPrivateCloudSyncEventRecorder(),
         container: CKContainer = CKContainer(
@@ -3605,10 +3626,15 @@ public actor PrivateCloudSyncCoordinator:
             accounts: accounts,
             credentialStore: credentialStore,
             configuration: configuration,
-            defaults: PrivateCloudDefaultsReference(defaults)
+            defaults: PrivateCloudDefaultsReference(
+                generationDefaults ?? defaults)
         )
         self.defaults = defaults
         self.container = container
+        zoneID = CKRecordZone.ID(
+            zoneName: dataZoneName, ownerName: CKCurrentUserDefaultName)
+        generationTransport = PrivateCloudGenerationTransport(
+            container: container)
         self.eventRecorder = eventRecorder
         // Bleat synchronizes listening history and account configuration. Keep
         // that user data in the owner's private database even though the
@@ -3648,12 +3674,12 @@ public actor PrivateCloudSyncCoordinator:
         async throws(PrivateCloudSyncError)
         -> CKSyncEngine
     {
-        #if DEBUG
-            guard !isolatedRestorePause else { throw .stopping }
-        #endif
+        guard !restorePause else { throw .stopping }
+
         guard !deletingAccount || allowAccountTransition else {
             throw .stopping
         }
+        try await requireSelectedGeneration()
         let generation = engineStateGeneration
         if let configurationFailure {
             throw configurationFailure
@@ -3661,9 +3687,8 @@ public actor PrivateCloudSyncCoordinator:
         if let engine {
             await engineCancellations.wait(
                 for: ObjectIdentifier(engine), release: true)
-            #if DEBUG
-                guard !isolatedRestorePause else { throw .stopping }
-            #endif
+            guard !restorePause else { throw .stopping }
+
             guard self.engine === engine, generation == engineStateGeneration,
                 !deletingAccount || allowAccountTransition
             else { throw .stopping }
@@ -3680,9 +3705,8 @@ public actor PrivateCloudSyncCoordinator:
         } catch let error as PrivateCloudSyncError { throw error } catch {
             throw .storage(.invalidStoredState)
         }
-        #if DEBUG
-            guard !isolatedRestorePause else { throw .stopping }
-        #endif
+        guard !restorePause else { throw .stopping }
+
         // Actor reentrancy permits another caller to initialize while awaiting storage.
         guard generation == engineStateGeneration,
             !deletingAccount || allowAccountTransition
@@ -3762,11 +3786,10 @@ public actor PrivateCloudSyncCoordinator:
             guard isEnabled else { throw PrivateCloudSyncError.disabled }
             let engine = try await configuredEngine()
             try await perform(.setupZone) {
-                #if DEBUG
-                    guard !isolatedRestorePause else {
-                        throw PrivateCloudSyncError.stopping
-                    }
-                #endif
+                guard !restorePause else {
+                    throw PrivateCloudSyncError.stopping
+                }
+
                 // Creating the zone must not flush restored record saves before
                 // remote reset anchors and replacements have been fetched.
                 _ = try await container.privateCloudDatabase.save(
@@ -4005,12 +4028,18 @@ public actor PrivateCloudSyncCoordinator:
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(PrivateCloudSyncFailure) {
-        #if DEBUG
-            guard !isolatedRestorePause else {
-                throw PrivateCloudSyncFailure(
-                    operation: enabled ? .enable : .disable, cause: .stopping)
-            }
-        #endif
+        guard
+            !deleteCloudData
+                || zoneID.zoneName == PrivateCloudSyncStore.zoneName
+        else {
+            throw PrivateCloudSyncFailure(
+                operation: .deleteCloudData, cause: .stopping)
+        }
+        guard !restorePause else {
+            throw PrivateCloudSyncFailure(
+                operation: enabled ? .enable : .disable, cause: .stopping)
+        }
+
         guard !deletingAccount else {
             throw PrivateCloudSyncFailure(
                 operation: enabled ? .enable : .disable, cause: .stopping)
@@ -4018,11 +4047,10 @@ public actor PrivateCloudSyncCoordinator:
         if enabled {
             try await perform(.enable) {
                 _ = try await configuredEngine()
-                #if DEBUG
-                    guard !isolatedRestorePause else {
-                        throw PrivateCloudSyncError.stopping
-                    }
-                #endif
+                guard !restorePause else {
+                    throw PrivateCloudSyncError.stopping
+                }
+
                 defaults.set(true, forKey: enabledKey)
                 do {
                     try await synchronize()
@@ -4077,12 +4105,11 @@ public actor PrivateCloudSyncCoordinator:
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(PrivateCloudSyncFailure) {
-        #if DEBUG
-            guard !isolatedRestorePause else {
-                throw PrivateCloudSyncFailure(
-                    operation: .deleteAccount, cause: .stopping)
-            }
-        #endif
+        guard !restorePause else {
+            throw PrivateCloudSyncFailure(
+                operation: .deleteAccount, cause: .stopping)
+        }
+
         guard !deletingAccount else {
             throw PrivateCloudSyncFailure(
                 operation: .deleteAccount, cause: .stopping)
@@ -4181,9 +4208,8 @@ public actor PrivateCloudSyncCoordinator:
         _ event: CKSyncEngine.Event,
         syncEngine: CKSyncEngine
     ) async {
-        #if DEBUG
-            guard !isolatedRestorePause else { return }
-        #endif
+        guard !restorePause else { return }
+
         guard engine === syncEngine else { return }
         let stateGeneration = engineStateGeneration
         let admittedCallback = UUID()
@@ -4229,10 +4255,17 @@ public actor PrivateCloudSyncCoordinator:
                 )
             }
         case .fetchedRecordZoneChanges(let changes):
+            let modifications = changes.modifications.filter {
+                $0.record.recordID.zoneID == zoneID
+            }
+            let deletions = changes.deletions.filter {
+                $0.recordID.zoneID == zoneID
+            }
+            guard !modifications.isEmpty || !deletions.isEmpty else { return }
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
             let recordCount =
-                changes.modifications.count + changes.deletions.count
+                modifications.count + deletions.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -4258,8 +4291,8 @@ public actor PrivateCloudSyncCoordinator:
             )
             do {
                 let pendingChanges = try await store.apply(
-                    modifications: changes.modifications,
-                    deletions: changes.deletions,
+                    modifications: modifications,
+                    deletions: deletions,
                     checkActive: {
                         if let callbackID {
                             try await run?.checkCallback(callbackID)
@@ -4307,13 +4340,31 @@ public actor PrivateCloudSyncCoordinator:
                 if let callbackID { await run?.endCallback(callbackID) }
             }
         case .sentRecordZoneChanges(let changes):
+            let saved = changes.savedRecords.filter {
+                $0.recordID.zoneID == zoneID
+            }
+            let deleted = changes.deletedRecordIDs.filter {
+                $0.zoneID == zoneID
+            }
+            let failedSaves = changes.failedRecordSaves.filter {
+                $0.record.recordID.zoneID == zoneID
+            }
+            let failedDeletes = changes.failedRecordDeletes.filter {
+                $0.key.zoneID == zoneID
+            }
+            guard
+                !saved.isEmpty || !deleted.isEmpty || !failedSaves.isEmpty
+                    || !failedDeletes.isEmpty
+            else {
+                return
+            }
             let correlationID = UUID()
             let startedAt = ContinuousClock.now
             let recordCount =
-                changes.savedRecords.count
-                + changes.deletedRecordIDs.count
-                + changes.failedRecordSaves.count
-                + changes.failedRecordDeletes.count
+                saved.count
+                + deleted.count
+                + failedSaves.count
+                + failedDeletes.count
             await eventRecorder.record(
                 PrivateCloudSyncEvent(
                     correlationID: correlationID,
@@ -4325,12 +4376,12 @@ public actor PrivateCloudSyncCoordinator:
                 let pendingChanges =
                     try await store
                     .reconcileSentRecordZoneChanges(
-                        savedRecords: changes.savedRecords,
-                        deletedRecordIDs: changes.deletedRecordIDs,
-                        failedRecordSaves: changes.failedRecordSaves.map {
+                        savedRecords: saved,
+                        deletedRecordIDs: deleted,
+                        failedRecordSaves: failedSaves.map {
                             (record: $0.record, error: $0.error)
                         },
-                        failedRecordDeletes: changes.failedRecordDeletes
+                        failedRecordDeletes: failedDeletes
                     )
                 syncEngine.state.add(
                     pendingRecordZoneChanges: pendingChanges
@@ -4433,11 +4484,11 @@ public actor PrivateCloudSyncCoordinator:
         for attempt in 0...1 {
             await engineCancellations.wait(
                 for: ObjectIdentifier(engine), release: true)
-            #if DEBUG
-                guard !isolatedRestorePause else {
-                    throw PrivateCloudSyncError.stopping
-                }
-            #endif
+            guard !restorePause else {
+                throw PrivateCloudSyncError.stopping
+            }
+
+            try await requireSelectedGeneration()
             guard engine === self.engine,
                 !deletingAccount || allowAccountTransition
             else { throw PrivateCloudSyncError.stopping }
@@ -4518,11 +4569,12 @@ public actor PrivateCloudSyncCoordinator:
         _ context: CKSyncEngine.SendChangesContext,
         syncEngine: CKSyncEngine
     ) async -> CKSyncEngine.RecordZoneChangeBatch? {
-        guard engine === syncEngine else { return nil }
+        guard acceptsEngine(syncEngine) else { return nil }
         return await CKSyncEngine.RecordZoneChangeBatch(
             pendingChanges:
                 syncEngine.state.pendingRecordZoneChanges.filter {
-                    context.options.scope.contains($0)
+                    Self.pendingChangeBelongs($0, to: zoneID)
+                        && context.options.scope.contains($0)
                 },
             recordProvider: { @Sendable [store, syncEngine] recordID in
                 guard await self.acceptsEngine(syncEngine) else { return nil }
@@ -4554,10 +4606,19 @@ public actor PrivateCloudSyncCoordinator:
         )
     }
 
+    static func pendingChangeBelongs(
+        _ change: CKSyncEngine.PendingRecordZoneChange,
+        to zoneID: CKRecordZone.ID
+    ) -> Bool {
+        switch change {
+        case .saveRecord(let id), .deleteRecord(let id): id.zoneID == zoneID
+        @unknown default: false
+        }
+    }
+
     private func acceptsEngine(_ candidate: CKSyncEngine) -> Bool {
-        #if DEBUG
-            guard !isolatedRestorePause else { return false }
-        #endif
+        guard !restorePause else { return false }
+
         return engine === candidate
     }
 }
