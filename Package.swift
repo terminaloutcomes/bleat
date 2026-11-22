@@ -18,6 +18,8 @@ let package = Package(
             targets: ["BleatTranscription"]
         ),
         .executable(
+            name: "bleat-cloud-history", targets: ["BleatCloudHistoryCLI"]),
+        .executable(
             name: "bleat-transcribe",
             targets: ["BleatTranscribeCLI"]
         ),
@@ -62,6 +64,8 @@ let package = Package(
         .target(
             name: "BleatTranscription"
         ),
+        .executableTarget(
+            name: "BleatCloudHistoryCLI", dependencies: ["BleatCore"]),
         .executableTarget(
             name: "BleatTranscribeCLI",
             dependencies: ["BleatTranscription"]

@@ -8,6 +8,24 @@ import SwiftData
 private let bleatOpenIDCallbackURL =
     "bleat://oauth2redirect"
 
+struct AppCloudRestoreReview: Sendable {
+    let id: UUID
+    let plan: PrivateCloudBackup.ReplacePlan
+}
+
+enum AppCloudRestoreResult: Equatable, Sendable {
+    case unchanged
+    case restartRequired
+    case pendingVerification
+    case restoreFromAnotherDevice
+}
+
+enum AppCloudRestoreFailure: Error, Sendable {
+    case unavailable
+    case staleReview
+    case pendingVerification
+}
+
 enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
     case storedDataMigrationFailed
@@ -839,6 +857,17 @@ protocol AppServicing: Sendable {
 
     func isPrivateCloudSyncAvailable() async -> Bool
 
+    func capturePrivateCloudBackup() async throws -> Data
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> AppCloudRestoreReview
+    func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+        async throws -> AppCloudRestoreResult
+    func verifyPendingPrivateCloudRestore() async throws
+        -> AppCloudRestoreResult
+    func checkForRestoreFromAnotherDevice() async throws -> Bool
+    func adoptRestoreFromAnotherDevice() async throws -> AppCloudRestoreResult
+    func prepareRestoredCloudPreferences() async throws(AppServiceError) -> Bool
+
     func isPrivateCloudSyncEnabled() async -> Bool
 
     func synchronizePrivateCloud() async throws(AppServiceError)
@@ -1282,6 +1311,35 @@ extension AppServicing {
         true
     }
 
+    func capturePrivateCloudBackup() async throws -> Data {
+        throw PrivateCloudBackup.Failure.captureFailed
+    }
+
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> AppCloudRestoreReview
+    {
+        throw AppCloudRestoreFailure.unavailable
+    }
+
+    func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+        async throws -> AppCloudRestoreResult
+    {
+        throw AppCloudRestoreFailure.unavailable
+    }
+
+    func verifyPendingPrivateCloudRestore() async throws
+        -> AppCloudRestoreResult
+    { .unchanged }
+
+    func checkForRestoreFromAnotherDevice() async throws -> Bool { false }
+
+    func adoptRestoreFromAnotherDevice() async throws -> AppCloudRestoreResult {
+        throw AppCloudRestoreFailure.unavailable
+    }
+
+    func prepareRestoredCloudPreferences() async throws(AppServiceError) -> Bool
+    { false }
+
     func isPrivateCloudSyncEnabled() async -> Bool {
         true
     }
@@ -1383,6 +1441,14 @@ actor LiveAppService: AppServicing {
     private var suspendedStatisticsHistoryAccounts: Set<AccountID> = []
     private var statisticsHistorySkipAutomaticAccounts: Set<AccountID> = []
     private var statisticsHistoryResetAll = false
+    private var cloudRestoreApplying = false
+    private var normalCloudToggleInFlight = false
+    private var reviewedCloudRestore:
+        (UUID, PrivateCloudSyncCoordinator.RestoreReview)?
+    private let cloudRestoreActivation: PrivateCloudRestoreLocalActivation?
+    private let launchedCloudZone: String
+    nonisolated let restoredDownloadsStorageRoot: URL?
+
     private let privateCloudSync: PrivateCloudSyncCoordinator?
     private var didMigrateAccountIdentities = false
     private var networkPathMonitor: AppNetworkPathMonitor?
@@ -1559,12 +1625,38 @@ actor LiveAppService: AppServicing {
         let schema = Schema(
             versionedSchema: BleatPersistenceSchemaCurrent.self
         )
+        let localActivation: PrivateCloudRestoreLocalActivation?
+        let selectedCloudZone: String?
         if let suppliedModelContainer {
             modelContainer = suppliedModelContainer
+            localActivation = nil
+            selectedCloudZone = nil
         } else {
             let storeURL: URL
             do {
-                storeURL = try BleatLocalStore.storeURL()
+                let activationRoot = URL.applicationSupportDirectory
+                    .appendingPathComponent(
+                        "Bleat/CloudRestore", isDirectory: true
+                    )
+                try FileManager.default.createDirectory(
+                    at: activationRoot, withIntermediateDirectories: true)
+                let activation = try PrivateCloudRestoreLocalActivation(
+                    root: activationRoot)
+                let state = try activation.current()
+                // The restore journal is durable independently of the
+                // preferences write. A crash before restart must not resume
+                // sync while publication is pending or a new store is loading.
+                if state.pending != nil || state.syncResumeRequired {
+                    UserDefaults.standard.set(
+                        false, forKey: "bleat.cloudKit.enabled.v1")
+                }
+                localActivation = activation
+                selectedCloudZone = state.selected
+                if let selected = state.selected {
+                    storeURL = try activation.storeURL(for: selected)
+                } else {
+                    storeURL = try BleatLocalStore.storeURL()
+                }
             } catch let error as AppBootstrapError {
                 throw error
             } catch {
@@ -1590,6 +1682,17 @@ actor LiveAppService: AppServicing {
                     ? .storedDataMigrationFailed
                     : .persistenceUnavailable
             }
+        }
+
+        cloudRestoreActivation = localActivation
+        launchedCloudZone = selectedCloudZone ?? "BleatPrivateData"
+        if let selectedCloudZone {
+            restoredDownloadsStorageRoot = URL.applicationSupportDirectory
+                .appendingPathComponent(
+                    "Bleat/CloudRestore/Downloads-\(selectedCloudZone)",
+                    isDirectory: true)
+        } else {
+            restoredDownloadsStorageRoot = nil
         }
 
         let endpointRouter = ServerEndpointRouter()
@@ -1662,11 +1765,26 @@ actor LiveAppService: AppServicing {
                     in: .standard)
             }
         )
+        let generationDefaults: UserDefaults?
+        if let selectedCloudZone {
+            guard
+                let isolated = UserDefaults(
+                    suiteName: "Bleat.cloudSync.generation.\(selectedCloudZone)"
+                )
+            else {
+                throw .persistenceUnavailable
+            }
+            generationDefaults = isolated
+        } else {
+            generationDefaults = nil
+        }
         if privateCloudAvailable {
             privateCloudSync = PrivateCloudSyncCoordinator(
                 statistics: statisticsRepository,
                 accounts: accountStore,
                 credentialStore: credentialStore,
+                generationDefaults: generationDefaults,
+                dataZoneName: launchedCloudZone,
                 eventRecorder: privateCloudEvents
                     ?? DiagnosticPrivateCloudSyncEventRecorder(
                         diagnostics: diagnostics
@@ -4071,6 +4189,173 @@ actor LiveAppService: AppServicing {
         privateCloudSync != nil
     }
 
+    func capturePrivateCloudBackup() async throws -> Data {
+        guard let privateCloudSync else {
+            throw PrivateCloudBackup.Failure.captureFailed
+        }
+        return try await privateCloudSync.captureCloudBackup()
+            .encoded()
+    }
+
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> AppCloudRestoreReview
+    {
+        guard let privateCloudSync, let cloudRestoreActivation,
+            !cloudRestoreApplying
+        else {
+            throw AppCloudRestoreFailure.unavailable
+        }
+        guard try await cloudRestoreActivation.readState().pending == nil else {
+            throw AppCloudRestoreFailure.pendingVerification
+        }
+        let source = try await privateCloudSync.reviewRestore(data)
+        let id = UUID()
+        reviewedCloudRestore = (id, source)
+        return AppCloudRestoreReview(id: id, plan: source.plan)
+    }
+
+    func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+        async throws -> AppCloudRestoreResult
+    {
+        guard let privateCloudSync, let cloudRestoreActivation,
+            let (id, source) = reviewedCloudRestore, id == review.id,
+            !cloudRestoreApplying, !normalCloudToggleInFlight
+        else { throw AppCloudRestoreFailure.staleReview }
+        reviewedCloudRestore = nil
+        cloudRestoreApplying = true
+        defer { cloudRestoreApplying = false }
+        do {
+            let selected = try await privateCloudSync.replaceBackup(source) {
+                backup, zone in
+                try await cloudRestoreActivation.prepare(
+                    backup, generation: zone)
+            }
+            guard selected.zoneName != launchedCloudZone else {
+                return .unchanged
+            }
+            try await cloudRestoreActivation.confirm(
+                generation: selected.zoneName,
+                accountBinding: selected.accountBinding,
+                verifiedBackup: selected.archive
+            )
+            return .restartRequired
+        } catch PrivateCloudSyncCoordinator.RestoreFailure.staleTarget {
+            let state = try await cloudRestoreActivation.readState()
+            if let pending = state.pending {
+                try await cloudRestoreActivation.abandon(generation: pending)
+            }
+            throw AppCloudRestoreFailure.staleReview
+        } catch PrivateCloudSyncCoordinator.RestoreFailure.notPublished {
+            if let pending = try await cloudRestoreActivation.readState()
+                .pending
+            {
+                try await cloudRestoreActivation.abandon(generation: pending)
+            }
+            throw PrivateCloudSyncCoordinator.RestoreFailure.notPublished
+        } catch {
+            if (try? await cloudRestoreActivation.readState().pending) != nil {
+                throw AppCloudRestoreFailure.pendingVerification
+            }
+            throw error
+        }
+    }
+
+    func verifyPendingPrivateCloudRestore() async throws
+        -> AppCloudRestoreResult
+    {
+        guard let privateCloudSync, let cloudRestoreActivation,
+            !cloudRestoreApplying
+        else {
+            throw AppCloudRestoreFailure.unavailable
+        }
+        let state = try await cloudRestoreActivation.readState()
+        if let pending = state.pending {
+            do {
+                let selected = try await privateCloudSync.selectedCloudRestore()
+                guard selected.zoneName == pending else {
+                    return .pendingVerification
+                }
+                try await cloudRestoreActivation.confirm(
+                    generation: pending,
+                    accountBinding: selected.accountBinding,
+                    verifiedBackup: selected.archive
+                )
+                return .restartRequired
+            } catch {
+                return .pendingVerification
+            }
+        }
+        if let selected = state.selected, selected != launchedCloudZone {
+            return .restartRequired
+        }
+        return .unchanged
+    }
+
+    func checkForRestoreFromAnotherDevice() async throws -> Bool {
+        guard let privateCloudSync, !cloudRestoreApplying else {
+            throw AppCloudRestoreFailure.unavailable
+        }
+        return try await privateCloudSync.hasRestoreFromAnotherDevice()
+    }
+
+    func adoptRestoreFromAnotherDevice() async throws -> AppCloudRestoreResult {
+        guard let privateCloudSync, let cloudRestoreActivation,
+            !cloudRestoreApplying, !normalCloudToggleInFlight
+        else { throw AppCloudRestoreFailure.unavailable }
+        cloudRestoreApplying = true
+        defer { cloudRestoreApplying = false }
+        guard try await cloudRestoreActivation.readState().pending == nil else {
+            throw AppCloudRestoreFailure.pendingVerification
+        }
+        do {
+            let selected =
+                try await privateCloudSync.adoptRestoreFromAnotherDevice {
+                    backup, zone in
+                    try await cloudRestoreActivation.prepare(
+                        backup, generation: zone)
+                }
+            try await cloudRestoreActivation.confirm(
+                generation: selected.zoneName,
+                accountBinding: selected.accountBinding,
+                verifiedBackup: selected.archive
+            )
+            return .restartRequired
+        } catch {
+            if let pending = try await cloudRestoreActivation.readState()
+                .pending
+            {
+                // This adoption path never publishes a remote selector.
+                try await cloudRestoreActivation.abandon(generation: pending)
+            }
+            throw error
+        }
+    }
+
+    func prepareRestoredCloudPreferences() async throws(AppServiceError) -> Bool
+    {
+        guard let cloudRestoreActivation,
+            launchedCloudZone != "BleatPrivateData"
+        else { return false }
+        do {
+            let state = try await cloudRestoreActivation.readState()
+            guard state.selected == launchedCloudZone, state.settingsPending
+            else { return false }
+            let restored =
+                try await cloudRestoreActivation.restoredConfiguration(
+                    generation: launchedCloudZone)
+            if let restored {
+                try await CloudConfigurationStore().apply(restored)
+            }
+            try await cloudRestoreActivation.markSettingsApplied(
+                generation: launchedCloudZone)
+            return restored != nil
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncCoordinator.mappedFailure(
+                    operation: .migrateLocalState, error: error))
+        }
+    }
+
     func isPrivateCloudSyncEnabled() async -> Bool {
         await privateCloudSync?.isEnabled ?? false
     }
@@ -4078,6 +4363,11 @@ actor LiveAppService: AppServicing {
     func synchronizePrivateCloud() async throws(AppServiceError)
         -> [CloudServerConfigurationChange]
     {
+        guard !cloudRestoreApplying else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: .stopping))
+        }
         guard let privateCloudSync else {
             throw .privateCloud(
                 PrivateCloudSyncFailure(
@@ -4215,6 +4505,13 @@ actor LiveAppService: AppServicing {
         _ enabled: Bool,
         deleteCloudData: Bool
     ) async throws(AppServiceError) {
+        guard !cloudRestoreApplying, !normalCloudToggleInFlight else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: .stopping))
+        }
+        normalCloudToggleInFlight = true
+        defer { normalCloudToggleInFlight = false }
         guard let privateCloudSync else {
             throw .privateCloud(
                 PrivateCloudSyncFailure(
@@ -4224,6 +4521,28 @@ actor LiveAppService: AppServicing {
                     cause: .disabled
                 )
             )
+        }
+        guard !deleteCloudData || launchedCloudZone == "BleatPrivateData" else {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .deleteCloudData, cause: .stopping))
+        }
+        do {
+            if let cloudRestoreActivation {
+                let state = try await cloudRestoreActivation.readState()
+                guard state.pending == nil,
+                    (state.selected ?? "BleatPrivateData") == launchedCloudZone
+                else {
+                    throw PrivateCloudSyncError.stopping
+                }
+            }
+            if enabled || deleteCloudData {
+                try await privateCloudSync.requireSelectedGeneration()
+            }
+        } catch {
+            throw .privateCloud(
+                PrivateCloudSyncFailure(
+                    operation: .synchronize, cause: .stopping))
         }
         if deleteCloudData {
             do {
@@ -4251,7 +4570,17 @@ actor LiveAppService: AppServicing {
                     enabled,
                     deleteCloudData: deleteCloudData
                 )
+                if enabled, launchedCloudZone != "BleatPrivateData",
+                    let cloudRestoreActivation
+                {
+                    try await cloudRestoreActivation.markSyncExplicitlyResumed(
+                        generation: launchedCloudZone)
+                }
             } catch {
+                if enabled, launchedCloudZone != "BleatPrivateData" {
+                    try? await privateCloudSync.setEnabled(
+                        false, deleteCloudData: false)
+                }
                 if !deleteCloudData {
                     try? await credentialStore.setSynchronizesNativeLogin(
                         !enabled,

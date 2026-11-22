@@ -182,6 +182,67 @@
     }
 
     actor UITestAppService: AppServicing {
+        #if DEBUG
+            private var fixtureIsolatedTarget: PrivateCloudIsolatedRestore?
+            private var fixtureCloudSyncEnabled = true
+
+            private func isolatedFixtureTarget() throws
+                -> PrivateCloudIsolatedRestore
+            {
+                let prefix = "--ui-testing-isolated-restore-fixture="
+                guard
+                    let argument = ProcessInfo.processInfo.arguments.first(
+                        where: { $0.hasPrefix(prefix) }),
+                    let session = UUID(
+                        uuidString: String(argument.dropFirst(prefix.count)))
+                else { throw PrivateCloudIsolatedRestore.Failure.invalidTarget }
+                if let fixtureIsolatedTarget { return fixtureIsolatedTarget }
+                let root = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "bleat-ui-testing-restore-\(session.uuidString)")
+                let target = try PrivateCloudIsolatedRestore(directory: root)
+                fixtureIsolatedTarget = target
+                return target
+            }
+
+            private var fixtureRestoreReview:
+                (UUID, PrivateCloudIsolatedRestore.Review)?
+            private var fixtureDidRestore = false
+
+            func previewPrivateCloudRestore(_ data: Data) async throws
+                -> AppCloudRestoreReview
+            {
+                let review = try await isolatedFixtureTarget().preview(data)
+                let id = UUID()
+                fixtureRestoreReview = (id, review)
+                return AppCloudRestoreReview(id: id, plan: review.plan)
+            }
+
+            func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+                async throws -> AppCloudRestoreResult
+            {
+                guard let (id, known) = fixtureRestoreReview, id == review.id
+                else {
+                    throw AppCloudRestoreFailure.staleReview
+                }
+                fixtureRestoreReview = nil
+                fixtureCloudSyncEnabled = false
+                _ = try await isolatedFixtureTarget().replace(known)
+                fixtureDidRestore = true
+                return .restartRequired
+            }
+
+            func verifyPendingPrivateCloudRestore() async throws
+                -> AppCloudRestoreResult
+            {
+                fixtureDidRestore ? .restartRequired : .unchanged
+            }
+
+            func isPrivateCloudSyncEnabled() async -> Bool {
+                fixtureCloudSyncEnabled
+            }
+        #endif
+
         static func hasExplicitScenario(
             arguments: [String] = ProcessInfo.processInfo.arguments
         ) -> Bool {

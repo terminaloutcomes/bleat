@@ -2918,6 +2918,56 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testICloudRestoreRequiresOtherDevicePauseAndConfirmation() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-isolated-restore-fixture=\(UUID().uuidString)"
+            ])
+        tabButton("Settings", in: app).tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.previewRestore",
+            direction: .up)
+        XCTAssertTrue(app.buttons["settings.icloud.exportBackup"].exists)
+        app.buttons["settings.icloud.previewRestore"].tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.restoreOtherDevicesPaused",
+            direction: .up
+        )
+        let paused = app.switches["settings.icloud.restoreOtherDevicesPaused"]
+        XCTAssertTrue(paused.exists)
+        XCTAssertEqual(paused.value as? String, "0")
+        paused.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        XCTAssertEqual(paused.value as? String, "1")
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.restoreReview",
+            direction: .up)
+        let review = app.buttons["settings.icloud.restoreReview"]
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+        XCTAssertTrue(review.isEnabled)
+        review.tap()
+        let confirm = app.buttons["settings.icloud.restoreConfirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        let cancel = app.buttons["settings.icloud.restoreCancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        XCTAssertFalse(
+            app.staticTexts["settings.icloud.restoreRestartRequired"].exists)
+        review.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(
+            app.staticTexts["settings.icloud.restoreRestartRequired"]
+                .waitForExistence(timeout: 20))
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.enabled", direction: .down)
+        XCTAssertEqual(
+            app.switches["settings.icloud.enabled"].value as? String, "0")
+
+    }
+
+    @MainActor
     func testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync() {
         let app = launch(scenario: "--ui-testing-signed-in")
         tabButton("Settings", in: app).tap()
