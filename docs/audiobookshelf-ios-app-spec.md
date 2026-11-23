@@ -1795,6 +1795,20 @@ Store the completion time, duration snapshot, title/author snapshot, and evidenc
 
 ### 12.6 Retention, reset, and portability
 
+The iCloud Data backup is distinct from statistics portability. Format 2
+captures the five supported record types in Bleat's private CloudKit zone,
+including non-secret account data, settings, completions, remote sessions and
+legacy/canonical listening records. Export is explicit and user-owned; it does
+not include Keychain credentials or device-local files. Restore preview checks
+the same iCloud account and reports the proposed changes without writing data.
+A confirmed restore pauses and drains this device's sync, stages a verified
+replacement generation, conditionally selects it, and loads a fresh local
+store on restart. The previous cloud and local stores are retained, and old
+queues cannot be uploaded into the selected generation. Other devices must
+be paused by the user before restore; older builds cannot follow the new
+selection. Format 1 remains a history-only migration fixture.
+See [the archive format and offline workflow](development.md#icloud-data-backups-format-2).
+
 Listening history contains personal behavioral data. It receives the same file protection as other structured app data and is never written to logs or analytics.
 
 - Ordinary sign-out retains statistics.
