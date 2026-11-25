@@ -24922,8 +24922,8 @@
       "identifier": "AppModelTests/testClearCloudKitDataPreservesTypedDeletionFailureAndLeavesSyncOff",
       "source": {
         "path": "Tests/BleatAppTests/AppModelTests.swift",
-        "line": 14839,
-        "endLineBeforeNextTest": 14862
+        "line": 17386,
+        "endLineBeforeNextTest": 17414
       },
       "compilerAndSkipConditions": [],
       "setupAndDependencies": [
@@ -24931,36 +24931,36 @@
       ],
       "actions": [
         {
-          "line": 14854,
+          "line": 17403,
           "expression": "await model.clearPrivateCloudData()"
         }
       ],
       "assertions": [
         {
-          "line": 14860,
+          "line": 17409,
           "expression": "XCTAssertEqual(model.privateCloudDataClearState, .failed(expected))"
         },
         {
-          "line": 14861,
+          "line": 17410,
           "expression": "XCTAssertEqual(model.privateCloudState, .failed(expected))"
         },
         {
-          "line": 14862,
-          "expression": "XCTAssertFalse(model.privateCloudSyncEnabled)"
+          "line": 17411,
+          "expression": "XCTAssertEqual(model.privateCloudSyncEnabled, !didDisable)"
         }
       ],
       "synchronizationEvidence": [],
       "manualReview": {
         "status": "source_reviewed",
-        "intendedBehavior": "Preserve typed CloudKit deletion failure and keep sync disabled.",
-        "purpose": "Typed CK network failure fake.",
+        "intendedBehavior": "Verify a typed deletion error before or after persistent opt-out leaves the displayed sync flag equal to the actual flag, and does not report successful deletion.",
+        "purpose": "Injected service rejection with opt-out either committed or not committed.",
         "actionPostconditions": [
           {
-            "action": "clearPrivateCloudData.",
-            "postcondition": "Both clear and cloud state expose same typed failure; sync remains off."
+            "action": "Attempt cloud data deletion against an injected failing service.",
+            "postcondition": "Verify a typed deletion error before or after persistent opt-out leaves the displayed sync flag equal to the actual flag, and does not report successful deletion."
           }
         ],
-        "timeoutAndToleranceRationale": "Bounded 2-second queue waits assert success; gate completions and service calls are awaited. This is a state-arrival bound, not a product timing tolerance.",
+        "timeoutAndToleranceRationale": "Awaits service completion; no timing assertion.",
         "ruleAssessments": {
           "1": "The action is followed by direct typed/model state or service request assertions specific to this scenario.",
           "2": "Cloud queue waits use bounded waitUntil and assert success before dependent actions; no fixed scheduler sleeps.",
@@ -24976,6 +24976,41 @@
           "outcome": "keep",
           "reason": "Typed cloud/account transitions are exercised with gated or bounded deterministic setup and exact resulting state."
         }
+      }
+    },
+    {
+      "identifier": "AppModelTests/testRestoredOrPendingCloudDataBlocksDeleteButAllowsPlainOptOut",
+      "source": {
+        "path": "Tests/BleatAppTests/AppModelTests.swift",
+        "line": 17415
+      },
+      "compilerAndSkipConditions": [],
+      "setupAndDependencies": [
+        "Fresh TestAppService and AppModel with a synthetic restored or pending state."
+      ],
+      "manualReview": {
+        "status": "source_reviewed",
+        "intendedBehavior": "Both delete entry points do not call the service for restored or pending state; plain opt-out requests no deletion and turns sync off.",
+        "purpose": "Check unsupported deletion routes versus a non-destructive opt-out.",
+        "actionPostconditions": [
+          {
+            "action": "Try both delete entry points and then plain opt-out.",
+            "postcondition": "Both delete entry points do not call the service for restored or pending state; plain opt-out requests no deletion and turns sync off."
+          }
+        ],
+        "timeoutAndToleranceRationale": "All model transitions are awaited directly.",
+        "ruleAssessments": {
+          "1": "Both delete entry points do not call the service for restored or pending state; plain opt-out requests no deletion and turns sync off.",
+          "2": "Awaits each transition directly.",
+          "3": "No playback or navigation timing assertion.",
+          "4": "No detached work is asserted as complete.",
+          "5": "Fresh fixture service per state.",
+          "6": "No Apple account or CloudKit provider.",
+          "7": "No retries or sleep.",
+          "8": "Checks outbound requests and persisted UI state.",
+          "9": "Focused app-model validation is recorded separately."
+        },
+        "decision": "keep"
       }
     },
     {

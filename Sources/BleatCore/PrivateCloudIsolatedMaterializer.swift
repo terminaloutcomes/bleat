@@ -102,7 +102,8 @@ public enum PrivateCloudIsolatedMaterializer {
             )
         }
         if await store.configurationConflict() != nil {
-            _ = try await store.resolveConfigurationConflict(.useICloud)
+            _ = try await store.resolveConfigurationConflict(
+                .useICloud, zoneID: zone)
         }
 
         let decoder = JSONDecoder()

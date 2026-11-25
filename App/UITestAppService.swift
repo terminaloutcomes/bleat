@@ -241,6 +241,18 @@
             func isPrivateCloudSyncEnabled() async -> Bool {
                 fixtureCloudSyncEnabled
             }
+
+            func privateCloudDataDeletionAvailability() async
+                -> AppCloudDataDeletionAvailability
+            {
+                if fixtureDidRestore { return .restorePending }
+                if ProcessInfo.processInfo.arguments.contains(
+                    "--ui-testing-restored-generation")
+                {
+                    return .restoredGeneration
+                }
+                return .available
+            }
         #endif
 
         static func hasExplicitScenario(

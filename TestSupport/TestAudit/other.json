@@ -2005,6 +2005,22 @@
       "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 5 seconds; shared scroll helper uses a bounded attempt count and now fails with caller file/line when exhausted."
     },
     {
+      "id": "BleatUITests::testRestoredICloudSettingsAllowsKeepingDataButNotDeleting",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 3034,
+      "purpose": "After simulating a restored generation, open iCloud settings, verify turn-off allows retaining but not deleting data, verify sync off, and check the standalone delete button is replaced with an explanation.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Exercises both entry points and real SwiftUI confirmation UI against a fake service reporting an adopted generation."
+      },
+      "profile": "ui_fixture",
+      "enablement": "Debug iOS simulator only.",
+      "setup_dependencies": "Fresh signed-in UI fixture with --ui-testing-restored-generation, no CloudKit.",
+      "action_postconditions": "After simulating a restored generation, open iCloud settings, verify turn-off allows retaining but not deleting data, verify sync off, and check the standalone delete button is replaced with an explanation.",
+      "synchronization_timeout": "Bounded five-second navigation/dialog and switch-value waits; uses bounded scrolling."
+    },
+    {
       "id": "BleatUITests::testLibraryCategoryModesBackAndStatus",
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "line": 2485,

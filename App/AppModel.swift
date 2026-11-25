@@ -1846,6 +1846,8 @@ final class AppModel {
     private(set) var cloudStorageUpgradeNoticePending = false
     @ObservationIgnored private let cloudStorageNoticeDefaults: UserDefaults
     private(set) var privateCloudSyncAvailable = true
+    private(set) var cloudDataDeletionAvailability:
+        AppCloudDataDeletionAvailability = .unavailable
     private(set) var privateCloudSyncEnabled = true
     private(set) var canCancelPrivateCloudSynchronization = false
     private(set) var pendingCloudServerConfigurationChanges:
@@ -2365,6 +2367,7 @@ final class AppModel {
             }
             privateCloudSyncAvailable =
                 await service.isPrivateCloudSyncAvailable()
+            await refreshCloudDataDeletionAvailability()
             if privateCloudSyncAvailable {
                 privateCloudSyncEnabled =
                     await service.isPrivateCloudSyncEnabled()
@@ -7133,7 +7136,9 @@ final class AppModel {
     func verifyPendingPrivateCloudRestore() async throws
         -> AppCloudRestoreResult
     {
-        try await service.verifyPendingPrivateCloudRestore()
+        let result = try await service.verifyPendingPrivateCloudRestore()
+        await refreshCloudDataDeletionAvailability()
+        return result
     }
 
     func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
@@ -7178,12 +7183,18 @@ final class AppModel {
         }
     }
 
+    private func refreshCloudDataDeletionAvailability() async {
+        cloudDataDeletionAvailability =
+            await service.privateCloudDataDeletionAvailability()
+    }
+
     private func finishPrivateCloudRestore(_ inFlight: Task<Void, Never>?) async
     {
         await inFlight?.value
         privateCloudSyncTask = nil
         canCancelPrivateCloudSynchronization = false
         privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+        await refreshCloudDataDeletionAvailability()
         if !privateCloudSyncEnabled {
             pendingCloudServerConfigurationChanges.removeAll()
             pendingCloudConfigurationConflict = nil
@@ -7241,7 +7252,8 @@ final class AppModel {
     }
 
     private func beginPrivateCloudSynchronization() -> Task<Void, Never>? {
-        guard privateCloudSyncTask == nil, !isResolvingCloudAccountSelection
+        guard privateCloudSyncTask == nil, !isResolvingCloudAccountSelection,
+            privateCloudDataClearState != .clearing
         else {
             return nil
         }
@@ -7666,6 +7678,10 @@ final class AppModel {
             privateCloudState = .disabled
             return
         }
+        if deleteCloudData {
+            await refreshCloudDataDeletionAvailability()
+            guard cloudDataDeletionAvailability == .available else { return }
+        }
         privateCloudState = .syncing
         do {
             try await service.setPrivateCloudSyncEnabled(
@@ -7679,6 +7695,8 @@ final class AppModel {
             }
             privateCloudState = enabled ? .idle : .disabled
         } catch let error {
+            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+            await refreshCloudDataDeletionAvailability()
             privateCloudState = .failed(
                 AppFailure(
                     operation: .privateCloudSync,
@@ -7692,7 +7710,11 @@ final class AppModel {
         guard privateCloudDataClearState != .clearing, !isResettingLocalData
         else { return }
         privateCloudDataClearState = .clearing
-        privateCloudSyncEnabled = false
+        await refreshCloudDataDeletionAvailability()
+        guard cloudDataDeletionAvailability == .available else {
+            privateCloudDataClearState = .idle
+            return
+        }
         await cancelPrivateCloudSynchronization()
         do {
             try await service.setPrivateCloudSyncEnabled(
@@ -7700,9 +7722,12 @@ final class AppModel {
             )
             pendingCloudServerConfigurationChanges.removeAll()
             pendingCloudConfigurationConflict = nil
+            privateCloudSyncEnabled = false
             privateCloudState = .disabled
             privateCloudDataClearState = .cleared
         } catch {
+            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+            await refreshCloudDataDeletionAvailability()
             let failure = AppFailure(
                 operation: .privateCloudSync, serviceError: error
             )

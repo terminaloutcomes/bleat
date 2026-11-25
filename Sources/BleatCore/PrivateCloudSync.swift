@@ -1124,31 +1124,6 @@ actor PrivateCloudSyncStore {
         return record
     }
 
-    private func recordNamed(_ name: String) throws -> CKRecord? {
-        if let record = records.values.first(where: {
-            $0.recordID.recordName == name
-        }) {
-            return record
-        }
-        let context = defaults.context()
-        let rows: [PrivateCloudRecordMetadata]
-        do {
-            rows = try context.fetch(
-                FetchDescriptor<PrivateCloudRecordMetadata>(
-                    predicate: #Predicate { $0.recordName == name }))
-        } catch {
-            throw PrivateCloudSyncError.storage(
-                .metadataReadFailed(PrivateCloudSystemError(error)))
-        }
-        guard rows.count <= 1 else { throw PrivateCloudSyncError.invalidRecord }
-        guard let row = rows.first else { return nil }
-        return try cachedRecord(
-            CKRecord.ID(
-                recordName: row.recordName,
-                zoneID: CKRecordZone.ID(
-                    zoneName: row.zoneName, ownerName: row.ownerName)))
-    }
-
     func prepareRecords(
         zoneID: CKRecordZone.ID, allowCompaction: Bool = false
     ) async throws -> [CKRecord] {
@@ -1330,7 +1305,8 @@ actor PrivateCloudSyncStore {
                 }
             for (canonicalName, legacyNames) in pendingLegacyRecordDeletions {
                 guard
-                    let canonicalRecord = try recordNamed(canonicalName),
+                    let canonicalRecord = try cachedRecord(
+                        CKRecord.ID(recordName: canonicalName, zoneID: zoneID)),
                     !needsUpload(canonicalRecord)
                 else {
                     continue
@@ -2027,12 +2003,17 @@ actor PrivateCloudSyncStore {
     }
 
     func resolveConfigurationConflict(
-        _ resolution: CloudConfigurationConflictResolution
+        _ resolution: CloudConfigurationConflictResolution,
+        zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
         guard let conflict = pendingConfigurationConflict else {
             return nil
         }
-        guard let record = try recordNamed("configuration.singleton") else {
+        guard
+            let record = try cachedRecord(
+                CKRecord.ID(
+                    recordName: "configuration.singleton", zoneID: zoneID))
+        else {
             throw PrivateCloudSyncError.invalidRecord
         }
         switch resolution {
@@ -2310,7 +2291,7 @@ actor PrivateCloudSyncStore {
                 !retained.contains($0.recordName)
             }
         }
-        return Array(matchingRecordIDs)
+        return matchingRecordIDs.filter { $0.zoneID == zoneID }
     }
 
     func prepareAccountHistoryRetirement(
@@ -3452,7 +3433,12 @@ public actor PrivateCloudSyncCoordinator:
         guard configurationFailure == nil, !deletingAccount,
             !clearingArchiveSource, !restorePause
         else { throw PrivateCloudBackup.Failure.captureFailed }
-        return try await generationTransport.readActive().archive
+        let revision = archiveCaptureRevision
+        let active = try await generationTransport.readActive()
+        guard revision == archiveCaptureRevision, !restorePause,
+            !deletingAccount, !clearingArchiveSource
+        else { throw PrivateCloudBackup.Failure.captureFailed }
+        return active.archive
     }
 
     public func reviewRestore(_ data: Data) async throws -> RestoreReview {
@@ -3462,9 +3448,12 @@ public actor PrivateCloudSyncCoordinator:
         else {
             throw PrivateCloudBackup.Failure.captureFailed
         }
+        let revision = archiveCaptureRevision
         let reviewed = try await generationTransport.readActive(
             allowMissingLegacy: true)
-        guard reviewed.zoneID == zoneID else {
+        guard reviewed.zoneID == zoneID, revision == archiveCaptureRevision,
+            !restorePause, !deletingAccount, !clearingArchiveSource
+        else {
             throw PrivateCloudSyncError.stopping
         }
         return RestoreReview(
@@ -3790,13 +3779,23 @@ public actor PrivateCloudSyncCoordinator:
                     throw PrivateCloudSyncError.stopping
                 }
 
-                // Creating the zone must not flush restored record saves before
-                // remote reset anchors and replacements have been fetched.
-                _ = try await container.privateCloudDatabase.save(
-                    CKRecordZone(zoneID: zoneID))
+                // The original zone can be initialized on first sync or
+                // after a supported clear. A selected restored zone must
+                // already exist; recreating it would mask lost restore data.
+                if zoneID.zoneName == PrivateCloudSyncStore.zoneName {
+                    _ = try await container.privateCloudDatabase.save(
+                        CKRecordZone(zoneID: zoneID))
+                } else {
+                    _ = try await container.privateCloudDatabase.recordZone(
+                        for: zoneID)
+                }
             }
             do {
                 try await perform(.fetchChanges) {
+                    try await requireSelectedGeneration()
+                    guard isEnabled, acceptsEngine(engine) else {
+                        throw PrivateCloudSyncError.stopping
+                    }
                     try await engine.fetchChanges(
                         CKSyncEngine.FetchChangesOptions(
                             scope: .zoneIDs([zoneID])
@@ -3954,7 +3953,7 @@ public actor PrivateCloudSyncCoordinator:
                 return
             }
             let record = try await store.resolveConfigurationConflict(
-                resolution
+                resolution, zoneID: zoneID
             )
             guard let record else {
                 return
@@ -4081,6 +4080,7 @@ public actor PrivateCloudSyncCoordinator:
             if deleteCloudData {
                 if let configurationFailure { throw configurationFailure }
                 await lifecycle.waitForDrain()
+                try await requireSelectedGeneration()
                 let database = container.privateCloudDatabase
                 do {
                     // Delete the entire app-owned zone directly. Sending the
@@ -4168,7 +4168,7 @@ public actor PrivateCloudSyncCoordinator:
         _ accountID: AccountID,
         includeStatistics: Bool
     ) async throws(PrivateCloudSyncFailure) {
-        guard !deletingAccount else {
+        guard !restorePause, !deletingAccount else {
             throw PrivateCloudSyncFailure(
                 operation: .deleteAccount, cause: .stopping)
         }
@@ -4192,7 +4192,9 @@ public actor PrivateCloudSyncCoordinator:
             try await store.prepareStorage()
             guard try await store.accountNeedsSynchronizationResume(accountID)
             else { return }
-            guard !deletingAccount else { throw PrivateCloudSyncError.stopping }
+            guard !restorePause, !deletingAccount else {
+                throw PrivateCloudSyncError.stopping
+            }
             archiveCaptureRevision = UUID()
             deletingAccount = true
             defer { deletingAccount = false }

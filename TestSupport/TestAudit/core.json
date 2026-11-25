@@ -18717,14 +18717,14 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testKeepingThisDevicePreparesCurrentConfigurationForUpload",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 1099
+        "line": 1664
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Resolve config conflict by retaining local snapshot and prepare that configuration for upload.",
+      "purpose": "Resolve keep-device in the selected zone even when an inactive zone has a configuration with the same record name; decode the outgoing payload and confirm the conflict remains pending.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
-        "action_postconditions": "Prepare baseline, apply local edit, stage fetched baseline conflict, resolve keep-device; decode outgoing payload and assert local snapshot; assert conflict remains recorded pending confirmation."
+        "action_postconditions": "Resolve keep-device in the selected zone even when an inactive zone has a configuration with the same record name; decode the outgoing payload and confirm the conflict remains pending."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
@@ -18732,7 +18732,7 @@
       },
       "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
       "rules": {
-        "1": "Prepare baseline, apply local edit, stage fetched baseline conflict, resolve keep-device; decode outgoing payload and assert local snapshot; assert conflict remains recorded pending confirmation.",
+        "1": "Resolve keep-device in the selected zone even when an inactive zone has a configuration with the same record name; decode the outgoing payload and confirm the conflict remains pending.",
         "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
         "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
         "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
@@ -18744,7 +18744,7 @@
       },
       "decision": "keep",
       "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
-      "action_postconditions": "Prepare baseline, apply local edit, stage fetched baseline conflict, resolve keep-device; decode outgoing payload and assert local snapshot; assert conflict remains recorded pending confirmation.",
+      "action_postconditions": "Resolve keep-device in the selected zone even when an inactive zone has a configuration with the same record name; decode the outgoing payload and confirm the conflict remains pending.",
       "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
       "timeout_tolerance": "N/A: no time tolerance.",
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",
@@ -19053,14 +19053,14 @@
       "identifier": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift::testAccountDeletionAfterCacheEvictionPreservesHistory",
       "source": {
         "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
-        "line": 1501
+        "line": 2091
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Find account CloudKit record IDs from persistent metadata after record cache eviction/reconstruction.",
+      "purpose": "Persist same-named account records in two zones, reconstruct the store, and assert account deletion addresses only the selected zone.",
       "dependencies_setup_actions_postconditions": {
         "setup": "Fresh CloudKit test fixture where needed: in-memory SwiftData schema, isolated unique UserDefaults suite, typed synthetic CKRecords/CKErrors and deterministic local account/statistics data.",
-        "action_postconditions": "Save account, prepare and mark records sent, reconstruct store, query account IDs excluding statistics and assert the account record is found."
+        "action_postconditions": "Persist same-named account records in two zones, reconstruct the store, and assert account deletion addresses only the selected zone."
       },
       "synchronization_timeout_tolerance": {
         "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
@@ -19068,7 +19068,7 @@
       },
       "compiler_skip_conditions": "No per-test compiler guard, opt-in flag, or skip applies.",
       "rules": {
-        "1": "Save account, prepare and mark records sent, reconstruct store, query account IDs excluding statistics and assert the account record is found.",
+        "1": "Persist same-named account records in two zones, reconstruct the store, and assert account deletion addresses only the selected zone.",
         "2": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
         "3": "N/A: no playback seek/position assertion; elapsed-time checks apply to CloudKit callback deadline behavior and are assessed in rule 7.",
         "4": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used. All other async work is awaited; callback cancellation/task-local behavior is asserted explicitly.",
@@ -19080,7 +19080,7 @@
       },
       "decision": "keep",
       "dependencies_and_setup": "Uses synthetic CloudKit data and deterministic local stores; state-machine tests call makeSyncStoreFixture() which creates a fresh in-memory container and unique defaults suite, removed in defer.",
-      "action_postconditions": "Save account, prepare and mark records sent, reconstruct store, query account IDs excluding statistics and assert the account record is found.",
+      "action_postconditions": "Persist same-named account records in two zones, reconstruct the store, and assert account deletion addresses only the selected zone.",
       "synchronization": "Await all lifecycle/store/CloudKit adapter operations. No sleep, guessed yield, or unbounded event wait is used.",
       "timeout_tolerance": "N/A: no time tolerance.",
       "classification": "Deterministic host CloudKit/state-machine test using synthetic CKRecord/CKError values, in-memory SwiftData, and a unique UserDefaults suite.",

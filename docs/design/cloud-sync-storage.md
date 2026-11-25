@@ -307,9 +307,10 @@ responsiveness.
 
 Bleat uses the current Apple Account's **private database** in
 `iCloud.com.terminaloutcomes.Bleat`. A zone is part of a CloudKit record's
-identity. CloudKit can create, save, or delete zones; it does not rename or
-atomically swap them. Copying to a different zone produces different record
-IDs and does not preserve server change tags or sync tokens.
+identity. [CloudKit's zone API](https://developer.apple.com/documentation/cloudkit/ckrecordzone)
+can create, save, or delete zones; it does not rename or atomically swap
+them. Copying to a different zone produces different record IDs and does not
+preserve server change tags or sync tokens.
 
 | Zone | Contents |
 | --- | --- |
@@ -346,7 +347,9 @@ to an unselected zone in bounded batches and independently verifies it. It
 also prepares a fresh local store and rechecks the reviewed cloud preimage.
 Only then does it conditionally save the selector using
 `.ifServerRecordUnchanged`. Only the selector record is switched atomically;
-the rest is **not** a cross-zone transaction. No old zone is automatically
+the rest is **not** a cross-zone transaction. [CloudKit atomicity](https://developer.apple.com/documentation/cloudkit/ckmodifyrecordsoperation/isatomic)
+applies within a single zone in one operation; it does not span zones or
+multiple batches. No old zone is automatically
 deleted. There is no automatic fallback or rollback after a verified
 publication. When the response is ambiguous, **Check Restore Status** looks
 for positive readback matching the pending journal; it does not blindly
@@ -376,6 +379,11 @@ finding an existing data zone is not authority to read, write, or delete it.
 | Remove an account on all devices | Delete matching records in the active zone using the normal account and reset handling. | Delete matching records in the active restored zone. Inactive generations and standalone exports may still contain that account. | Reject stale remote targets. Do not claim that inactive backups were erased. |
 | Delete Bleat Data from iCloud, including the delete option when turning off sync | Only supports clearing the original zone while it is active. Keeps local data and disables sync. | **Unsupported**: deleting the selected restored zone without a safe selector transition could strand other devices. | Do not delete. Never turn a failed selector read into an instruction to delete the original zone. |
 
+iCloud Keychain is not a data zone. Ordinary opt-in and opt-out can change
+credential synchronization; restore leaves those credentials alone and
+never puts them in the archive. Keep that path in the signed acceptance
+matrix separately from CloudKit record routing.
+
 This table is a contract and test checklist, not a signed acceptance record.
 Synthetic tests can check zone routing, receipt handling, and failures
 around publication. A real acceptance run still requires a separate,
@@ -383,3 +391,12 @@ signed CloudKit development setup, cloud-only records for export, two
 upgraded clients for adoption, and tests for missing/malformed selectors,
 account changes, and an interrupted publication. Do not use a personal
 production database to test deletion.
+
+The first operation audit exercised the unsupported deletion entry points for
+restored or pending local state, normal opt-out in the same state, and
+failures before and after opt-out is persisted. It also used synthetic
+same-named records in two zones to verify preference conflict uploads and
+account-deletion targets stay in the supplied zone. Normal synchronization
+now requires an existing restored zone rather than recreating a missing
+one, and rechecks selection before fetching or deleting. These checks
+cannot establish isolation from a simultaneous write on another device.

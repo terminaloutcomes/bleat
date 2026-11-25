@@ -17386,25 +17386,57 @@ final class AppModelTests: XCTestCase {
     func testClearCloudKitDataPreservesTypedDeletionFailureAndLeavesSyncOff()
         async
     {
-        let failure = PrivateCloudSyncFailure(
-            operation: .deleteCloudData,
-            cause: .cloudKit(CloudKitFailure(CKError(.networkFailure)))
-        )
-        let service = TestAppService(
-            activeAccount: .success(nil),
-            privateCloudSyncSetting: .failure(.privateCloud(failure))
-        )
-        let model = AppModel(service: service)
+        for didDisable in [false, true] {
+            let failure = PrivateCloudSyncFailure(
+                operation: .deleteCloudData,
+                cause: didDisable
+                    ? .cloudKit(CloudKitFailure(CKError(.networkFailure)))
+                    : .stopping
+            )
+            let service = TestAppService(
+                activeAccount: .success(nil),
+                privateCloudSyncSetting: .failure(.privateCloud(failure)),
+                privateCloudSyncSettingDisablesBeforeFailure: didDisable
+            )
+            let model = AppModel(service: service)
 
-        await model.clearPrivateCloudData()
+            await model.clearPrivateCloudData()
 
-        let expected = AppFailure(
-            operation: .privateCloudSync,
-            serviceError: .privateCloud(failure)
-        )
-        XCTAssertEqual(model.privateCloudDataClearState, .failed(expected))
-        XCTAssertEqual(model.privateCloudState, .failed(expected))
-        XCTAssertFalse(model.privateCloudSyncEnabled)
+            let expected = AppFailure(
+                operation: .privateCloudSync,
+                serviceError: .privateCloud(failure)
+            )
+            XCTAssertEqual(model.privateCloudDataClearState, .failed(expected))
+            XCTAssertEqual(model.privateCloudState, .failed(expected))
+            XCTAssertEqual(model.privateCloudSyncEnabled, !didDisable)
+        }
+    }
+
+    func testRestoredOrPendingCloudDataBlocksDeleteButAllowsPlainOptOut()
+        async
+    {
+        for status: AppCloudDataDeletionAvailability in [
+            .restoredGeneration, .restorePending,
+        ] {
+            let service = TestAppService(
+                activeAccount: .success(nil),
+                cloudDataDeletionAvailability: status)
+            let model = AppModel(service: service)
+            await model.start()
+            XCTAssertEqual(model.cloudDataDeletionAvailability, status)
+
+            await model.clearPrivateCloudData()
+            await model.setPrivateCloudSyncEnabled(false, deleteCloudData: true)
+            let afterBlocked = await service.privateCloudSyncSettingRequests()
+            XCTAssertTrue(afterBlocked.isEmpty)
+            XCTAssertTrue(model.privateCloudSyncEnabled)
+
+            await model.setPrivateCloudSyncEnabled(false)
+            let afterOptOut = await service.privateCloudSyncSettingRequests()
+            XCTAssertEqual(afterOptOut.count, 1)
+            XCTAssertEqual(afterOptOut.first?.deleteCloudData, false)
+            XCTAssertFalse(model.privateCloudSyncEnabled)
+        }
     }
 
     func testDisablingCloudSyncClearsPendingServerConfigurationChange()
@@ -31514,6 +31546,9 @@ private actor TestAppService: AppServicing {
     private let artworkAccountIDsResult: Result<[AccountID], AppServiceError>?
     private var localDataResetResult: Result<Void, AppServiceError>
     private var privateCloudSyncSettingResult: Result<Void, AppServiceError>
+    private let privateCloudSyncSettingDisablesBeforeFailure: Bool
+    private let configuredCloudDataDeletionAvailability:
+        AppCloudDataDeletionAvailability
     private let loginGate: AsyncGate?
     private let accountUpdateGate: AsyncGate?
     private let removeGate: AsyncGate?
@@ -31778,6 +31813,9 @@ private actor TestAppService: AppServicing {
         localDataReset: Result<Void, AppServiceError> = .success(()),
         privateCloudSyncSetting:
             Result<Void, AppServiceError> = .success(()),
+        privateCloudSyncSettingDisablesBeforeFailure: Bool = false,
+        cloudDataDeletionAvailability:
+            AppCloudDataDeletionAvailability = .available,
         loginGate: AsyncGate? = nil,
         accountUpdateGate: AsyncGate? = nil,
         removeGate: AsyncGate? = nil,
@@ -31870,6 +31908,9 @@ private actor TestAppService: AppServicing {
         artworkAccountIDsResult = artworkAccountIDs
         localDataResetResult = localDataReset
         privateCloudSyncSettingResult = privateCloudSyncSetting
+        self.privateCloudSyncSettingDisablesBeforeFailure =
+            privateCloudSyncSettingDisablesBeforeFailure
+        configuredCloudDataDeletionAvailability = cloudDataDeletionAvailability
         self.loginGate = loginGate
         self.accountUpdateGate = accountUpdateGate
         self.removeGate = removeGate
@@ -31930,6 +31971,13 @@ private actor TestAppService: AppServicing {
 
     func isPrivateCloudSyncEnabled() async -> Bool {
         privateCloudSyncEnabled
+    }
+
+    func privateCloudDataDeletionAvailability() async
+        -> AppCloudDataDeletionAvailability
+    {
+        privateCloudSyncAvailable
+            ? configuredCloudDataDeletionAvailability : .unavailable
     }
 
     func cachedChapterTranscripts(
@@ -32205,6 +32253,9 @@ private actor TestAppService: AppServicing {
         recordedPrivateCloudSyncSettingRequests.append(
             (enabled, deleteCloudData)
         )
+        if privateCloudSyncSettingDisablesBeforeFailure {
+            privateCloudSyncEnabled = false
+        }
         try value(from: privateCloudSyncSettingResult)
         privateCloudSyncEnabled = enabled
     }

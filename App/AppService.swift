@@ -26,6 +26,13 @@ enum AppCloudRestoreFailure: Error, Sendable {
     case pendingVerification
 }
 
+enum AppCloudDataDeletionAvailability: Equatable, Sendable {
+    case available
+    case restoredGeneration
+    case restorePending
+    case unavailable
+}
+
 enum AppBootstrapError: Error, Equatable, Sendable {
     case persistenceUnavailable
     case storedDataMigrationFailed
@@ -857,6 +864,9 @@ protocol AppServicing: Sendable {
 
     func isPrivateCloudSyncAvailable() async -> Bool
 
+    func privateCloudDataDeletionAvailability() async
+        -> AppCloudDataDeletionAvailability
+
     func capturePrivateCloudBackup() async throws -> Data
     func previewPrivateCloudRestore(_ data: Data) async throws
         -> AppCloudRestoreReview
@@ -1309,6 +1319,12 @@ extension AppServicing {
 
     func isPrivateCloudSyncAvailable() async -> Bool {
         true
+    }
+
+    func privateCloudDataDeletionAvailability() async
+        -> AppCloudDataDeletionAvailability
+    {
+        await isPrivateCloudSyncAvailable() ? .available : .unavailable
     }
 
     func capturePrivateCloudBackup() async throws -> Data {
@@ -4189,6 +4205,23 @@ actor LiveAppService: AppServicing {
         privateCloudSync != nil
     }
 
+    func privateCloudDataDeletionAvailability() async
+        -> AppCloudDataDeletionAvailability
+    {
+        guard privateCloudSync != nil, let cloudRestoreActivation else {
+            return .unavailable
+        }
+        guard !cloudRestoreApplying else { return .restorePending }
+        guard let state = try? await cloudRestoreActivation.readState() else {
+            return .unavailable
+        }
+        guard !cloudRestoreApplying, state.pending == nil,
+            (state.selected ?? "BleatPrivateData") == launchedCloudZone
+        else { return .restorePending }
+        return launchedCloudZone == "BleatPrivateData"
+            ? .available : .restoredGeneration
+    }
+
     func capturePrivateCloudBackup() async throws -> Data {
         guard let privateCloudSync else {
             throw PrivateCloudBackup.Failure.captureFailed
@@ -4522,27 +4555,28 @@ actor LiveAppService: AppServicing {
                 )
             )
         }
-        guard !deleteCloudData || launchedCloudZone == "BleatPrivateData" else {
-            throw .privateCloud(
-                PrivateCloudSyncFailure(
-                    operation: .deleteCloudData, cause: .stopping))
-        }
-        do {
-            if let cloudRestoreActivation {
-                let state = try await cloudRestoreActivation.readState()
-                guard state.pending == nil,
-                    (state.selected ?? "BleatPrivateData") == launchedCloudZone
-                else {
-                    throw PrivateCloudSyncError.stopping
+        let operation: PrivateCloudSyncOperation =
+            deleteCloudData ? .deleteCloudData : enabled ? .enable : .disable
+        if enabled || deleteCloudData {
+            do {
+                if deleteCloudData {
+                    guard
+                        await privateCloudDataDeletionAvailability()
+                            == .available
+                    else { throw PrivateCloudSyncError.stopping }
+                } else if let cloudRestoreActivation {
+                    let state = try await cloudRestoreActivation.readState()
+                    guard state.pending == nil,
+                        (state.selected ?? "BleatPrivateData")
+                            == launchedCloudZone
+                    else { throw PrivateCloudSyncError.stopping }
                 }
-            }
-            if enabled || deleteCloudData {
                 try await privateCloudSync.requireSelectedGeneration()
+            } catch {
+                throw .privateCloud(
+                    PrivateCloudSyncFailure(
+                        operation: operation, cause: .stopping))
             }
-        } catch {
-            throw .privateCloud(
-                PrivateCloudSyncFailure(
-                    operation: .synchronize, cause: .stopping))
         }
         if deleteCloudData {
             do {

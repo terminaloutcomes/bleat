@@ -1991,7 +1991,13 @@
     {
       "path": "Tests/BleatAppTests/AppModelTests.swift",
       "name": "testClearCloudKitDataPreservesTypedDeletionFailureAndLeavesSyncOff",
-      "line": 14843,
+      "line": 17386,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatAppTests/AppModelTests.swift",
+      "name": "testRestoredOrPendingCloudDataBlocksDeleteButAllowsPlainOptOut",
+      "line": 17415,
       "language": "swift"
     },
     {
@@ -6657,7 +6663,7 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testKeepingThisDevicePreparesCurrentConfigurationForUpload",
-      "line": 1099,
+      "line": 1664,
       "language": "swift"
     },
     {
@@ -6699,7 +6705,7 @@
     {
       "path": "Tests/BleatCoreTests/PrivateCloudSyncTests.swift",
       "name": "testAccountDeletionAfterCacheEvictionPreservesHistory",
-      "line": 1501,
+      "line": 2091,
       "language": "swift"
     },
     {
@@ -8134,6 +8140,12 @@
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "name": "testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync",
       "line": 2980,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testRestoredICloudSettingsAllowsKeepingDataButNotDeleting",
+      "line": 3034,
       "language": "swift"
     },
     {

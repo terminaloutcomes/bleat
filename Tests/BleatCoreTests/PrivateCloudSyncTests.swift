@@ -1650,7 +1650,7 @@ final class PrivateCloudSyncTests {
             record, persistSystemFields: true)
 
         let outgoing = try await fixture.store.resolveConfigurationConflict(
-            .useICloud
+            .useICloud, zoneID: fixture.zoneID
         )
         let remainingConflict = await fixture.store.configurationConflict()
         let applied = await fixture.configuration.snapshot()
@@ -1675,6 +1675,16 @@ final class PrivateCloudSyncTests {
         )
         let record = try #require(
             records.first { $0.recordType == "Configuration" })
+        let wrongZone = CKRecordZone.ID(
+            zoneName: "BleatPrivateData", ownerName: fixture.zoneID.ownerName)
+        let unrelated = CKRecord(
+            recordType: "Configuration",
+            recordID: CKRecord.ID(
+                recordName: record.recordID.recordName, zoneID: wrongZone))
+        unrelated[PrivateCloudSyncStore.payloadKey] =
+            record[PrivateCloudSyncStore.payloadKey]
+        try await fixture.store.applyFetchedRecord(
+            unrelated, persistSystemFields: true)
         let local = makeSnapshot(
             previousCommandAction: .previousChapter,
             nextCommandAction: .nextChapter
@@ -1684,8 +1694,10 @@ final class PrivateCloudSyncTests {
             record, persistSystemFields: true)
 
         let outgoingValue = try await fixture.store
-            .resolveConfigurationConflict(.keepThisDevice)
+            .resolveConfigurationConflict(
+                .keepThisDevice, zoneID: fixture.zoneID)
         let outgoing = try #require(outgoingValue)
+        #expect(outgoing.recordID.zoneID == fixture.zoneID)
         let payload = try #require(
             outgoing[PrivateCloudSyncStore.payloadKey] as? Data)
 
@@ -2090,9 +2102,18 @@ final class PrivateCloudSyncTests {
             zoneID: fixture.zoneID)
         let accountRecord = try #require(
             prepared.first { $0.recordType == "ServerAccount" })
+        let inactive = CKRecord(
+            recordType: accountRecord.recordType,
+            recordID: CKRecord.ID(
+                recordName: accountRecord.recordID.recordName,
+                zoneID: CKRecordZone.ID(
+                    zoneName: "BleatPrivateData",
+                    ownerName: fixture.zoneID.ownerName)))
+        inactive[PrivateCloudSyncStore.payloadKey] =
+            accountRecord[PrivateCloudSyncStore.payloadKey]
         _ = try await fixture.store.reconcileSentRecordZoneChanges(
-            savedRecords: prepared, deletedRecordIDs: [], failedRecordSaves: [],
-            failedRecordDeletes: [:])
+            savedRecords: prepared + [inactive], deletedRecordIDs: [],
+            failedRecordSaves: [], failedRecordDeletes: [:])
         let restored = PrivateCloudSyncStore(
             statistics: fixture.statistics, accounts: fixture.accounts,
             credentialStore: nil,

@@ -3031,6 +3031,39 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testRestoredICloudSettingsAllowsKeepingDataButNotDeleting() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-restored-generation"])
+        tabButton("Settings", in: app).tap()
+        let iCloud = app.buttons["settings.icloud.open"]
+        XCTAssertTrue(iCloud.waitForExistence(timeout: 5))
+        XCTAssertTrue(iCloud.isHittable)
+        iCloud.tap()
+        let sync = app.switches["settings.icloud.enabled"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 5))
+        XCTAssertEqual(sync.value as? String, "1")
+        XCTAssertTrue(sync.isHittable)
+        sync.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        let sheet = app.sheets["Turn Off iCloud Sync?"]
+        let keepData = sheet.buttons["Keep Data in iCloud"]
+        XCTAssertTrue(keepData.waitForExistence(timeout: 5))
+        XCTAssertFalse(sheet.buttons["Delete Data from iCloud"].exists)
+        XCTAssertTrue(keepData.isHittable)
+        keepData.tap()
+        let syncOff = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "0"), object: sync)
+        XCTAssertEqual(XCTWaiter.wait(for: [syncOff], timeout: 5), .completed)
+        let explanation =
+            "Bleat can’t delete restored iCloud data from this screen."
+        Self.scrollUntilHittable(
+            app: app, identifier: explanation, direction: .up)
+        XCTAssertTrue(app.staticTexts[explanation].exists)
+        XCTAssertFalse(app.buttons["settings.icloud.clear"].exists)
+    }
+
+    @MainActor
     func testLibraryCategoryModesBackAndStatus() {
         assertLibraryCategoryModes()
     }

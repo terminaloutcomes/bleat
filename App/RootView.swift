@@ -6828,12 +6828,14 @@ private struct ICloudSettingsView: View {
                     )
                 }
             }
-            Button("Delete Data from iCloud", role: .destructive) {
-                Task {
-                    await model.setPrivateCloudSyncEnabled(
-                        false,
-                        deleteCloudData: true
-                    )
+            if model.cloudDataDeletionAvailability == .available {
+                Button("Delete Data from iCloud", role: .destructive) {
+                    Task {
+                        await model.setPrivateCloudSyncEnabled(
+                            false,
+                            deleteCloudData: true
+                        )
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -6963,14 +6965,30 @@ private struct ICloudSettingsView: View {
 
     private var cloudDataClearSection: some View {
         Section("Delete Data") {
-            Button("Delete Bleat Data from iCloud", role: .destructive) {
-                showClearCloudDataConfirmation = true
+            switch model.cloudDataDeletionAvailability {
+            case .available:
+                Button("Delete Bleat Data from iCloud", role: .destructive) {
+                    showClearCloudDataConfirmation = true
+                }
+                .disabled(
+                    model.privateCloudDataClearState == .clearing
+                        || model.isResettingLocalData
+                )
+                .accessibilityIdentifier("settings.icloud.clear")
+            case .restoredGeneration:
+                Text(
+                    "Bleat can’t delete restored iCloud data from this screen."
+                )
+                .foregroundStyle(.secondary)
+            case .restorePending:
+                Text(
+                    "Finish checking or loading the restore before deleting iCloud data."
+                )
+                .foregroundStyle(.secondary)
+            case .unavailable:
+                Text("Bleat can’t check whether iCloud data can be deleted.")
+                    .foregroundStyle(.secondary)
             }
-            .disabled(
-                model.privateCloudDataClearState == .clearing
-                    || model.isResettingLocalData
-            )
-            .accessibilityIdentifier("settings.icloud.clear")
 
             switch model.privateCloudDataClearState {
             case .idle:
