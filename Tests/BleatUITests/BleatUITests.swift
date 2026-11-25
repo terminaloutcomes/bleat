@@ -2788,6 +2788,10 @@ final class BleatUITests: XCTestCase {
         )
         let reset = app.buttons["settings.resetLocalData"]
         XCTAssertTrue(reset.waitForExistence(timeout: 3))
+        let diagnostics = app.buttons["settings.diagnostics"]
+        XCTAssertTrue(diagnostics.exists)
+        XCTAssertTrue(diagnostics.isHittable)
+        XCTAssertGreaterThan(reset.frame.minY, diagnostics.frame.maxY)
         reset.tap()
 
         let confirm = app.buttons[

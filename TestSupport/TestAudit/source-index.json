@@ -8103,7 +8103,7 @@
     {
       "path": "Tests/BleatUITests/BleatUITests.swift",
       "name": "testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch",
-      "line": 2317,
+      "line": 2771,
       "language": "swift"
     },
     {

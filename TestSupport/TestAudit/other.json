@@ -1901,7 +1901,7 @@
     {
       "id": "BleatUITests::testResetLocalDataConfirmsAndRemainsSignedOutAfterRelaunch",
       "path": "Tests/BleatUITests/BleatUITests.swift",
-      "line": 2311,
+      "line": 2771,
       "purpose": "Reset Local Data Confirms And Remains Signed Out After Relaunch.",
       "review": {
         "status": "reviewed",
@@ -1911,7 +1911,7 @@
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-clear-local-data-reset, --ui-testing-persist-local-data-reset, --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by app.signedIn, settings.resetLocalData, login.server. Body-specific asserted postconditions: XCTAssertTrue( XCTAssertTrue(reset.waitForExistence(timeout: 3)) XCTAssertTrue(confirm.waitForExistence(timeout: 3)) XCTAssertFalse(app.otherElements[\"app.signedIn\"].exists)",
+      "action_postconditions": "Open Settings and locate Reset All Local Data below Diagnostics. Confirm reset with the synthetic account, verify sign-out, then relaunch and verify that sign-out persisted.",
       "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; shared scroll helper uses a bounded attempt count and now fails with caller file/line when exhausted."
     },
     {

@@ -7240,8 +7240,6 @@ private struct SettingsView: View {
                     )
                 }
 
-                localDataResetSection
-
                 Section {
                     Picker(
                         "Previous Command",
@@ -7308,6 +7306,8 @@ private struct SettingsView: View {
                         accessibilityIdentifier: "settings.diagnostics"
                     )
                 }
+
+                localDataResetSection
             }
             .accessibilityIdentifier("settings.form")
             .navigationTitle("Settings")
