@@ -6171,19 +6171,19 @@
     {
       "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
       "name": "testCatalogListsEveryPersistentModelInCore",
-      "line": 10,
+      "line": 26,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
       "name": "testCatalogBuildsUsableSchema",
-      "line": 39,
+      "line": 70,
       "language": "swift"
     },
     {
       "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
       "name": "testSchemaRegistersEveryCatalogModelName",
-      "line": 57,
+      "line": 85,
       "language": "swift"
     },
     {
@@ -6256,6 +6256,144 @@
       "path": "Tests/BleatCoreTests/PlaybackSessionTests.swift",
       "name": "testCloseFailuresRemainTyped",
       "line": 558,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "allFiveRecordTypesKeepExactPayloadBytesThroughAnArchive",
+      "line": 13,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "plannerPreviewsExactReplacementAndFlagsAccountDeletion",
+      "line": 33,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "refusesUnknownAssetFieldsUnsafeURLsAndIncompleteArchives",
+      "line": 67,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "canonicalizesOrderAndDetectsValidlyTruncatedJSON",
+      "line": 129,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "largeCaptureIsValidButAnOversizedReplaceIsNeverPlannedAsOneOperation",
+      "line": 147,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+      "name": "isolatedRestoreMaterializesFiveTypesAndRetainsPreviousGenerationAfterReopen",
+      "line": 178,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "replacementPreservesLegacyAndIsolatesItsLaterWriter",
+      "line": 10,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "recoveryStagesAnEarlierBackupAsAFreshGeneration",
+      "line": 42,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "refusesWrongAccountChangedBackupAndStaleReviewedState",
+      "line": 76,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "ordinaryWriteRacingPublishIsRejectedByTransportCAS",
+      "line": 105,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "changedPointerBeforePublishRefusesReplacement",
+      "line": 120,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "interruptedOrCorruptStageNeverPublishes",
+      "line": 134,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "lostCommitResponseUsesReceiptWithoutRetry",
+      "line": 157,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "unknownWithoutPositiveReadbackRemainsPendingEvenIfOldSelectionIsVisible",
+      "line": 177,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "ambiguousResponseAndThirdPointerStayIndeterminate",
+      "line": 207,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+      "name": "refusesUnfencedLegacyAndAccountSessionTransitionDuringStage",
+      "line": 229,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+      "name": "replaysOriginalLegacyRecordsAndMixedCanonicalHistory",
+      "line": 19,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+      "name": "countsCanonicalSingletonAndReplaysResetAnchor",
+      "line": 85,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+      "name": "futurePartialMalformedAndUnknownPayloadFieldsFailBeforeReplay",
+      "line": 114,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+      "name": "requiresExactAccountScopeAndRetryAfterCancellation",
+      "line": 156,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+      "name": "pendingNeverSelectsAndOnlyMatchingCloudReceiptConfirms",
+      "line": 9,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+      "name": "replacingAgainRetainsPriorMaterializedStore",
+      "line": 59,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+      "name": "positivelyAbandonedGenerationDoesNotReplaceSelectionOrEraseFiles",
+      "line": 94,
       "language": "swift"
     },
     {

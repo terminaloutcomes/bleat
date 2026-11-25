@@ -23,6 +23,8 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
 
     public static let generationPrefix = "BleatRestoredData-"
 
+    static let modelTypes: [any PersistentModel.Type] = [ActivationRow.self]
+
     private let root: URL
     private let container: ModelContainer
     private let journal: JournalOwner
@@ -32,7 +34,7 @@ public struct PrivateCloudRestoreLocalActivation: Sendable {
     public init(root: URL) throws {
         guard root.isFileURL else { throw Failure.invalidJournal }
         self.root = root
-        let schema = Schema([ActivationRow.self])
+        let schema = Schema(Self.modelTypes)
         let url = root.appending(path: "BleatRestoreActivation-v1.store")
         container = try ModelContainer(
             for: schema,

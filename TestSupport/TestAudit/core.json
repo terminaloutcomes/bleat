@@ -15393,43 +15393,43 @@
       "identifier": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift::testCatalogListsEveryPersistentModelInCore",
       "source": {
         "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
-        "line": 10
+        "line": 26
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Compare source-declared @Model names with catalog registration.",
+      "purpose": "Compare source-declared @Model names with the actual registrations of the app, restore journal, and debug-only restore store.",
       "dependencies_setup_actions_postconditions": null,
       "synchronization_timeout_tolerance": null,
       "compiler_skip_conditions": null,
       "rules": {
-        "1": "Assert missing/extra are empty and provide names in Comment.",
+        "1": "Assert no duplicate registrations, exact restore-store ownership, and no missing or extra declarations.",
         "2": "No arbitrary delay or condition wait occurs.",
         "3": "N/A: no advancing playback or exact playback-position assertion.",
         "4": "Synchronous; no wait is required.",
-        "5": "Read Swift source directory relative to #filePath; derive declared/catalogued sets.",
+        "5": "Read repository source relative to #filePath and reuse each store's production model list.",
         "6": "Source/catalog consistency check requiring repository source files at runtime.",
         "7": "No retry or timeout/tolerance adjustment is present.",
         "8": "Comment enumerates exactly which model declarations are missing/extra.",
         "9": "Individual and owning-suite repetition evidence remains pending execution."
       },
       "decision": "keep",
-      "dependencies_and_setup": "Read Swift source directory relative to #filePath; derive declared/catalogued sets.",
-      "action_postconditions": "Assert missing/extra are empty and provide names in Comment.",
+      "dependencies_and_setup": "Read repository source relative to #filePath and reuse each store's production model list.",
+      "action_postconditions": "Assert no duplicate registrations, exact restore-store ownership, and no missing or extra declarations.",
       "synchronization": "Synchronous; no wait is required.",
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Source/catalog consistency check requiring repository source files at runtime.",
-      "compiler_skip": "None identified.",
+      "compiler_skip": "The isolated restore store is included only in Debug, matching its production source guard.",
       "reason": "Fresh fixed inputs with a direct result assertion."
     },
     {
       "identifier": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift::testCatalogBuildsUsableSchema",
       "source": {
         "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
-        "line": 39
+        "line": 70
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Construct catalog schema and in-memory SwiftData ModelContainer.",
+      "purpose": "Construct a separate in-memory SwiftData ModelContainer for each store's actual model list.",
       "dependencies_setup_actions_postconditions": null,
       "synchronization_timeout_tolerance": null,
       "compiler_skip_conditions": null,
@@ -15438,51 +15438,51 @@
         "2": "No arbitrary delay or condition wait occurs.",
         "3": "N/A: no advancing playback or exact playback-position assertion.",
         "4": "Synchronous; no wait is required.",
-        "5": "Catalog model types and in-memory ModelConfiguration.",
+        "5": "Each store's production model list and a fresh in-memory ModelConfiguration.",
         "6": "Local SwiftData in-memory framework integration.",
         "7": "No retry or timeout/tolerance adjustment is present.",
         "8": "Assertions report the expression and source location.",
         "9": "Individual and owning-suite repetition evidence remains pending execution."
       },
       "decision": "keep",
-      "dependencies_and_setup": "Catalog model types and in-memory ModelConfiguration.",
+      "dependencies_and_setup": "Each store's production model list and a fresh in-memory ModelConfiguration.",
       "action_postconditions": "Assert entity count and successful container initialization.",
       "synchronization": "Synchronous; no wait is required.",
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Local SwiftData in-memory framework integration.",
-      "compiler_skip": "None identified.",
+      "compiler_skip": "The isolated restore store is included only in Debug.",
       "reason": "Fresh fixed inputs with a direct result assertion."
     },
     {
       "identifier": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift::testSchemaRegistersEveryCatalogModelName",
       "source": {
         "path": "Tests/BleatCoreTests/PersistenceModelCatalogTests.swift",
-        "line": 57
+        "line": 85
       },
       "source_reviewed": true,
       "review_status": "source_reviewed",
-      "purpose": "Ensure each catalog model name is present in schema entities.",
+      "purpose": "Compare the exact entity set for each separate SwiftData store with its registered model names.",
       "dependencies_setup_actions_postconditions": null,
       "synchronization_timeout_tolerance": null,
       "compiler_skip_conditions": null,
       "rules": {
-        "1": "Assert every name exists and include name in assertion message.",
+        "1": "Assert equality of the actual and expected entity-name sets for each store.",
         "2": "No arbitrary delay or condition wait occurs.",
         "3": "N/A: no advancing playback or exact playback-position assertion.",
         "4": "Synchronous; no wait is required.",
-        "5": "Fresh Schema from current catalog model types.",
+        "5": "Fresh Schema from each store's production model list.",
         "6": "Local SwiftData schema integration.",
         "7": "No retry or timeout/tolerance adjustment is present.",
-        "8": "Missing model diagnostic names exact entity.",
+        "8": "Set comparison reports missing or unexpected entity names.",
         "9": "Individual and owning-suite repetition evidence remains pending execution."
       },
       "decision": "keep",
-      "dependencies_and_setup": "Fresh Schema from current catalog model types.",
-      "action_postconditions": "Assert every name exists and include name in assertion message.",
+      "dependencies_and_setup": "Fresh Schema from each store's production model list.",
+      "action_postconditions": "Assert equality of the actual and expected entity-name sets for each store.",
       "synchronization": "Synchronous; no wait is required.",
       "timeout_tolerance": "N/A: no elapsed-time assertion or timeout is used.",
       "classification": "Local SwiftData schema integration.",
-      "compiler_skip": "None identified.",
+      "compiler_skip": "The isolated restore store is included only in Debug.",
       "reason": "Fresh fixed inputs with a direct result assertion."
     },
     {
@@ -15952,6 +15952,673 @@
       "compiler_skip": "No per-test compiler condition, opt-in flag, or skip applies.",
       "reason": "The contract or typed failure named by the test is directly asserted from local scripted data.",
       "shared_helper_review": "Inspected sessionJSON/track/decodeSession and Fixture builders plus actor PlaybackTestTransport and PlaybackTestCredentialStore; caller-specific status/body assertions audited individually."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::allFiveRecordTypesKeepExactPayloadBytesThroughAnArchive",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 13
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Round-trip preserves exact archive bytes and record counts; support summary omits payload, account binding, and server details.",
+      "dependencies_and_setup": "Synthetic payloads of all five record kinds",
+      "action_postconditions": "Round-trip preserves exact archive bytes and record counts; support summary omits payload, account binding, and server details.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Round-trip preserves exact archive bytes and record counts; support summary omits payload, account binding, and server details.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "Synthetic payloads of all five record kinds",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::plannerPreviewsExactReplacementAndFlagsAccountDeletion",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 33
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Preview reports exact additions, replacements and removals and rejects the wrong account.",
+      "dependencies_and_setup": "Current and desired snapshots with edits and a removed account",
+      "action_postconditions": "Preview reports exact additions, replacements and removals and rejects the wrong account.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Preview reports exact additions, replacements and removals and rejects the wrong account.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "Current and desired snapshots with edits and a removed account",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::refusesUnknownAssetFieldsUnsafeURLsAndIncompleteArchives",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 67
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Rejects unsupported fields and assets, unsafe account URLs, duplicates, incomplete capture, and future versions.",
+      "dependencies_and_setup": "Synthetic CloudKit records and deliberately altered export envelopes",
+      "action_postconditions": "Rejects unsupported fields and assets, unsafe account URLs, duplicates, incomplete capture, and future versions.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Rejects unsupported fields and assets, unsafe account URLs, duplicates, incomplete capture, and future versions.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "Synthetic CloudKit records and deliberately altered export envelopes",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::canonicalizesOrderAndDetectsValidlyTruncatedJSON",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 129
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reordering reproduces canonical archive bytes; truncation fails digest verification.",
+      "dependencies_and_setup": "A valid envelope with reordered and truncated records",
+      "action_postconditions": "Reordering reproduces canonical archive bytes; truncation fails digest verification.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Reordering reproduces canonical archive bytes; truncation fails digest verification.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "A valid envelope with reordered and truncated records",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::largeCaptureIsValidButAnOversizedReplaceIsNeverPlannedAsOneOperation",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 147
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Capture is valid but the resulting replacement is explicitly too large for one operation.",
+      "dependencies_and_setup": "A large synthetic set of 58,004 entries",
+      "action_postconditions": "Capture is valid but the resulting replacement is explicitly too large for one operation.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Capture is valid but the resulting replacement is explicitly too large for one operation.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "A large synthetic set of 58,004 entries",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift::isolatedRestoreMaterializesFiveTypesAndRetainsPreviousGenerationAfterReopen",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudBackupTests.swift",
+        "line": 178
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Verifies locking, five materialized types, readback after reopen, and retention of the old generation after replacement.",
+      "dependencies_and_setup": "New temporary isolated store, five-record archive, and an empty replacement",
+      "action_postconditions": "Verifies locking, five materialized types, readback after reopen, and retention of the old generation after replacement.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+      "compiler_skip": "Debug-only; the isolated test-store implementation is not compiled in Release.",
+      "rules": {
+        "1": "Verifies locking, five materialized types, readback after reopen, and retention of the old generation after replacement.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "New temporary isolated store, five-record archive, and an empty replacement",
+        "6": "Deterministic backup codec and planner tests; isolated restore uses temporary local SwiftData.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::replacementPreservesLegacyAndIsolatesItsLaterWriter",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 10
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Publishes one verified generation in three bounded batches and keeps writes from the legacy generation isolated.",
+      "dependencies_and_setup": "Fresh actor transport with a legacy generation and a 201-entry archive",
+      "action_postconditions": "Publishes one verified generation in three bounded batches and keeps writes from the legacy generation isolated.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Publishes one verified generation in three bounded batches and keeps writes from the legacy generation isolated.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Fresh actor transport with a legacy generation and a 201-entry archive",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::recoveryStagesAnEarlierBackupAsAFreshGeneration",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 42
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Restores original content into a new generation with a new revision while retaining both earlier generations.",
+      "dependencies_and_setup": "A previously published replacement and the original archive",
+      "action_postconditions": "Restores original content into a new generation with a new revision while retaining both earlier generations.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Restores original content into a new generation with a new revision while retaining both earlier generations.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "A previously published replacement and the original archive",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::refusesWrongAccountChangedBackupAndStaleReviewedState",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 76
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Returns typed rejections without creating a stage or attempting publication.",
+      "dependencies_and_setup": "Wrong account, changed backup, and stale preview against a fresh actor transport",
+      "action_postconditions": "Returns typed rejections without creating a stage or attempting publication.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Returns typed rejections without creating a stage or attempting publication.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Wrong account, changed backup, and stale preview against a fresh actor transport",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::ordinaryWriteRacingPublishIsRejectedByTransportCAS",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 105
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Rejects the stale compare-and-swap; leaves the legacy generation and data active.",
+      "dependencies_and_setup": "Actor transport that injects an ordinary write at publication",
+      "action_postconditions": "Rejects the stale compare-and-swap; leaves the legacy generation and data active.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Rejects the stale compare-and-swap; leaves the legacy generation and data active.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Actor transport that injects an ordinary write at publication",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::changedPointerBeforePublishRefusesReplacement",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 120
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Rejects stale state before attempting publication.",
+      "dependencies_and_setup": "Actor transport that changes the selector during verification",
+      "action_postconditions": "Rejects stale state before attempting publication.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Rejects stale state before attempting publication.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Actor transport that changes the selector during verification",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::interruptedOrCorruptStageNeverPublishes",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 134
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Both stop publication and leave legacy state active.",
+      "dependencies_and_setup": "Cancellable second batch and corrupted staged readback in separate transports",
+      "action_postconditions": "Both stop publication and leave legacy state active.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Both stop publication and leave legacy state active.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Cancellable second batch and corrupted staged readback in separate transports",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::lostCommitResponseUsesReceiptWithoutRetry",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 157
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Resolves the matching receipt as published without submitting a second write.",
+      "dependencies_and_setup": "Transport that commits but loses the publication response",
+      "action_postconditions": "Resolves the matching receipt as published without submitting a second write.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Resolves the matching receipt as published without submitting a second write.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Transport that commits but loses the publication response",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::unknownWithoutPositiveReadbackRemainsPendingEvenIfOldSelectionIsVisible",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 177
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keeps the receipt pending and blocks replacement until positive readback; never retries the write.",
+      "dependencies_and_setup": "Ambiguous response with delayed publication and a temporary read of the old selector",
+      "action_postconditions": "Keeps the receipt pending and blocks replacement until positive readback; never retries the write.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Keeps the receipt pending and blocks replacement until positive readback; never retries the write.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Ambiguous response with delayed publication and a temporary read of the old selector",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::ambiguousResponseAndThirdPointerStayIndeterminate",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 207
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Keeps the original receipt indeterminate instead of identifying unrelated state as success.",
+      "dependencies_and_setup": "Ambiguous response followed by selection of a third generation",
+      "action_postconditions": "Keeps the original receipt indeterminate instead of identifying unrelated state as success.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Keeps the original receipt indeterminate instead of identifying unrelated state as success.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Ambiguous response followed by selection of a third generation",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift::refusesUnfencedLegacyAndAccountSessionTransitionDuringStage",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudGenerationRestoreTests.swift",
+        "line": 229
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Rejects unsafe writes before publishing and leaves legacy data intact.",
+      "dependencies_and_setup": "Unfenced transport and transport that transitions account after the first batch",
+      "action_postconditions": "Rejects unsafe writes before publishing and leaves legacy data intact.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Rejects unsafe writes before publishing and leaves legacy data intact.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Unfenced transport and transport that transitions account after the first batch",
+        "6": "Deterministic generation protocol with actor-backed fault injection, not a live CloudKit account.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift::replaysOriginalLegacyRecordsAndMixedCanonicalHistory",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+        "line": 19
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Replays original rows, preserves history totals and boundaries, round-trips canonical records, and redacts support output.",
+      "dependencies_and_setup": "Checked-in synthetic legacy history plus a mixed canonical snapshot",
+      "action_postconditions": "Replays original rows, preserves history totals and boundaries, round-trips canonical records, and redacts support output.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Offline replay using checked-in synthetic history and local test persistence.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Replays original rows, preserves history totals and boundaries, round-trips canonical records, and redacts support output.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Checked-in synthetic legacy history plus a mixed canonical snapshot",
+        "6": "Offline replay using checked-in synthetic history and local test persistence.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift::countsCanonicalSingletonAndReplaysResetAnchor",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+        "line": 85
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Counts both as current and verifies replayed reset accounting.",
+      "dependencies_and_setup": "Canonical singleton and reset anchor derived from the synthetic fixture",
+      "action_postconditions": "Counts both as current and verifies replayed reset accounting.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Offline replay using checked-in synthetic history and local test persistence.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Counts both as current and verifies replayed reset accounting.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Canonical singleton and reset anchor derived from the synthetic fixture",
+        "6": "Offline replay using checked-in synthetic history and local test persistence.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift::futurePartialMalformedAndUnknownPayloadFieldsFailBeforeReplay",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+        "line": 114
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Returns the expected validation errors without replaying invalid input.",
+      "dependencies_and_setup": "Mutated synthetic archive header, duplicate records, and unknown payload fields",
+      "action_postconditions": "Returns the expected validation errors without replaying invalid input.",
+      "synchronization": "Synchronous fixture validation; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Offline replay using checked-in synthetic history and local test persistence.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Returns the expected validation errors without replaying invalid input.",
+        "2": "Synchronous fixture validation; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Synchronous fixture validation; no timing-based wait.",
+        "5": "Mutated synthetic archive header, duplicate records, and unknown payload fields",
+        "6": "Offline replay using checked-in synthetic history and local test persistence.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift::requiresExactAccountScopeAndRetryAfterCancellation",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudHistoryArchiveTests.swift",
+        "line": 156
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Rejects the wrong account, propagates cancellation, and successfully retries with the exact account scope.",
+      "dependencies_and_setup": "Synthetic archive, mismatched account selection, and explicit cancellation path",
+      "action_postconditions": "Rejects the wrong account, propagates cancellation, and successfully retries with the exact account scope.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Offline replay using checked-in synthetic history and local test persistence.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Rejects the wrong account, propagates cancellation, and successfully retries with the exact account scope.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Synthetic archive, mismatched account selection, and explicit cancellation path",
+        "6": "Offline replay using checked-in synthetic history and local test persistence.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift::pendingNeverSelectsAndOnlyMatchingCloudReceiptConfirms",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+        "line": 9
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reopen preserves pending state; only the matching receipt selects the new store, with settings and sync safeguards.",
+      "dependencies_and_setup": "Fresh temporary journal, materialized generation and matching/nonmatching receipts",
+      "action_postconditions": "Reopen preserves pending state; only the matching receipt selects the new store, with settings and sync safeguards.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Local SwiftData journal and generation-file integration with temporary storage.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Reopen preserves pending state; only the matching receipt selects the new store, with settings and sync safeguards.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Fresh temporary journal, materialized generation and matching/nonmatching receipts",
+        "6": "Local SwiftData journal and generation-file integration with temporary storage.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift::replacingAgainRetainsPriorMaterializedStore",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+        "line": 59
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Reopen preserves the old selection until confirmation; then verifies both the new selection and retained old store.",
+      "dependencies_and_setup": "One activated generation and a second prepared replacement in the same temporary journal",
+      "action_postconditions": "Reopen preserves the old selection until confirmation; then verifies both the new selection and retained old store.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Local SwiftData journal and generation-file integration with temporary storage.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Reopen preserves the old selection until confirmation; then verifies both the new selection and retained old store.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "One activated generation and a second prepared replacement in the same temporary journal",
+        "6": "Local SwiftData journal and generation-file integration with temporary storage.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
+    },
+    {
+      "identifier": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift::positivelyAbandonedGenerationDoesNotReplaceSelectionOrEraseFiles",
+      "source": {
+        "path": "Tests/BleatCoreTests/PrivateCloudRestoreLocalActivationTests.swift",
+        "line": 94
+      },
+      "source_reviewed": true,
+      "review_status": "source_reviewed",
+      "purpose": "Leaves the selection untouched, keeps the old attempt file, and uses a distinct file for the next attempt.",
+      "dependencies_and_setup": "Pending generation positively abandoned in a fresh temporary journal",
+      "action_postconditions": "Leaves the selection untouched, keeps the old attempt file, and uses a distinct file for the next attempt.",
+      "synchronization": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+      "timeout_tolerance": "No elapsed-time or tolerance assertion.",
+      "classification": "Local SwiftData journal and generation-file integration with temporary storage.",
+      "compiler_skip": "No configuration-dependent skip.",
+      "rules": {
+        "1": "Leaves the selection untouched, keeps the old attempt file, and uses a distinct file for the next attempt.",
+        "2": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "3": "No media playback or position assertion.",
+        "4": "Awaits the restore or replay operation and its readback; no timing-based wait.",
+        "5": "Pending generation positively abandoned in a fresh temporary journal",
+        "6": "Local SwiftData journal and generation-file integration with temporary storage.",
+        "7": "Uses explicit state and typed results, without retry-to-green or tolerance changes.",
+        "8": "Swift Testing reports the failing expected value or typed error at the assertion.",
+        "9": "Ran with the owning restore suites in the focused host lane; the full host lane verifies registration."
+      },
+      "decision": "keep",
+      "reason": "Verifies a specific restore or validation outcome using synthetic inputs without production CloudKit."
     },
     {
       "identifier": "Tests/BleatCoreTests/PrivateCloudPersistenceTests.swift::migrationCopiesOpaqueArchivesAndRemovesOnlyVerifiedSources",

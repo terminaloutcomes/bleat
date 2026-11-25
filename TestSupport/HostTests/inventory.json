@@ -443,6 +443,37 @@
     "testSyncValidationAndFailuresRemainTyped()",
     "testCloseFailuresRemainTyped()"
   ],
+  "BleatCoreTests.PrivateCloudBackupTests": [
+    "allFiveRecordTypesKeepExactPayloadBytesThroughAnArchive()",
+    "plannerPreviewsExactReplacementAndFlagsAccountDeletion()",
+    "refusesUnknownAssetFieldsUnsafeURLsAndIncompleteArchives()",
+    "canonicalizesOrderAndDetectsValidlyTruncatedJSON()",
+    "largeCaptureIsValidButAnOversizedReplaceIsNeverPlannedAsOneOperation()",
+    "isolatedRestoreMaterializesFiveTypesAndRetainsPreviousGenerationAfterReopen()"
+  ],
+  "BleatCoreTests.PrivateCloudGenerationRestoreTests": [
+    "replacementPreservesLegacyAndIsolatesItsLaterWriter()",
+    "recoveryStagesAnEarlierBackupAsAFreshGeneration()",
+    "refusesWrongAccountChangedBackupAndStaleReviewedState()",
+    "ordinaryWriteRacingPublishIsRejectedByTransportCAS()",
+    "changedPointerBeforePublishRefusesReplacement()",
+    "interruptedOrCorruptStageNeverPublishes()",
+    "lostCommitResponseUsesReceiptWithoutRetry()",
+    "unknownWithoutPositiveReadbackRemainsPendingEvenIfOldSelectionIsVisible()",
+    "ambiguousResponseAndThirdPointerStayIndeterminate()",
+    "refusesUnfencedLegacyAndAccountSessionTransitionDuringStage()"
+  ],
+  "BleatCoreTests.PrivateCloudHistoryArchiveTests": [
+    "replaysOriginalLegacyRecordsAndMixedCanonicalHistory()",
+    "countsCanonicalSingletonAndReplaysResetAnchor()",
+    "futurePartialMalformedAndUnknownPayloadFieldsFailBeforeReplay()",
+    "requiresExactAccountScopeAndRetryAfterCancellation()"
+  ],
+  "BleatCoreTests.PrivateCloudRestoreLocalActivationTests": [
+    "pendingNeverSelectsAndOnlyMatchingCloudReceiptConfirms()",
+    "replacingAgainRetainsPriorMaterializedStore()",
+    "positivelyAbandonedGenerationDoesNotReplaceSelectionOrEraseFiles()"
+  ],
   "BleatCoreTests.PrivateCloudSyncTests": [
     "testRunlessCallbackCancellationIsOwnedUntilReplacementCanProceed()",
     "testConcurrentCancellationWaitersCannotReleaseReplacementOwnership()",

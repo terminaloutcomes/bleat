@@ -27,6 +27,11 @@
             cloudUserRecordName: "local-test-target-v1"
         )
 
+        static let modelTypes: [any PersistentModel.Type] = [
+            IsolatedRestoreSelector.self, IsolatedRestoreStage.self,
+            IsolatedRestoreEntry.self,
+        ]
+
         private let storeLock: FileHandle
         private let transport: IsolatedRestoreTransport
         private let coordinator: PrivateCloudGenerationRestore
@@ -61,10 +66,7 @@
 
             let url = root.appendingPathComponent(
                 "Bleat-Isolated-iCloud-Restore-Test-v1.store")
-            let schema = Schema([
-                IsolatedRestoreSelector.self, IsolatedRestoreStage.self,
-                IsolatedRestoreEntry.self,
-            ])
+            let schema = Schema(Self.modelTypes)
             let model = try ModelContainer(
                 for: schema,
                 configurations: [
