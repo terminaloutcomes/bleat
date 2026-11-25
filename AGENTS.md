@@ -399,6 +399,12 @@ Simulator test.
 
 ## Versioning and automated releases
 
+For internal TestFlight releases, use the single canonical entry point,
+`mise run testflight:internal`, following the
+[release procedure and signing policy](docs/development.md#internal-testflight-releases).
+Resolve any signing/provisioning authorization mismatch before running it;
+do not substitute improvised manual signing or profile overrides.
+
 `MARKETING_VERSION` in `project.yml` is the application version source of
 truth. Distributable builds use the UTC timestamp build number resolved by
 `build-scripts/src/bin/resolve-build-number.rs`; `CURRENT_PROJECT_VERSION` is only the

@@ -8,6 +8,400 @@ import Testing
 @Suite(.serialized)
 final class PrivateCloudSyncTests {
     @Test
+    func testAcceptedCloudAccountDoesNotPromptAgainOrBecomeAuthenticated()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let incoming = try makeAccount(
+            server: "https://restore.example", localServer: nil)
+        let record = try makeRecord(
+            type: "ServerAccount", name: "account.\(incoming.id.rawValue)",
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: incoming),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
+        #expect(
+            await fixture.store.pendingServerConfigurationChanges().count == 1)
+        _ = try await fixture.store.acceptServerConfigurationChange(
+            accountID: incoming.id, selected: incoming, zoneID: fixture.zoneID)
+        for store in [
+            fixture.store,
+            PrivateCloudSyncStore(
+                statistics: fixture.statistics, accounts: fixture.accounts,
+                credentialStore: nil, configuration: fixture.configuration,
+                defaults: PrivateCloudDefaultsReference(fixture.defaults)),
+        ] {
+            try await store.applyFetchedRecord(
+                record, persistSystemFields: true)
+            #expect(await store.pendingServerConfigurationChanges().isEmpty)
+            #expect(
+                try await fixture.accounts.account(id: incoming.id)?
+                    .connectionState == .reauthenticationRequired)
+            #expect(try await fixture.accounts.selection().activeAccount == nil)
+        }
+        // A later endpoint choice for this same pending account must actually
+        // apply its URL without inheriting another device's authenticated state.
+        let changed = try incoming.updatingLocalServer(
+            NormalizedServerURL("https://local.example"), validated: true)
+        let changedRecord = try makeRecord(
+            type: "ServerAccount", name: record.recordID.recordName,
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: changed),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            changedRecord, persistSystemFields: true)
+        _ = try await fixture.store.acceptServerConfigurationChange(
+            accountID: incoming.id, selected: changed, zoneID: fixture.zoneID)
+        let restored = try await fixture.accounts.account(id: incoming.id)
+        #expect(restored?.localServer == changed.localServer)
+        #expect(restored?.localServerValidated == false)
+        #expect(restored?.connectionState == .reauthenticationRequired)
+        #expect(try await fixture.accounts.selection().activeAccount == nil)
+    }
+
+    @Test
+    func
+        testCancelledCloudChoicesSurviveReopenedStoreAndChangedConfigurationPrompts()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("chooser.store")
+        let suite = makeSuite()
+        let cleanupDefaults = try #require(UserDefaults(suiteName: suite))
+        defer { cleanupDefaults.removePersistentDomain(forName: suite) }
+        let original = try makeAccount(
+            server: "https://restore.example", localServer: nil)
+        let record: CKRecord
+        do {
+            let fixture = try makeSyncStoreFixture(storeURL: url, suite: suite)
+            try await fixture.accounts.save(original)
+            let incoming = try original.updatingLocalServer(
+                NormalizedServerURL("https://local.example"))
+            record = try makeRecord(
+                type: "ServerAccount", name: "account.\(incoming.id.rawValue)",
+                value: CloudServerAccountRecordPayload(
+                    supersededPayloadDigest: nil, account: incoming),
+                zoneID: fixture.zoneID)
+            try await fixture.store.applyFetchedRecord(
+                record, persistSystemFields: true)
+            let pending = await fixture.store
+                .pendingServerConfigurationChanges()
+            #expect(pending.count == 1)
+            try await fixture.store.deferServerConfigurationChanges(pending)
+            #expect(
+                await fixture.store.pendingServerConfigurationChanges().isEmpty)
+            try await fixture.store.applyFetchedRecord(
+                record, persistSystemFields: true)
+            #expect(
+                await fixture.store.pendingServerConfigurationChanges().isEmpty)
+            let prepared = try await fixture.store.prepareRecords(
+                zoneID: fixture.zoneID)
+            #expect(!prepared.contains { $0.recordType == "ServerAccount" })
+            #expect(
+                try await fixture.accounts.account(id: original.id) == original)
+        }
+        // All store/repository/container owners above have left scope; reopen
+        // durable state with new owners as a cold-process restoration witness.
+        let fixture = try makeSyncStoreFixture(storeURL: url, suite: suite)
+        try await fixture.store.prepareStorage()
+        #expect(await fixture.store.pendingServerConfigurationChanges().isEmpty)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
+        #expect(await fixture.store.pendingServerConfigurationChanges().isEmpty)
+        let changed = try original.updatingLocalServer(
+            NormalizedServerURL("https://changed.example"))
+        let changedRecord = try makeRecord(
+            type: "ServerAccount", name: record.recordID.recordName,
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: changed),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            changedRecord, persistSystemFields: true)
+        #expect(
+            await fixture.store.pendingServerConfigurationChanges() == [
+                CloudServerConfigurationChange(
+                    current: original, incoming: changed)
+            ])
+        _ = try await fixture.store.acceptServerConfigurationChange(
+            accountID: changed.id, selected: changed, zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            changedRecord, persistSystemFields: true)
+        #expect(await fixture.store.pendingServerConfigurationChanges().isEmpty)
+        #expect(try await fixture.accounts.account(id: changed.id) == changed)
+        let newerOriginal = try makeRecord(
+            type: "ServerAccount", name: record.recordID.recordName,
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: original),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            newerOriginal, persistSystemFields: true)
+        #expect(
+            await fixture.store.pendingServerConfigurationChanges() == [
+                CloudServerConfigurationChange(
+                    current: changed, incoming: original)
+            ])
+    }
+
+    @Test
+    func testCloudConfigurationKeepsDeviceConnectionAndEndpointValidation()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let remote = try makeAccount(
+            server: "https://restore.example",
+            localServer: "https://local.example")
+        let local = try remote.updatingConnectionState(.offline)
+            .updatingLocalServer(remote.localServer, validated: false)
+        try await fixture.accounts.save(local)
+        let record = try makeRecord(
+            type: "ServerAccount", name: "account.\(remote.id.rawValue)",
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: remote),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
+        #expect(await fixture.store.pendingServerConfigurationChanges().isEmpty)
+        #expect(try await fixture.accounts.account(id: local.id) == local)
+        let metadataOnly = try ServerAccount(
+            id: remote.id,
+            server: NormalizedServerURL("https://restore.example/"),
+            localServer: remote.localServer, localServerValidated: true,
+            serverVersion: "2.37.0", authenticationMethods: [.openID, .local],
+            user: remote.user)
+        let metadataRecord = try makeRecord(
+            type: "ServerAccount", name: record.recordID.recordName,
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: metadataOnly),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            metadataRecord, persistSystemFields: true)
+        #expect(await fixture.store.pendingServerConfigurationChanges().isEmpty)
+        #expect(try await fixture.accounts.account(id: local.id) == local)
+    }
+
+    @Test
+    func testStaleExplicitCloudSelectionDoesNotAcceptAnotherCandidate()
+        async throws
+    {
+        let fixture = try makeSyncStoreFixture()
+        defer {
+            fixture.defaults.removePersistentDomain(forName: fixture.suite)
+        }
+        let incoming = try makeAccount(
+            server: "https://restore.example", localServer: nil)
+        let record = try makeRecord(
+            type: "ServerAccount", name: "account.\(incoming.id.rawValue)",
+            value: CloudServerAccountRecordPayload(
+                supersededPayloadDigest: nil, account: incoming),
+            zoneID: fixture.zoneID)
+        try await fixture.store.applyFetchedRecord(
+            record, persistSystemFields: true)
+        let stale = try incoming.updatingLocalServer(
+            NormalizedServerURL("https://stale.example"))
+        do {
+            _ = try await fixture.store.acceptServerConfigurationChange(
+                accountID: incoming.id, selected: stale, zoneID: fixture.zoneID)
+            Issue.record(
+                "A retired selection must not commit a different candidate")
+        } catch let error as PrivateCloudSyncError {
+            #expect(error == .accountSelectionChanged)
+            #expect(
+                error.diagnosticFailureCode
+                    == .privateCloudAccountSelectionChanged)
+        }
+        #expect(try await fixture.accounts.account(id: incoming.id) == nil)
+        #expect(
+            await fixture.store.pendingServerConfigurationChanges().count == 1)
+    }
+
+    @Test
+    func testCurrentAndCloudChoicesRetireAllCompetingSnapshots() async throws {
+        for useCloud in [false, true] {
+            let fixture = try makeSyncStoreFixture()
+            defer {
+                fixture.defaults.removePersistentDomain(forName: fixture.suite)
+            }
+            let current = try makeAccount(
+                server: "https://restore.example", localServer: nil)
+            try await fixture.accounts.save(current)
+            let alternatives = try [
+                "https://one.example", "https://two.example",
+            ].map {
+                try current.updatingLocalServer(NormalizedServerURL($0))
+            }
+            let snapshots = try alternatives.map {
+                try makeRecord(
+                    type: "ServerAccount",
+                    name: "account.\(current.id.rawValue)",
+                    value: CloudServerAccountRecordPayload(
+                        supersededPayloadDigest: nil, account: $0),
+                    zoneID: fixture.zoneID)
+            }
+            let payloads = try snapshots.map {
+                try #require($0[PrivateCloudSyncStore.payloadKey] as? Data)
+            }
+            for record in snapshots {
+                try await fixture.store.applyFetchedRecord(
+                    record, persistSystemFields: true)
+            }
+            #expect(
+                await fixture.store.pendingServerConfigurationChanges().count
+                    == 2)
+            let chosen: ServerAccount
+            if useCloud {
+                chosen = alternatives[1]
+                _ = try await fixture.store.acceptServerConfigurationChange(
+                    accountID: current.id, selected: chosen,
+                    zoneID: fixture.zoneID)
+            } else {
+                chosen = current
+                _ = try await fixture.store.prepareAccountRecord(
+                    current, zoneID: fixture.zoneID)
+            }
+            for payload in payloads {
+                let record = CKRecord(
+                    recordType: "ServerAccount", recordID: snapshots[0].recordID
+                )
+                record[PrivateCloudSyncStore.payloadKey] =
+                    payload as CKRecordValue
+                try await fixture.store.applyFetchedRecord(
+                    record, persistSystemFields: true)
+                #expect(
+                    await fixture.store.pendingServerConfigurationChanges()
+                        .isEmpty)
+                #expect(
+                    try await fixture.accounts.account(id: current.id) == chosen
+                )
+            }
+            let relaunched = PrivateCloudSyncStore(
+                statistics: fixture.statistics, accounts: fixture.accounts,
+                credentialStore: nil,
+                configuration: fixture.configuration,
+                defaults: PrivateCloudDefaultsReference(fixture.defaults))
+            for payload in payloads {
+                let record = CKRecord(
+                    recordType: "ServerAccount", recordID: snapshots[0].recordID
+                )
+                record[PrivateCloudSyncStore.payloadKey] =
+                    payload as CKRecordValue
+                try await relaunched.applyFetchedRecord(
+                    record, persistSystemFields: true)
+                #expect(
+                    await relaunched.pendingServerConfigurationChanges().isEmpty
+                )
+            }
+            let changed = try current.updatingLocalServer(
+                NormalizedServerURL("https://new.example"))
+            let newRecord = try makeRecord(
+                type: "ServerAccount", name: "account.\(current.id.rawValue)",
+                value: CloudServerAccountRecordPayload(
+                    supersededPayloadDigest: nil, account: changed),
+                zoneID: fixture.zoneID)
+            try await relaunched.applyFetchedRecord(
+                newRecord, persistSystemFields: true)
+            #expect(
+                await relaunched.pendingServerConfigurationChanges() == [
+                    CloudServerConfigurationChange(
+                        current: chosen, incoming: changed)
+                ])
+        }
+    }
+
+    @Test
+    func testCloudChoiceRemovalPreservesOtherAccountDecisions() async throws {
+        enum Boundary { case thisDevice, allDevices, fetched, zone }
+        for boundary in [Boundary.thisDevice, .allDevices, .fetched, .zone] {
+            let fixture = try makeSyncStoreFixture()
+            defer {
+                fixture.defaults.removePersistentDomain(forName: fixture.suite)
+            }
+            let accounts = try ["https://one.example", "https://two.example"]
+                .map {
+                    try makeAccount(server: $0, localServer: nil)
+                }
+            var records: [CKRecord] = []
+            for account in accounts {
+                let record = try makeRecord(
+                    type: "ServerAccount",
+                    name: "account.\(account.id.rawValue)",
+                    value: CloudServerAccountRecordPayload(
+                        supersededPayloadDigest: nil, account: account),
+                    zoneID: fixture.zoneID)
+                records.append(record)
+                try await fixture.store.applyFetchedRecord(
+                    record, persistSystemFields: true)
+            }
+            let choices = await fixture.store
+                .pendingServerConfigurationChanges()
+            #expect(choices.count == 2)
+            try await fixture.store.deferServerConfigurationChanges(choices)
+            switch boundary {
+            case .thisDevice:
+                try await fixture.store.ignoreAccountOnThisDevice(
+                    accounts[0].id, includeStatistics: false)
+            case .allDevices:
+                try await fixture.store.clearAccountConfigurationChoices(
+                    for: accounts[0].id)
+            case .fetched:
+                try await fixture.store.applyDeletion(
+                    recordID: records[0].recordID, recordType: "ServerAccount")
+            case .zone:
+                try await fixture.store.removeAllRecords()
+            }
+            let expected = boundary == .zone ? [] : [accounts[1]]
+            let storage = PrivateCloudPersistence(container: fixture.container)
+            let retained = try #require(
+                try storage.data(
+                    forKey: "bleat.cloudKit.deferredAccountConfigurations.v1"))
+            #expect(
+                try JSONDecoder().decode([ServerAccount].self, from: retained)
+                    == expected)
+            let pending = try #require(
+                try storage.data(
+                    forKey: "bleat.cloudKit.pendingAccountChanges.v1"))
+            #expect(
+                try JSONDecoder().decode(
+                    [CloudServerConfigurationChange].self, from: pending
+                ).map(\.id) == expected.map(\.id))
+            try storage.set("preserved", forKey: "unrelated-reset-state")
+            let context = ModelContext(fixture.container)
+            try PrivateCloudStateRecord.removeAccountConfigurationChoices(
+                in: context)
+            try context.save()
+            #expect(
+                try storage.value(forKey: "unrelated-reset-state") as? String
+                    == "preserved")
+            #expect(try storage.migrationComplete())
+            try await fixture.store.clearAccountConfigurationChoices()
+            let relaunched = PrivateCloudSyncStore(
+                statistics: fixture.statistics, accounts: fixture.accounts,
+                credentialStore: nil, configuration: fixture.configuration,
+                defaults: PrivateCloudDefaultsReference(fixture.defaults))
+            try await relaunched.prepareStorage()
+            #expect(
+                await relaunched.pendingServerConfigurationChanges().isEmpty)
+            try await relaunched.applyFetchedRecord(
+                records[1], persistSystemFields: true)
+            #expect(
+                await relaunched.pendingServerConfigurationChanges().map(\.id)
+                    == [
+                        accounts[1].id
+                    ])
+        }
+    }
+
+    @Test
     func testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()
         async throws
     {
@@ -150,6 +544,11 @@ final class PrivateCloudSyncTests {
     @Test
     func testEveryPrivateCloudErrorPreservesDiagnosticFailureCode() {
         let cases: [(PrivateCloudSyncError, DiagnosticFailureCode)] = [
+            (.accountSelectionChanged, .privateCloudAccountSelectionChanged),
+            (
+                .accountSelectionInProgress,
+                .privateCloudAccountSelectionInProgress
+            ),
             (.disabled, .privateCloudDisabled),
             (.cancelled, .privateCloudCancelled),
             (.callbackTimedOut, .privateCloudCallbackTimedOut),
@@ -830,7 +1229,10 @@ final class PrivateCloudSyncTests {
             id: remoteUpdate.id
         )
 
-        #expect(accepted == remoteUpdate)
+        #expect(
+            accepted
+                == (try remoteUpdate.updatingLocalServer(
+                    remoteUpdate.localServer, validated: false)))
     }
 
     @Test
@@ -1570,6 +1972,19 @@ final class PrivateCloudSyncTests {
         try await store.prepareStorage()
         let revision = try #require(await store.configurationConflictRevision())
         for _ in 0..<2 {
+            do {
+                try await store.deferServerConfigurationChanges([change])
+                Issue.record(
+                    "Read-only cancellation must remain visible and fail durably"
+                )
+            } catch let error as PrivateCloudSyncError {
+                guard case .storage(.stateWriteFailed) = error else {
+                    Issue.record(
+                        "Expected typed cancellation state write failure")
+                    return
+                }
+            }
+            #expect(await store.pendingServerConfigurationChanges() == [change])
             do {
                 try await store.completeConfigurationConflictResolution(
                     revision: revision)
@@ -2408,18 +2823,26 @@ final class PrivateCloudSyncTests {
         )
     }
 
-    private func makeSyncStoreFixture() throws -> SyncStoreFixture {
+    private func makeSyncStoreFixture(
+        storeURL: URL? = nil, suite: String? = nil
+    ) throws -> SyncStoreFixture {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: true
-        )
+        let modelConfiguration =
+            storeURL.map {
+                ModelConfiguration(
+                    schema: schema, url: $0, cloudKitDatabase: .none)
+            }
+            ?? ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true,
+                cloudKitDatabase: .none
+            )
         let container = try ModelContainer(
             for: schema,
             configurations: [modelConfiguration]
         )
         let accounts = AccountStore(modelContainer: container)
-        let suite = makeSuite()
+        let suite = suite ?? makeSuite()
         let configurationDefaults = try #require(UserDefaults(suiteName: suite))
         let recordDefaults = try #require(UserDefaults(suiteName: suite))
         let configuration = CloudConfigurationStore(

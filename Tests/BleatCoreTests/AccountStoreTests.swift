@@ -7,6 +7,41 @@ import Testing
 @Suite(.serialized)
 final class AccountStoreTests {
     @Test
+    func
+        testReauthenticationRetainsSelectedLocalEndpointAndReturnsSavedProfile()
+        async throws
+    {
+        let fixture = try StoreFixture()
+        let coordinator = AuthCoordinator(
+            transport: OnboardingTransport(),
+            credentialStore: OnboardingCredentialStore())
+        let discovered = try Self.discoveredServer()
+        let canonical = AccountID.canonical(
+            server: discovered.baseURL, userID: UserID(rawValue: "remote-user"))
+        let first = try await coordinator.loginAndPersistAccount(
+            accountID: canonical, discoveredServer: discovered,
+            username: "reader", password: "correct", accountStore: fixture.store
+        )
+        #expect(first.localServer == nil)
+        for address in ["https://local.example", "https://changed.example"] {
+            let local = try NormalizedServerURL(address)
+            try await fixture.store.setLocalServer(
+                local, validated: true, for: canonical)
+            try await fixture.store.setConnectionState(
+                .reauthenticationRequired, for: canonical)
+            let authenticated = try await coordinator.loginAndPersistAccount(
+                accountID: canonical, discoveredServer: discovered,
+                username: "reader", password: "correct",
+                expectedUserID: first.user.id, accountStore: fixture.store,
+                makeActive: false)
+            #expect(authenticated.localServer == local)
+            #expect(authenticated.localServerValidated)
+            #expect(authenticated.connectionState == .connected)
+            let reopened = AccountStore(modelContainer: fixture.container)
+            #expect(try await reopened.account(id: canonical) == authenticated)
+        }
+    }
+    @Test
     func testStoresMultipleUsersAndServersWithOneActiveContext()
         async throws
     {
@@ -848,7 +883,8 @@ private struct StoreFixture {
         let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
         let configuration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: true
+            isStoredInMemoryOnly: true,
+            cloudKitDatabase: .none
         )
         container = try ModelContainer(
             for: schema,

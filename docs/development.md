@@ -40,6 +40,13 @@ development team; this uses the provisioned signed host and accepts no skips.
 app tests through the `Bleat` scheme and verify the requested test identifiers
 and outcomes in an `.xcresult` bundle.
 
+The supported runner forwards `BLEAT_UNIT_TEST_HOST=1` to iOS application-unit
+hosts during enumeration and execution. Debug/UI-testing composition then uses
+an inert local model before live account services, Bonjour discovery or remote
+telemetry are initialized. Explicit UI fixture scenarios keep their own
+composition. For a direct `xcodebuild` app-unit invocation, prefix the command
+with `TEST_RUNNER_BLEAT_UNIT_TEST_HOST=1` to retain that isolation.
+
 ## Swift linting
 
 Run the same read-only, strict formatter lint task used in GitHub Actions:
@@ -617,15 +624,19 @@ external release with a specific diagnostic. Request failures retain their stage
 inspect status before retrying an uncertain mutation. Group output excludes tester
 identities. Assignment and pending beta review do not confirm tester availability.
 
-Upload a signed build that can be installed only by internal App Store Connect
-testers with:
+### Internal TestFlight releases
+
+Use this single canonical entry point to upload a build that can be installed
+only by internal App Store Connect testers:
 
 ```sh
 mise run testflight:internal
 ```
 
-The task uses the Apple account signed into Xcode and the ignored signing and
-production telemetry settings from `.envrc`. It uses the same UTC build-number
+The task runs packaging checks and `scripts/upload-testflight-internal.sh`, using
+the Apple account signed into Xcode and this worktree's ignored production signing
+and telemetry settings from `.envrc`. Fixture/test endpoints are not release
+configuration. It uses the same UTC build-number
 policy as every other archive without changing `project.yml`, validates both
 the Release archive
 and its distribution-signed IPA, requires the tracked production CloudKit
@@ -637,6 +648,36 @@ options, and upload metadata are retained below
 `.build/testflight-internal/`. A successful upload is only delivery evidence;
 wait for the matching version and build to finish App Store Connect processing
 before treating it as installable.
+
+Before execution, check the signing identities and App Store Connect
+authentication the workflow needs against authorization already given. Ask only
+for uncovered scope or a required fresh confirmation. Automatic signing can use
+Apple Development for the intermediate archive and Apple Distribution for export.
+The script enables provisioning updates for archive, export and upload; Xcode
+may create or update certificates, provisioning profiles and app IDs, or download
+missing signing assets, for the configured team.
+This behavior needs to fit the approved scope; the command itself grants no
+permission to create credentials, change access or revoke unrelated assets.
+
+If the approved scope excludes required provisioning updates or key use, stop
+before launching the task and report the exact mismatch and smallest required
+authorization. Do not replace it with ad-hoc `xcodebuild` signing commands,
+`codesign` signing/re-signing or global manual-profile overrides. This task currently
+has neither an existing-assets-only mode nor an archive-resume option: each run
+creates a fresh numbered archive. Use only documented resume paths, or separately
+implement and validate a needed mode in the canonical tooling. Retain completed
+artifacts rather than repeatedly rebuilding to probe a settled signing blocker.
+
+A prior IPA's distribution signature proves how that artifact was signed; it does
+not prove a matching private key is currently available locally. Xcode-managed
+or cloud signing may be involved, and an Xcode-managed profile must not be assumed
+usable under a manual override. Report those states separately. Recheck settled
+signing facts only after relevant new evidence. Respect required action-time
+confirmation; otherwise do not re-request approval already valid for the same
+operation. If upload delivery is uncertain, inspect its
+status before retrying; never upload again merely because processing/status
+verification needs authentication. Report the exact version/build/source and
+distinguish confirmed upload, processing, and internal tester availability.
 
 ## Release screenshots
 

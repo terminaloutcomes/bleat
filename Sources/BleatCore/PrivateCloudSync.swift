@@ -20,6 +20,8 @@ public enum PrivateCloudSyncOperation: String, Codable, Equatable, Sendable {
     case uploadChanges = "upload_changes"
     case pushServerConfiguration = "push_server_configuration"
     case resolveServerConfiguration = "resolve_server_configuration"
+    case deferServerConfiguration = "defer_server_configuration"
+    case resetLocalAccountChoices = "reset_local_account_choices"
     case enable
     case disable
     case cancel
@@ -249,6 +251,8 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
     case callbackTimedOut
     case stopping
     case invalidRecord
+    case accountSelectionChanged
+    case accountSelectionInProgress
     case persistenceFailed
     case storage(PrivateCloudStorageFailure)
     case nonPrivateDatabase
@@ -272,7 +276,8 @@ public enum PrivateCloudSyncError: Error, Equatable, Sendable, Codable {
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
-        case .disabled, .stopping, .invalidRecord, .nonPrivateDatabase,
+        case .disabled, .stopping, .invalidRecord, .accountSelectionChanged,
+            .accountSelectionInProgress, .nonPrivateDatabase,
             .unexpected:
             false
         }
@@ -818,6 +823,9 @@ actor PrivateCloudSyncStore {
         "bleat.cloudKit.pendingConfigurationConflict.v1"
     private let pendingAccountChangesKey =
         "bleat.cloudKit.pendingAccountChanges.v1"
+    private let deferredAccountConfigurationsKey =
+        "bleat.cloudKit.deferredAccountConfigurations.v1"
+    private var deferredAccountConfigurations: [ServerAccount] = []
     private let legacyAccountIdentityMappingsKey =
         "bleat.cloudKit.legacyAccountIdentityMappings.v1"
     private let pendingLegacyRecordDeletionsKey =
@@ -974,6 +982,14 @@ actor PrivateCloudSyncStore {
                             throw PrivateCloudSyncError.storage(
                                 .invalidLegacyState)
                         }
+                    case deferredAccountConfigurationsKey:
+                        guard let data = value as? Data,
+                            (try? JSONDecoder().decode(
+                                [ServerAccount].self, from: data)) != nil
+                        else {
+                            throw PrivateCloudSyncError.storage(
+                                .invalidLegacyState)
+                        }
                     case legacyAccountIdentityMappingsKey:
                         guard value is [String: String] else {
                             throw PrivateCloudSyncError.storage(
@@ -1056,6 +1072,14 @@ actor PrivateCloudSyncStore {
                     .mapValues {
                         $0.sorted { $0.structuralKey < $1.structuralKey }
                     }
+            } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
+        }
+        if let data = try defaults.data(
+            forKey: deferredAccountConfigurationsKey)
+        {
+            do {
+                deferredAccountConfigurations = try JSONDecoder().decode(
+                    [ServerAccount].self, from: data)
             } catch { throw PrivateCloudSyncError.storage(.invalidStoredState) }
         }
         storageReady = true
@@ -1709,7 +1733,8 @@ actor PrivateCloudSyncStore {
 
     func prepareAccountRecord(
         _ account: ServerAccount,
-        zoneID: CKRecordZone.ID
+        zoneID: CKRecordZone.ID,
+        resolving candidates: [CloudServerConfigurationChange] = []
     ) throws -> CKRecord {
         let record = try accountRecord(
             account,
@@ -1718,22 +1743,103 @@ actor PrivateCloudSyncStore {
         )
         var updated = pendingAccountChanges
         updated[account.id] = nil
-        try persistPendingAccountChanges(updated)
+        var deferred = deferredAccountConfigurations.filter {
+            !$0.hasSameCloudConfiguration(as: account)
+        }
+        for change in candidates + (pendingAccountChanges[account.id] ?? [])
+        where !change.incoming.hasSameCloudConfiguration(as: account)
+            && !deferred.contains(where: {
+                $0.hasSameCloudConfiguration(as: change.incoming)
+            })
+        {
+            deferred.append(change.incoming)
+        }
+        try persistAccountChoices(pending: updated, deferred: deferred)
         records[record.recordID] = record
         synchronizedRecords.remove(record.recordID)
         dirtyRecords.insert(record.recordID)
         return record
     }
 
+    private func persistAccountChoices(
+        pending updated: [AccountID: [CloudServerConfigurationChange]],
+        deferred: [ServerAccount]
+    ) throws {
+        let pendingData: Data
+        let deferredData: Data
+        do {
+            pendingData = try JSONEncoder().encode(
+                updated.values.flatMap { $0 }.sorted {
+                    $0.structuralKey < $1.structuralKey
+                })
+            deferredData = try JSONEncoder().encode(deferred)
+        } catch {
+            throw PrivateCloudSyncError.storage(
+                .stateWriteFailed(PrivateCloudSystemError(error)))
+        }
+        try defaults.setValues([
+            (pendingAccountChangesKey, pendingData),
+            (deferredAccountConfigurationsKey, deferredData),
+        ])
+        pendingAccountChanges = updated
+        deferredAccountConfigurations = deferred
+    }
+
+    func clearAccountConfigurationChoices() throws {
+        try persistAccountChoices(pending: [:], deferred: [])
+        legacyDefaults.removeObject(forKey: pendingAccountChangesKey)
+        legacyDefaults.removeObject(forKey: deferredAccountConfigurationsKey)
+    }
+
+    func clearAccountConfigurationChoices(for accountID: AccountID) throws {
+        var pending = pendingAccountChanges
+        pending[accountID] = nil
+        try persistAccountChoices(
+            pending: pending,
+            deferred: deferredAccountConfigurations.filter {
+                $0.id != accountID
+            })
+    }
+
     func pendingServerConfigurationChanges()
         -> [CloudServerConfigurationChange]
     {
-        pendingAccountChanges.values.flatMap { $0 }.sorted {
+        pendingAccountChanges.values.flatMap { $0 }.filter { change in
+            !deferredAccountConfigurations.contains {
+                $0.hasSameCloudConfiguration(as: change.incoming)
+            }
+        }.sorted {
             if $0.incoming.id != $1.incoming.id {
                 return $0.incoming.id.rawValue < $1.incoming.id.rawValue
             }
             return $0.structuralKey < $1.structuralKey
         }
+    }
+
+    func deferServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws {
+        try await prepareStorage()
+        var updated = deferredAccountConfigurations
+        for change in changes
+        where !updated.contains(where: {
+            $0.hasSameCloudConfiguration(as: change.incoming)
+        }) {
+            updated.append(change.incoming)
+        }
+        try persistDeferredAccountConfigurations(updated)
+    }
+
+    private func persistDeferredAccountConfigurations(
+        _ updated: [ServerAccount]
+    ) throws {
+        let data: Data
+        do { data = try JSONEncoder().encode(updated) } catch {
+            throw PrivateCloudSyncError.storage(
+                .stateWriteFailed(PrivateCloudSystemError(error)))
+        }
+        try defaults.set(data, forKey: deferredAccountConfigurationsKey)
+        deferredAccountConfigurations = updated
     }
 
     private func appendPendingAccountChange(
@@ -1742,7 +1848,7 @@ actor PrivateCloudSyncStore {
         var candidates = pendingAccountChanges[change.id] ?? []
         guard
             !candidates.contains(where: {
-                $0.incoming == change.incoming
+                $0.incoming.hasSameCloudConfiguration(as: change.incoming)
             })
         else { return }
         candidates.append(change)
@@ -1834,24 +1940,23 @@ actor PrivateCloudSyncStore {
         selected: ServerAccount? = nil,
         zoneID: CKRecordZone.ID
     ) async throws -> CKRecord? {
-        guard let candidates = pendingAccountChanges[accountID],
-            let change = selected.flatMap({ selection in
-                candidates.first { $0.incoming == selection }
-            }) ?? firstPendingAccountChange(accountID: accountID)
+        let candidates = pendingAccountChanges[accountID] ?? []
+        guard
+            let change =
+                (selected == nil
+                    ? firstPendingAccountChange(accountID: accountID)
+                    : candidates.first { $0.incoming == selected })
         else {
+            if selected != nil {
+                throw PrivateCloudSyncError.accountSelectionChanged
+            }
             return nil
         }
         var updated = pendingAccountChanges
         updated[accountID] = nil
         try persistPendingAccountChanges(updated)
         do {
-            if change.current == nil {
-                try await accounts.savePendingRestoredAccount(
-                    change.incoming
-                )
-            } else {
-                try await accounts.save(change.incoming)
-            }
+            try await accounts.saveSelectedCloudConfiguration(change.incoming)
         } catch {
             var restored = pendingAccountChanges
             restored[accountID] = candidates
@@ -1859,7 +1964,8 @@ actor PrivateCloudSyncStore {
             throw PrivateCloudSyncError.persistenceFailed
         }
         do {
-            return try prepareAccountRecord(change.incoming, zoneID: zoneID)
+            return try prepareAccountRecord(
+                change.incoming, zoneID: zoneID, resolving: candidates)
         } catch {
             throw PrivateCloudSyncFailure(
                 operation: .resolveServerConfiguration,
@@ -1919,6 +2025,7 @@ actor PrivateCloudSyncStore {
         pendingConfigurationConflict = nil
         pendingConfigurationConflictRevision = nil
         pendingConfigurationConflictIsInvalid = false
+        try clearAccountConfigurationChoices()
         try await prepareStorage()
         records.removeAll()
         dirtyRecords.removeAll()
@@ -1936,6 +2043,7 @@ actor PrivateCloudSyncStore {
         var ignored = try ignoredAccountIDs()
         ignored.insert(accountID.rawValue)
         try defaults.set(Array(ignored).sorted(), forKey: ignoredAccountsKey)
+        try clearAccountConfigurationChoices(for: accountID)
         if includeStatistics {
             var ignoredStatistics = try ignoredStatisticsAccountIDs()
             ignoredStatistics.insert(accountID.rawValue)
@@ -2079,7 +2187,7 @@ actor PrivateCloudSyncStore {
             let previousPayload = try? decodeAccountPayload(previousData),
             previousPayload.schemaVersion
                 == CloudServerAccountRecordPayload.currentSchemaVersion,
-            previousPayload.account == account,
+            previousPayload.account.hasSameCloudConfiguration(as: account),
             previousPayload.legacyAccountIDs == legacyAccountIDs
         {
             return record
@@ -2226,7 +2334,14 @@ actor PrivateCloudSyncStore {
                 case "ServerAccount":
                     let value = try decodeAccountPayload(data).account
                     if !ignoredAccounts.contains(value.id.rawValue) {
-                        accountsToSave.append(value)
+                        // Matching descriptors carry no local update. Even a
+                        // save of the same profile could activate a pending
+                        // restored account, so leave its local lifecycle alone.
+                        if try await accounts.account(id: value.id).map({
+                            $0.hasSameCloudConfiguration(as: value)
+                        }) != true {
+                            accountsToSave.append(value)
+                        }
                     }
                 case "Configuration":
                     configurations.append(
@@ -2529,6 +2644,21 @@ actor PrivateCloudSyncStore {
                     return .applyRemote
                 }
                 let current = try await accounts.account(id: incoming.id)
+                // A completed choice can retire several competing snapshots.
+                // Keep the chosen payload when one of those exact semantic
+                // alternatives is delivered again. A cancellation alone has
+                // no chosen local payload and keeps its pending upload pause.
+                if let current,
+                    deferredAccountConfigurations.contains(where: {
+                        $0.hasSameCloudConfiguration(as: incoming)
+                    }),
+                    let previousData = previousRecord?[Self.payloadKey]
+                        as? Data,
+                    let previous = try? decodeAccountPayload(previousData),
+                    previous.account.hasSameCloudConfiguration(as: current)
+                {
+                    return .preserveLocal(previousData)
+                }
                 if let previousRecord,
                     let previousData =
                         previousRecord[Self.payloadKey] as? Data,
@@ -2539,7 +2669,10 @@ actor PrivateCloudSyncStore {
                     previousPayload.schemaVersion
                         == CloudServerAccountRecordPayload
                         .currentSchemaVersion,
-                    previousPayload.account == current,
+                    current.map({
+                        previousPayload.account.hasSameCloudConfiguration(
+                            as: $0)
+                    }) == true,
                     previousPayload.supersededGenerationID
                         == incomingPayload.generationID
                         || previousPayload.supersededPayloadDigest
@@ -2547,7 +2680,10 @@ actor PrivateCloudSyncStore {
                 {
                     return .preserveLocal(previousData)
                 }
-                guard current != incoming else {
+                guard
+                    current.map({ $0.hasSameCloudConfiguration(as: incoming) })
+                        != true
+                else {
                     return .applyRemote
                 }
                 return .requestAccountConfirmation(
@@ -2615,7 +2751,7 @@ actor PrivateCloudSyncStore {
         Data(SHA256.hash(data: data))
     }
 
-    private func applyDeletion(
+    func applyDeletion(
         recordID: CKRecord.ID,
         recordType: CKRecord.RecordType
     ) async throws {
@@ -2666,10 +2802,13 @@ actor PrivateCloudSyncStore {
                     with: ""
                 )
                 let accountID = AccountID(rawValue: rawID)
+                try clearAccountConfigurationChoices(for: accountID)
                 try await credentialStore?.deleteCredentials(for: accountID)
-                _ = try await accounts.removeAccount(
-                    id: accountID
-                )
+                do throws(AccountStoreError) {
+                    _ = try await accounts.removeAccount(id: accountID)
+                } catch .accountNotFound {
+                    // A cloud-only pending account has no local profile to remove.
+                } catch { throw PrivateCloudSyncError.persistenceFailed }
             default:
                 return
             }
@@ -3237,12 +3376,20 @@ public actor PrivateCloudSyncCoordinator:
                     .saveRecord(record.recordID)
                 ]
             )
-            try await sendRecordChanges(
-                engine: engine,
-                CKSyncEngine.SendChangesOptions(
-                    scope: .recordIDs([record.recordID])
+            do {
+                try await sendRecordChanges(
+                    engine: engine,
+                    CKSyncEngine.SendChangesOptions(
+                        scope: .recordIDs([record.recordID])
+                    )
                 )
-            )
+            } catch {
+                let failure = Self.mappedFailure(
+                    operation: .pushServerConfiguration, error: error)
+                throw PrivateCloudSyncFailure(
+                    operation: failure.operation, cause: failure.cause,
+                    selectionCommitted: true)
+            }
         }
     }
 
@@ -3250,6 +3397,22 @@ public actor PrivateCloudSyncCoordinator:
         -> [CloudServerConfigurationChange]
     {
         await store.pendingServerConfigurationChanges()
+    }
+
+    public func deferServerConfigurationChanges(
+        _ changes: [CloudServerConfigurationChange]
+    ) async throws(PrivateCloudSyncFailure) {
+        try await perform(.deferServerConfiguration) {
+            try await store.deferServerConfigurationChanges(changes)
+        }
+    }
+
+    public func clearLocalAccountConfigurationChoices()
+        async throws(PrivateCloudSyncFailure)
+    {
+        try await perform(.resetLocalAccountChoices) {
+            try await store.clearAccountConfigurationChoices()
+        }
     }
 
     public func pendingConfigurationConflict() async
@@ -3417,6 +3580,7 @@ public actor PrivateCloudSyncCoordinator:
                     scope: .recordIDs(recordIDs)
                 )
             )
+            try await store.clearAccountConfigurationChoices(for: accountID)
         }
     }
 
