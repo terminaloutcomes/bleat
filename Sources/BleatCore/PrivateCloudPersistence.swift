@@ -481,12 +481,26 @@ struct PrivateCloudPersistence: Sendable {
 
 public enum CloudStorageUpgradeNotice {
     public static let introducedInVersion = "2026.10.14"
+    public static let canonicalSegmentsIntroducedInVersion = "2026.10.27"
     private static let detectedKey = "bleat.cloudStorageUpgrade.v2.detected"
     // The revised notice requires explicit device-update confirmation. The old
     // OK acknowledgement must not suppress it; retain legacy detection so an
     // already migrated installation can present it without another migration.
     private static let acknowledgedKey =
-        "bleat.cloudStorageUpgrade.v3.acknowledged"
+        "bleat.cloudStorageUpgrade.v4.canonicalRetirementConfirmed"
+    private static let canonicalSeenKey =
+        "bleat.cloudStorageUpgrade.canonicalSegments.v1.seen"
+    public static func hasConfirmedRetirement(in defaults: UserDefaults) -> Bool
+    { defaults.bool(forKey: acknowledgedKey) }
+    public static func supportsCanonicalHistory(in defaults: UserDefaults)
+        -> Bool
+    {
+        hasConfirmedRetirement(in: defaults)
+            || defaults.bool(forKey: canonicalSeenKey)
+    }
+    static func detectCanonicalHistory(in defaults: UserDefaults) {
+        defaults.set(true, forKey: canonicalSeenKey)
+    }
     public static func detectLegacy(in defaults: UserDefaults) {
         guard !defaults.bool(forKey: detectedKey) else { return }
         defaults.set(true, forKey: detectedKey)
@@ -496,6 +510,11 @@ public enum CloudStorageUpgradeNotice {
             && !defaults.bool(forKey: acknowledgedKey)
     }
     public static func acknowledge(in defaults: UserDefaults) {
+        // Preserve the shipped reminder API until the new, explicit conversion
+        // UI invokes confirmCanonicalRetirement. A reminder is not consent.
+        defaults.set(true, forKey: "bleat.cloudStorageUpgrade.v3.acknowledged")
+    }
+    public static func confirmCanonicalRetirement(in defaults: UserDefaults) {
         defaults.set(true, forKey: acknowledgedKey)
     }
 }

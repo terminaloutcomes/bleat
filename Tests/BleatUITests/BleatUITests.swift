@@ -1754,7 +1754,7 @@ final class BleatUITests: XCTestCase {
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertFalse(cancel.exists)
         let response = notice.buttons[
-            selectCurrent ? "All my devices are updated" : "Later"]
+            selectCurrent ? "All devices updated — convert history" : "Later"]
         XCTAssertTrue(response.isEnabled)
         XCTAssertTrue(response.isHittable)
         response.tap()
@@ -1845,7 +1845,8 @@ final class BleatUITests: XCTestCase {
             "cloudStorageUpgradeNotice"
         ].firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
-        XCTAssertTrue(notice.buttons["All my devices are updated"].exists)
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].exists)
         XCTAssertTrue(notice.buttons["Later"].isEnabled)
         XCTAssertTrue(notice.buttons["Later"].isHittable)
         notice.buttons["Later"].tap()
@@ -1872,9 +1873,11 @@ final class BleatUITests: XCTestCase {
         XCUIDevice.shared.press(.home)
         app.activate()
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
-        XCTAssertTrue(notice.buttons["All my devices are updated"].isEnabled)
-        XCTAssertTrue(notice.buttons["All my devices are updated"].isHittable)
-        notice.buttons["All my devices are updated"].tap()
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].isEnabled)
+        XCTAssertTrue(
+            notice.buttons["All devices updated — convert history"].isHittable)
+        notice.buttons["All devices updated — convert history"].tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
         app.activate()
@@ -2785,6 +2788,10 @@ final class BleatUITests: XCTestCase {
         )
         let reset = app.buttons["settings.resetLocalData"]
         XCTAssertTrue(reset.waitForExistence(timeout: 3))
+        let diagnostics = app.buttons["settings.diagnostics"]
+        XCTAssertTrue(diagnostics.exists)
+        XCTAssertTrue(diagnostics.isHittable)
+        XCTAssertGreaterThan(reset.frame.minY, diagnostics.frame.maxY)
         reset.tap()
 
         let confirm = app.buttons[
@@ -2915,18 +2922,97 @@ final class BleatUITests: XCTestCase {
     }
 
     @MainActor
+    func testICloudRestoreRequiresOtherDevicePauseAndConfirmation() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: [
+                "--ui-testing-isolated-restore-fixture=\(UUID().uuidString)"
+            ])
+        tabButton("Settings", in: app).tap()
+        let iCloud = app.buttons["settings.icloud.open"]
+        XCTAssertTrue(iCloud.waitForExistence(timeout: 5))
+        XCTAssertTrue(iCloud.isHittable)
+        XCTAssertFalse(app.switches["settings.icloud.enabled"].exists)
+        XCTAssertFalse(app.buttons["settings.icloud.exportBackup"].exists)
+        XCTAssertFalse(app.buttons["settings.icloud.previewRestore"].exists)
+        XCTAssertFalse(app.buttons["settings.icloud.clear"].exists)
+        iCloud.tap()
+        XCTAssertTrue(app.navigationBars["iCloud"].waitForExistence(timeout: 5))
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.previewRestore",
+            direction: .up)
+        XCTAssertTrue(app.buttons["settings.icloud.exportBackup"].exists)
+        app.buttons["settings.icloud.previewRestore"].tap()
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.restoreOtherDevicesPaused",
+            direction: .up
+        )
+        let paused = app.switches["settings.icloud.restoreOtherDevicesPaused"]
+        XCTAssertTrue(paused.exists)
+        XCTAssertEqual(paused.value as? String, "0")
+        paused.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        XCTAssertEqual(paused.value as? String, "1")
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.restoreReview",
+            direction: .up)
+        let review = app.buttons["settings.icloud.restoreReview"]
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+        XCTAssertTrue(review.isEnabled)
+        review.tap()
+        let confirm = app.buttons["settings.icloud.restoreConfirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        let cancel = app.buttons["settings.icloud.restoreCancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        XCTAssertFalse(
+            app.staticTexts["settings.icloud.restoreRestartRequired"].exists)
+        review.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(
+            app.staticTexts["settings.icloud.restoreRestartRequired"]
+                .waitForExistence(timeout: 20))
+        Self.scrollUntilHittable(
+            app: app, identifier: "settings.icloud.enabled", direction: .down)
+        XCTAssertEqual(
+            app.switches["settings.icloud.enabled"].value as? String, "0")
+
+    }
+
+    @MainActor
     func testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync() {
         let app = launch(scenario: "--ui-testing-signed-in")
         tabButton("Settings", in: app).tap()
+        let iCloud = app.buttons["settings.icloud.open"]
+        XCTAssertTrue(iCloud.waitForExistence(timeout: 5))
+        XCTAssertTrue(iCloud.isHittable)
+        iCloud.tap()
+        XCTAssertTrue(app.navigationBars["iCloud"].waitForExistence(timeout: 5))
+        let sync = app.switches["settings.icloud.enabled"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 5))
+        XCTAssertEqual(sync.value as? String, "1")
+        XCTAssertTrue(sync.isHittable)
+        sync.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        let turnOff = app.sheets["Turn Off iCloud Sync?"]
+        let keepData = turnOff.buttons["Keep Data in iCloud"]
+        XCTAssertTrue(keepData.waitForExistence(timeout: 5))
+        XCTAssertTrue(turnOff.buttons["Delete Data from iCloud"].exists)
+        XCTAssertTrue(keepData.isHittable)
+        keepData.tap()
+        XCTAssertTrue(turnOff.waitForNonExistence(timeout: 5))
+        let syncOff = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "0"),
+            object: sync)
+        XCTAssertEqual(XCTWaiter.wait(for: [syncOff], timeout: 5), .completed)
         Self.scrollUntilHittable(
             app: app, identifier: "settings.icloud.clear", direction: .up
         )
         let clear = app.buttons["settings.icloud.clear"]
-        let diagnostics = app.buttons["settings.diagnostics"]
-        XCTAssertTrue(diagnostics.exists)
-        XCTAssertGreaterThan(clear.frame.minY, diagnostics.frame.maxY)
+        XCTAssertEqual(clear.label, "Delete Bleat Data from iCloud")
         clear.tap()
-        let confirm = app.alerts["Clear My CloudKit Data?"].buttons[
+        let confirm = app.alerts["Delete Bleat Data from iCloud?"].buttons[
             "settings.icloud.clear.confirm"
         ].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3))
@@ -2942,6 +3028,39 @@ final class BleatUITests: XCTestCase {
         tabButton("Library", in: app).tap()
         XCTAssertTrue(
             app.staticTexts["The Test Audiobook"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testRestoredICloudSettingsAllowsKeepingDataButNotDeleting() {
+        let app = launch(
+            scenario: "--ui-testing-signed-in",
+            additionalArguments: ["--ui-testing-restored-generation"])
+        tabButton("Settings", in: app).tap()
+        let iCloud = app.buttons["settings.icloud.open"]
+        XCTAssertTrue(iCloud.waitForExistence(timeout: 5))
+        XCTAssertTrue(iCloud.isHittable)
+        iCloud.tap()
+        let sync = app.switches["settings.icloud.enabled"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 5))
+        XCTAssertEqual(sync.value as? String, "1")
+        XCTAssertTrue(sync.isHittable)
+        sync.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            .tap()
+        let sheet = app.sheets["Turn Off iCloud Sync?"]
+        let keepData = sheet.buttons["Keep Data in iCloud"]
+        XCTAssertTrue(keepData.waitForExistence(timeout: 5))
+        XCTAssertFalse(sheet.buttons["Delete Data from iCloud"].exists)
+        XCTAssertTrue(keepData.isHittable)
+        keepData.tap()
+        let syncOff = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "0"), object: sync)
+        XCTAssertEqual(XCTWaiter.wait(for: [syncOff], timeout: 5), .completed)
+        let explanation =
+            "Bleat can’t delete restored iCloud data from this screen."
+        Self.scrollUntilHittable(
+            app: app, identifier: explanation, direction: .up)
+        XCTAssertTrue(app.staticTexts[explanation].exists)
+        XCTAssertFalse(app.buttons["settings.icloud.clear"].exists)
     }
 
     @MainActor

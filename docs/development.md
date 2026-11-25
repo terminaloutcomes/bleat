@@ -903,3 +903,153 @@ preserved the extracted history and imported metadata; see the traceability row
 for evidence. Mixed-version physical testing with Bleat 0.1.3 verified explicitly matched
 records in both directions and preserved original history; see traceability.
 Host and simulator tests alone do not prove that journey.
+
+### iCloud Data backups (format 2)
+
+See the [restore generation and selector contract](design/cloud-sync-storage.md#icloud-restore-generations-and-the-active-selector)
+for the exact CloudKit layout, fallback rules, and operation checklist.
+
+In **Settings → iCloud**, under **iCloud Data**, choose **Export iCloud Data…**.
+Review the privacy warning, then choose where to save the file. Choose a device-local destination
+if you do not want a file provider to synchronize it. No capture runs
+automatically.
+
+Format 2 backs up the record data in Bleat's selected private CloudKit data
+generation, not the device's cache. Existing accounts start in `BleatPrivateData`. It verifies the zone inventory, fetches
+all keys and all change pages from a fresh cursor, folds deletions, and keeps
+the exact application bytes and logical name for each supported record:
+
+- `ServerAccount`: non-secret server/account descriptors, including known
+  legacy/current account formats and account aliases.
+- `Configuration`: CloudKit-synced playback and download preferences.
+- `ListeningSlice`: legacy observations, canonical segments, boundaries,
+  lineage and reset records.
+- `CompletionMilestone`: completion IDs, timestamps and evidence.
+- `RemoteListeningSession`: remote listening-session IDs and data.
+
+Neither checked-in CloudKit schema contains an app asset field. An unexpected
+custom zone, record type, extra field, encrypted field, asset, or share/parent
+reference prevents export rather than being silently omitted. A missing zone
+is not an empty verified backup. Per-record/page failures and observed iCloud
+account changes also fail capture. The archive excludes system `Users` records
+in the default zone, the restore control selector, CloudKit change tags,
+system fields and sync tokens. It
+does not back up passwords, tokens or native login items held in Keychain
+(including iCloud Keychain), downloads, bookmarks or other device-local data
+not written to this zone, or anything stored only in Audiobookshelf. Archives
+that contain unsupported payloads or account URLs with credentials, query
+strings or fragments are refused. The format is unencrypted and still
+contains private server details and listening history. Keep it in a private
+location and do not attach it to public support issues.
+
+The JSON contains `version`, `zone`, `complete`, optionally the capture app's
+`sourceBuild`, a pseudonymous `accountBinding`, an unkeyed `contentDigest`, and sorted `records` with
+`kind`, `name` and the exact base64 payload. It is limited to 120,000 records,
+128 MiB of total payload and 224 MiB of archive JSON. The digest detects
+accidental edits or truncation; it does not authenticate the file. Format 1 was
+listening-slices only and is not a full backup or a restore source.
+
+**Restore from Export…** validates the whole file and compares it with a
+fresh capture for the same Apple Account. It previews records to add,
+replace, or remove and does not write until you confirm. Turn off Bleat iCloud
+sync on all other devices first; Bleat cannot verify that remotely. Then
+confirm **Disable Sync and Restore**. Bleat disables and drains this
+device's sync without moving Keychain items. Sync stays off after the
+attempt, including when an announced replacement fails. Do not re-enable
+sync on old builds.
+
+Bleat stages and independently verifies the five record types in a fresh
+private data zone and materializes the backup in a new local app store before
+changing a small, account-scoped selector conditionally. Older data zones and
+local stores are retained; the operation does not delete account records from
+an old zone, send tombstones to old clients, or delete saved credentials.
+Close and reopen Bleat to use the new local store. Old downloads and other
+local-only data are not merged into the restored app and may not appear, but
+their prior storage is retained. Restored server profiles may require a
+fresh sign-in. Retain the original backup and consider exporting the current
+state separately before replacing it.
+
+If publication cannot be verified, use **Check Restore Status** instead of
+retrying. It compares the active generation's full record digest and account
+against the pending receipt before activating your new local store. Definitive
+pre-publication failures allow a fresh review; an ambiguous nonmatching
+outcome deliberately leaves sync blocked rather than retrying or clearing the
+old state. A separate upgraded device can use **Check for a Restore from
+Another Device** and explicitly load the selected data into its own fresh
+store before re-enabling sync. Devices on older builds do not see the control
+selector and must stay paused.
+
+This is a generation change, not a cross-zone atomic overwrite. A last-second
+write on another device to the previous zone can be left behind despite the
+pre-publication drift check. Large data is sent in bounded batches only to
+the unselected candidate; the prior zone stays selected if staging fails. The
+previous zones are not automatically deleted. **Delete Bleat Data from iCloud**
+is not available on a restored generation until it can clear the selector and its
+data safely. The production path requires a CloudKit-capable build; fixture
+validation is synthetic, not validation on a real Apple Account.
+
+### Offline archive tools (macOS)
+
+```sh
+swift run bleat-cloud-history backup-preview /path/to/backup.json
+swift run bleat-cloud-history backup-rehearse /path/to/backup.json /path/to/current-backup.json
+```
+
+The tool prints only redacted version information and counts. Full-backup
+rehearsal applies inserts, edits, and removals in disposable memory and
+compares a re-export byte-for-byte. It is not a CloudKit or local-app-store
+restore.
+
+To exercise listening-history migration itself, the format-1 synthetic fixture
+`Tests/BleatCoreTests/Fixtures/cloud-history-legacy-v1.json` remains available:
+
+```sh
+swift run bleat-cloud-history preview /path/to/history-archive.json
+swift run bleat-cloud-history private-scope-file /path/to/history-archive.json /private/new-scope.json
+# Review the private list against the account IDs you expect to replay.
+swift run bleat-cloud-history replay /path/to/history-archive.json /private/reviewed-scope.json
+```
+
+The scope file helper creates a new mode-0600 file and refuses to overwrite
+a file. Replay uses the real ingestion and canonical compaction code in a
+disposable SwiftData store with CloudKit disabled. It neither simulates
+server acknowledgement for source retirement nor recovers old SQLite metadata.
+
+### Synthetic generation tests
+
+The offline generation coordinator exercises staged replacement, interrupted
+batches, races, and lost/unknown publication responses without a cloud
+connection. Its mock can fence ordinary writes; that stronger capability is
+not promised by the CloudKit transport. Separately, the journal and
+materializer tests exercise restart, stable payload digestion, and the real
+local app record-ingestion path in disposable SwiftData stores. The simulator
+test uses a synthetic restore service and never joins an iCloud account.
+
+### Signed development CloudKit verification matrix (#492)
+
+The 101 host tests at `7b944a1` cover format-2 payload validation and
+round-tripping, model-only interrupted staging and selector outcomes, and
+durable local confirmation against the expected account and full digest.
+The iOS simulator test covers pause acknowledgement, cancel, confirmation,
+and sync-off through the synthetic app service. None exercise Apple's
+pagination or per-record results. In the shipped adapter the fetch and
+batch-save loops call concrete `CKDatabase` APIs; the offline coordinator's
+mock transport is not this adapter.
+
+Run the following only in a provisioned, signed **development** CloudKit
+environment using a disposable Apple Account and synthetic data. No
+production container data or personal account is a test target. Verify the
+entitlement/environment and both simulator accounts before seeding. If the
+test setup cannot inject a specific per-record/provider error into the real
+adapter path, record that row as **not run**. Do not fill an account's quota
+or treat an arbitrary network error or mock coordinator result as equivalent.
+
+| Scenario | Setup and action | Verify |
+| --- | --- | --- |
+| Complete export includes cloud-only data | Seed over 100 synthetic app records in the selected private zone, including a uniquely identified supported record known to be absent from simulator A's local store. Leave sync off on A, then export in Settings. | Compare the version-2 archive against a separate full read of the selected development zone. The known cloud-only record is present with exact payload bytes; all pages and per-type counts match. |
+| Page-two per-record failure | With the same multi-page fixture, return a successful first page and a second page containing an individual record failure in the otherwise successful result map. | The Settings export reports failure and never offers a complete archive or Save sheet. Earlier successful pages do not become a partial artifact labeled complete. The source remains unchanged. |
+| Staging quota failure after batch one | Start with a readable previous generation and reviewed backup large enough for at least two staging saves. Accept the first save to the fresh candidate, then inject provider `quotaExceeded` on the second (not `limitExceeded`). | Read active selector and previous payload independently: both are unchanged, no selector publication or local pending activation occurred, and sync on the restoring device stays off. An unselected candidate may remain. After the fault is removed, make a fresh review and explicitly retry; a different candidate is staged, verified and selected. There is no automatic split/retry of the quota-failed batch or deletion of the old generation. |
+| Selected zone and two-device adoption | On the same disposable Apple Account, start upgraded simulators A and B on the original data zone. Export a baseline with a known synced preference. Change that preference normally, sync the new value on both devices, and verify the cloud record's logical name is unchanged. Turn off sync on B and restore the baseline archive on A; keep both cloud copies intact. | Verify the selector points to the restored zone. A's export contains the restored value, not the original. B cannot enable sync against the stale store; it can explicitly load the restore, reopen, and see the restored value. After enabling sync, edit that preference on B and independently read both zones: only the selected zone changed. |
+| Missing, malformed, or unreadable selector | Separately exercise a verified absent selector on a never-restored account, a malformed or unreadable selector, and an absent selector on a device that already adopted a restored zone. Use isolated development fixtures and do not remove a real account's selector. | Only confirmed absence on a never-restored account permits ordinary operation against the original zone. Unreadable or invalid data never authorizes fallback. A device with a loaded restored store must not silently repoint it to the original zone or write to either zone while the selection disagrees. |
+| Account changes between review and publication | Change the signed-in disposable Apple Account after preview and before the next provider write, using a controlled session-transition fixture if available. | The prior account's review cannot publish into either account after the change is detected. The new account never sees another account's data or selector as its own. |
+| Publication acknowledgement lost | Interrupt after the service submits the conditional selector save but before the app receives its result. Reopen with the pending local receipt and inspect the selector independently. | Sync remains off. **Check Restore Status** activates only a readback matching the generation, account and backup digest. If the outcome remains ambiguous, do not republish or abandon the pending receipt; retain prior data. |

@@ -1795,6 +1795,20 @@ Store the completion time, duration snapshot, title/author snapshot, and evidenc
 
 ### 12.6 Retention, reset, and portability
 
+The iCloud Data backup is distinct from statistics portability. Format 2
+captures the five supported record types in Bleat's private CloudKit zone,
+including non-secret account data, settings, completions, remote sessions and
+legacy/canonical listening records. Export is explicit and user-owned; it does
+not include Keychain credentials or device-local files. Restore preview checks
+the same iCloud account and reports the proposed changes without writing data.
+A confirmed restore pauses and drains this device's sync, stages a verified
+replacement generation, conditionally selects it, and loads a fresh local
+store on restart. The previous cloud and local stores are retained, and old
+queues cannot be uploaded into the selected generation. Other devices must
+be paused by the user before restore; older builds cannot follow the new
+selection. Format 1 remains a history-only migration fixture.
+See [the archive format and offline workflow](development.md#icloud-data-backups-format-2).
+
 Listening history contains personal behavioral data. It receives the same file protection as other structured app data and is never written to logs or analytics.
 
 - Ordinary sign-out retains statistics.
@@ -1888,20 +1902,37 @@ source preferences. CloudKit waits for migration; browsing and playback do not.
 Invalid data or save/verification failures retain the source and surface the
 specific typed processing failure rather than resetting sync state.
 
-Successful legacy reconciliation queues one acknowledged **Cloud storage
-update** notice per installation across accounts and relaunches. It recommends
-updating every device to the fixed introducing release, 2026.10.14, or later,
-without claiming that an outdated device is currently running. It does not
-block synchronization or remove history.
+Successful legacy reconciliation queues a **Cloud storage update** notice per
+installation. The canonical migration requires fresh explicit consent that all
+devices support its introducing release (proposed 2026.10.27, subject to release
+validation). Earlier reminder acknowledgments never authorize retirement. The
+notice offers **All devices updated — convert history** and **Later**, explains
+conversion and verified removal, and retains Later across foreground/relaunch.
+It does not claim to detect remote device versions or block ordinary sync.
 
-The upgrade notice offers **All my devices are updated** and **Later**. Confirmation
-records only this installation's acknowledgment; Bleat does not infer remote
-device versions or start a new cloud-history rewrite. Local sync-metadata
-migration is already automatic, verified, and restartable. Legacy listening
-slices remain immutable: their original playback samples are unavailable, so
-relabeling them as continuous segments would misrepresent how they were recorded.
-Later preserves the pending notice for a subsequent foreground or relaunch.
-Neither choice changes existing history or older-client compatibility.
+Compatible legacy observations convert into the canonical continuous-segment
+model with one shared local/CloudKit codec and continuity predicate. The trial
+wall adjacency tolerance is 0.5 seconds, independently guarded by media endpoints
+and known playback/context boundaries. Gaps add no measured listening time.
+Five-second timestamps are not retained; compact source identities, measured
+contributions and proof hashes preserve overlap deduplication. Reporting-day
+boundaries remain exact; sub-day queries use segment start-date selection and
+cannot reconstruct removed timer checkpoints. Ambiguous partial resets are
+rejected with explicit wider-range guidance rather than deleting extra history.
+
+Originals coexist with replacements without double-counting. Retirement requires
+an actual server save receipt matching the exact current canonical payload;
+fetched data is not a receipt. Bounded conversion and durable cleanup resume
+after interruption. Permanent reset actions/anchors suppress offline reuploads,
+survive ordinary reset, account rekey/removal and version-2 export/import, and
+are uploaded before dependent physical deletion. Account-wide removal retains
+minimal reset metadata; full cloud-zone erasure removes its remote copy until
+retained local reset metadata is synchronized again.
+Uncovered canonical physical deletions retain/repair authoritative local history.
+Unknown versions, corrupt payloads and conflicting proofs produce typed stage
+and cause diagnostics while preserving source data. See
+[canonical conversion design](design/cloud-sync-storage.md#canonical-history-conversion)
+for limits and the distinction between isolated evidence and device validation.
 The notice and iCloud account/preference choices share one presentation owner.
 An incoming sync result must wait for the unanswered notice; explicit confirmation
 or Later releases it only after dismissal. Presentation interruption never implies
@@ -1933,10 +1964,12 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
-Settings provides **Clear My CloudKit Data** in its own section below Diagnostics, including when synchronization is
-already disabled. After confirmation, Bleat turns off synchronization on this
-device, cancels and drains its current sync, and directly deletes its entire
-private record zone, including unrecognized records. It clears local sync
+**Settings → iCloud** contains the sync controls and **iCloud Data** export
+and restore controls. **Delete Bleat Data from iCloud** is in the same view,
+including when synchronization is already disabled. After confirmation, Bleat
+turns off synchronization on this device, cancels and drains its current sync,
+and directly deletes its entire private record zone, including unrecognized
+records. It clears local sync
 metadata and recreates the sync engine without its old serialized state while
 preserving local accounts, downloads, preferences, and listening history.
 An already absent zone counts as cleared. A deletion failure retains its typed

@@ -99,46 +99,49 @@ final class AppBootstrap {
         #endif
 
         do {
+            let liveService = try LiveAppService(
+                remoteTelemetryTracer: remoteTelemetry.tracer,
+                diagnostics: diagnostics,
+                privateCloudEvents:
+                    CompositePrivateCloudSyncEventRecorder([
+                        DiagnosticPrivateCloudSyncEventRecorder(
+                            diagnostics: diagnostics
+                        ),
+                        remoteTelemetry.privateCloudEvents,
+                    ]),
+                openIDBrowserProvider: {
+                    SystemOpenIDBrowserSession(
+                        anchorProvider: {
+                            #if os(iOS)
+                                let activeScenes = UIApplication.shared
+                                    .connectedScenes
+                                    .compactMap {
+                                        $0 as? UIWindowScene
+                                    }
+                                    .filter {
+                                        $0.activationState
+                                            == .foregroundActive
+                                    }
+                                let windows = activeScenes.flatMap(
+                                    \.windows)
+                                return
+                                    windows
+                                    .first(where: \.isKeyWindow)
+                                    ?? windows.first
+                            #else
+                                return NSApplication.shared.keyWindow
+                                    ?? NSWindow()
+                            #endif
+                        }
+                    )
+                }
+            )
             model = AppModel(
-                service: try LiveAppService(
-                    remoteTelemetryTracer: remoteTelemetry.tracer,
-                    diagnostics: diagnostics,
-                    privateCloudEvents:
-                        CompositePrivateCloudSyncEventRecorder([
-                            DiagnosticPrivateCloudSyncEventRecorder(
-                                diagnostics: diagnostics
-                            ),
-                            remoteTelemetry.privateCloudEvents,
-                        ]),
-                    openIDBrowserProvider: {
-                        SystemOpenIDBrowserSession(
-                            anchorProvider: {
-                                #if os(iOS)
-                                    let activeScenes = UIApplication.shared
-                                        .connectedScenes
-                                        .compactMap {
-                                            $0 as? UIWindowScene
-                                        }
-                                        .filter {
-                                            $0.activationState
-                                                == .foregroundActive
-                                        }
-                                    let windows = activeScenes.flatMap(
-                                        \.windows)
-                                    return
-                                        windows
-                                        .first(where: \.isKeyWindow)
-                                        ?? windows.first
-                                #else
-                                    return NSApplication.shared.keyWindow
-                                        ?? NSWindow()
-                                #endif
-                            }
-                        )
-                    }
-                ),
+                service: liveService,
                 nearbyServerDiscovery: launchMode.makeNearbyServerDiscovery(
                     tracer: remoteTelemetry.tracer),
+                downloadsStorageRootURL: liveService
+                    .restoredDownloadsStorageRoot,
                 diagnostics: diagnostics,
                 remoteTelemetryConsentController: remoteTelemetry,
                 remoteTelemetryTracer: remoteTelemetry.tracer,

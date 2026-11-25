@@ -20,10 +20,9 @@ preferences, downloads, and any transcripts you create. Credentials and access
 tokens are stored using Apple's Keychain. Downloaded audio remains in Bleat's
 app-owned storage on your device.
 
-Bleat may use your private iCloud account to synchronize supported settings and
-records when iCloud synchronization is enabled. That data is
-stored in your private CloudKit database on Apple's servers. It is not
-available to Terminal Outcomes.
+When iCloud sync is enabled, Bleat stores supported settings and records
+privately in your iCloud account on Apple’s servers. Terminal Outcomes cannot
+access that data.
 
 Local Diagnostics is available without sharing data with Terminal Outcomes.
 Diagnostic snapshots are created only when you choose to export them. They can
@@ -65,8 +64,8 @@ library refresh, playback, downloads, progress synchronization, transcription,
 and private iCloud synchronization. A report can include the app and operating
 system versions, whether the operation worked, how long it took, a general
 error category, whether playback was "downloaded" or "streamed" (not where it
-came from), and the number of retries. iCloud reports can also include Apple's
-CloudKit error code and when a retry is allowed - but not the data.
+came from), and the number of retries. Reports about iCloud sync can also include Apple’s error code and when a retry
+is allowed, but not the synced data.
 
 Bleat uses a random installation identifier and Apple's App Attest state feature
 to authenticate diagnostic uploads and limit attacks. The app keeps the

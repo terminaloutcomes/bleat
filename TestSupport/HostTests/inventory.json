@@ -324,6 +324,26 @@
     "testSearchSleeperCancellationAndRetirement(scenario:)",
     "testCancellableRepositoryHoldCancellationAndRelease(scenario:)"
   ],
+  "BleatCoreTests.ListeningContinuityPolicyTests": [
+    "diagnosticsRetainExactSegmentStageAndCause()",
+    "fractionalMeasuredQuantitiesSurviveCanonicalTransportExactly()",
+    "retirementWaitsForExactSavedPayloadAndSurvivesActorRecreation()",
+    "corruptAndUnknownCanonicalPayloadNeverFallsBackToScalarColumns()",
+    "resetFencesPreparedUploadsAndLateSavesWaitForDurableAnchors()",
+    "uncoveredCloudDeletionRepairsHistoryAndPermanentResetAnchors()",
+    "accountRekeyRebuildsCanonicalPayloadAndReceiptDependencies()",
+    "pendingPreconsentResetDoesNotActivateAnotherAccountsProtocol()",
+    "localAccountHistoryRemovalDoesNotCreateCloudReset()",
+    "compactionFiltersDecodedFormatsAndProgressesPastRepresentedSources()",
+    "wallToleranceHasExplicitHalfSecondBoundary(gap:)",
+    "representationNoiseDoesNotCreateAFalseGap()",
+    "knownBoundariesAlwaysWin(boundary:)",
+    "wallGapNeverAddsListeningAndMediaSeekRemainsSeparate()",
+    "deterministicSharedCodecPreservesLocalCloudLocalPayload()",
+    "overlapDeduplicationNeedsOnlyOpaqueContributionBookkeeping()",
+    "resolutionPreservesAccountSeparationAndTypedConflictBoundaries()",
+    "syntheticHistoryShowsActualRecordAndPayloadReduction()"
+  ],
   "BleatCoreTests.LiveUpdatesTests": [
     "testConnectionAttemptReportsEndpointRoleAndTypedFailure()",
     "testSocketRequestDisallowsConstrainedNetworkAccess()",
@@ -399,6 +419,7 @@
     "testOpenIDReauthenticationRetainsSelectedLocalEndpoint()"
   ],
   "BleatCoreTests.PersistenceMigrationTests": [
+    "canonicalSegmentSchemaPreservesReleased019Rows()",
     "testReleasedStoreFixturesOpenWithCurrentCatalog()",
     "statisticsCacheMigrationPreservesReleasedLedger()",
     "cloudMetadataSchemaUpgradePreservesLegacyListeningRows()"
@@ -422,7 +443,43 @@
     "testSyncValidationAndFailuresRemainTyped()",
     "testCloseFailuresRemainTyped()"
   ],
+  "BleatCoreTests.PrivateCloudBackupTests": [
+    "allFiveRecordTypesKeepExactPayloadBytesThroughAnArchive()",
+    "plannerPreviewsExactReplacementAndFlagsAccountDeletion()",
+    "refusesUnknownAssetFieldsUnsafeURLsAndIncompleteArchives()",
+    "canonicalizesOrderAndDetectsValidlyTruncatedJSON()",
+    "largeCaptureIsValidButAnOversizedReplaceIsNeverPlannedAsOneOperation()",
+    "isolatedRestoreMaterializesFiveTypesAndRetainsPreviousGenerationAfterReopen()"
+  ],
+  "BleatCoreTests.PrivateCloudGenerationRestoreTests": [
+    "replacementPreservesLegacyAndIsolatesItsLaterWriter()",
+    "recoveryStagesAnEarlierBackupAsAFreshGeneration()",
+    "refusesWrongAccountChangedBackupAndStaleReviewedState()",
+    "ordinaryWriteRacingPublishIsRejectedByTransportCAS()",
+    "changedPointerBeforePublishRefusesReplacement()",
+    "interruptedOrCorruptStageNeverPublishes()",
+    "lostCommitResponseUsesReceiptWithoutRetry()",
+    "unknownWithoutPositiveReadbackRemainsPendingEvenIfOldSelectionIsVisible()",
+    "ambiguousResponseAndThirdPointerStayIndeterminate()",
+    "refusesUnfencedLegacyAndAccountSessionTransitionDuringStage()"
+  ],
+  "BleatCoreTests.PrivateCloudHistoryArchiveTests": [
+    "replaysOriginalLegacyRecordsAndMixedCanonicalHistory()",
+    "countsCanonicalSingletonAndReplaysResetAnchor()",
+    "futurePartialMalformedAndUnknownPayloadFieldsFailBeforeReplay()",
+    "requiresExactAccountScopeAndRetryAfterCancellation()"
+  ],
+  "BleatCoreTests.PrivateCloudRestoreLocalActivationTests": [
+    "pendingNeverSelectsAndOnlyMatchingCloudReceiptConfirms()",
+    "replacingAgainRetainsPriorMaterializedStore()",
+    "positivelyAbandonedGenerationDoesNotReplaceSelectionOrEraseFiles()"
+  ],
   "BleatCoreTests.PrivateCloudSyncTests": [
+    "testRunlessCallbackCancellationIsOwnedUntilReplacementCanProceed()",
+    "testConcurrentCancellationWaitersCannotReleaseReplacementOwnership()",
+    "accountRemovalRetainsVerifiedResetMetadataAgainstOfflineReupload()",
+    "explicitAccountReaddResumesUploadsAndRejectsRetiredFetchState()",
+    "ignoredAccountStillRetainsRemoteResetProtectionForReadd()",
     "testCallbackCancellationEscapesDelegateTaskLocalsAndRunsOnce()",
     "testCallbackCancellationCompletesBeforeLifecycleAllowsRetry()",
     "testCallbackWatchdogCancellationEscapesDelegateTaskLocals()",

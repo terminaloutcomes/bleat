@@ -26,8 +26,10 @@ With iCloud sync enabled and the same iCloud account on your devices, history co
 
 Bleat found older sync information or listening records. The message recommends updating all your devices; it does not mean Bleat detected another device running an old version. Tap **OK** to acknowledge it once on that installation.
 
-## Do I need to clear my CloudKit data?
+## Do I need to delete my Bleat data from iCloud?
 
 No. Clearing cloud data is not part of this update or its migration.
 
-**Clear My CloudKit Data** is in its own section below **Diagnostics** in Bleat's Settings. It deletes Bleat's data from iCloud and turns off sync on that device while keeping local data. Other devices with sync enabled may upload their local data again. Use it only when you intend to remove the cloud copy.
+When Bleat is still using its original iCloud data, **Settings → iCloud → Delete Bleat Data from iCloud** removes that cloud copy and turns off sync on this device. It keeps your local data. Other devices that are still syncing can upload their local data again.
+
+This option is unavailable while a restore is pending or after Bleat has switched to restored iCloud data. It does not remove restored copies, older copies retained during a restore, or exported backup files. To stop syncing without deleting cloud data, turn off **Sync with iCloud** and choose **Keep Data in iCloud**.

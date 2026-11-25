@@ -722,6 +722,13 @@ struct AppFailure: Equatable, Sendable, Codable {
         self.cause = cause
     }
 
+    var listeningSegmentFailure: ListeningSegmentFailure? {
+        if case .statistics(.segmentFailure(let failure)) = cause {
+            return failure
+        }
+        return nil
+    }
+
     var title: String {
         switch cause {
         case .privateCloud(let failure): failure.presentationTitle
@@ -962,6 +969,9 @@ struct AppFailure: Equatable, Sendable, Codable {
             return operation.isSafeToRetry && failure.isRetryable
         }
         if case .statistics(let error) = cause {
+            if case .segmentFailure(let failure) = error {
+                return operation.isSafeToRetry && failure.isRetryable
+            }
             return operation.isSafeToRetry && error == .persistenceFailed
         }
         return operation.isSafeToRetry
@@ -1070,6 +1080,8 @@ struct AppFailure: Equatable, Sendable, Codable {
         case .statistics(.partialSessionResetRequiresFullSession):
             return .statisticsResetSplitSession
         case .statistics(let error): return .statistics(error)
+        case .accountStore(.segmentFailure(let failure)):
+            return .statistics(.segmentFailure(failure))
         case .libraryCache(.invalidFinishedProgressCheckpoint):
             return .progressCheckpointInvalid
         case .accountStore, .credentialStore, .accountIdentityMigration,
@@ -1417,6 +1429,7 @@ extension PrivateCloudSyncFailure {
         case .accountSelectionChanged: "iCloud account choice changed"
         case .accountSelectionInProgress: "Saving iCloud account choice"
         case .storage: "iCloud storage update failed"
+        case .segmentFailure: "Listening history needs attention"
         case .persistenceFailed: "Local storage unavailable"
         case .nonPrivateDatabase: "Unsafe iCloud configuration"
         case .engineUnavailable: "iCloud sync unavailable"
@@ -1459,6 +1472,9 @@ extension PrivateCloudSyncFailure {
             case .stateWriteFailed:
                 "Bleat could not save local iCloud synchronization state."
             }
+        case .segmentFailure(let failure):
+            StatisticsRepositoryError.segmentFailure(failure)
+                .presentationMessage
         case .persistenceFailed:
             "Bleat could not save or read the iCloud data on this device."
         case .nonPrivateDatabase:
@@ -1488,7 +1504,7 @@ extension PrivateCloudSyncFailure {
             default:
                 "exclamationmark.triangle"
             }
-        case .persistenceFailed, .storage:
+        case .persistenceFailed, .storage, .segmentFailure:
             "externaldrive.badge.exclamationmark"
         case .cancelled:
             "xmark.circle"
@@ -1505,7 +1521,7 @@ extension PrivateCloudSyncFailure {
     fileprivate var isRetryable: Bool {
         switch cause {
         case .cloudKit(let failure): failure.isRetryable
-        case .storage: cause.isRetryable
+        case .storage, .segmentFailure: cause.isRetryable
         case .cancelled, .callbackTimedOut, .persistenceFailed,
             .engineUnavailable:
             true
@@ -1542,6 +1558,9 @@ extension PrivateCloudSyncFailure {
             }
         case .persistenceFailed, .storage:
             .localStorage
+        case .segmentFailure(let failure):
+            failure.stage == .storageRead || failure.stage == .storageWrite
+                ? .localStorage : .invalidResponse
         case .nonPrivateDatabase:
             .sourceBug
         case .cancelled, .stopping, .disabled, .invalidRecord,
@@ -1827,6 +1846,8 @@ final class AppModel {
     private(set) var cloudStorageUpgradeNoticePending = false
     @ObservationIgnored private let cloudStorageNoticeDefaults: UserDefaults
     private(set) var privateCloudSyncAvailable = true
+    private(set) var cloudDataDeletionAvailability:
+        AppCloudDataDeletionAvailability = .unavailable
     private(set) var privateCloudSyncEnabled = true
     private(set) var canCancelPrivateCloudSynchronization = false
     private(set) var pendingCloudServerConfigurationChanges:
@@ -2334,6 +2355,10 @@ final class AppModel {
         )
 
         do {
+            if try await service.prepareRestoredCloudPreferences() {
+                playback.reloadSyncedPreferences()
+                downloads.reloadSyncedPreferences()
+            }
             await BookCoverImageLoader.shared.setTracer(remoteTelemetryTracer)
             if let endpointRouter = await service.serverEndpointRouter() {
                 await BookCoverImageLoader.shared.setEndpointRouter(
@@ -2342,6 +2367,7 @@ final class AppModel {
             }
             privateCloudSyncAvailable =
                 await service.isPrivateCloudSyncAvailable()
+            await refreshCloudDataDeletionAvailability()
             if privateCloudSyncAvailable {
                 privateCloudSyncEnabled =
                     await service.isPrivateCloudSyncEnabled()
@@ -2436,7 +2462,8 @@ final class AppModel {
                 .failed(
                     .appStart,
                     category: .app,
-                    failureCode: failure.diagnosticFailureCode
+                    failureCode: failure.diagnosticFailureCode,
+                    listeningSegmentFailure: failure.listeningSegmentFailure
                 )
             )
             await diagnostics.record(
@@ -6765,7 +6792,8 @@ final class AppModel {
             await diagnostics.record(
                 .failed(
                     .loadStatistics, category: .sync,
-                    failureCode: failure.diagnosticFailureCode))
+                    failureCode: failure.diagnosticFailureCode,
+                    listeningSegmentFailure: failure.listeningSegmentFailure))
             guard generation == statisticsLoadGeneration,
                 observationID == statisticsObservationID
             else { return }
@@ -7018,7 +7046,9 @@ final class AppModel {
             await diagnostics.record(
                 .failed(
                     .exportStatistics, category: .sync,
-                    failureCode: diagnosticFailure.diagnosticFailureCode))
+                    failureCode: diagnosticFailure.diagnosticFailureCode,
+                    listeningSegmentFailure: diagnosticFailure
+                        .listeningSegmentFailure))
             statisticsArchiveFailure = AppFailure(
                 operation: .exportStatistics, serviceError: error
             )
@@ -7049,7 +7079,9 @@ final class AppModel {
             await diagnostics.record(
                 .failed(
                     .importStatistics, category: .sync,
-                    failureCode: diagnosticFailure.diagnosticFailureCode))
+                    failureCode: diagnosticFailure.diagnosticFailureCode,
+                    listeningSegmentFailure: diagnosticFailure
+                        .listeningSegmentFailure))
             statisticsArchiveFailure = AppFailure(
                 operation: .importStatistics, serviceError: error
             )
@@ -7071,7 +7103,9 @@ final class AppModel {
             await diagnostics.record(
                 .failed(
                     .resetStatistics, category: .sync,
-                    failureCode: diagnosticFailure.diagnosticFailureCode))
+                    failureCode: diagnosticFailure.diagnosticFailureCode,
+                    listeningSegmentFailure: diagnosticFailure
+                        .listeningSegmentFailure))
             statisticsArchiveFailure = AppFailure(
                 operation: .resetStatistics, serviceError: error
             )
@@ -7089,6 +7123,85 @@ final class AppModel {
         }
     }
 
+    func capturePrivateCloudBackup() async throws -> Data {
+        try await service.capturePrivateCloudBackup()
+    }
+
+    func previewPrivateCloudRestore(_ data: Data) async throws
+        -> AppCloudRestoreReview
+    {
+        try await service.previewPrivateCloudRestore(data)
+    }
+
+    func verifyPendingPrivateCloudRestore() async throws
+        -> AppCloudRestoreResult
+    {
+        let result = try await service.verifyPendingPrivateCloudRestore()
+        await refreshCloudDataDeletionAvailability()
+        return result
+    }
+
+    func replacePrivateCloudRestore(_ review: AppCloudRestoreReview)
+        async throws -> AppCloudRestoreResult
+    {
+        guard !isResettingLocalData, privateCloudDataClearState != .clearing
+        else {
+            throw AppCloudRestoreFailure.unavailable
+        }
+        let inFlight = privateCloudSyncTask
+        privateCloudSyncGeneration &+= 1
+        inFlight?.cancel()
+        do {
+            let result = try await service.replacePrivateCloudRestore(review)
+            await finishPrivateCloudRestore(inFlight)
+            return result
+        } catch {
+            await finishPrivateCloudRestore(inFlight)
+            throw error
+        }
+    }
+
+    func checkForRestoreFromAnotherDevice() async throws -> Bool {
+        try await service.checkForRestoreFromAnotherDevice()
+    }
+
+    func adoptRestoreFromAnotherDevice() async throws -> AppCloudRestoreResult {
+        guard !isResettingLocalData, privateCloudDataClearState != .clearing
+        else {
+            throw AppCloudRestoreFailure.unavailable
+        }
+        let inFlight = privateCloudSyncTask
+        privateCloudSyncGeneration &+= 1
+        inFlight?.cancel()
+        do {
+            let result = try await service.adoptRestoreFromAnotherDevice()
+            await finishPrivateCloudRestore(inFlight)
+            return result
+        } catch {
+            await finishPrivateCloudRestore(inFlight)
+            throw error
+        }
+    }
+
+    private func refreshCloudDataDeletionAvailability() async {
+        cloudDataDeletionAvailability =
+            await service.privateCloudDataDeletionAvailability()
+    }
+
+    private func finishPrivateCloudRestore(_ inFlight: Task<Void, Never>?) async
+    {
+        await inFlight?.value
+        privateCloudSyncTask = nil
+        canCancelPrivateCloudSynchronization = false
+        privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+        await refreshCloudDataDeletionAvailability()
+        if !privateCloudSyncEnabled {
+            pendingCloudServerConfigurationChanges.removeAll()
+            pendingCloudConfigurationConflict = nil
+        }
+        privateCloudState = privateCloudSyncEnabled ? .idle : .disabled
+    }
+
     func synchronizePrivateCloud() async {
         guard privateCloudSyncAvailable,
             privateCloudSyncEnabled,
@@ -7103,7 +7216,8 @@ final class AppModel {
     }
 
     func acknowledgeCloudStorageUpgradeNotice() {
-        CloudStorageUpgradeNotice.acknowledge(in: cloudStorageNoticeDefaults)
+        CloudStorageUpgradeNotice.confirmCanonicalRetirement(
+            in: cloudStorageNoticeDefaults)
         cloudStorageUpgradeNoticePending = false
     }
 
@@ -7138,7 +7252,8 @@ final class AppModel {
     }
 
     private func beginPrivateCloudSynchronization() -> Task<Void, Never>? {
-        guard privateCloudSyncTask == nil, !isResolvingCloudAccountSelection
+        guard privateCloudSyncTask == nil, !isResolvingCloudAccountSelection,
+            privateCloudDataClearState != .clearing
         else {
             return nil
         }
@@ -7563,6 +7678,10 @@ final class AppModel {
             privateCloudState = .disabled
             return
         }
+        if deleteCloudData {
+            await refreshCloudDataDeletionAvailability()
+            guard cloudDataDeletionAvailability == .available else { return }
+        }
         privateCloudState = .syncing
         do {
             try await service.setPrivateCloudSyncEnabled(
@@ -7576,6 +7695,8 @@ final class AppModel {
             }
             privateCloudState = enabled ? .idle : .disabled
         } catch let error {
+            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+            await refreshCloudDataDeletionAvailability()
             privateCloudState = .failed(
                 AppFailure(
                     operation: .privateCloudSync,
@@ -7589,7 +7710,11 @@ final class AppModel {
         guard privateCloudDataClearState != .clearing, !isResettingLocalData
         else { return }
         privateCloudDataClearState = .clearing
-        privateCloudSyncEnabled = false
+        await refreshCloudDataDeletionAvailability()
+        guard cloudDataDeletionAvailability == .available else {
+            privateCloudDataClearState = .idle
+            return
+        }
         await cancelPrivateCloudSynchronization()
         do {
             try await service.setPrivateCloudSyncEnabled(
@@ -7597,9 +7722,12 @@ final class AppModel {
             )
             pendingCloudServerConfigurationChanges.removeAll()
             pendingCloudConfigurationConflict = nil
+            privateCloudSyncEnabled = false
             privateCloudState = .disabled
             privateCloudDataClearState = .cleared
         } catch {
+            privateCloudSyncEnabled = await service.isPrivateCloudSyncEnabled()
+            await refreshCloudDataDeletionAvailability()
             let failure = AppFailure(
                 operation: .privateCloudSync, serviceError: error
             )
@@ -7771,9 +7899,6 @@ final class AppModel {
                     includeStatistics: deleteStatistics
                 )
             }
-            if deleteStatistics {
-                try await service.removeStatistics(accountID: account.id)
-            }
             switch scope {
             case .thisDevice:
                 try await service.removeAccountFromThisDevice(
@@ -7782,6 +7907,9 @@ final class AppModel {
                 )
             case .allDevices:
                 try await service.removeAccount(account)
+            }
+            if deleteStatistics {
+                try await service.removeStatistics(accountID: account.id)
             }
             await downloads.removeAll(for: account.id)
             playback.removeLocalData(for: account.id)
@@ -7831,7 +7959,8 @@ final class AppModel {
                 .failed(
                     .removeAccount,
                     category: .auth,
-                    failureCode: failure.diagnosticFailureCode
+                    failureCode: failure.diagnosticFailureCode,
+                    listeningSegmentFailure: failure.listeningSegmentFailure
                 )
             )
             seriesDownloadBlockedAccounts.remove(account.id)

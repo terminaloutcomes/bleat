@@ -6,16 +6,47 @@ import Testing
 
 @Suite(.serialized)
 final class PersistenceModelCatalogTests {
+    private static var storeModelTypes: [[any PersistentModel.Type]] {
+        let app = BleatPersistenceModelCatalog.currentModelTypes
+        let activation = PrivateCloudRestoreLocalActivation.modelTypes
+        #if DEBUG
+            return [app, activation, PrivateCloudIsolatedRestore.modelTypes]
+        #else
+            return [app, activation]
+        #endif
+    }
+
+    private static func modelNames(
+        _ models: [any PersistentModel.Type]
+    ) -> Set<String> {
+        Set(models.map { Schema.entityName(for: $0) })
+    }
+
     @Test
     func testCatalogListsEveryPersistentModelInCore() throws {
         let declared = try Self.declaredModelNames(
             in: Self.coreSourceDirectory()
         )
-        let catalogued = Set(
-            BleatPersistenceModelCatalog.allModelTypes.map {
-                Schema.entityName(for: $0)
-            }
+        let stores = Self.storeModelTypes
+        let catalogued = Self.modelNames(stores.flatMap { $0 })
+        #expect(
+            catalogued.count == stores.reduce(0) { $0 + $1.count },
+            "A model is registered more than once across the stores"
         )
+
+        let activation = Self.modelNames(
+            PrivateCloudRestoreLocalActivation.modelTypes)
+        #expect(activation == ["ActivationRow"])
+        #if DEBUG
+            let isolated = Self.modelNames(
+                PrivateCloudIsolatedRestore.modelTypes)
+            #expect(
+                isolated
+                    == [
+                        "IsolatedRestoreEntry", "IsolatedRestoreSelector",
+                        "IsolatedRestoreStage",
+                    ])
+        #endif
 
         let missing = declared.subtracting(catalogued)
             .sorted()
@@ -27,8 +58,8 @@ final class PersistenceModelCatalogTests {
         #expect(
             missing.isEmpty && extra.isEmpty,
             Comment(
-                rawValue: "Catalog and declared @Model types differ. "
-                    + "Register new models in BleatPersistenceModelCatalog."
+                rawValue:
+                    "Store registrations and declared @Model types differ."
                     + (missing.isEmpty
                         ? "" : "\nMissing: \(missing.joined(separator: ", "))")
                     + (extra.isEmpty
@@ -37,31 +68,24 @@ final class PersistenceModelCatalogTests {
 
     @Test
     func testCatalogBuildsUsableSchema() throws {
-        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
-
-        #expect(
-            schema.entities.count
-                == BleatPersistenceModelCatalog.allModelTypes.count)
-        _ = try ModelContainer(
-            for: schema,
-            configurations: [
-                ModelConfiguration(
-                    schema: schema,
-                    isStoredInMemoryOnly: true
-                )
-            ]
-        )
+        for models in Self.storeModelTypes {
+            let schema = Schema(models)
+            #expect(schema.entities.count == models.count)
+            _ = try ModelContainer(
+                for: schema,
+                configurations: [
+                    ModelConfiguration(
+                        schema: schema, isStoredInMemoryOnly: true)
+                ]
+            )
+        }
     }
 
     @Test
     func testSchemaRegistersEveryCatalogModelName() throws {
-        let schema = Schema(BleatPersistenceModelCatalog.allModelTypes)
-
-        for type in BleatPersistenceModelCatalog.allModelTypes {
-            let name = Schema.entityName(for: type)
-            #expect(
-                schema.entitiesByName[name] != nil,
-                "Schema did not register catalog model \(name)")
+        for models in Self.storeModelTypes {
+            let schema = Schema(models)
+            #expect(Set(schema.entitiesByName.keys) == Self.modelNames(models))
         }
     }
 
@@ -85,6 +109,13 @@ final class PersistenceModelCatalogTests {
         var names: Set<String> = []
         let declarationPattern = #"\b(?:class|struct)\b"#
         for file in files {
+            #if !DEBUG
+                // This entire source file is excluded from Release.
+                if file.lastPathComponent == "PrivateCloudIsolatedRestore.swift"
+                {
+                    continue
+                }
+            #endif
             let content = try String(contentsOf: file, encoding: .utf8)
             let lines = content.split(whereSeparator: \.isNewline)
             for (index, line) in lines.enumerated() {

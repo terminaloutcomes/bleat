@@ -77,6 +77,9 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
     public let duration: Double
     public let recordingFormat: ListeningRecordingFormat?
     public let recordingState: ListeningRecordingState?
+    public let boundaryAfter: ListeningBoundary?
+    public let lineage: ListeningSegmentLineage?
+    public let acknowledgedResetIDs: [UUID]?
 
     public init(
         id: UUID = UUID(),
@@ -98,7 +101,10 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         author: String,
         duration: Double,
         recordingFormat: ListeningRecordingFormat? = nil,
-        recordingState: ListeningRecordingState? = nil
+        recordingState: ListeningRecordingState? = nil,
+        boundaryAfter: ListeningBoundary? = nil,
+        lineage: ListeningSegmentLineage? = nil,
+        acknowledgedResetIDs: [UUID]? = nil
     ) {
         self.id = id
         self.accountID = accountID
@@ -120,11 +126,17 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         self.duration = duration
         self.recordingFormat = recordingFormat
         self.recordingState = recordingState
+        self.boundaryAfter = boundaryAfter
+        self.lineage = lineage
+        self.acknowledgedResetIDs = acknowledgedResetIDs
     }
 
     func reidentified(as accountID: AccountID) -> ListeningSlice {
         ListeningSlice(
-            id: id,
+            id: lineage.map {
+                ListeningSegmentCodec.identity(
+                    accountID: accountID, lineage: $0)
+            } ?? id,
             accountID: accountID,
             itemID: itemID,
             sessionID: sessionID,
@@ -142,7 +154,8 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             title: title,
             author: author,
             duration: duration, recordingFormat: recordingFormat,
-            recordingState: recordingState
+            recordingState: recordingState, boundaryAfter: boundaryAfter,
+            lineage: lineage, acknowledgedResetIDs: acknowledgedResetIDs
         )
     }
 
@@ -156,10 +169,12 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             chapterTitle: chapterTitle, chapterStart: chapterStart,
             chapterEnd: chapterEnd, title: title, author: author,
             duration: duration, recordingFormat: recordingFormat,
-            recordingState: recordingState
+            recordingState: recordingState, boundaryAfter: boundaryAfter,
+            lineage: lineage, acknowledgedResetIDs: acknowledgedResetIDs
         )
     }
     func splitAtReportingDay() -> (ListeningSlice, ListeningSlice)? {
+        guard lineage == nil else { return nil }
         let boundary = StatisticsQuery.reportingCalendar.startOfDay(
             for: endedAt)
         guard startedAt < boundary, boundary < endedAt else { return nil }
@@ -181,7 +196,9 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
                 chapterStart: chapterStart,
                 chapterEnd: chapterEnd, title: title, author: author,
                 duration: duration,
-                recordingFormat: recordingFormat, recordingState: recordingState
+                recordingFormat: recordingFormat,
+                recordingState: recordingState, boundaryAfter: boundaryAfter,
+                lineage: lineage, acknowledgedResetIDs: acknowledgedResetIDs
             )
         }
         return (
@@ -194,7 +211,9 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
         copying(state: .finalized)
     }
 
-    func copying(state: ListeningRecordingState) -> ListeningSlice {
+    func copying(
+        state: ListeningRecordingState, boundary: ListeningBoundary? = nil
+    ) -> ListeningSlice {
         ListeningSlice(
             id: id, accountID: accountID, itemID: itemID,
             sessionID: sessionID, startedAt: startedAt, endedAt: endedAt,
@@ -204,7 +223,9 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             chapterTitle: chapterTitle, chapterStart: chapterStart,
             chapterEnd: chapterEnd,
             title: title, author: author, duration: duration,
-            recordingFormat: recordingFormat, recordingState: state)
+            recordingFormat: recordingFormat, recordingState: state,
+            boundaryAfter: boundary ?? boundaryAfter, lineage: lineage,
+            acknowledgedResetIDs: acknowledgedResetIDs)
     }
 
     /// Only newly observed quantities contribute to committed summaries. Keep
@@ -224,7 +245,8 @@ public struct ListeningSlice: Codable, Equatable, Identifiable, Sendable {
             chapterStart: chapterStart, chapterEnd: chapterEnd, title: title,
             author: author,
             duration: duration, recordingFormat: recordingFormat,
-            recordingState: recordingState)
+            recordingState: recordingState, boundaryAfter: boundaryAfter,
+            lineage: lineage, acknowledgedResetIDs: acknowledgedResetIDs)
     }
 
 }
@@ -533,6 +555,7 @@ public enum StatisticsRepositoryError: Error, Equatable, Sendable, Codable {
     case persistenceFailed
     case invalidArchive
     case invalidAccountMapping
+    case segmentFailure(ListeningSegmentFailure)
     case partialSessionResetRequiresFullSession
 }
 
@@ -560,8 +583,15 @@ public final class ListeningSliceRecord {
     var author: String
     var duration: Double
     var recordingFormat: ListeningRecordingFormat?
+    var boundaryAfter: ListeningBoundary?
+    var acknowledgedResetIDs: [UUID]?
+    var segmentProtocolObserved: Bool?
     var isFinalized: Bool?
     var privateCloudSynchronized: Bool?
+    var segmentPayload: Data?
+    var segmentEnvelopeVersion: Int?
+    var segmentReceiptDigest: Data?
+    var segmentDeletionObserved: Bool?
 
     init(_ slice: ListeningSlice) {
         eventID = slice.id
@@ -583,8 +613,42 @@ public final class ListeningSliceRecord {
         author = slice.author
         duration = slice.duration
         recordingFormat = slice.recordingFormat
+        acknowledgedResetIDs = slice.acknowledgedResetIDs
+        boundaryAfter = slice.boundaryAfter
         isFinalized = slice.recordingState != .active
         privateCloudSynchronized = false
+        segmentPayload = nil
+        segmentEnvelopeVersion = nil
+        segmentReceiptDigest = nil
+        segmentDeletionObserved = nil
+    }
+
+    convenience init(encodedSegment: Data) throws {
+        let segment = try ListeningSegmentCodec.decode(encodedSegment)
+        self.init(segment)
+        segmentPayload = encodedSegment
+        segmentEnvelopeVersion = segment.lineage?.version
+    }
+
+    func validatedValue() throws -> ListeningSlice {
+        guard let segmentPayload else {
+            guard segmentEnvelopeVersion == nil else {
+                throw ListeningSegmentFailure(.validation, .invalidPayload)
+            }
+            return domainValue
+        }
+        let value = try ListeningSegmentCodec.decode(
+            segmentPayload, expectedID: eventID)
+        guard
+            segmentEnvelopeVersion == nil
+                || segmentEnvelopeVersion == value.lineage?.version,
+            ListeningSegmentCodec.scalar(value) == domainValue
+        else { throw ListeningSegmentFailure(.validation, .metadataConflict) }
+        // Valid local bytes authoritatively recover an absent optional marker.
+        if segmentEnvelopeVersion == nil {
+            segmentEnvelopeVersion = value.lineage?.version
+        }
+        return value
     }
 
     var domainValue: ListeningSlice {
@@ -608,7 +672,9 @@ public final class ListeningSliceRecord {
             author: author,
             duration: duration, recordingFormat: recordingFormat,
             recordingState: recordingFormat == nil
-                ? nil : (isFinalized == false ? .active : .finalized)
+                ? nil : (isFinalized == false ? .active : .finalized),
+            boundaryAfter: boundaryAfter,
+            acknowledgedResetIDs: acknowledgedResetIDs
         )
     }
 }
@@ -620,6 +686,8 @@ extension ListeningSliceRecord {
         realSeconds = slice.realSeconds
         audiobookSeconds = slice.audiobookSeconds
         isFinalized = slice.recordingState != .active
+        boundaryAfter = slice.boundaryAfter
+        acknowledgedResetIDs = slice.acknowledgedResetIDs
         privateCloudSynchronized = false
     }
 }
@@ -809,6 +877,7 @@ public struct StatisticsArchive: Codable, Sendable {
     public let version: Int
     public let exportedAt: Date
     public let slices: [ListeningSlice]
+    public let resetEnvelopes: [ListeningSlice]?
     public let completions: [CompletionMilestone]
     public let remoteSessions: [RemoteListeningSession]
 
@@ -817,11 +886,18 @@ public struct StatisticsArchive: Codable, Sendable {
         exportedAt: Date = Date(),
         slices: [ListeningSlice],
         completions: [CompletionMilestone],
-        remoteSessions: [RemoteListeningSession]
+        remoteSessions: [RemoteListeningSession],
+        resetEnvelopes: [ListeningSlice]? = nil
     ) {
-        self.version = version
+        let resets =
+            (resetEnvelopes ?? [])
+            + slices.filter { $0.lineage?.kind == .resetAnchors }
+        self.version =
+            (!resets.isEmpty || slices.contains(where: { $0.lineage != nil }))
+            ? max(2, version) : version
         self.exportedAt = exportedAt
-        self.slices = slices
+        self.slices = slices.filter { $0.lineage?.kind != .resetAnchors }
+        self.resetEnvelopes = resets.isEmpty ? nil : resets
         self.completions = completions
         self.remoteSessions = remoteSessions
     }
@@ -833,6 +909,9 @@ public struct StatisticsArchive: Codable, Sendable {
             slices: slices.map { $0.reidentified(as: accountID) },
             completions: completions.map { $0.reidentified(as: accountID) },
             remoteSessions: remoteSessions.map {
+                $0.reidentified(as: accountID)
+            },
+            resetEnvelopes: resetEnvelopes?.map {
                 $0.reidentified(as: accountID)
             }
         )
@@ -873,6 +952,17 @@ public struct StatisticsArchive: Codable, Sendable {
     }
 }
 
+struct PrivateCloudStatisticsSnapshot: Sendable {
+    let archive: StatisticsArchive
+    let payloads: [UUID: Data]
+    let retirementGeneration: UInt64
+}
+
+struct CurrentListeningUpload: Sendable {
+    let value: ListeningSlice
+    let payload: Data?
+}
+
 struct PrivateCloudStatisticsDeletion: Equatable, Sendable {
     let recordName: String
     let recordType: String
@@ -894,7 +984,15 @@ public struct ListeningAccumulator: Sendable {
     fileprivate private(set) var pending: ListeningSlice?
     private var checkpoint: ListeningSlice?
 
-    public init() {}
+    private let acknowledgedResetIDs: [UUID]?
+    public init(acknowledgedResetIDs: [UUID]? = nil) {
+        self.acknowledgedResetIDs = acknowledgedResetIDs
+    }
+
+    var resetBoundaryDate: Date? { pending?.startedAt ?? previous?.observedAt }
+    func acknowledgesReset(_ id: UUID) -> Bool {
+        (acknowledgedResetIDs ?? []).contains(id)
+    }
 
     public var uncommittedSlice: ListeningSlice? {
         pending?.tail(after: checkpoint)
@@ -912,21 +1010,27 @@ public struct ListeningAccumulator: Sendable {
         guard let previous else {
             return []
         }
-        guard previous.accountID == sample.accountID,
-            previous.itemID == sample.itemID,
-            previous.sessionID == sample.sessionID,
-            previous.playbackGeneration == sample.playbackGeneration,
-            previous.isAudibleAndAdvancing,
-            sample.isAudibleAndAdvancing
-        else {
-            return flush()
+        if previous.accountID != sample.accountID {
+            return flush(.accountChanged)
+        }
+        if previous.itemID != sample.itemID { return flush(.bookChanged) }
+        if previous.sessionID != sample.sessionID {
+            return flush(.sessionChanged)
+        }
+        if previous.playbackGeneration != sample.playbackGeneration {
+            return flush(.playbackGenerationChanged)
+        }
+        if !previous.isAudibleAndAdvancing || !sample.isAudibleAndAdvancing {
+            return flush(.inaudibleSample)
         }
 
         let realDelta = sample.monotonicTime - previous.monotonicTime
         let positionDelta =
             sample.wholeBookPosition - previous.wholeBookPosition
         guard realDelta > 0, realDelta <= 10, positionDelta > 0.01 else {
-            return flush()
+            return flush(
+                positionDelta <= 0.01
+                    ? .positionDiscontinuity : .observationDiscontinuity)
         }
         let cappedAudiobookDelta = min(
             positionDelta,
@@ -954,7 +1058,7 @@ public struct ListeningAccumulator: Sendable {
             title: previous.title,
             author: previous.author,
             duration: previous.duration, recordingFormat: .continuousSegment,
-            recordingState: .active
+            recordingState: .active, acknowledgedResetIDs: acknowledgedResetIDs
         )
 
         var output: [ListeningSlice]
@@ -968,7 +1072,10 @@ public struct ListeningAccumulator: Sendable {
         if previous.playbackRate != sample.playbackRate
             || previous.chapter != sample.chapter
         {
-            output.append(contentsOf: flush())
+            output.append(
+                contentsOf: flush(
+                    previous.playbackRate != sample.playbackRate
+                        ? .rateChanged : .chapterChanged))
         }
         return output
     }
@@ -996,10 +1103,16 @@ public struct ListeningAccumulator: Sendable {
                 title: pending.title,
                 author: pending.author,
                 duration: pending.duration, recordingFormat: .continuousSegment,
-                recordingState: .active
+                recordingState: .active,
+                acknowledgedResetIDs: acknowledgedResetIDs
             )
         } else {
-            var output = flush()
+            let boundary: ListeningBoundary =
+                pending.map {
+                    ListeningContinuityPolicy.sameContext($0, interval)
+                        ? .positionDiscontinuity : .metadataChanged
+                } ?? .metadataChanged
+            var output = flush(boundary)
             pending = interval
             if interval.realSeconds >= 5 {
                 output.append(interval)
@@ -1017,35 +1130,28 @@ public struct ListeningAccumulator: Sendable {
         return []
     }
 
-    public mutating func finish() -> [ListeningSlice] {
+    public mutating func finish(boundary: ListeningBoundary = .explicitStop)
+        -> [ListeningSlice]
+    {
         previous = nil
-        return flush()
+        return flush(boundary)
     }
 
-    private mutating func flush() -> [ListeningSlice] {
+    private mutating func flush(_ boundary: ListeningBoundary? = nil)
+        -> [ListeningSlice]
+    {
         guard let pending else {
             return []
         }
         self.pending = nil
         checkpoint = nil
-        return [pending.finalized]
+        return [pending.copying(state: .finalized, boundary: boundary)]
     }
 
-    private static func canMerge(
-        _ lhs: ListeningSlice,
-        _ rhs: ListeningSlice
-    ) -> Bool {
-        lhs.accountID == rhs.accountID
-            && lhs.itemID == rhs.itemID
-            && lhs.sessionID == rhs.sessionID
-            && lhs.playbackRate == rhs.playbackRate
-            && lhs.chapterID == rhs.chapterID
-            && lhs.chapterTitle == rhs.chapterTitle
-            && StatisticsQuery.reportingCalendar.isDate(
-                lhs.startedAt,
-                inSameDayAs: rhs.startedAt
-            )
-            && abs(lhs.endPosition - rhs.startPosition) <= 0.5
+    private static func canMerge(_ lhs: ListeningSlice, _ rhs: ListeningSlice)
+        -> Bool
+    {
+        ListeningContinuityPolicy.canJoin(lhs, rhs, evidence: .liveSamples)
     }
 
     private static func isValid(
@@ -1072,6 +1178,12 @@ public struct ListeningAccumulator: Sendable {
 /// SwiftData provides native asynchronous fetch/save operations.
 public actor StatisticsRepository {
     let modelContainer: ModelContainer
+    private var canonicalReconciliationNeeded = true
+    private var retirementGeneration: UInt64 = 0
+    private var resetActionCache: [AccountID: [ListeningResetAction]]?
+    private var resetMonotonicFence: [AccountID: TimeInterval] = [:]
+    private let monotonicNow: @Sendable () -> TimeInterval
+    private let canonicalHistoryEnabled: @Sendable () -> Bool
     private var accumulators:
         [StatisticsAggregation.SessionKey: ListeningAccumulator] = [:]
     private struct Observation {
@@ -1224,8 +1336,15 @@ public actor StatisticsRepository {
         }
     }
 
-    public init(modelContainer: ModelContainer) {
+    public init(
+        modelContainer: ModelContainer,
+        monotonicNow: @escaping @Sendable () -> TimeInterval = {
+            ProcessInfo.processInfo.systemUptime
+        }, canonicalHistoryEnabled: @escaping @Sendable () -> Bool = { false }
+    ) {
         self.modelContainer = modelContainer
+        self.monotonicNow = monotonicNow
+        self.canonicalHistoryEnabled = canonicalHistoryEnabled
     }
 
     public func discardAfterPersistentReset() {
@@ -1264,7 +1383,18 @@ public actor StatisticsRepository {
         {
             return
         }
-        var accumulator = accumulators[identity] ?? ListeningAccumulator()
+        if let fence = resetMonotonicFence[sample.accountID],
+            sample.monotonicTime <= fence
+        {
+            return
+        }
+        let resetIDs = try knownListeningResets()[sample.accountID]?.map(\.id)
+            .sorted { $0.uuidString < $1.uuidString }
+        var accumulator =
+            accumulators[identity]
+            ?? ListeningAccumulator(
+                acknowledgedResetIDs: resetIDs?.isEmpty == false
+                    ? resetIDs : nil)
         let slices = try accumulator.ingest(sample)
         if !slices.isEmpty { try save(slices, publish: false) }
         accumulators[identity] = accumulator
@@ -1291,7 +1421,7 @@ public actor StatisticsRepository {
         try recoverActiveSegments()
         let slices = accumulators.values.flatMap { value in
             var accumulator = value
-            return accumulator.finish()
+            return accumulator.finish(boundary: .synchronizationCheckpoint)
         }
         if !slices.isEmpty { try save(slices, publish: false) }
         accumulators.removeAll()
@@ -1308,6 +1438,7 @@ public actor StatisticsRepository {
                     predicate: #Predicate { $0.isFinalized == false }))
             for record in records {
                 record.isFinalized = true
+                record.boundaryAfter = .processInterrupted
                 record.privateCloudSynchronized = false
             }
             try context.save()
@@ -1340,6 +1471,8 @@ public actor StatisticsRepository {
             }
             context.insert(CompletionMilestoneRecord(milestone))
             try saveMutation(context) { $0.completions.append(milestone) }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1422,6 +1555,8 @@ public actor StatisticsRepository {
             }
         } catch let error as StatisticsRepositoryError {
             throw error
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1445,6 +1580,8 @@ public actor StatisticsRepository {
                 completedPages: record?.completedPages ?? 0,
                 totalPages: record?.totalPages ?? 0
             )
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1492,6 +1629,8 @@ public actor StatisticsRepository {
                         lastCompletedAt: record.lastCompletedAt,
                         completedPages: record.completedPages,
                         totalPages: record.totalPages)))
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1567,6 +1706,17 @@ public actor StatisticsRepository {
     public func snapshot(query: StatisticsQuery = StatisticsQuery())
         throws(StatisticsRepositoryError) -> StatisticsSnapshot
     {
+        if canonicalReconciliationNeeded {
+            let context = ModelContext(modelContainer)
+            context.autosaveEnabled = false
+            do {
+                _ = try reconcileListeningSegments(context)
+                try saveMutation(context, publish: false)
+                canonicalReconciliationNeeded = false
+            } catch let failure as ListeningSegmentFailure {
+                throw .segmentFailure(failure)
+            } catch { throw .persistenceFailed }
+        }
         if let value = try cachedSnapshot(query: query) { return value }
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
@@ -1574,10 +1724,8 @@ public actor StatisticsRepository {
         let end = query.end
         let scope = query.accountID?.rawValue
         do {
-            let slices = try context.fetch(
-                FetchDescriptor<ListeningSliceRecord>()
-            )
-            .map(\.domainValue)
+            let slices = try reconcileListeningSegments(context).groups.map(
+                \.value)
             let completions = try context.fetch(
                 FetchDescriptor<CompletionMilestoneRecord>()
             )
@@ -1621,6 +1769,8 @@ public actor StatisticsRepository {
                 try context.save()
             }
             return value
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1632,14 +1782,36 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
+            let resolution = try reconcileListeningSegments(context)
+            var exported: [UUID: ListeningSlice] = [:]
+            for group in resolution.groups
+            where query.contains(
+                accountID: group.value.accountID, date: group.value.startedAt)
+            {
+                var covered: Set<UUID> = []
+                let candidates = group.representations.sorted {
+                    let left =
+                        (try? ListeningSegmentCodec.sourceIDs($0).count) ?? 0
+                    let right =
+                        (try? ListeningSegmentCodec.sourceIDs($1).count) ?? 0
+                    return left == right
+                        ? $0.id.uuidString < $1.id.uuidString : left > right
+                }
+                for value in candidates {
+                    let ids = try ListeningSegmentCodec.sourceIDs(value)
+                    guard !ids.isSubset(of: covered) else { continue }
+                    exported[value.id] = value
+                    covered.formUnion(ids)
+                }
+            }
+            for reset in resolution.resetEnvelopes
+            where query.accountID == nil || query.accountID == reset.accountID {
+                exported[reset.id] = reset
+            }
+            if context.hasChanges { try saveMutation(context, publish: false) }
             return StatisticsArchive(
-                slices: try context.fetch(
-                    FetchDescriptor<ListeningSliceRecord>()
-                ).map(\.domainValue).filter {
-                    query.contains(
-                        accountID: $0.accountID,
-                        date: $0.startedAt
-                    )
+                slices: exported.values.sorted {
+                    $0.id.uuidString < $1.id.uuidString
                 },
                 completions: try context.fetch(
                     FetchDescriptor<CompletionMilestoneRecord>()
@@ -1658,24 +1830,28 @@ public actor StatisticsRepository {
                     )
                 }
             )
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
     }
 
-    func privateCloudArchive() throws(StatisticsRepositoryError)
-        -> StatisticsArchive
+    func privateCloudSnapshot(includeCanonicalSegments: Bool = true)
+        throws(StatisticsRepositoryError)
+        -> PrivateCloudStatisticsSnapshot
     {
         try recoverActiveSegments()
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
             let sliceDescriptor = FetchDescriptor<ListeningSliceRecord>(
-                predicate: #Predicate<ListeningSliceRecord> {
-                    ($0.privateCloudSynchronized == false
-                        || $0.privateCloudSynchronized == nil)
-                        && $0.isFinalized != false
+                predicate: #Predicate {
+                    $0.privateCloudSynchronized == false
+                        || $0.privateCloudSynchronized == nil
                 })
+            let extendedDescriptor = FetchDescriptor<ListeningSliceRecord>(
+                predicate: #Predicate { $0.segmentPayload != nil })
             let completionDescriptor = FetchDescriptor<
                 CompletionMilestoneRecord
             >(
@@ -1690,34 +1866,76 @@ public actor StatisticsRepository {
                     $0.privateCloudSynchronized == false
                         || $0.privateCloudSynchronized == nil
                 })
-            let slices = try context.fetch(sliceDescriptor).map(\.domainValue)
+            var pending: [UUID: ListeningSliceRecord] = [:]
+            for row in try context.fetch(sliceDescriptor) {
+                pending[row.eventID] = row
+            }
+            if includeCanonicalSegments {
+                for row in try context.fetch(extendedDescriptor)
+                where row.segmentReceiptDigest == nil {
+                    pending[row.eventID] = row
+                }
+            }
+            var slices: [ListeningSlice] = []
+            var payloads: [UUID: Data] = [:]
+            for row in pending.values
+            where row.isFinalized != false
+                && row.segmentDeletionObserved != true
+            {
+                let value = try row.validatedValue()
+                if includeCanonicalSegments || value.lineage == nil {
+                    slices.append(value)
+                    if let data = row.segmentPayload {
+                        payloads[value.id] = data
+                    }
+                }
+            }
             let completions = try context.fetch(completionDescriptor)
                 .compactMap(\.domainValue)
             let sessions = try context.fetch(sessionDescriptor).map(
                 \.domainValue)
-            return StatisticsArchive(
-                slices: slices, completions: completions,
-                remoteSessions: sessions)
+            return PrivateCloudStatisticsSnapshot(
+                archive: StatisticsArchive(
+                    slices: slices, completions: completions,
+                    remoteSessions: sessions),
+                payloads: payloads, retirementGeneration: retirementGeneration)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
     }
 
     func markPrivateCloudArchiveSynchronized(
-        _ archive: StatisticsArchive
+        _ archive: StatisticsArchive, confirmedUpload: Bool = false,
+        savedPayloads: [UUID: Data] = [:]
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
-            for slice in archive.slices {
+            for slice in archive.slices + (archive.resetEnvelopes ?? []) {
                 let id = slice.id
                 let descriptor = FetchDescriptor<ListeningSliceRecord>(
                     predicate: #Predicate { $0.eventID == id }
                 )
                 if let record = try context.fetch(descriptor).first,
-                    record.domainValue == slice
+                    try record.validatedValue() == slice
                 {
                     record.privateCloudSynchronized = true
+                    if slice.lineage != nil {
+                        record.segmentProtocolObserved = true
+                    }
+                    if confirmedUpload, let data = record.segmentPayload {
+                        guard let saved = savedPayloads[id], saved == data
+                        else {
+                            throw ListeningSegmentFailure(
+                                .retirement, .incompleteReplacement)
+                        }
+                        // Intentional byte identity binds the receipt to the
+                        // exact payload sent unchanged from the native row.
+                        record.segmentReceiptDigest = Data(
+                            SHA256.hash(data: data))
+                    }
                 }
             }
             for completion in archive.completions {
@@ -1749,6 +1967,8 @@ public actor StatisticsRepository {
                 }
             }
             try context.save()
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1760,15 +1980,39 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
-            return try context.fetch(
-                FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
-            ).map {
-                PrivateCloudStatisticsDeletion(
-                    recordName: $0.recordName,
-                    recordType: $0.recordType,
-                    accountID: AccountID(rawValue: $0.accountID)
-                )
+            let rows = try ListeningSegmentPersistence.rows(context)
+            var receipts: Set<UUID> = []
+            for row in rows {
+                if let data = row.segmentPayload,
+                    row.segmentReceiptDigest == Data(SHA256.hash(data: data))
+                {
+                    receipts.insert(row.eventID)
+                }
             }
+            let cleanup = try context.fetch(
+                FetchDescriptor<ListeningSegmentCleanupRecord>()
+            )
+            .filter {
+                !$0.requiredReceiptIDs.isEmpty
+                    && Set($0.requiredReceiptIDs).isSubset(of: receipts)
+            }
+            .map {
+                PrivateCloudStatisticsDeletion(
+                    recordName: $0.recordName, recordType: "ListeningSlice",
+                    accountID: AccountID(rawValue: $0.accountID))
+            }
+            return cleanup
+                + (try context.fetch(
+                    FetchDescriptor<PrivateCloudStatisticsDeletionRecord>()
+                ).map {
+                    PrivateCloudStatisticsDeletion(
+                        recordName: $0.recordName,
+                        recordType: $0.recordType,
+                        accountID: AccountID(rawValue: $0.accountID)
+                    )
+                })
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1807,10 +2051,16 @@ public actor StatisticsRepository {
                     predicate: #Predicate { $0.accountID == account }
                 )
             ).map(\.recordName)
+            let cleanupNames = try context.fetch(
+                FetchDescriptor<ListeningSegmentCleanupRecord>()
+            )
+            .filter { $0.accountID == account }.map(\.recordName)
             return Set(
                 sliceNames + completionNames + remoteSessionNames
-                    + deletionNames
+                    + deletionNames + cleanupNames
             )
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1826,6 +2076,8 @@ public actor StatisticsRepository {
                 FetchDescriptor<ListeningSliceRecord>()
             ) {
                 record.privateCloudSynchronized = false
+                record.segmentReceiptDigest = nil
+                record.segmentDeletionObserved = nil
             }
             for record in try context.fetch(
                 FetchDescriptor<CompletionMilestoneRecord>()
@@ -1843,6 +2095,8 @@ public actor StatisticsRepository {
                 context.delete(deletion)
             }
             try context.save()
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1862,9 +2116,14 @@ public actor StatisticsRepository {
             ) where recordNames.contains(record.recordName) {
                 context.delete(record)
             }
+            for row in try context.fetch(
+                FetchDescriptor<ListeningSegmentCleanupRecord>())
+            where recordNames.contains(row.recordName) { context.delete(row) }
             try context.save()
         } catch let error as StatisticsRepositoryError {
             throw error
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -1873,7 +2132,25 @@ public actor StatisticsRepository {
     public func importArchive(
         _ archive: StatisticsArchive
     ) throws(StatisticsRepositoryError) {
-        guard archive.version == 1,
+        do {
+            for value in archive.slices + (archive.resetEnvelopes ?? [])
+            where value.lineage != nil {
+                try ListeningSegmentCodec.validate(value)
+            }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch { throw .invalidArchive }
+        guard archive.version == 1 || archive.version == 2,
+            (archive.resetEnvelopes ?? []).allSatisfy({
+                $0.lineage?.kind == .resetAnchors
+            }),
+            archive.slices.allSatisfy({ $0.lineage?.kind != .resetAnchors }),
+            Set((archive.slices + (archive.resetEnvelopes ?? [])).map(\.id))
+                .count == archive.slices.count
+                + (archive.resetEnvelopes?.count ?? 0),
+            archive.version >= 2
+                || ((archive.resetEnvelopes ?? []).isEmpty
+                    && archive.slices.allSatisfy { $0.lineage == nil }),
             Set(archive.slices.map(\.id)).count == archive.slices.count,
             Set(archive.completions.map(\.id)).count
                 == archive.completions.count,
@@ -1906,16 +2183,18 @@ public actor StatisticsRepository {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         do {
-            let existingSliceIDs = Set(
-                try context.fetch(FetchDescriptor<ListeningSliceRecord>())
-                    .map(\.eventID)
-            )
-            for slice in archive.slices
-            where
-                !existingSliceIDs.contains(slice.id)
-            {
-                context.insert(ListeningSliceRecord(slice))
+            let before = try knownListeningResets()
+            for slice in archive.slices + (archive.resetEnvelopes ?? []) {
+                try ListeningSegmentPersistence.insert(slice, in: context)
+                if slice.lineage != nil {
+                    let id = slice.id
+                    try context.fetch(
+                        FetchDescriptor<ListeningSliceRecord>(
+                            predicate: #Predicate { $0.eventID == id })
+                    ).first?.segmentProtocolObserved = true
+                }
             }
+            _ = try reconcileListeningSegments(context)
             let existingCompletionIDs = Set(
                 try context.fetch(
                     FetchDescriptor<CompletionMilestoneRecord>()
@@ -1969,15 +2248,32 @@ public actor StatisticsRepository {
                 }
             }
             try saveMutation(context)
+            if !(archive.resetEnvelopes ?? []).isEmpty {
+                retirementGeneration &+= 1
+            }
+            resetActionCache = nil
+            let after = try knownListeningResets()
+            for (account, actions) in after
+            where !Set(actions.map(\.id)).isSubset(
+                of: Set(before[account]?.map(\.id) ?? []))
+            {
+                let newActions = actions.filter {
+                    !(before[account]?.map(\.id) ?? []).contains($0.id)
+                }
+                retireActiveRecording(for: account, actions: newActions)
+            }
         } catch let error as StatisticsRepositoryError {
             throw error
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
     }
 
     public func reset(
-        query: StatisticsQuery
+        query: StatisticsQuery, knownAccountIDs: [AccountID] = [],
+        resetAt: Date = Date()
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
@@ -1990,42 +2286,28 @@ public actor StatisticsRepository {
             var deletionNames = existingDeletionNames
             var affectedSessionKeys: Set<String> = []
             var remainingRealBySession: [String: Double] = [:]
-            for record in try context.fetch(
-                FetchDescriptor<ListeningSliceRecord>()
-            ) {
-                let sessionKey =
-                    StatisticsSessionAccountingRecord
-                    .compositeID(
-                        accountID: AccountID(rawValue: record.accountID),
-                        sessionID: PlaybackSessionID(rawValue: record.sessionID)
-                    )
-                guard
-                    query.contains(
-                        accountID: AccountID(rawValue: record.accountID),
-                        date: record.startedAt
-                    )
-                else {
-                    remainingRealBySession[sessionKey, default: 0] +=
-                        record.realSeconds
-                    continue
+            let physical = try ListeningSegmentPersistence.physical(context)
+            let reportingRange = ListeningSegmentCodec.reportingRange(
+                start: query.start, end: query.end)
+            let current = try ListeningSegmentCodec.resolve(
+                physical, applyingResets: !reportingRange)
+            var selected: [AccountID: Set<UUID>] = [:]
+            for group in current.groups {
+                let value = group.value
+                let key = StatisticsSessionAccountingRecord.compositeID(
+                    accountID: value.accountID, sessionID: value.sessionID)
+                if query.contains(
+                    accountID: value.accountID, date: value.startedAt)
+                {
+                    selected[value.accountID, default: []].formUnion(
+                        group.sources.keys)
+                    affectedSessionKeys.insert(key)
+                } else {
+                    remainingRealBySession[key, default: 0] += value.realSeconds
                 }
-                affectedSessionKeys.insert(sessionKey)
-                let recordName =
-                    "slice.\(record.eventID.uuidString.lowercased())"
-                if deletionNames.insert(recordName).inserted {
-                    context.insert(
-                        PrivateCloudStatisticsDeletionRecord(
-                            recordName: recordName,
-                            recordType: "ListeningSlice",
-                            accountID: record.accountID
-                        )
-                    )
-                }
-                context.delete(record)
             }
             for record in try context.fetch(
-                FetchDescriptor<StatisticsSessionAccountingRecord>()
-            )
+                FetchDescriptor<StatisticsSessionAccountingRecord>())
             where affectedSessionKeys.contains(record.compositeID)
                 && (remainingRealBySession[record.compositeID] ?? 0) > 0
                 && (record.confirmedRealSeconds > 0
@@ -2034,6 +2316,62 @@ public actor StatisticsRepository {
                 throw StatisticsRepositoryError
                     .partialSessionResetRequiresFullSession
             }
+            if !reportingRange {
+                for group in current.groups
+                where query.accountID == nil
+                    || query.accountID == group.value.accountID
+                {
+                    guard
+                        group.representations.contains(where: {
+                            $0.lineage?.kind == .observations
+                        })
+                    else { continue }
+                    let cutsStart =
+                        query.start.map {
+                            group.value.startedAt < $0
+                                && $0 < group.value.endedAt
+                        } ?? false
+                    let cutsEnd =
+                        query.end.map {
+                            group.value.startedAt < $0
+                                && $0 < group.value.endedAt
+                        } ?? false
+                    if cutsStart || cutsEnd {
+                        throw ListeningSegmentFailure(
+                            .retirement, .partialRangeResetUnsupported)
+                    }
+                }
+            }
+            var accounts = Set(selected.keys)
+            if let account = query.accountID {
+                accounts.insert(account)
+            } else if reportingRange {
+                accounts.formUnion(knownAccountIDs)
+                accounts.formUnion(physical.map(\.accountID))
+                accounts.formUnion(
+                    try context.fetch(
+                        FetchDescriptor<CompletionMilestoneRecord>()
+                    ).map { AccountID(rawValue: $0.accountID) })
+                accounts.formUnion(
+                    try context.fetch(
+                        FetchDescriptor<RemoteListeningSessionRecord>()
+                    ).map { AccountID(rawValue: $0.accountID) })
+            }
+            let action = ListeningResetAction(
+                id: UUID(), start: query.start, end: query.end,
+                issuedAt: resetAt,
+                selection: reportingRange ? .reportingRange : .sourceIdentities)
+            for account in accounts {
+                let ids = selected[account] ?? []
+                if ids.isEmpty && !reportingRange { continue }
+                for envelope in try ListeningSegmentCodec.resetEnvelopes(
+                    accountID: account, action: action, ids: ids)
+                {
+                    try ListeningSegmentPersistence.insert(
+                        envelope, in: context)
+                }
+            }
+            _ = try reconcileListeningSegments(context)
             for record in try context.fetch(
                 FetchDescriptor<CompletionMilestoneRecord>()
             )
@@ -2099,19 +2437,11 @@ public actor StatisticsRepository {
                 record.totalPages = 0
             }
             try saveMutation(context, publish: false)
-            let removed = accumulators.filter { identity, accumulator in
-                guard
-                    query.accountID == nil
-                        || query.accountID == identity.account
-                else { return false }
-                if query.start == nil && query.end == nil { return true }
-                guard let pending = accumulator.pending else {
-                    return false
-                }
-                return query.contains(
-                    accountID: pending.accountID, date: pending.startedAt)
-            }.map(\.key)
-            for identity in removed { accumulators[identity] = nil }
+            retirementGeneration &+= 1
+            resetActionCache = nil
+            for account in accounts {
+                retireActiveRecording(for: account, actions: [action])
+            }
             for accountID in Set(
                 observations.values.flatMap { $0.state.history.keys })
             where query.accountID == nil || query.accountID == accountID {
@@ -2125,12 +2455,14 @@ public actor StatisticsRepository {
             publishPresentation()
         } catch let error as StatisticsRepositoryError {
             throw error
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
     }
 
-    public func deleteSlice(
+    func observeCloudSliceDeletion(
         id: UUID
     ) throws(StatisticsRepositoryError) {
         let context = ModelContext(modelContainer)
@@ -2140,12 +2472,80 @@ public actor StatisticsRepository {
                 predicate: #Predicate { $0.eventID == id }
             )
             if let record = try context.fetch(descriptor).first {
-                context.delete(record)
+                record.segmentDeletionObserved = true
+                let others = try ListeningSegmentPersistence.physical(context)
+                    .filter { $0.id != id }
+                if try ListeningSegmentPersistence.canRemove(
+                    record.validatedValue(), alternatives: others)
+                {
+                    context.delete(record)
+                }
                 try saveMutation(context)
             }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
+    }
+
+    /// Account removal on this device is not a synchronized history reset.
+    /// Existing reset metadata remains authoritative through a later re-add.
+    public func removeAccountHistoryLocally(_ accountID: AccountID)
+        throws(StatisticsRepositoryError)
+    {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        let owner = accountID.rawValue
+        do {
+            for row in try ListeningSegmentPersistence.rows(context)
+            where row.accountID == owner {
+                if try row.validatedValue().lineage?.kind != .resetAnchors {
+                    context.delete(row)
+                }
+            }
+            try context.delete(
+                model: CompletionMilestoneRecord.self,
+                where: #Predicate { $0.accountID == owner })
+            try context.delete(
+                model: RemoteListeningSessionRecord.self,
+                where: #Predicate { $0.accountID == owner })
+            try context.delete(
+                model: StatisticsSessionAccountingRecord.self,
+                where: #Predicate { $0.accountID == owner })
+            try context.delete(
+                model: StatisticsHistoryImportRecord.self,
+                where: #Predicate { $0.accountID == owner })
+            try saveMutation(context)
+            accumulators = accumulators.filter { $0.key.account != accountID }
+            resetMonotonicFence[accountID] = monotonicNow()
+            retirementGeneration &+= 1
+            resetActionCache = nil
+            canonicalReconciliationNeeded = true
+            preparedSnapshots.removeAll()
+            publishPresentation()
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageWrite, .writeFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    public func deleteSlice(id: UUID) throws(StatisticsRepositoryError) {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            if let row = try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.eventID == id })
+            ).first {
+                context.delete(row)
+                try saveMutation(context)
+            }
+        } catch { throw .persistenceFailed }
     }
 
     public func deleteCompletion(
@@ -2161,6 +2561,8 @@ public actor StatisticsRepository {
                 context.delete(record)
                 try saveMutation(context)
             }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -2187,6 +2589,8 @@ public actor StatisticsRepository {
                 context.delete(record)
                 try saveMutation(context)
             }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -2226,6 +2630,8 @@ public actor StatisticsRepository {
             try saveMutation(context, publish: publish) { $0.append(tails) }
         } catch let error as StatisticsRepositoryError {
             throw error
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -2248,14 +2654,16 @@ public actor StatisticsRepository {
         do {
             let account = accountID.rawValue
             let session = sessionID.rawValue
-            let total = try context.fetch(
-                FetchDescriptor<ListeningSliceRecord>(
-                    predicate: #Predicate {
-                        $0.accountID == account
-                            && $0.sessionID == session
-                    }
-                )
-            ).reduce(0) { $0 + $1.realSeconds }
+            _ = try reconcileListeningSegments(context)
+            let owned = try ListeningSegmentPersistence.physical(context).filter
+            {
+                $0.accountID.rawValue == account
+                    && ($0.sessionID.rawValue == session
+                        || $0.lineage?.kind == .resetAnchors)
+            }
+            let total = try ListeningSegmentCodec.resolve(owned).groups.reduce(
+                0
+            ) { $0 + $1.value.realSeconds }
             let compositeID =
                 StatisticsSessionAccountingRecord.compositeID(
                     accountID: accountID,
@@ -2271,10 +2679,13 @@ public actor StatisticsRepository {
             let reported =
                 (accounting?.confirmedRealSeconds ?? 0)
                 + (accounting?.uncertainRealSeconds ?? 0)
+            if context.hasChanges { try saveMutation(context, publish: false) }
             return StatisticsSessionListeningTime(
                 total: max(total, reported),
                 pending: max(0, total - reported)
             )
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -2350,6 +2761,8 @@ public actor StatisticsRepository {
                 uncertain: record.uncertainRealSeconds,
                 updatedAt: record.updatedAt)
             try saveMutation(context) { $0.setAccounting(value) }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
         } catch {
             throw .persistenceFailed
         }
@@ -2388,8 +2801,403 @@ public actor StatisticsRepository {
         if publish { publishPresentation() }
     }
 
+    private func reconcileListeningSegments(_ context: ModelContext) throws
+        -> ListeningSegmentResolution
+    {
+        try ListeningSegmentPersistence.reconcile(
+            context, canonicalProtocolEnabled: canonicalHistoryEnabled())
+    }
+
+    func canonicalSegmentPayload(id: UUID) throws(StatisticsRepositoryError)
+        -> Data?
+    {
+        let context = ModelContext(modelContainer)
+        do {
+            let row = try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.eventID == id })
+            ).first
+            if let row { _ = try row.validatedValue() }
+            return row?.segmentPayload
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageRead, .readFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    /// Existing source rows remain durable until an exact upload receipt exists.
+    func prepareCanonicalCompaction() throws(StatisticsRepositoryError) {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            // Compare the Codable enum after materialization: supported older
+            // SwiftData runtimes need not expose it as a SQL-queryable keypath.
+            let legacy = try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate {
+                        $0.isFinalized != false
+                    })
+            ).filter { $0.recordingFormat == nil }
+            guard !legacy.isEmpty else { return }
+            let current = try reconcileListeningSegments(context)
+            var represented: Set<ListeningSourceIdentity> = []
+            for group in current.groups {
+                for value in group.representations
+                where value.lineage?.kind == .observations {
+                    represented.formUnion(
+                        try ListeningSegmentCodec.sourceIDs(value).map {
+                            ListeningSourceIdentity(
+                                accountID: value.accountID, id: $0)
+                        })
+                }
+            }
+            // Bound each transaction. Interrupted runs retain every source;
+            // subsequent passes exclude already represented identities.
+            let originals = legacy.filter {
+                !represented.contains(
+                    ListeningSourceIdentity(
+                        accountID: AccountID(rawValue: $0.accountID),
+                        id: $0.eventID))
+            }.sorted {
+                if $0.startedAt != $1.startedAt {
+                    return $0.startedAt < $1.startedAt
+                }
+                return $0.eventID.uuidString < $1.eventID.uuidString
+            }.prefix(ListeningSegmentCodec.maximumSources * 8).map(
+                \.domainValue)
+            let replacements = try ListeningSegmentCodec.coalesce(originals)
+            for value in replacements {
+                if value.lineage == nil {
+                    if let row = legacy.first(where: { $0.eventID == value.id })
+                    {
+                        row.recordingFormat = .continuousSegment
+                        row.isFinalized = true
+                        row.privateCloudSynchronized = false
+                    }
+                } else {
+                    try ListeningSegmentPersistence.insert(value, in: context)
+                }
+            }
+            try saveMutation(context)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageWrite, .writeFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    func retireConfirmedCanonicalSources(additional: [ListeningSlice] = [])
+        throws(StatisticsRepositoryError)
+    {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            let resolution = try reconcileListeningSegments(context)
+            var replacements:
+                [ListeningSourceIdentity: (ListeningSourceContribution, UUID)] =
+                    [:]
+            for row in try ListeningSegmentPersistence.rows(context) {
+                guard let data = row.segmentPayload,
+                    row.segmentReceiptDigest == Data(SHA256.hash(data: data))
+                else { continue }
+                let value = try row.validatedValue()
+                guard value.lineage?.kind == .observations else { continue }
+                for proof in try ListeningSegmentCodec.contributions(value) {
+                    replacements[
+                        ListeningSourceIdentity(
+                            accountID: value.accountID, id: proof.id)] = (
+                            proof, value.id
+                        )
+                }
+            }
+            let originals = try ListeningSegmentPersistence.rows(context).filter
+            { $0.segmentPayload == nil && $0.recordingFormat == nil }
+            for value in originals.map(\.domainValue) + additional
+            where value.lineage == nil {
+                let identity = ListeningSourceIdentity(
+                    accountID: value.accountID, id: value.id)
+                guard let (expected, replacementID) = replacements[identity]
+                else { continue }
+                guard
+                    try ListeningSegmentCodec.contributions(value).first
+                        == expected
+                else {
+                    throw ListeningSegmentFailure(.retirement, .sourceConflict)
+                }
+                try ListeningSegmentPersistence.enqueue(
+                    name: "slice.\(value.id.uuidString.lowercased())",
+                    accountID: value.accountID, requiring: [replacementID],
+                    in: context)
+                if let row = originals.first(where: { $0.eventID == value.id })
+                {
+                    context.delete(row)
+                }
+            }
+            _ = resolution
+            try saveMutation(context)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageWrite, .writeFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    /// A complete fetch is not proof that a replacement covers a deleted row.
+    /// The canonical protocol represents intentional resets with durable anchors;
+    /// an uncovered physical deletion is repaired from authoritative local data.
+    func finalizeObservedListeningDeletions() throws(StatisticsRepositoryError)
+    {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            _ = try reconcileListeningSegments(context)
+            let canonicalRows = try ListeningSegmentPersistence.rows(context)
+            let canonicalAccounts = Set(
+                canonicalRows.filter { $0.segmentProtocolObserved == true }.map(
+                    \.accountID))
+            for row in try ListeningSegmentPersistence.rows(context)
+            where row.segmentDeletionObserved == true {
+                let value = try row.validatedValue()
+                let alternatives = try ListeningSegmentPersistence.physical(
+                    context
+                ).filter { $0.id != value.id }
+                if try ListeningSegmentPersistence.canRemove(
+                    value, alternatives: alternatives)
+                {
+                    context.delete(row)
+                } else if value.lineage != nil || canonicalHistoryEnabled()
+                    || canonicalAccounts.contains(value.accountID.rawValue)
+                {
+                    row.segmentDeletionObserved = nil
+                    row.segmentReceiptDigest = nil
+                    row.privateCloudSynchronized = false
+                } else {
+                    context.delete(row)
+                }
+            }
+            try saveMutation(context)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch { throw .persistenceFailed }
+    }
+
+    public func accountOwnershipDidChange() {
+        retirementGeneration &+= 1
+        resetActionCache = nil
+        canonicalReconciliationNeeded = true
+        preparedSnapshots.removeAll()
+        publishPresentation()
+    }
+
+    func requireAccountResetReceipts(_ accountID: AccountID)
+        throws(StatisticsRepositoryError)
+    {
+        do {
+            let rows = try ListeningSegmentPersistence.rows(
+                ModelContext(modelContainer)
+            ).filter { $0.accountID == accountID.rawValue }
+            let resets = try rows.filter {
+                try $0.validatedValue().lineage?.kind == .resetAnchors
+            }
+            guard !resets.isEmpty,
+                resets.allSatisfy({ row in
+                    guard let data = row.segmentPayload else { return false }
+                    return row.segmentReceiptDigest
+                        == Data(SHA256.hash(data: data))
+                })
+            else { throw ListeningSegmentFailure(.retirement, .missingReceipt) }
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageRead, .readFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    func hasCanonicalPayloads() throws(StatisticsRepositoryError) -> Bool {
+        do {
+            return try ModelContext(modelContainer).fetchCount(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.segmentPayload != nil })) > 0
+        } catch { throw .persistenceFailed }
+    }
+
+    func validatePreparedHistory(generation: UInt64)
+        throws(StatisticsRepositoryError)
+    {
+        guard generation == retirementGeneration else {
+            throw .segmentFailure(
+                ListeningSegmentFailure(.retirement, .stalePreparation))
+        }
+    }
+
+    func currentListeningUpload(id: UUID) throws(StatisticsRepositoryError)
+        -> CurrentListeningUpload?
+    {
+        let context = ModelContext(modelContainer)
+        do {
+            guard
+                let row = try context.fetch(
+                    FetchDescriptor<ListeningSliceRecord>(
+                        predicate: #Predicate { $0.eventID == id })
+                ).first,
+                row.isFinalized != false, row.segmentDeletionObserved != true
+            else { return nil }
+            let value = try row.validatedValue()
+            return CurrentListeningUpload(
+                value: value, payload: row.segmentPayload)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageRead, .readFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    /// A save may complete after reset removed its local row. Reconcile it only
+    /// as evidence for compensating cleanup, never as a history import.
+    func compensateLateListeningSaves(_ values: [ListeningSlice])
+        throws(StatisticsRepositoryError)
+    {
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        do {
+            for value in values {
+                // A retired reset envelope is never resurrected by a late save.
+                guard value.lineage?.kind != .resetAnchors else { continue }
+                let id = value.id
+                if let existing = try context.fetch(
+                    FetchDescriptor<ListeningSliceRecord>(
+                        predicate: #Predicate { $0.eventID == id })
+                ).first {
+                    if try existing.validatedValue() != value {
+                        existing.privateCloudSynchronized = false
+                    }
+                    continue
+                }
+                if value.lineage != nil {
+                    let owner = value.accountID.rawValue
+                    if let alias = try context.fetch(
+                        FetchDescriptor<AccountIdentityAliasRecord>(
+                            predicate: #Predicate {
+                                $0.legacyAccountID == owner
+                            })
+                    ).first {
+                        let canonical = value.reidentified(
+                            as: AccountID(rawValue: alias.canonicalAccountID))
+                        let canonicalID = canonical.id
+                        if let current = try context.fetch(
+                            FetchDescriptor<ListeningSliceRecord>(
+                                predicate: #Predicate {
+                                    $0.eventID == canonicalID
+                                })
+                        ).first,
+                            try ListeningSegmentCodec.equivalentRepresentation(
+                                current.validatedValue(), canonical)
+                        {
+                            try ListeningSegmentPersistence.enqueue(
+                                name: "slice.\(id.uuidString.lowercased())",
+                                accountID: canonical.accountID,
+                                requiring: [canonicalID], in: context)
+                            continue
+                        }
+                    }
+                }
+                try ListeningSegmentPersistence.insert(value, in: context)
+                _ = try reconcileListeningSegments(context)
+                // No reset selected this stale save: it must not create local
+                // history merely because a retired request completed.
+                if let transient = try context.fetch(
+                    FetchDescriptor<ListeningSliceRecord>(
+                        predicate: #Predicate { $0.eventID == id })
+                ).first {
+                    context.delete(transient)
+                }
+            }
+            try saveMutation(context)
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageWrite, .writeFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    private func knownListeningResets() throws(StatisticsRepositoryError)
+        -> [AccountID: [ListeningResetAction]]
+    {
+        if let resetActionCache { return resetActionCache }
+        let context = ModelContext(modelContainer)
+        do {
+            var actions: [AccountID: [UUID: ListeningResetAction]] = [:]
+            for row in try context.fetch(
+                FetchDescriptor<ListeningSliceRecord>(
+                    predicate: #Predicate { $0.segmentPayload != nil }))
+            {
+                let value = try row.validatedValue()
+                if let action = value.lineage?.resetAction {
+                    actions[value.accountID, default: [:]][action.id] = action
+                }
+            }
+            let result = actions.mapValues { Array($0.values) }
+            resetActionCache = result
+            return result
+        } catch let failure as ListeningSegmentFailure {
+            throw .segmentFailure(failure)
+        } catch {
+            throw .segmentFailure(
+                ListeningSegmentFailure(
+                    .storageRead, .readFailed,
+                    systemError: PrivateCloudSystemError(error)))
+        }
+    }
+
+    private func retireActiveRecording(
+        for account: AccountID, actions: [ListeningResetAction]
+    ) {
+        var affected = false
+        for identity in Array(accumulators.keys)
+        where identity.account == account {
+            guard let accumulator = accumulators[identity],
+                let startedAt = accumulator.resetBoundaryDate
+            else { continue }
+            if actions.contains(where: { action in
+                startedAt <= action.issuedAt
+                    && !accumulator.acknowledgesReset(action.id)
+                    && StatisticsQuery(start: action.start, end: action.end)
+                        .contains(accountID: account, date: startedAt)
+            }) {
+                accumulators[identity] = nil
+                affected = true
+            }
+        }
+        if affected { resetMonotonicFence[account] = monotonicNow() }
+    }
+
     private static func isValid(_ slice: ListeningSlice) -> Bool {
-        !slice.accountID.rawValue.isEmpty
+        if slice.lineage != nil {
+            do {
+                try ListeningSegmentCodec.validate(slice)
+                return true
+            } catch { return false }
+        }
+        return !slice.accountID.rawValue.isEmpty
             && !slice.itemID.rawValue.isEmpty
             && !slice.sessionID.rawValue.isEmpty
             && slice.startedAt <= slice.endedAt
