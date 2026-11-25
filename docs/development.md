@@ -906,8 +906,8 @@ Host and simulator tests alone do not prove that journey.
 
 ### iCloud Data backups (format 2)
 
-In **Settings → iCloud Data**, choose **Export iCloud Data…**, review the privacy
-warning, then choose where to save the file. Choose a device-local destination
+In **Settings → iCloud**, under **iCloud Data**, choose **Export iCloud Data…**.
+Review the privacy warning, then choose where to save the file. Choose a device-local destination
 if you do not want a file provider to synchronize it. No capture runs
 automatically.
 
@@ -980,8 +980,8 @@ This is a generation change, not a cross-zone atomic overwrite. A last-second
 write on another device to the previous zone can be left behind despite the
 pre-publication drift check. Large data is sent in bounded batches only to
 the unselected candidate; the prior zone stays selected if staging fails. The
-previous zones are not automatically deleted. Clear iCloud Data is not
-available on a restored generation until it can clear the selector and its
+previous zones are not automatically deleted. **Delete Bleat Data from iCloud**
+is not available on a restored generation until it can clear the selector and its
 data safely. The production path requires a CloudKit-capable build; fixture
 validation is synthetic, not validation on a real Apple Account.
 

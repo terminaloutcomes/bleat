@@ -8126,8 +8126,14 @@
     },
     {
       "path": "Tests/BleatUITests/BleatUITests.swift",
+      "name": "testICloudRestoreRequiresOtherDevicePauseAndConfirmation",
+      "line": 2921,
+      "language": "swift"
+    },
+    {
+      "path": "Tests/BleatUITests/BleatUITests.swift",
       "name": "testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync",
-      "line": 2461,
+      "line": 2980,
       "language": "swift"
     },
     {

@@ -1964,10 +1964,12 @@ save per record; one invalid fetched record does not discard valid records in
 the same callback. Zone setup, fetch, fetched-record application, local
 preparation, upload, and sent-change reconciliation emit privacy-safe duration
 and available record-count diagnostics for successful and failed stages.
-Settings provides **Clear My CloudKit Data** in its own section below Diagnostics, including when synchronization is
-already disabled. After confirmation, Bleat turns off synchronization on this
-device, cancels and drains its current sync, and directly deletes its entire
-private record zone, including unrecognized records. It clears local sync
+**Settings → iCloud** contains the sync controls and **iCloud Data** export
+and restore controls. **Delete Bleat Data from iCloud** is in the same view,
+including when synchronization is already disabled. After confirmation, Bleat
+turns off synchronization on this device, cancels and drains its current sync,
+and directly deletes its entire private record zone, including unrecognized
+records. It clears local sync
 metadata and recreates the sync engine without its old serialized state while
 preserving local accounts, downloads, preferences, and listening history.
 An already absent zone counts as cleared. A deletion failure retains its typed

@@ -1973,19 +1973,35 @@
       "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3 seconds; shared scroll helper uses a bounded attempt count and now fails with caller file/line when exhausted."
     },
     {
-      "id": "BleatUITests::testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync",
+      "id": "BleatUITests::testICloudRestoreRequiresOtherDevicePauseAndConfirmation",
       "path": "Tests/BleatUITests/BleatUITests.swift",
-      "line": 2455,
-      "purpose": "Clear Cloud Kit Data Keeps Local Account And Turns Off Sync.",
+      "line": 2921,
+      "purpose": "The dedicated iCloud screen exposes the synthetic restore preview, requires consent and confirmation, and reports restart with sync disabled.",
       "review": {
         "status": "reviewed",
         "decision": "keep",
-        "reason": "Inspected the complete test body and called helpers. Assertions verify the named UI state/navigation/control behavior using fixture setup and bounded UI synchronization; no test-order dependency or retry-to-green behavior was found."
+        "reason": "Runs the isolated archive through the normal settings navigation; the backend is synthetic and out of scope for real iCloud verification."
+      },
+      "profile": "ui_fixture",
+      "enablement": "Default BleatUITests Debug simulator run.",
+      "setup_dependencies": "Fresh signed-in fixture and unique isolated restore session. No Apple account or real CloudKit.",
+      "action_postconditions": "Assert root Settings exposes only the iCloud entry, then open it and verify the export action. Preview synthetic restore, assert other-device acknowledgement defaults off, turn it on, cancel once, then confirm and verify restart-required status and sync off.",
+      "synchronization_timeout": "Assertion-bound 5-second navigation and dialog waits, with up to 20 seconds for local restore; bounded scrolling fails with caller location."
+    },
+    {
+      "id": "BleatUITests::testClearCloudKitDataKeepsLocalAccountAndTurnsOffSync",
+      "path": "Tests/BleatUITests/BleatUITests.swift",
+      "line": 2980,
+      "purpose": "Delete only Bleat’s synced data on the dedicated iCloud settings screen, leaving local playback data available.",
+      "review": {
+        "status": "reviewed",
+        "decision": "keep",
+        "reason": "Verifies settings navigation, turning off sync while retaining cloud data and separate deletion confirmation using a signed-in fixture with no Apple account."
       },
       "profile": "ui_fixture",
       "enablement": "Default BleatUITests Xcode target on Simulator; launches a fresh app with deterministic --ui-testing-* fixture arguments listed in setup_dependencies. Requires OS accessibility/simulator support only for the accessibility-specific suite.",
       "setup_dependencies": "Fresh XCUIApplication launch; scenario argument(s): --ui-testing-signed-in. Test-owned setup/configuration is in Tests/BleatUITests/BleatUITests.swift; uses app fixture services for deterministic scenarios.",
-      "action_postconditions": "Drives the UI controls identified by settings.icloud.clear, settings.diagnostics, settings.icloud.clear.completed, settings.icloud.enabled, The Test Audiobook. Body-specific asserted postconditions: XCTAssertTrue(diagnostics.exists) XCTAssertGreaterThan(clear.frame.minY, diagnostics.frame.maxY) XCTAssertTrue(confirm.waitForExistence(timeout: 3)) XCTAssertTrue( XCTAssertEqual(",
+      "action_postconditions": "Open iCloud, check sync is on; open the disable-sync choices and choose Keep Data in iCloud, confirming sync turns off. Confirm Delete Bleat Data from iCloud, then check completion, sync off, and the local audiobook still visible.",
       "synchronization_timeout": "bounded XCTest UI waits with explicit timeouts 3, 5 seconds; shared scroll helper uses a bounded attempt count and now fails with caller file/line when exhausted."
     },
     {

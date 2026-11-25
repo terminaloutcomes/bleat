@@ -6803,13 +6803,196 @@ private struct PrivateCloudBackupSection: View {
     }
 }
 
+private struct ICloudSettingsView: View {
+    @Bindable var model: AppModel
+    @State private var showDisableCloudSyncConfirmation = false
+    @State private var showClearCloudDataConfirmation = false
+
+    var body: some View {
+        Form {
+            cloudSection
+            PrivateCloudBackupSection(model: model)
+            cloudDataClearSection
+        }
+        .navigationTitle("iCloud")
+        .confirmationDialog(
+            "Turn Off iCloud Sync?",
+            isPresented: $showDisableCloudSyncConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Keep Data in iCloud") {
+                Task {
+                    await model.setPrivateCloudSyncEnabled(
+                        false,
+                        deleteCloudData: false
+                    )
+                }
+            }
+            Button("Delete Data from iCloud", role: .destructive) {
+                Task {
+                    await model.setPrivateCloudSyncEnabled(
+                        false,
+                        deleteCloudData: true
+                    )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Your statistics, accounts, preferences, and credentials remain on this device."
+            )
+        }
+        .alert(
+            "Delete Bleat Data from iCloud?",
+            isPresented: $showClearCloudDataConfirmation
+        ) {
+            Button("Delete Bleat Data from iCloud", role: .destructive) {
+                Task { await model.clearPrivateCloudData() }
+            }
+            .accessibilityIdentifier("settings.icloud.clear.confirm")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Deletes Bleat’s synced data from iCloud and turns off iCloud sync. Data on this device is kept. Other devices with sync enabled can upload data again."
+            )
+        }
+    }
+
+    private var cloudSection: some View {
+        Section {
+            Toggle(
+                "Sync with iCloud",
+                isOn: Binding(
+                    get: {
+                        model.privateCloudSyncEnabled
+                    },
+                    set: { enabled in
+                        if enabled {
+                            Task {
+                                await model.setPrivateCloudSyncEnabled(true)
+                            }
+                        } else {
+                            showDisableCloudSyncConfirmation = true
+                        }
+                    }
+                )
+            )
+            .disabled(
+                model.privateCloudDataClearState == .clearing
+                    || model.privateCloudState == .syncing
+                    || model.privateCloudState == .cancelling
+                    || model.privateCloudState.isStopping
+            )
+            .accessibilityIdentifier("settings.icloud.enabled")
+
+            if model.canCancelPrivateCloudSynchronization {
+                Button(
+                    "Cancel Sync",
+                    systemImage: "xmark.circle",
+                    role: .destructive
+                ) {
+                    Task {
+                        await model.cancelPrivateCloudSynchronization()
+                    }
+                }
+                .accessibilityIdentifier("settings.icloud.cancel")
+            } else if model.privateCloudState == .cancelling {
+                ProgressView("Cancelling…")
+                    .accessibilityIdentifier("settings.icloud.cancelling")
+            } else if model.privateCloudState.isStopping {
+                ProgressView("Stopping iCloud sync…")
+                    .accessibilityIdentifier("settings.icloud.stopping")
+            } else {
+                Button(
+                    privateCloudSyncButtonTitle,
+                    systemImage: "arrow.triangle.2.circlepath"
+                ) {
+                    Task {
+                        await model.synchronizePrivateCloud()
+                    }
+                }
+                .disabled(
+                    !model.privateCloudSyncEnabled
+                        || model.privateCloudState == .syncing
+                        || !privateCloudFailureAllowsRetry
+                )
+                .accessibilityIdentifier("settings.icloud.syncNow")
+            }
+
+            if model.privateCloudState == .cancelled {
+                Text("iCloud synchronization was cancelled.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings.icloud.cancelled")
+            }
+
+            if case .failed(let failure) = model.privateCloudState {
+                Label(failure.title, systemImage: failure.systemImage)
+                Text(failure.message)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("settings.icloud.error")
+            }
+            if case .stopping(let failure) = model.privateCloudState {
+                Label(failure.title, systemImage: failure.systemImage)
+                Text(failure.message)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("Sync")
+        } footer: {
+            Text(
+                "Syncs listening statistics, account details, preferences, and native usernames and passwords. Access and refresh tokens stay on this device."
+            )
+        }
+    }
+
+    private var privateCloudSyncButtonTitle: String {
+        switch model.privateCloudState {
+        case .cancelled, .failed:
+            "Retry Sync"
+        case .disabled, .idle, .syncing, .cancelling, .stopping:
+            "Sync Now"
+        }
+    }
+
+    private var privateCloudFailureAllowsRetry: Bool {
+        if case .failed(let failure) = model.privateCloudState {
+            return failure.allowsRetry
+        }
+        return true
+    }
+
+    private var cloudDataClearSection: some View {
+        Section("Delete Data") {
+            Button("Delete Bleat Data from iCloud", role: .destructive) {
+                showClearCloudDataConfirmation = true
+            }
+            .disabled(
+                model.privateCloudDataClearState == .clearing
+                    || model.isResettingLocalData
+            )
+            .accessibilityIdentifier("settings.icloud.clear")
+
+            switch model.privateCloudDataClearState {
+            case .idle:
+                EmptyView()
+            case .clearing:
+                ProgressView("Deleting Bleat data from iCloud…")
+            case .cleared:
+                Text("Bleat data deleted from iCloud. iCloud sync is off.")
+                    .accessibilityIdentifier("settings.icloud.clear.completed")
+            case .failed:
+                // The sync section reports the typed failure.
+                EmptyView()
+            }
+        }
+    }
+}
+
 private struct SettingsView: View {
     @Bindable var model: AppModel
     @Bindable var navigation: AppNavigationCoordinator
     @State private var showAddAccount = false
     @State private var editingAccount: ServerAccount?
-    @State private var showDisableCloudSyncConfirmation = false
-    @State private var showClearCloudDataConfirmation = false
     @State private var showResetLocalDataConfirmation = false
 
     @ColourSchemePreference private var colourScheme
@@ -6860,10 +7043,14 @@ private struct SettingsView: View {
                 }
 
                 if model.privateCloudSyncAvailable {
-                    cloudSection
-                }
-                if model.privateCloudSyncAvailable {
-                    PrivateCloudBackupSection(model: model)
+                    Section {
+                        NavigationLink {
+                            ICloudSettingsView(model: model)
+                        } label: {
+                            Label("iCloud", systemImage: "icloud")
+                        }
+                        .accessibilityIdentifier("settings.icloud.open")
+                    }
                 }
 
                 Section("Appearance") {
@@ -7121,8 +7308,6 @@ private struct SettingsView: View {
                         accessibilityIdentifier: "settings.diagnostics"
                     )
                 }
-
-                cloudDataClearSection
             }
             .accessibilityIdentifier("settings.form")
             .navigationTitle("Settings")
@@ -7159,47 +7344,6 @@ private struct SettingsView: View {
                     editingAccount = nil
                 }
             }
-            .confirmationDialog(
-                "Turn Off iCloud Sync?",
-                isPresented: $showDisableCloudSyncConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Keep Data in iCloud") {
-                    Task {
-                        await model.setPrivateCloudSyncEnabled(
-                            false,
-                            deleteCloudData: false
-                        )
-                    }
-                }
-                Button("Delete Data from iCloud", role: .destructive) {
-                    Task {
-                        await model.setPrivateCloudSyncEnabled(
-                            false,
-                            deleteCloudData: true
-                        )
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(
-                    "Your statistics, accounts, preferences, and credentials remain on this device."
-                )
-            }
-            .alert(
-                "Clear My CloudKit Data?",
-                isPresented: $showClearCloudDataConfirmation
-            ) {
-                Button("Clear My CloudKit Data", role: .destructive) {
-                    Task { await model.clearPrivateCloudData() }
-                }
-                .accessibilityIdentifier("settings.icloud.clear.confirm")
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(
-                    "Deletes all Bleat data in your private iCloud database and turns off iCloud sync. Data on this device is kept. Other devices with sync enabled can upload data again."
-                )
-            }
             .alert(
                 "Reset All Local Data?",
                 isPresented: $showResetLocalDataConfirmation
@@ -7218,33 +7362,6 @@ private struct SettingsView: View {
                 )
                 .accessibilityIdentifier("settings.resetLocalData.message")
             }
-        }
-    }
-
-    private var cloudDataClearSection: some View {
-        Section {
-            Button("Clear My CloudKit Data", role: .destructive) {
-                showClearCloudDataConfirmation = true
-            }
-            .disabled(
-                model.privateCloudDataClearState == .clearing
-                    || model.isResettingLocalData
-            )
-            .accessibilityIdentifier("settings.icloud.clear")
-
-            switch model.privateCloudDataClearState {
-            case .idle:
-                EmptyView()
-            case .clearing:
-                ProgressView("Clearing CloudKit data…")
-            case .cleared:
-                Text("CloudKit data cleared. iCloud sync is off.")
-                    .accessibilityIdentifier("settings.icloud.clear.completed")
-            case .failed:
-                // The shared iCloud failure below retains the typed cause.
-                EmptyView()
-            }
-
         }
     }
 
@@ -7272,7 +7389,7 @@ private struct SettingsView: View {
             Text("Data")
         } footer: {
             Text(
-                "Erases accounts, downloads, caches, listening data, preferences, and saved credentials. This does not delete data from your Audiobookshelf server or private CloudKit database; Bleat disables private-cloud sync so erased data is not restored. If iCloud Keychain is enabled, saved native credentials are also removed from it."
+                "Erases accounts, downloads, caches, listening data, preferences, and saved credentials. This does not delete data from your Audiobookshelf server or Bleat data in iCloud; Bleat turns off iCloud sync so erased data is not restored. If iCloud Keychain is enabled, saved native credentials are also removed from it."
             )
         }
     }
@@ -7292,109 +7409,6 @@ private struct SettingsView: View {
             }
         }
         .accessibilityIdentifier(accessibilityIdentifier)
-    }
-
-    private var cloudSection: some View {
-        Section {
-            Toggle(
-                "Sync with iCloud",
-                isOn: Binding(
-                    get: {
-                        model.privateCloudSyncEnabled
-                    },
-                    set: { enabled in
-                        if enabled {
-                            Task {
-                                await model.setPrivateCloudSyncEnabled(true)
-                            }
-                        } else {
-                            showDisableCloudSyncConfirmation = true
-                        }
-                    }
-                )
-            )
-            .disabled(
-                model.privateCloudDataClearState == .clearing
-                    || model.privateCloudState == .syncing
-                    || model.privateCloudState == .cancelling
-                    || model.privateCloudState.isStopping
-            )
-            .accessibilityIdentifier("settings.icloud.enabled")
-
-            if model.canCancelPrivateCloudSynchronization {
-                Button(
-                    "Cancel Sync",
-                    systemImage: "xmark.circle",
-                    role: .destructive
-                ) {
-                    Task {
-                        await model.cancelPrivateCloudSynchronization()
-                    }
-                }
-                .accessibilityIdentifier("settings.icloud.cancel")
-            } else if model.privateCloudState == .cancelling {
-                ProgressView("Cancelling…")
-                    .accessibilityIdentifier("settings.icloud.cancelling")
-            } else if model.privateCloudState.isStopping {
-                ProgressView("Stopping iCloud sync…")
-                    .accessibilityIdentifier("settings.icloud.stopping")
-            } else {
-                Button(
-                    privateCloudSyncButtonTitle,
-                    systemImage: "arrow.triangle.2.circlepath"
-                ) {
-                    Task {
-                        await model.synchronizePrivateCloud()
-                    }
-                }
-                .disabled(
-                    !model.privateCloudSyncEnabled
-                        || model.privateCloudState == .syncing
-                        || !privateCloudFailureAllowsRetry
-                )
-                .accessibilityIdentifier("settings.icloud.syncNow")
-            }
-
-            if model.privateCloudState == .cancelled {
-                Text("iCloud synchronization was cancelled.")
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("settings.icloud.cancelled")
-            }
-
-            if case .failed(let failure) = model.privateCloudState {
-                Label(failure.title, systemImage: failure.systemImage)
-                Text(failure.message)
-                    .foregroundStyle(.red)
-                    .accessibilityIdentifier("settings.icloud.error")
-            }
-            if case .stopping(let failure) = model.privateCloudState {
-                Label(failure.title, systemImage: failure.systemImage)
-                Text(failure.message)
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("iCloud")
-        } footer: {
-            Text(
-                "Syncs listening statistics, account details, preferences, and native usernames and passwords. Access and refresh tokens stay on this device."
-            )
-        }
-    }
-
-    private var privateCloudSyncButtonTitle: String {
-        switch model.privateCloudState {
-        case .cancelled, .failed:
-            "Retry Sync"
-        case .disabled, .idle, .syncing, .cancelling, .stopping:
-            "Sync Now"
-        }
-    }
-
-    private var privateCloudFailureAllowsRetry: Bool {
-        if case .failed(let failure) = model.privateCloudState {
-            return failure.allowsRetry
-        }
-        return true
     }
 
     private var downloadStorageText: String {
