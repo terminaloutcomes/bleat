@@ -5833,6 +5833,21 @@ final class AppModel {
         selectionResumeTask = nil
     }
 
+    private func canResumeDownloadedSelectionDuringStartup() -> Bool {
+        guard phase == .signedIn,
+            let account,
+            let record = try? playbackPositionStore.lastPlaying(),
+            record.accountID == account.id,
+            let download = downloads.record(
+                accountID: account.id, itemID: record.book.id),
+            download.manifest.purpose == .manual,
+            downloads.isFullBookAvailable(download)
+        else { return false }
+        return download.detail.id == record.book.id
+            && download.detail.libraryID == record.book.libraryID
+            && download.manifest.itemID == record.book.id
+    }
+
     func requestSelectionResume() -> PlaybackRemoteCommandOutcome {
         if selectionResumeTask != nil { return .accepted }
         guard playbackStartTask == nil, accountActionStatus != .switching,
@@ -5853,7 +5868,11 @@ final class AppModel {
                     selectionResumeTask = nil
                 }
             }
-            await start()
+            // A restored account and its downloads are ready before library
+            // and statistics loading finish. Don't make local audio wait on them.
+            if !canResumeDownloadedSelectionDuringStartup() {
+                await start()
+            }
             guard !Task.isCancelled, generation == selectionResumeGeneration
             else { return }
             guard phase == .signedIn,
