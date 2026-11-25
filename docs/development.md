@@ -906,6 +906,9 @@ Host and simulator tests alone do not prove that journey.
 
 ### iCloud Data backups (format 2)
 
+See the [restore generation and selector contract](design/cloud-sync-storage.md#icloud-restore-generations-and-the-active-selector)
+for the exact CloudKit layout, fallback rules, and operation checklist.
+
 In **Settings → iCloud**, under **iCloud Data**, choose **Export iCloud Data…**.
 Review the privacy warning, then choose where to save the file. Choose a device-local destination
 if you do not want a file provider to synchronize it. No capture runs

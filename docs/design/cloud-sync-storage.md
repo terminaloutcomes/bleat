@@ -300,3 +300,86 @@ no duration threshold was inflated. Actual app responsiveness during migration,
 signed-device behavior and live multi-device CloudKit remain separate evidence;
 the concurrent standalone share-sheet UI run is not proof of migration UI
 responsiveness.
+
+## iCloud restore generations and the active selector
+
+### Cloud layout and identity
+
+Bleat uses the current Apple Account's **private database** in
+`iCloud.com.terminaloutcomes.Bleat`. A zone is part of a CloudKit record's
+identity. CloudKit can create, save, or delete zones; it does not rename or
+atomically swap them. Copying to a different zone produces different record
+IDs and does not preserve server change tags or sync tokens.
+
+| Zone | Contents |
+| --- | --- |
+| `BleatPrivateData` | The original data zone and the default for accounts that have never published a selector. |
+| `BleatRestoredData-<lowercase UUID>` | A separate generation of the five synced record types. A verified generation becomes primary when selected; previous zones remain as inactive copies. |
+| `BleatRestoreControl` | The selector only: a `Configuration` record named `active-generation.<accountBinding>`. Its existing binary `payload` field contains JSON with exactly `version` (currently 1), `generation` (UUID), `revision` (publication UUID), and `accountBinding` (a SHA-256 binding to this container and the current CloudKit user record). The selector is neither a backup record nor a synced user preference. |
+
+The resolver verifies the private account before and after reading the
+selector. A confirmed missing control zone or missing selector record
+(`zoneNotFound` or `unknownItem`) means use the original zone. A malformed
+record, unsupported version, wrong account, or other read failure is not
+absence and must not trigger fallback. If a device has already loaded a
+restored zone, a missing selector resolves to the original zone remotely but
+cannot silently retarget that device's local sync engine. Treat a missing
+selector on an account known to have restored data as a recovery incident:
+do not recreate it from a guess, delete the control zone, or turn on sync on
+an old device.
+
+The local `Application Support/Bleat/CloudRestore/` directory is separate.
+`BleatRestoreActivation-v1.store` is the on-device activation journal, not the
+source of cloud truth. It records a pending or selected generation, the
+attempt and account it belongs to, and whether sync may resume. A
+`BleatRestoredData-<generation>-<attempt>.materialized.store` file holds that
+device's working copy. The app binds the local store and its sync engine at
+launch; discovering a different selector does not repoint the old engine.
+
+### Why not write a replacement straight into the original zone?
+
+An exact restore must save records from the backup *and* remove records that
+are not in it. For large backups, that requires multiple CloudKit batches.
+An interrupted in-place restore could leave the live zone with a mixture of
+old and restored data. Instead, Bleat writes the entire proposed replacement
+to an unselected zone in bounded batches and independently verifies it. It
+also prepares a fresh local store and rechecks the reviewed cloud preimage.
+Only then does it conditionally save the selector using
+`.ifServerRecordUnchanged`. Only the selector record is switched atomically;
+the rest is **not** a cross-zone transaction. No old zone is automatically
+deleted. There is no automatic fallback or rollback after a verified
+publication. When the response is ambiguous, **Check Restore Status** looks
+for positive readback matching the pending journal; it does not blindly
+retry or discard the old state.
+
+Older Bleat builds ignore the selector. Keep their iCloud sync off before
+starting a restore and until they are upgraded and explicitly adopt the
+selected data. Other upgraded devices must adopt and reopen before
+resuming their own sync. A write from an old or concurrently active client
+that lands in the previous zone around the switch can be left behind; the
+selector is not an account-wide write lock.
+
+### Operation boundaries to validate
+
+“Active” below means the validated remote selector or a confirmed legacy
+default. “Loaded” means the zone bound to this process's local store. Merely
+finding an existing data zone is not authority to read, write, or delete it.
+
+| Operation | Original active and loaded | Restored active and loaded | Active and loaded differ, or publication is pending |
+| --- | --- | --- | --- |
+| Export backup and read-only discovery | Export reads the original cloud zone, not the local cache. | Export reads the selected cloud zone, not the original or retained copies. | Export reads only a verified active cloud snapshot; discovery may report a different restored zone. Neither changes the selector or the loaded store. |
+| Preview, restore, and verify | Preview compares the same-account backup with the active data. Confirmation stages and verifies a fresh generation. | Same workflow, using the current restored zone as the preimage; earlier zones stay inactive. | Ordinary preview rejects a loaded/active mismatch. A pending result requires status verification, not a new write. A separate device can explicitly adopt a verified generation and reopen. |
+| Startup, manual sync, and foreground/background sync | Load the original local store; scope fetch, upload and record callbacks to its zone. | Load the journal-selected store; start with its own metadata, download directory and sync state. Sync still requires explicit re-enable. | Do not upload to, recreate, or treat the old zone as current. Keep local data intact for adoption or recovery. |
+| Turn sync on or off | Enabling requires the selected zone. Keeping data is a local opt-out, not an iCloud delete. | The same rule applies; enabling also acknowledges the local post-restore pause. | Do not enable sync on a mismatched or pending store. A local opt-out must never delete cloud data. |
+| Server-profile updates and conflict choices; preference merge; listening, completions, and history resets | Cloud record changes are scoped to the original zone. | Cloud record changes are scoped to the currently selected restored zone. | Cloud writes and acceptance of stale cloud changes are not allowed; retained local data is not proof of a successful upload. |
+| Remove an account on this device; reset local data | Local operations do not delete the selector or cloud zones. | Same local boundary; retained generations are not silently erased. | Keep the activation journal intact. Do not use either local action as recovery for an ambiguous publication. |
+| Remove an account on all devices | Delete matching records in the active zone using the normal account and reset handling. | Delete matching records in the active restored zone. Inactive generations and standalone exports may still contain that account. | Reject stale remote targets. Do not claim that inactive backups were erased. |
+| Delete Bleat Data from iCloud, including the delete option when turning off sync | Only supports clearing the original zone while it is active. Keeps local data and disables sync. | **Unsupported**: deleting the selected restored zone without a safe selector transition could strand other devices. | Do not delete. Never turn a failed selector read into an instruction to delete the original zone. |
+
+This table is a contract and test checklist, not a signed acceptance record.
+Synthetic tests can check zone routing, receipt handling, and failures
+around publication. A real acceptance run still requires a separate,
+signed CloudKit development setup, cloud-only records for export, two
+upgraded clients for adoption, and tests for missing/malformed selectors,
+account changes, and an interrupted publication. Do not use a personal
+production database to test deletion.
